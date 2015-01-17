@@ -1,6 +1,6 @@
 ;;; w32-win.el --- parse switches controlling interface with W32 window system -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1994, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Kevin Gallo
 ;; Keywords: terminals
@@ -205,13 +205,14 @@ European languages which are distributed with Windows as
 
 See the documentation of `create-fontset-from-fontset-spec' for the format.")
 
-(defun x-win-suspend-error ()
-  "Report an error when a suspend is attempted.
-This returns an error if any Emacs frames are X frames, or always under W32."
+(defun w32-win-suspend-error ()
+  "Report an error when a suspend is attempted."
   (error "Suspending an Emacs running under W32 makes no sense"))
 
 (defvar dynamic-library-alist)
 (defvar libpng-version)                 ; image.c #ifdef HAVE_NTGUI
+(defvar libgif-version)
+(defvar libjpeg-version)
 
 ;;; Set default known names for external libraries
 (setq dynamic-library-alist
@@ -251,13 +252,16 @@ This returns an error if any Emacs frames are X frames, or always under W32."
        ;; libraries according to the version of giflib we were
        ;; compiled against.  (If we were compiled without GIF support,
        ;; libgif-version's value is -1.)
-       (if (>= libgif-version 50000)
-	   ;; Yes, giflib 5.x uses 6 as the major version of the API,
-	   ;; thus "libgif-6.dll" below (giflib 4.x used 5 as the
-	   ;; major API version).
-	   ;; giflib5.dll is from the lua-files project.
-	   '(gif "libgif-6.dll" "giflib5.dll")
-	 '(gif "libgif-5.dll" "giflib4.dll" "libungif4.dll" "libungif.dll"))
+       (if (>= libgif-version 50100)
+	   ;; Yes, giflib 5.0 uses 6 as the major version of the API,
+	   ;; and giflib 5.1 uses 7, thus "libgif-7.dll" and
+	   ;; "libgif-6.dll" below (giflib 4.x used 5 as the major API
+	   ;; version).  giflib5.dll is from the lua-files project,
+	   ;; and gif.dll is from luapower.
+	   '(gif "libgif-7.dll")
+	 (if (>= libgif-version 50000)
+	     '(gif "libgif-6.dll" "giflib5.dll" "gif.dll")
+	 '(gif "libgif-5.dll" "giflib4.dll" "libungif4.dll" "libungif.dll")))
        '(svg "librsvg-2-2.dll")
        '(gdk-pixbuf "libgdk_pixbuf-2.0-0.dll")
        '(glib "libglib-2.0-0.dll")
@@ -350,7 +354,7 @@ This returns an error if any Emacs frames are X frames, or always under W32."
                 (cons '(reverse . t) default-frame-alist)))))
 
   ;; Don't let Emacs suspend under Windows.
-  (add-hook 'suspend-hook 'x-win-suspend-error)
+  (add-hook 'suspend-hook #'w32-win-suspend-error)
 
   ;; Turn off window-splitting optimization; w32 is usually fast enough
   ;; that this is only annoying.
@@ -368,9 +372,67 @@ This returns an error if any Emacs frames are X frames, or always under W32."
   (setq w32-initialized t))
 
 (add-to-list 'display-format-alist '("\\`w32\\'" . w32))
-(add-to-list 'handle-args-function-alist '(w32 . x-handle-args))
-(add-to-list 'frame-creation-function-alist '(w32 . x-create-frame-with-faces))
-(add-to-list 'window-system-initialization-alist '(w32 . w32-initialize-window-system))
+(gui-method-define handle-args-function w32 #'x-handle-args)
+(gui-method-define frame-creation-function w32
+                   #'x-create-frame-with-faces)
+(gui-method-define window-system-initialization w32
+                   #'w32-initialize-window-system)
+
+;;;; Selections
+
+(declare-function w32-set-clipboard-data "w32select.c"
+		  (string &optional ignored))
+(declare-function w32-get-clipboard-data "w32select.c")
+(declare-function w32-selection-exists-p "w32select.c")
+
+;;; Fix interface to (X-specific) mouse.el
+(defun w32--set-selection (type value)
+  (if (eq type 'CLIPBOARD)
+      (w32-set-clipboard-data value)
+    (put 'x-selections (or type 'PRIMARY) value)))
+
+(defun w32--get-selection  (&optional type data-type)
+  (if (and (eq type 'CLIPBOARD)
+           (eq data-type 'STRING))
+      (with-demoted-errors "w32-get-clipboard-data:%S"
+        (w32-get-clipboard-data))
+    (get 'x-selections (or type 'PRIMARY))))
+
+(defun w32--selection-owner-p (selection)
+  (and (memq selection '(nil PRIMARY SECONDARY))
+       (get 'x-selections (or selection 'PRIMARY))))
+
+(gui-method-define gui-set-selection w32 #'w32--set-selection)
+(gui-method-define gui-get-selection w32 #'w32--get-selection)
+
+(gui-method-define gui-selection-owner-p w32 #'w32--selection-owner-p)
+(gui-method-define gui-selection-exists-p w32 #'w32-selection-exists-p)
+
+(when (eq system-type 'windows-nt)
+  ;; Make copy&pasting in w32's console interact with the system's clipboard!
+  (gui-method-define gui-set-selection nil #'w32--set-selection)
+  (gui-method-define gui-get-selection nil #'w32--get-selection)
+  (gui-method-define gui-selection-owner-p nil #'w32--selection-owner-p)
+  (gui-method-define gui-selection-exists-p nil #'w32-selection-exists-p))
+
+;; The "Windows" keys on newer keyboards bring up the Start menu
+;; whether you want it or not - make Emacs ignore these keystrokes
+;; rather than beep.
+(global-set-key [lwindow] 'ignore)
+(global-set-key [rwindow] 'ignore)
+
+(declare-function x-server-version "w32fns.c" (&optional terminal))
+
+(defun w32-version ()
+  "Return the MS-Windows version numbers.
+The value is a list of three integers: the major and minor version
+numbers, and the build number."
+  (x-server-version))
+
+(defun w32-using-nt ()
+  "Return non-nil if running on a Windows NT descendant.
+That includes all Windows systems except for 9X/Me."
+  (getenv "SystemRoot"))
 
 (provide 'w32-win)
 

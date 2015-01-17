@@ -2826,7 +2826,7 @@
 2006-07-21  Eli Zaretskii  <eliz@gnu.org>
 
 	* w32.c (convert_time): Use explicit long double constants to
-	ensure long double arithmetics is used throughout.
+	ensure long double arithmetic is used throughout.
 
 2006-07-20  YAMAMOTO Mitsuharu  <mituharu@math.s.chiba-u.ac.jp>
 
@@ -3264,7 +3264,7 @@
 	* w32term.c (x_make_frame_visible): Use SystemParametersInfo with
 	SPI_GETWORKAREA to find the dimensions of the screen work area,
 	and adjust vertical position of the frame in order to avoid being
-	covered by the task bar.
+	covered by the taskbar.
 
 	* w32fns.c (w32_createwindow): Use CW_USEDEFAULT instead of
 	f->left_pos and SH_SHOW instead of f->top_pos in the call to
@@ -13008,7 +13008,7 @@
 2004-08-27  Jan Djärv  <jan.h.d@swipnet.se>
 
 	* xmenu.c (set_frame_menubar): Reintroduce inhibit_garbage_collection
-	from 1.233 so that strings from ENCODE_UTF_8 isn't GC:ed before used.
+	from 2002-07-15T00:01:34Z!raeburn@raeburn.org so that strings from ENCODE_UTF_8 isn't GC:ed before used.
 
 	* gtkutil.c (xg_create_frame_widgets): Compensate for tool bar when
 	tool bar items is 0.
@@ -19757,7 +19757,7 @@
 
 	* keymap.c (accessible_keymaps_1): Break cycles but without preventing
 	multiple occurrences of the same keymap under different prefixes.
-	(Faccessible_keymaps): Remove code redundant since rev 1.82.
+	(Faccessible_keymaps): Remove code redundant since 1994-08-03T07:39:00Z!rms@gnu.org.
 
 2003-03-16  Jason Rumney  <jasonr@gnu.org>
 
@@ -20769,7 +20769,7 @@
 
 	* fontset.c (syms_of_fontset): Setup Vfont_encoding_alist here.
 
-	* editfns.c (Fformat): Convert an unibyte char argument that is
+	* editfns.c (Fformat): Convert a unibyte char argument that is
 	formatted by "%c" to multibyte if the total result must be a
 	multibyte string.
 
@@ -27912,7 +27912,7 @@ See ChangeLog.9 for earlier changes.
 ;; add-log-time-zone-rule: t
 ;; End:
 
-    Copyright (C) 2001-2014 Free Software Foundation, Inc.
+    Copyright (C) 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

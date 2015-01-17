@@ -1,6 +1,6 @@
 ;; info.el --- Info package for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1992-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1992-2015 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help
@@ -138,10 +138,15 @@ The Lisp code is executed when the node is selected.")
   :type 'boolean
   :group 'info)
 
-(defcustom Info-fontify-maximum-menu-size 100000
+;; It's unfortunate that nil means no fontification, as opposed to no limit,
+;; since that differs from font-lock-maximum-size.
+(defcustom Info-fontify-maximum-menu-size 400000
   "Maximum size of menu to fontify if `font-lock-mode' is non-nil.
-Set to nil to disable node fontification."
-  :type 'integer
+Set to nil to disable node fontification; set to t for no limit."
+  :type '(choice (const :tag "No fontification" nil)
+		 (const :tag "No size limit" t)
+		 (integer :tag "Up to this many characters"))
+  :version "25.1"			; 100k -> 400k
   :group 'info)
 
 (defcustom Info-use-header-line t
@@ -774,8 +779,7 @@ with the top-level Info directory.
 In interactive use, a non-numeric prefix argument directs
 this command to read a file name from the minibuffer.
 
-A numeric prefix argument N selects an Info buffer named
-\"*info*<%s>\".
+A numeric prefix argument of N selects an Info buffer named \"*info*<N>\".
 
 The search path for Info files is in the variable `Info-directory-list'.
 The top-level Info directory is made by combining all the files named `dir'
@@ -2691,9 +2695,7 @@ Because of ambiguities, this should be concatenated with something like
                      (equal (nth 1 Info-complete-cache) Info-current-node)
                      (equal (nth 2 Info-complete-cache) Info-complete-next-re)
                      (equal (nth 5 Info-complete-cache) Info-complete-nodes)
-                     (let ((prev (nth 3 Info-complete-cache)))
-                       (eq t (compare-strings string 0 (length prev)
-                                              prev 0 nil t))))
+                     (string-prefix-p (nth 3 Info-complete-cache) string) t)
                 ;; We can reuse the previous list.
                 (setq completions (nth 4 Info-complete-cache))
               ;; The cache can't be used.
@@ -4209,9 +4211,16 @@ With a zero prefix arg, put the name inside a function call to `info'."
     st)
   "Syntax table used in `Info-mode'.")
 
+(defface Info-quoted
+  '((t :family "courier"))
+  "Face used for quoted elements.")
+
+(defvar Info-mode-font-lock-keywords
+  '(("‘\\([^’]*\\)’" (1 'Info-quoted))))
+
 ;; Autoload cookie needed by desktop.el
 ;;;###autoload
-(define-derived-mode Info-mode nil "Info"
+(define-derived-mode Info-mode nil "Info" ;FIXME: Derive from special-mode?
   "Info mode provides commands for browsing through the Info documentation tree.
 Documentation in Info is divided into \"nodes\", each of which discusses
 one topic and contains references to other nodes which discuss related
@@ -4297,6 +4306,7 @@ Advanced commands:
   (setq-local isearch-push-state-function #'Info-isearch-push-state)
   (setq-local isearch-filter-predicate #'Info-isearch-filter)
   (setq-local revert-buffer-function #'Info-revert-buffer-function)
+  (setq-local font-lock-defaults '(Info-mode-font-lock-keywords t t))
   (Info-set-mode-line)
   (setq-local bookmark-make-record-function #'Info-bookmark-make-record))
 
@@ -4599,7 +4609,9 @@ first line or header line, and for breadcrumb links.")
             (and Info-fontify-visited-nodes
                  ;; Don't take time to refontify visited nodes in huge nodes
 		 Info-fontify-maximum-menu-size
-                 (< (- (point-max) (point-min)) Info-fontify-maximum-menu-size)))
+                 (or (eq Info-fontify-maximum-menu-size t)
+		     (< (- (point-max) (point-min))
+			Info-fontify-maximum-menu-size))))
            rbeg rend)
 
       ;; Fontify header line
@@ -4856,7 +4868,9 @@ first line or header line, and for breadcrumb links.")
                  (search-forward "\n* Menu:" nil t)
                  ;; Don't take time to annotate huge menus
 		 Info-fontify-maximum-menu-size
-                 (< (- (point-max) (point)) Info-fontify-maximum-menu-size))
+		 (or (eq Info-fontify-maximum-menu-size t)
+		     (< (- (point-max) (point))
+			Info-fontify-maximum-menu-size)))
         (let ((n 0)
               cont)
           (while (re-search-forward
@@ -5263,13 +5277,15 @@ type returned by `Info-bookmark-make-record', which see."
 (defun info-display-manual (manual)
   "Display an Info buffer displaying MANUAL.
 If there is an existing Info buffer for MANUAL, display it.
-Otherwise, visit the manual in a new Info buffer."
+Otherwise, visit the manual in a new Info buffer.  In interactive
+use, a prefix argument directs this command to limit the
+completion alternatives to currently visited manuals."
   (interactive
    (list
     (progn
       (info-initialize)
       (completing-read "Manual name: "
-		       (info--manual-names)
+		       (info--manual-names current-prefix-arg)
 		       nil t))))
   (let ((blist (buffer-list))
 	(manual-re (concat "\\(/\\|\\`\\)" manual "\\(\\.\\|\\'\\)"))
@@ -5288,7 +5304,7 @@ Otherwise, visit the manual in a new Info buffer."
       (info (Info-find-file manual)
 	    (generate-new-buffer-name "*info*")))))
 
-(defun info--manual-names ()
+(defun info--manual-names (visited-only)
   (let (names)
     (dolist (buffer (buffer-list))
       (with-current-buffer buffer
@@ -5299,11 +5315,12 @@ Otherwise, visit the manual in a new Info buffer."
 		    (file-name-nondirectory Info-current-file))
 		   names))))
     (delete-dups (append (nreverse names)
-			 (all-completions
-			  ""
-			  (apply-partially 'Info-read-node-name-2
-					   Info-directory-list
-					   (mapcar 'car Info-suffix-list)))))))
+			 (when (not visited-only)
+			   (all-completions
+			    ""
+			    (apply-partially 'Info-read-node-name-2
+					     Info-directory-list
+					     (mapcar 'car Info-suffix-list))))))))
 
 (provide 'info)
 

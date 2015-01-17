@@ -1,6 +1,6 @@
 ;;; nntp.el --- nntp access for Gnus
 
-;; Copyright (C) 1987-1990, 1992-1998, 2000-2014 Free Software
+;; Copyright (C) 1987-1990, 1992-1998, 2000-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
@@ -1219,14 +1219,17 @@ If SEND-IF-FORCE, only send authinfo to the server if the
 	      nntp-authinfo-user user))
       (unless (member user '(nil ""))
 	(nntp-send-command "^3.*\r?\n" "AUTHINFO USER" user)
-	(when t				;???Should check if AUTHINFO succeeded
-	  (nntp-send-command
-	   "^2.*\r?\n" "AUTHINFO PASS"
-	   (or passwd
-	       nntp-authinfo-password
-	       (setq nntp-authinfo-password
-		     (read-passwd (format "NNTP (%s@%s) password: "
-					  user nntp-address))))))))))
+	(let ((result
+	       (nntp-send-command
+		"^2.*\r?\n" "AUTHINFO PASS"
+		(or passwd
+		    nntp-authinfo-password
+		    (setq nntp-authinfo-password
+			  (read-passwd (format "NNTP (%s@%s) password: "
+					       user nntp-address)))))))
+	  (if (not result)
+	      (signal 'nntp-authinfo-rejected "Password rejected")
+	    result))))))
 
 ;;; Internal functions.
 

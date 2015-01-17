@@ -1,6 +1,6 @@
 ;;; bindings.el --- define standard key bindings and some variables
 
-;; Copyright (C) 1985-1987, 1992-1996, 1999-2014 Free Software
+;; Copyright (C) 1985-1987, 1992-1996, 1999-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -36,7 +36,7 @@ corresponding to the mode line clicked."
 
 
 (defun mode-line-toggle-read-only (event)
-  "Like `toggle-read-only', for the mode-line."
+  "Like toggling `read-only-mode', for the mode-line."
   (interactive "e")
   (with-selected-window (posn-window (event-start event))
     (read-only-mode 'toggle)))
@@ -229,11 +229,13 @@ mnemonics of the following coding systems:
 	 'help-echo (purecopy (lambda (window _object _point)
  				(format "%s"
 					(with-selected-window window
-					  (concat
-					   (if (file-remote-p default-directory)
-					       "Current directory is remote: "
-					     "Current directory is local: ")
-					   default-directory)))))))
+					  (if (stringp default-directory)
+					      (concat
+					       (if (file-remote-p default-directory)
+						   "Current directory is remote: "
+						 "Current directory is local: ")
+					       default-directory)
+					    "Current directory is nil")))))))
   "Mode line construct to indicate a remote buffer.")
 ;;;###autoload
 (put 'mode-line-remote 'risky-local-variable t)
@@ -837,11 +839,11 @@ if `inhibit-field-text-motion' is non-nil."
 (let ((map minibuffer-local-map))
   (define-key map "\en"   'next-history-element)
   (define-key map [next]  'next-history-element)
-  (define-key map [down]  'next-history-element)
+  (define-key map [down]  'next-line-or-history-element)
   (define-key map [XF86Forward] 'next-history-element)
   (define-key map "\ep"   'previous-history-element)
   (define-key map [prior] 'previous-history-element)
-  (define-key map [up]    'previous-history-element)
+  (define-key map [up]    'previous-line-or-history-element)
   (define-key map [XF86Back] 'previous-history-element)
   (define-key map "\es"   'next-matching-history-element)
   (define-key map "\er"   'previous-matching-history-element)
@@ -923,14 +925,15 @@ if `inhibit-field-text-motion' is non-nil."
   "Keymap for search related commands.")
 (define-key esc-map "s" search-map)
 
-(define-key search-map "o"  'occur)
-(define-key search-map "hr" 'highlight-regexp)
-(define-key search-map "hp" 'highlight-phrase)
-(define-key search-map "hl" 'highlight-lines-matching-regexp)
-(define-key search-map "h." 'highlight-symbol-at-point)
-(define-key search-map "hu" 'unhighlight-regexp)
-(define-key search-map "hf" 'hi-lock-find-patterns)
-(define-key search-map "hw" 'hi-lock-write-interactive-patterns)
+(define-key search-map "o"    'occur)
+(define-key search-map "\M-w" 'eww-search-words)
+(define-key search-map "hr"   'highlight-regexp)
+(define-key search-map "hp"   'highlight-phrase)
+(define-key search-map "hl"   'highlight-lines-matching-regexp)
+(define-key search-map "h."   'highlight-symbol-at-point)
+(define-key search-map "hu"   'unhighlight-regexp)
+(define-key search-map "hf"   'hi-lock-find-patterns)
+(define-key search-map "hw"   'hi-lock-write-interactive-patterns)
 
 ;;(defun function-key-error ()
 ;;  (interactive)
@@ -1075,10 +1078,14 @@ if `inhibit-field-text-motion' is non-nil."
 	      (kp-5 ?5) (kp-6 ?6) (kp-7 ?7) (kp-8 ?8) (kp-9 ?9)
 	      (kp-add ?+) (kp-subtract ?-) (kp-multiply ?*) (kp-divide ?/))))
   (dolist (pair keys)
-    (dolist (mod modifiers)
-      (define-key function-key-map
-	(vector (append mod (list (nth 0 pair))))
-	(vector (append mod (list (nth 1 pair))))))))
+    (let ((keypad (nth 0 pair))
+	  (normal (nth 1 pair)))
+      (when (characterp normal)
+	(put keypad 'ascii-character normal))
+      (dolist (mod modifiers)
+	(define-key function-key-map
+	  (vector (append mod (list keypad)))
+	  (vector (append mod (list normal))))))))
 
 (define-key function-key-map [backspace] [?\C-?])
 (define-key function-key-map [delete] [?\C-?])

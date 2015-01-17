@@ -1,5 +1,5 @@
 @echo off
-rem Copyright (C) 2001-2014 Free Software Foundation, Inc.
+rem Copyright (C) 2001-2015 Free Software Foundation, Inc.
 
 rem Author: Christoph Scholtes cschol2112 at gmail.com
 
@@ -36,7 +36,7 @@ goto EXIT
 
 rem Build and verify the binary distribution
 :ZIP_DIST
-7z a -bd -tZIP -mx=9 -x!.bzrignore -x!.gitignore -xr!emacs.mdp -xr!*.pdb -xr!*.opt -xr!*~ -xr!CVS -xr!.arch-inventory emacs-%EMACS_VER%-bin-i386.zip %TMP_DIST_DIR%
+7z a -bd -tZIP -mx=9 -x!.gitignore -xr!emacs.mdp -xr!*.pdb -xr!*.opt -xr!*~ -xr!CVS -xr!.arch-inventory emacs-%EMACS_VER%-bin-i386.zip %TMP_DIST_DIR%
 7z t emacs-%EMACS_VER%-bin-i386.zip
 goto EXIT
 

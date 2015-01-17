@@ -1,6 +1,6 @@
 ;;; smie.el --- Simple Minded Indentation Engine -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: languages, lisp, internal, parsing, indentation
@@ -632,14 +632,14 @@ e.g. a LEFT-LEVEL of nil means this is a token that behaves somewhat like
 an open-paren, whereas a RIGHT-LEVEL of nil would correspond to something
 like a close-paren.")
 
-(defvar smie-forward-token-function 'smie-default-forward-token
+(defvar smie-forward-token-function #'smie-default-forward-token
   "Function to scan forward for the next token.
 Called with no argument should return a token and move to its end.
 If no token is found, return nil or the empty string.
 It can return nil when bumping into a parenthesis, which lets SMIE
 use syntax-tables to handle them in efficient C code.")
 
-(defvar smie-backward-token-function 'smie-default-backward-token
+(defvar smie-backward-token-function #'smie-default-backward-token
   "Function to scan backward the previous token.
 Same calling convention as `smie-forward-token-function' except
 it should move backward to the beginning of the previous token.")
@@ -709,7 +709,8 @@ Possible return values:
                 (condition-case err
                     (progn (funcall next-sexp 1) nil)
                   (scan-error
-                   (let ((epos (nth 2 err)))
+                   (let* ((epos1 (nth 2 err))
+                          (epos (if (<= (point) epos1) (nth 3 err) epos1)))
                      (goto-char pos)
                      (throw 'return
                             (list t epos
@@ -805,9 +806,9 @@ Possible return values:
   nil: we skipped over an identifier, matched parentheses, ..."
   (smie-next-sexp
    (indirect-function smie-backward-token-function)
-   (indirect-function 'backward-sexp)
-   (indirect-function 'smie-op-left)
-   (indirect-function 'smie-op-right)
+   (indirect-function #'backward-sexp)
+   (indirect-function #'smie-op-left)
+   (indirect-function #'smie-op-right)
    halfsexp))
 
 (defun smie-forward-sexp (&optional halfsexp)
@@ -826,9 +827,9 @@ Possible return values:
   nil: we skipped over an identifier, matched parentheses, ..."
   (smie-next-sexp
    (indirect-function smie-forward-token-function)
-   (indirect-function 'forward-sexp)
-   (indirect-function 'smie-op-right)
-   (indirect-function 'smie-op-left)
+   (indirect-function #'forward-sexp)
+   (indirect-function #'smie-op-right)
+   (indirect-function #'smie-op-left)
    halfsexp))
 
 ;;; Miscellaneous commands using the precedence parser.
@@ -1120,7 +1121,7 @@ OPENER is non-nil if TOKEN is an opener and nil if it's a closer."
   :type 'integer
   :group 'smie)
 
-(defvar smie-rules-function 'ignore
+(defvar smie-rules-function #'ignore
   "Function providing the indentation rules.
 It takes two arguments METHOD and ARG where the meaning of ARG
 and the expected return value depends on METHOD.
@@ -1154,6 +1155,15 @@ NUMBER				offset by NUMBER, relative to a base token
 The functions whose name starts with \"smie-rule-\" are helper functions
 designed specifically for use in this function.")
 
+(defvar smie--hanging-eolp-function
+  ;; FIXME: This is a quick hack for 24.4.  Don't document it and replace with
+  ;; a well-defined function with a cleaner interface instead!
+  (lambda ()
+    (skip-chars-forward " \t")
+    (or (eolp)
+	(and ;; (looking-at comment-start-skip) ;(bug#16041).
+	 (forward-comment (point-max))))))
+
 (defalias 'smie-rule-hanging-p 'smie-indent--hanging-p)
 (defun smie-indent--hanging-p ()
   "Return non-nil if the current token is \"hanging\".
@@ -1167,10 +1177,7 @@ the beginning of a line."
 		    (not (eobp))
 		    ;; Could be an open-paren.
 		    (forward-char 1))
-               (skip-chars-forward " \t")
-               (or (eolp)
-                   (and ;; (looking-at comment-start-skip) ;(bug#16041).
-                        (forward-comment (point-max))))
+	       (funcall smie--hanging-eolp-function)
                (point))))))
 
 (defalias 'smie-rule-bolp 'smie-indent--bolp)
@@ -1832,6 +1839,8 @@ KEYWORDS are additional arguments, which can use the following keywords:
                     (append smie-blink-matching-triggers
                             (delete-dups triggers)))))))
 
+(declare-function edebug-instrument-function "edebug" (func))
+
 (defun smie-edebug ()
   "Instrument the `smie-rules-function' for Edebug."
   (interactive)
@@ -2112,41 +2121,45 @@ position corresponding to each rule."
                otraces)
 
       ;; Finally, guess the indentation rules.
-      (let ((ssigs nil)
-            (rules nil))
-        ;; Sort the sigs by frequency of occurrence.
-        (maphash (lambda (sig sig-data) (push (cons sig sig-data) ssigs)) sigs)
-        (setq ssigs (sort ssigs (lambda (sd1 sd2) (> (cadr sd1) (cadr sd2)))))
-        (while ssigs
-          (pcase-let ((`(,sig ,total ,off-alist ,cotraces) (pop ssigs)))
-            (cl-assert (= total (apply #'+ (mapcar #'cdr off-alist))))
-            (let* ((sorted-off-alist
-                    (sort off-alist (lambda (x y) (> (cdr x) (cdr y)))))
-                   (offset (caar sorted-off-alist)))
-              (if (zerop offset)
-                  ;; Nothing to do with this sig; indentation is
-                  ;; correct already.
-                  nil
-                (push (cons (+ offset (nth 2 sig)) sig) rules)
-                ;; Adjust the rest of the data.
-                (pcase-dolist ((and cotrace `(,count ,toffset ,trace))
-                               cotraces)
-                  (setf (nth 1 cotrace) (- toffset offset))
-                  (dolist (sig trace)
-                    (let ((sig-data (cdr (assq sig ssigs))))
-                      (when sig-data
-                        (let* ((ooff-data (assq toffset (nth 1 sig-data)))
-                               (noffset (- toffset offset))
-                               (noff-data
-                                (or (assq noffset (nth 1 sig-data))
-                                    (let ((off-data (cons noffset 0)))
-                                      (push off-data (nth 1 sig-data))
-                                      off-data))))
-                          (cl-assert (>= (cdr ooff-data) count))
-                          (cl-decf (cdr ooff-data) count)
-                          (cl-incf (cdr noff-data) count))))))))))
-        (message "Guessing...done")
-        rules))))
+      (prog1
+	  (smie-config--guess-1 sigs)
+        (message "Guessing...done")))))
+
+(defun smie-config--guess-1 (sigs)
+  (let ((ssigs nil)
+        (rules nil))
+    ;; Sort the sigs by frequency of occurrence.
+    (maphash (lambda (sig sig-data) (push (cons sig sig-data) ssigs)) sigs)
+    (setq ssigs (sort ssigs (lambda (sd1 sd2) (> (cadr sd1) (cadr sd2)))))
+    (while ssigs
+      (pcase-let ((`(,sig ,total ,off-alist ,cotraces) (pop ssigs)))
+        (cl-assert (= total (apply #'+ (mapcar #'cdr off-alist))))
+        (let* ((sorted-off-alist
+                (sort off-alist (lambda (x y) (> (cdr x) (cdr y)))))
+               (offset (caar sorted-off-alist)))
+          (if (zerop offset)
+              ;; Nothing to do with this sig; indentation is
+              ;; correct already.
+              nil
+            (push (cons (+ offset (nth 2 sig)) sig) rules)
+            ;; Adjust the rest of the data.
+            (pcase-dolist ((and cotrace `(,count ,toffset . ,trace))
+                           cotraces)
+              (setf (nth 1 cotrace) (- toffset offset))
+              (dolist (sig trace)
+                (let ((sig-data (cdr (assq sig ssigs))))
+                  (when sig-data
+                    (let* ((ooff-data (assq toffset (nth 1 sig-data)))
+                           (noffset (- toffset offset))
+                           (noff-data
+                            (or (assq noffset (nth 1 sig-data))
+                                (let ((off-data (cons noffset 0)))
+                                  (push off-data (nth 1 sig-data))
+                                  off-data))))
+                      (cl-assert (>= (cdr ooff-data) count))
+                      (cl-decf (cdr ooff-data) count)
+                      (cl-incf (cdr noff-data) count))))))))))
+    rules))
 
 (defun smie-config-guess ()
   "Try and figure out this buffer's indentation settings.
@@ -2158,15 +2171,14 @@ To save the result for future sessions, use `smie-config-save'."
     (cond
      ((null config) (message "Nothing to change"))
      ((null smie-config--buffer-local)
-      (message "Local rules set")
-      (setq smie-config--buffer-local config))
+      (smie-config-local config)
+      (message "Local rules set"))
      ((y-or-n-p "Replace existing local config? ")
       (message "Local rules replaced")
-      (setq smie-config--buffer-local config))
+      (smie-config-local config))
      ((y-or-n-p "Merge with existing local config? ")
       (message "Local rules adjusted")
-      (setq smie-config--buffer-local
-            (append config smie-config--buffer-local)))
+      (smie-config-local (append config smie-config--buffer-local)))
      (t
       (message "Rules guessed: %S" config)))))
 

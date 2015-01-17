@@ -1,6 +1,6 @@
 ;;; comint.el --- general command interpreter in a window stuff -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1990, 1992-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1988, 1990, 1992-2015 Free Software Foundation, Inc.
 
 ;; Author: Olin Shivers <shivers@cs.cmu.edu>
 ;;	Simon Marshall <simon@gnu.org>
@@ -1475,7 +1475,7 @@ Intended to be added to `isearch-mode-hook' in `comint-mode'."
       (or
        ;; 1. First try searching in the initial comint text
        (funcall search-fun string
-		(if isearch-forward bound (comint-line-beginning-position))
+		(if isearch-forward bound (field-beginning))
 		noerror)
        ;; 2. If the above search fails, start putting next/prev history
        ;; elements in the comint successively, and search the string
@@ -1491,7 +1491,7 @@ Intended to be added to `isearch-mode-hook' in `comint-mode'."
 			(when (null comint-input-ring-index)
 			  (error "End of history; no next item"))
 			(comint-next-input 1)
-			(goto-char (comint-line-beginning-position)))
+			(goto-char (field-beginning)))
 		       (t
 			;; Signal an error here explicitly, because
 			;; `comint-previous-input' doesn't signal an error.
@@ -1509,7 +1509,7 @@ Intended to be added to `isearch-mode-hook' in `comint-mode'."
 				      (unless isearch-forward
 					;; For backward search, don't search
 					;; in the comint prompt
-					(comint-line-beginning-position))
+					(field-beginning))
 				      noerror)))
 	       ;; Return point of the new search result
 	       (point))
@@ -1532,14 +1532,20 @@ the function `isearch-message'."
     ;; the initial comint prompt.
     (if (overlayp comint-history-isearch-message-overlay)
 	(move-overlay comint-history-isearch-message-overlay
-		      (save-excursion (forward-line 0) (point))
-                      (comint-line-beginning-position))
+		      (save-excursion
+			(goto-char (field-beginning))
+			(forward-line 0)
+			(point))
+                      (field-beginning))
       (setq comint-history-isearch-message-overlay
-	    (make-overlay (save-excursion (forward-line 0) (point))
-                          (comint-line-beginning-position)))
+	    (make-overlay (save-excursion
+			    (goto-char (field-beginning))
+			    (forward-line 0)
+			    (point))
+                          (field-beginning)))
       (overlay-put comint-history-isearch-message-overlay 'evaporate t))
     (overlay-put comint-history-isearch-message-overlay
-		 'display (isearch-message-prefix c-q-hack ellipsis))
+		 'display (isearch-message-prefix ellipsis isearch-nonincremental))
     (if (and comint-input-ring-index (not ellipsis))
 	;; Display the current history index.
 	(message "History item: %d" (1+ comint-input-ring-index))
@@ -1557,7 +1563,7 @@ or to the last history element for a backward search."
       (comint-goto-input (1- (ring-length comint-input-ring)))
     (comint-goto-input nil))
   (setq isearch-success t)
-  (goto-char (if isearch-forward (comint-line-beginning-position) (point-max))))
+  (goto-char (if isearch-forward (field-beginning) (point-max))))
 
 (defun comint-history-isearch-push-state ()
   "Save a function restoring the state of input history search.
@@ -1781,7 +1787,7 @@ Similarly for Soar, Scheme, etc."
       (widen)
       (let* ((pmark (process-mark proc))
              (intxt (if (>= (point) (marker-position pmark))
-                        (progn (if comint-eol-on-send (end-of-line))
+                        (progn (if comint-eol-on-send (goto-char (field-end)))
                                (buffer-substring pmark (point)))
                       (let ((copy (funcall comint-get-old-input)))
                         (goto-char pmark)

@@ -1,6 +1,6 @@
 ;;; rst.el --- Mode for viewing and editing reStructuredText-documents.
 
-;; Copyright (C) 2003-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
 
 ;; Maintainer: Stefan Merten <smerten@oekonux.de>
 ;; Author: Stefan Merten <smerten@oekonux.de>,
@@ -3121,7 +3121,7 @@ newlines as mandated by `comment-line-break-function'."
 
 (defun rst-comment-region (beg end &optional arg)
   "Comment or uncomment the current region.
-Region is from from BEG to END.  Uncomment if ARG."
+Region is from BEG to END.  Uncomment if ARG."
   (save-excursion
     (if (consp arg)
 	(rst-uncomment-region beg end arg)

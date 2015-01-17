@@ -1,6 +1,6 @@
 ;;; htmlfontify.el --- htmlize a buffer/source tree with optional hyperlinks
 
-;; Copyright (C) 2002-2003, 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2003, 2009-2015 Free Software Foundation, Inc.
 
 ;; Emacs Lisp Archive Entry
 ;; Package: htmlfontify
@@ -1809,17 +1809,25 @@ fontified.  This is a simple convenience wrapper around
   (eval-and-compile (require 'font-lock))
   (if (boundp 'font-lock-cache-position)
       (or font-lock-cache-position
-          (set 'font-lock-cache-position (make-marker))))
-  (if (not noninteractive)
-      (progn
-        (message "hfy interactive mode (%S %S)" window-system major-mode)
-        (when (and font-lock-defaults
-                   font-lock-mode)
-          (font-lock-fontify-region (point-min) (point-max) nil)))
+          (setq font-lock-cache-position (make-marker))))
+  (cond
+   (noninteractive
     (message "hfy batch mode (%s:%S)"
              (or (buffer-file-name) (buffer-name)) major-mode)
-    (when font-lock-defaults
-      (font-lock-fontify-buffer)) ))
+    (if (fboundp 'font-lock-ensure)
+        (font-lock-ensure)
+      (when font-lock-defaults
+        (font-lock-fontify-buffer))))
+   ((fboundp #'jit-lock-fontify-now)
+    (message "hfy jit-lock mode (%S %S)" window-system major-mode)
+    (jit-lock-fontify-now))
+   (t
+    (message "hfy interactive mode (%S %S)" window-system major-mode)
+    ;; If jit-lock is not in use, then the buffer is already fontified!
+    ;; (when (and font-lock-defaults
+    ;;            font-lock-mode)
+    ;;   (font-lock-fontify-region (point-min) (point-max) nil))
+    )))
 
 ;;;###autoload
 (defun htmlfontify-buffer (&optional srcdir file)
@@ -2403,7 +2411,7 @@ You may also want to set `hfy-page-header' and `hfy-page-footer'."
     (load file 'NOERROR nil nil) ))
 
 
-;;;### (autoloads nil "hfy-cmap" "hfy-cmap.el" "27dc80b0f7187aaf582805a8f887819a")
+;;;### (autoloads nil "hfy-cmap" "hfy-cmap.el" "ce07a28b93c09032fd6b225ad74be0df")
 ;;; Generated autoloads from hfy-cmap.el
 
 (autoload 'htmlfontify-load-rgb-file "hfy-cmap" "\

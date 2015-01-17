@@ -1,3 +1,53 @@
+2015-01-04  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Less 'make' chatter for oldXMenu
+	* Makefile.in (AM_V_GEN, am__v_GEN_, am__v_GEN_0, am__v_GEN_1)
+	(AM_V_at, am__v_at_, am__v_at_0, am__v_at_1): New macros.
+	(libXMenu11.a): Use them.
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* Merge in all changes up to 24.4 release.
+
+2014-09-04  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Less chatter in 'make' output.
+	* Makefile.in (clean mostlyclean): Simplify, for shorter command line.
+
+2014-09-01  Paul Eggert  <eggert@cs.ucla.edu>
+
+	--enable-silent-rules now suppresses more chatter.
+	* Makefile.in (AM_DEFAULT_VERBOSITY, AM_V_CC, am__v_CC_)
+	(am__v_CC_0, am__v_CC_1): New macros, taken from Automake.
+	(.c.o): Use them.
+
+2014-07-12  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* XMenuInt.h (XDeleteAssoc): Remove duplicated prototype to
+	pacify -Wredundant-decls.
+
+2014-06-28  Glenn Morris  <rgm@gnu.org>
+
+	* deps.mk (${OBJS}): Depend on ../src/config.h.
+
+	* Makefile.in: Use gcc auto-dependency information.
+	Move old dependency information to new file deps.mk.
+	(MKDIR_P, DEPFLAGS, MKDEPDIR, oldxmenu_deps_frag):
+	New, set by configure.
+	(DEPDIR): New variable.
+	(ALL_CFLAGS): Add DEPFLAGS.
+	(.c.o): Add MKDEPDIR.
+	(clean, mostlyclean): Delete DEPDIR.
+	* deps.mk, autodeps.mk: New files.
+
+2014-06-15  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (CPPFLAGS): Explicitly set via configure.
+
+	* Makefile.in (mostlyclean, clean, distclean, maintainer-clean, tags):
+	Declare as PHONY.
+	(boostrap-clean): New.
+
 2013-10-24  Glenn Morris  <rgm@gnu.org>
 
 	* Makefile.in (abs_top_srcdir): New, set by configure.
@@ -55,8 +105,8 @@
 	(MAX_INACT_PNUM, TILE_BUF_SIZE): Remove; unused.
 	(x_get_resource_string): Args are readonly.
 	(XAllocDisplayColor): colorName is readonly.
-	(XMenuCreate): def_env is readonly.  Remove unused locals.  Avoid
-	"else;".
+	(XMenuCreate): def_env is readonly.  Remove unused locals.
+	Avoid "else;".
 	* Destroy.c (XMenuDestroy): Return void.
 	* Error.c (XMenuError): Remove const pointer.
 	* EvHand.c (XMenuEventHandler): Return void.
@@ -311,7 +361,7 @@
 
 1995-02-07  Richard Stallman  <rms@pogo.gnu.ai.mit.edu>
 
-	* Makefile.in (maintainer-clean): Renamed from realclean.
+	* Makefile.in (maintainer-clean): Rename from realclean.
 
 1994-10-25  Richard Stallman  <rms@mole.gnu.ai.mit.edu>
 
@@ -391,8 +441,8 @@
 
 1993-09-27  Brian J. Fox  (bfox@valhalla)
 
-	* Makefile.in (CPP, LN_S, C_SWITCH_X_SITE, CC, CFLAGS): Allow
-	`configure' to supply the values for these variables.
+	* Makefile.in (CPP, LN_S, C_SWITCH_X_SITE, CC, CFLAGS):
+	Allow `configure' to supply the values for these variables.
 
 1993-09-26  Brian J. Fox  (bfox@ai.mit.edu)
 
@@ -597,7 +647,7 @@
 
 	* XDelAssoc.c, XLookAssoc.c, XCrAssoc.c, XDestAssoc.c, XMakeAssoc.c:
 	Use Xlib.h, not Xlibint.h.
-	* XLookAssoc.c, XMakeAssoc.c, XCrAssoc.c (NULL): Defined.
+	* XLookAssoc.c, XMakeAssoc.c, XCrAssoc.c (NULL): Define.
 	* XMakeAssoc.c, XCrAssoc.c: Include errno.h.  Declare errno.
 	* XMakeAssoc.c (_XIOErrorFunction): Declared.
 
@@ -662,7 +712,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1993-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1993-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

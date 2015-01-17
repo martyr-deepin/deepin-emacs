@@ -1,6 +1,6 @@
 ;;; reftex-parse.el --- parser functions for RefTeX
 
-;; Copyright (C) 1997-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <dominik@science.uva.nl>
 ;; Maintainer: auctex-devel@gnu.org
@@ -363,7 +363,7 @@ of master file."
       (member "biblatex" TeX-active-styles)
     ;; poor-man's check...
     (save-excursion
-      (re-search-forward "^[^%]*\\\\usepackage.*{biblatex}" nil t))))
+      (re-search-forward "^[^%\n]*?\\\\usepackage.*{biblatex}" nil t))))
 
 ;;;###autoload
 (defun reftex-locate-bibliography-files (master-dir &optional files)

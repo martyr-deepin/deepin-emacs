@@ -1,5 +1,5 @@
 /* Font backend for the Microsoft W32 Uniscribe API.
-   Copyright (C) 2008-2014 Free Software Foundation, Inc.
+   Copyright (C) 2008-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -47,14 +47,10 @@ struct uniscribe_font_info
 
 int uniscribe_available = 0;
 
-/* Defined in w32font.c, since it is required there as well.  */
-extern Lisp_Object Quniscribe;
-extern Lisp_Object Qopentype;
-
 /* EnumFontFamiliesEx callback.  */
-static int CALLBACK add_opentype_font_name_to_list (ENUMLOGFONTEX *,
-                                                    NEWTEXTMETRICEX *,
-                                                    DWORD, LPARAM);
+static int CALLBACK ALIGN_STACK add_opentype_font_name_to_list (ENUMLOGFONTEX *,
+								NEWTEXTMETRICEX *,
+								DWORD, LPARAM);
 /* Used by uniscribe_otf_capability.  */
 static Lisp_Object otf_features (HDC context, char *table);
 
@@ -127,8 +123,6 @@ uniscribe_open (struct frame *f, Lisp_Object font_entity, int pixel_size)
   /* Uniscribe backend uses glyph indices.  */
   uniscribe_font->w32_font.glyph_idx = ETO_GLYPH_INDEX;
 
-  /* Mark the format as opentype  */
-  uniscribe_font->w32_font.font.props[FONT_FORMAT_INDEX] = Qopentype;
   uniscribe_font->w32_font.font.driver = &uniscribe_font_driver;
 
   return font_object;
@@ -189,8 +183,9 @@ uniscribe_otf_capability (struct font *font)
 static Lisp_Object
 uniscribe_shape (Lisp_Object lgstring)
 {
-  struct font * font;
-  struct uniscribe_font_info * uniscribe_font;
+  struct font *font = CHECK_FONT_GET_OBJECT (LGSTRING_FONT (lgstring));
+  struct uniscribe_font_info *uniscribe_font
+    = (struct uniscribe_font_info *) font;
   EMACS_UINT nchars;
   int nitems, max_items, i, max_glyphs, done_glyphs;
   wchar_t *chars;
@@ -204,9 +199,6 @@ uniscribe_shape (Lisp_Object lgstring)
   struct frame * f = NULL;
   HDC context = NULL;
   HFONT old_font = NULL;
-
-  CHECK_FONT_GET_OBJECT (LGSTRING_FONT (lgstring), font);
-  uniscribe_font = (struct uniscribe_font_info *) font;
 
   /* Get the chars from lgstring in a form we can use with uniscribe.  */
   max_glyphs = nchars = LGSTRING_GLYPH_LEN (lgstring);
@@ -593,8 +585,8 @@ uniscribe_encode_char (struct font *font, int c)
    Lisp_Object uniscribe_get_cache (Lisp_Object frame);
    void uniscribe_free_entity (Lisp_Object font_entity);
    int uniscribe_has_char (Lisp_Object entity, int c);
-   int uniscribe_text_extents (struct font *font, unsigned *code,
-                               int nglyphs, struct font_metrics *metrics);
+   void uniscribe_text_extents (struct font *font, unsigned *code,
+                                int nglyphs, struct font_metrics *metrics);
    int uniscribe_draw (struct glyph_string *s, int from, int to,
                        int x, int y, int with_background);
 
@@ -604,8 +596,6 @@ uniscribe_encode_char (struct font *font, int c)
    int uniscribe_get_bitmap (struct font *font, unsigned code,
                              struct font_bitmap *bitmap, int bits_per_pixel);
    void uniscribe_free_bitmap (struct font *font, struct font_bitmap *bitmap);
-   void * uniscribe_get_outline (struct font *font, unsigned code);
-   void uniscribe_free_outline (struct font *font, void *outline);
    int uniscribe_anchor_point (struct font *font, unsigned code,
                                int index, int *x, int *y);
    int uniscribe_start_for_frame (struct frame *f);
@@ -617,7 +607,7 @@ uniscribe_encode_char (struct font *font, int c)
 /* Callback function for EnumFontFamiliesEx.
    Adds the name of opentype fonts to a Lisp list (passed in as the
    lParam arg). */
-static int CALLBACK
+static int CALLBACK ALIGN_STACK
 add_opentype_font_name_to_list (ENUMLOGFONTEX *logical_font,
 				NEWTEXTMETRICEX *physical_font,
 				DWORD font_type, LPARAM list_object)
@@ -981,8 +971,6 @@ struct font_driver uniscribe_font_driver =
     w32font_draw,
     NULL, /* get_bitmap */
     NULL, /* free_bitmap */
-    NULL, /* get_outline */
-    NULL, /* free_outline */
     NULL, /* anchor_point */
     uniscribe_otf_capability, /* Defined so (font-get FONTOBJ :otf) works.  */
     NULL, /* otf_drive - use shape instead.  */

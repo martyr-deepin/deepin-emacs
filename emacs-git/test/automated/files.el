@@ -1,6 +1,6 @@
 ;;; files.el --- tests for file handling.
 
-;; Copyright (C) 2012-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2015 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -147,6 +147,24 @@ form.")
 	    (dolist (subtest (cdr test))
 	      (should (file-test--do-local-variables-test str subtest))))))
     (ad-disable-advice 'hack-local-variables-confirm 'around 'files-test)))
+
+(defvar files-test-bug-18141-file
+  (expand-file-name "data/files-bug18141.el.gz" (getenv "EMACS_TEST_DIRECTORY"))
+  "Test file for bug#18141.")
+
+(ert-deftest files-test-bug-18141 ()
+  "Test for http://debbugs.gnu.org/18141 ."
+  (skip-unless (executable-find "gzip"))
+  (let ((tempfile (make-temp-file "files-test-bug-18141" nil ".gz")))
+    (unwind-protect
+	(progn
+	  (copy-file files-test-bug-18141-file tempfile t)
+	  (with-current-buffer (find-file-noselect tempfile)
+	    (set-buffer-modified-p t)
+	    (save-buffer)
+	    (should (eq buffer-file-coding-system 'iso-2022-7bit-unix))))
+      (delete-file tempfile))))
+
 
 ;; Stop the above "Local Var..." confusing Emacs.
 

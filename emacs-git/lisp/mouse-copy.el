@@ -1,6 +1,6 @@
 ;;; mouse-copy.el --- one-click text copy and move
 
-;; Copyright (C) 1996, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1996, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: John Heidemann <johnh@ISI.EDU>
 ;; Keywords: mouse
@@ -147,7 +147,7 @@ If you have the bug (or the real fix :-), please let me know."
       ;; Third, set the selection.
       ;; (setq me-beg beg me-end end me-range range)  ; for debugging
       (set-buffer end-buffer)
-      (x-set-selection 'SECONDARY (buffer-substring beg end)))))
+      (gui-set-selection 'SECONDARY (buffer-substring beg end)))))
 
 
 (defun mouse-drag-secondary-pasting (start-event)
@@ -203,7 +203,7 @@ by johnh@ficus.cs.ucla.edu."
     (kill-region (overlay-start mouse-secondary-overlay)
 		 (overlay-end mouse-secondary-overlay)))
   ;; (delete-overlay mouse-secondary-overlay)
-  ;; (x-set-selection 'SECONDARY nil)
+  ;; (gui-set-selection 'SECONDARY nil)
   ;; (setq mouse-secondary-overlay nil)
 )
 

@@ -1,6 +1,6 @@
 /* Utility and Unix shadow routines for GNU Emacs on the Microsoft Windows API.
 
-Copyright (C) 1994-1995, 2000-2014 Free Software Foundation, Inc.
+Copyright (C) 1994-1995, 2000-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -72,10 +72,12 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <pwd.h>
 #include <grp.h>
 
-/* MinGW64 (_W64) defines these in its _mingw.h.  */
-#if defined(__GNUC__) && !defined(_W64)
-#define _ANONYMOUS_UNION
-#define _ANONYMOUS_STRUCT
+/* MinGW64 defines these in its _mingw.h.  */
+#ifndef _ANONYMOUS_UNION
+# define _ANONYMOUS_UNION
+#endif
+#ifndef _ANONYMOUS_STRUCT
+# define _ANONYMOUS_STRUCT
 #endif
 #include <windows.h>
 /* Some versions of compiler define MEMORYSTATUSEX, some don't, so we
@@ -149,7 +151,7 @@ typedef struct _PROCESS_MEMORY_COUNTERS_EX {
 #define SDDL_REVISION_1	1
 #endif	/* SDDL_REVISION_1 */
 
-#if defined(_MSC_VER) || defined(_W64)
+#if defined(_MSC_VER) || defined(MINGW_W64)
 /* MSVC and MinGW64 don't provide the definition of
    REPARSE_DATA_BUFFER and the associated macros, except on ntifs.h,
    which cannot be included because it triggers conflicts with other
@@ -240,8 +242,6 @@ typedef struct _REPARSE_DATA_BUFFER {
 typedef HRESULT (WINAPI * ShGetFolderPath_fn)
   (IN HWND, IN int, IN HANDLE, IN DWORD, OUT char *);
 
-Lisp_Object QCloaded_from;
-
 void globals_of_w32 (void);
 static DWORD get_rid (PSID);
 static int is_symlink (const char *);
@@ -306,6 +306,8 @@ static BOOL g_b_init_set_file_security_a;
 static BOOL g_b_init_set_named_security_info_w;
 static BOOL g_b_init_set_named_security_info_a;
 static BOOL g_b_init_get_adapters_info;
+
+BOOL g_b_init_compare_string_w;
 
 /*
   BEGIN: Wrapper functions around OpenProcessToken
@@ -880,7 +882,7 @@ set_named_security_info (LPCTSTR lpObjectName,
 	  g_b_init_set_named_security_info_a = 1;
 	  hm_advapi32 = LoadLibrary ("Advapi32.dll");
 	  s_pfn_Set_Named_Security_InfoA =
-	    (SetNamedSecurityInfoA_Proc) GetProcAddress (hm_advapi32, 
+	    (SetNamedSecurityInfoA_Proc) GetProcAddress (hm_advapi32,
 							 "SetNamedSecurityInfoA");
 	}
       if (s_pfn_Set_Named_Security_InfoA == NULL)
@@ -2290,7 +2292,7 @@ get_long_basename (char * name, char * buf, int size)
 
 /* Get long name for file, if possible (assumed to be absolute).  */
 BOOL
-w32_get_long_filename (char * name, char * buf, int size)
+w32_get_long_filename (const char * name, char * buf, int size)
 {
   char * o = buf;
   char * p;
@@ -2341,7 +2343,7 @@ w32_get_long_filename (char * name, char * buf, int size)
 }
 
 unsigned int
-w32_get_short_filename (char * name, char * buf, int size)
+w32_get_short_filename (const char * name, char * buf, int size)
 {
   if (w32_unicode_filenames)
     {
@@ -2387,6 +2389,8 @@ ansi_encode_filename (Lisp_Object filename)
 	  dostounix_filename (shortname);
 	  encoded_filename = build_string (shortname);
 	}
+      else
+	encoded_filename = build_unibyte_string (fname);
     }
   else
     encoded_filename = build_unibyte_string (fname);
@@ -3399,10 +3403,10 @@ sys_readdir (DIR *dirp)
       int ln;
 
       strcpy (filename, dir_pathname);
-      ln = strlen (filename) - 1;
-      if (!IS_DIRECTORY_SEP (filename[ln]))
-	strcat (filename, "\\");
-      strcat (filename, "*");
+      ln = strlen (filename);
+      if (!IS_DIRECTORY_SEP (filename[ln - 1]))
+	filename[ln++] = '\\';
+      strcpy (filename + ln, "*");
 
       /* Note: No need to resolve symlinks in FILENAME, because
 	 FindFirst opens the directory that is the target of a
@@ -4963,7 +4967,7 @@ stat_worker (const char * path, struct stat * buf, int follow_symlinks)
 	{
 	  /* Make sure root directories end in a slash.  */
 	  if (!IS_DIRECTORY_SEP (name[len-1]))
-	    strcat (name, "\\");
+	    strcpy (name + len, "\\");
 	  if (GetDriveType (name) < 2)
 	    {
 	      errno = ENOENT;
@@ -5432,8 +5436,7 @@ symlink (char const *filename, char const *linkname)
 	p--;
       if (p > linkfn)
 	strncpy (tem, linkfn, p - linkfn);
-      tem[p - linkfn] = '\0';
-      strcat (tem, filename);
+      strcpy (tem + (p - linkfn), filename);
       dir_access = faccessat (AT_FDCWD, tem, D_OK, AT_EACCESS);
     }
   else
@@ -6953,6 +6956,35 @@ system_process_attributes (Lisp_Object pid)
   return attrs;
 }
 
+int
+w32_memory_info (unsigned long long *totalram, unsigned long long *freeram,
+		 unsigned long long *totalswap, unsigned long long *freeswap)
+{
+  MEMORYSTATUS memst;
+  MEMORY_STATUS_EX memstex;
+
+  /* Use GlobalMemoryStatusEx if available, as it can report more than
+     2GB of memory.  */
+  if (global_memory_status_ex (&memstex))
+    {
+      *totalram  = memstex.ullTotalPhys;
+      *freeram   = memstex.ullAvailPhys;
+      *totalswap = memstex.ullTotalPageFile;
+      *freeswap  = memstex.ullAvailPageFile;
+      return 0;
+    }
+  else if (global_memory_status (&memst))
+    {
+      *totalram = memst.dwTotalPhys;
+      *freeram   = memst.dwAvailPhys;
+      *totalswap = memst.dwTotalPageFile;
+      *freeswap  = memst.dwAvailPageFile;
+      return 0;
+    }
+  else
+    return -1;
+}
+
 
 /* Wrappers for  winsock functions to map between our file descriptors
    and winsock's handles; also set h_errno for convenience.
@@ -7687,15 +7719,15 @@ fcntl (int s, int cmd, int options)
   if (cmd == F_DUPFD_CLOEXEC)
     return sys_dup (s);
 
-  if (winsock_lib == NULL)
-    {
-      errno = ENETDOWN;
-      return -1;
-    }
-
   check_errno ();
   if (fd_info[s].flags & FILE_SOCKET)
     {
+      if (winsock_lib == NULL)
+	{
+	  errno = ENETDOWN;
+	  return -1;
+	}
+
       if (cmd == F_SETFL && options == O_NONBLOCK)
 	{
 	  unsigned long nblock = 1;
@@ -7712,13 +7744,36 @@ fcntl (int s, int cmd, int options)
 	  return SOCKET_ERROR;
 	}
     }
+  else if ((fd_info[s].flags & (FILE_PIPE | FILE_WRITE))
+	   == (FILE_PIPE | FILE_WRITE))
+    {
+      /* Force our writes to pipes be non-blocking.  */
+      if (cmd == F_SETFL && options == O_NONBLOCK)
+	{
+	  HANDLE h = (HANDLE)_get_osfhandle (s);
+	  DWORD pipe_mode = PIPE_NOWAIT;
+
+	  if (!SetNamedPipeHandleState (h, &pipe_mode, NULL, NULL))
+	    {
+	      DebPrint (("SetNamedPipeHandleState: %lu\n", GetLastError ()));
+	      return SOCKET_ERROR;
+	    }
+	  fd_info[s].flags |= FILE_NDELAY;
+	  return 0;
+	}
+      else
+	{
+	  errno = EINVAL;
+	  return SOCKET_ERROR;
+	}
+    }
   errno = ENOTSOCK;
   return SOCKET_ERROR;
 }
 
 
 /* Shadow main io functions: we need to handle pipes and sockets more
-   intelligently, and implement non-blocking mode as well. */
+   intelligently.  */
 
 int
 sys_close (int fd)
@@ -7834,7 +7889,7 @@ pipe2 (int * phandles, int pipe2_flags)
   int rc;
   unsigned flags;
 
-  eassert (pipe2_flags == O_CLOEXEC);
+  eassert (pipe2_flags == (O_BINARY | O_CLOEXEC));
 
   /* make pipe handles non-inheritable; when we spawn a child, we
      replace the relevant handle with an inheritable one.  Also put
@@ -8203,11 +8258,11 @@ sys_read (int fd, char * buffer, unsigned int count)
 /* From w32xfns.c */
 extern HANDLE interrupt_handle;
 
-/* For now, don't bother with a non-blocking mode */
 int
 sys_write (int fd, const void * buffer, unsigned int count)
 {
   int nchars;
+  USE_SAFE_ALLOCA;
 
   if (fd < 0)
     {
@@ -8226,30 +8281,33 @@ sys_write (int fd, const void * buffer, unsigned int count)
       /* Perform text mode translation if required.  */
       if ((fd_info[fd].flags & FILE_BINARY) == 0)
 	{
-	  char * tmpbuf = alloca (count * 2);
-	  unsigned char * src = (void *)buffer;
-	  unsigned char * dst = tmpbuf;
+	  char * tmpbuf;
+	  const unsigned char * src = buffer;
+	  unsigned char * dst;
 	  int nbytes = count;
+
+	  SAFE_NALLOCA (tmpbuf, 2, count);
+	  dst = tmpbuf;
 
 	  while (1)
 	    {
 	      unsigned char *next;
-	      /* copy next line or remaining bytes */
+	      /* Copy next line or remaining bytes.  */
 	      next = _memccpy (dst, src, '\n', nbytes);
 	      if (next)
 		{
-		  /* copied one line ending with '\n' */
+		  /* Copied one line ending with '\n'.  */
 		  int copied = next - dst;
 		  nbytes -= copied;
 		  src += copied;
-		  /* insert '\r' before '\n' */
+		  /* Insert '\r' before '\n'.  */
 		  next[-1] = '\r';
 		  next[0] = '\n';
 		  dst = next + 1;
 		  count++;
 		}
 	      else
-		/* copied remaining partial line -> now finished */
+		/* Copied remaining partial line -> now finished.  */
 		break;
 	    }
 	  buffer = tmpbuf;
@@ -8263,31 +8321,44 @@ sys_write (int fd, const void * buffer, unsigned int count)
       HANDLE wait_hnd[2] = { interrupt_handle, ovl->hEvent };
       DWORD active = 0;
 
+      /* This is async (a.k.a. "overlapped") I/O, so the return value
+	 of FALSE from WriteFile means either an error or the output
+	 will be completed asynchronously (ERROR_IO_PENDING).  */
       if (!WriteFile (hnd, buffer, count, (DWORD*) &nchars, ovl))
 	{
 	  if (GetLastError () != ERROR_IO_PENDING)
 	    {
 	      errno = EIO;
-	      return -1;
+	      nchars = -1;
 	    }
-	  if (detect_input_pending ())
-	    active = MsgWaitForMultipleObjects (2, wait_hnd, FALSE, INFINITE,
-						QS_ALLINPUT);
 	  else
-	    active = WaitForMultipleObjects (2, wait_hnd, FALSE, INFINITE);
-	  if (active == WAIT_OBJECT_0)
-	    { /* User pressed C-g, cancel write, then leave.  Don't bother
-		 cleaning up as we may only get stuck in buggy drivers.  */
-	      PurgeComm (hnd, PURGE_TXABORT | PURGE_TXCLEAR);
-	      CancelIo (hnd);
-	      errno = EIO;
-	      return -1;
-	    }
-	  if (active == WAIT_OBJECT_0 + 1
-	      && !GetOverlappedResult (hnd, ovl, (DWORD*) &nchars, TRUE))
 	    {
-	      errno = EIO;
-	      return -1;
+	      /* Wait for the write to complete, and watch C-g while
+		 at that.  */
+	      if (detect_input_pending ())
+		active = MsgWaitForMultipleObjects (2, wait_hnd, FALSE,
+						    INFINITE, QS_ALLINPUT);
+	      else
+		active = WaitForMultipleObjects (2, wait_hnd, FALSE, INFINITE);
+	      switch (active)
+		{
+		case WAIT_OBJECT_0:
+		  /* User pressed C-g, cancel write, then leave.
+		     Don't bother cleaning up as we may only get stuck
+		     in buggy drivers.  */
+		  PurgeComm (hnd, PURGE_TXABORT | PURGE_TXCLEAR);
+		  CancelIo (hnd);
+		  errno = EIO;	/* Why not EINTR? */
+		  nchars = -1;
+		  break;
+		case WAIT_OBJECT_0 + 1:
+		  if (!GetOverlappedResult (hnd, ovl, (DWORD*) &nchars, TRUE))
+		    {
+		      errno = EIO;
+		      nchars = -1;
+		    }
+		  break;
+		}
 	    }
 	}
     }
@@ -8338,6 +8409,22 @@ sys_write (int fd, const void * buffer, unsigned int count)
 	  nchars += n;
 	  if (n < 0)
 	    {
+	      /* When there's no buffer space in a pipe that is in the
+		 non-blocking mode, _write returns ENOSPC.  We return
+		 EAGAIN instead, which should trigger the logic in
+		 send_process that enters waiting loop and calls
+		 wait_reading_process_output to allow process input to
+		 be accepted during the wait.  Those calls to
+		 wait_reading_process_output allow sys_select to
+		 notice when process input becomes available, thus
+		 avoiding deadlock whereby each side of the pipe is
+		 blocked on write, waiting for the other party to read
+		 its end of the pipe.  */
+	      if (errno == ENOSPC
+		  && fd < MAXDESC
+		  && ((fd_info[fd].flags & (FILE_PIPE | FILE_NDELAY))
+		      == (FILE_PIPE | FILE_NDELAY)))
+		errno = EAGAIN;
 	      nchars = n;
 	      break;
 	    }
@@ -8348,6 +8435,7 @@ sys_write (int fd, const void * buffer, unsigned int count)
 	}
     }
 
+  SAFE_FREE ();
   return nchars;
 }
 
@@ -8610,6 +8698,7 @@ network_interface_list (void)
 Lisp_Object
 network_interface_info (Lisp_Object ifname)
 {
+  CHECK_STRING (ifname);
   return network_interface_get_info (ifname);
 }
 
@@ -9036,6 +9125,7 @@ globals_of_w32 (void)
   g_b_init_set_named_security_info_w = 0;
   g_b_init_set_named_security_info_a = 0;
   g_b_init_get_adapters_info = 0;
+  g_b_init_compare_string_w = 0;
   num_of_processors = 0;
   /* The following sets a handler for shutdown notifications for
      console apps. This actually applies to Emacs in both console and

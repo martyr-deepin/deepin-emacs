@@ -1,6 +1,6 @@
 ;;; bs.el --- menu for selecting and displaying buffers -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 ;; Author: Olaf Sylvester <Olaf.Sylvester@netsurf.de>
 ;; Maintainer: Olaf Sylvester <Olaf.Sylvester@netsurf.de>
 ;; Keywords: convenience
@@ -954,7 +954,7 @@ Default is `bs--current-sort-function'."
 
 (defun bs-toggle-readonly ()
   "Toggle read-only status for buffer on current line.
-Uses function `toggle-read-only'."
+Uses function `read-only-mode'."
   (interactive)
   (with-current-buffer (bs--current-buffer)
     (read-only-mode 'toggle))
@@ -1143,7 +1143,7 @@ and move point to current buffer."
     (delete-char -1)
     (bs--set-window-height)
     (bs--goto-current-buffer)
-    (font-lock-fontify-buffer)
+    (font-lock-ensure)
     (bs-apply-sort-faces)
     (set-buffer-modified-p nil)))
 

@@ -1,6 +1,6 @@
 ;;; ert-tests.el --- ERT's self-tests  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2008, 2010-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2008, 2010-2015 Free Software Foundation, Inc.
 
 ;; Author: Christian Ohler <ohler@gnu.org>
 
@@ -831,3 +831,7 @@ This macro is used to test if macroexpansion in `should' works."
 (provide 'ert-tests)
 
 ;;; ert-tests.el ends here
+
+;; Local Variables:
+;; no-byte-compile: t
+;; End:

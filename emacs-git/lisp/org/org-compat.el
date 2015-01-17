@@ -1,6 +1,6 @@
 ;;; org-compat.el --- Compatibility code for Org-mode
 
-;; Copyright (C) 2004-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -295,7 +295,7 @@ Works on both Emacs and XEmacs."
       (setq mark-active t)
       (when (and (boundp 'transient-mark-mode)
 		 (not transient-mark-mode))
-	(setq transient-mark-mode 'lambda))
+	(set (make-local-variable 'transient-mark-mode) 'lambda))
       (when (boundp 'zmacs-regions)
 	(setq zmacs-regions t)))))
 
@@ -312,8 +312,7 @@ Works on both Emacs and XEmacs."
 (defun org-in-invisibility-spec-p (arg)
   "Is ARG a member of `buffer-invisibility-spec'?"
   (if (consp buffer-invisibility-spec)
-      (member arg buffer-invisibility-spec)
-    nil))
+      (member arg buffer-invisibility-spec)))
 
 (defmacro org-xemacs-without-invisibility (&rest body)
   "Turn off extents with invisibility while executing BODY."
@@ -347,18 +346,8 @@ Works on both Emacs and XEmacs."
   "Move to column COLUMN.
 Pass COLUMN and FORCE to `move-to-column'.
 Pass BUFFER to the XEmacs version of `move-to-column'."
-  (let* ((with-bracket-link
-	  (save-excursion
-	    (forward-line 0)
-	    (looking-at (concat "^.*" org-bracket-link-regexp))))
-	 (buffer-invisibility-spec
-	  (cond
-	   ((or (not (derived-mode-p 'org-mode))
-		(and with-bracket-link (org-invisible-p2)))
-	    (remove '(org-link) buffer-invisibility-spec))
-	   (with-bracket-link
-	    (remove t buffer-invisibility-spec))
-	   (t buffer-invisibility-spec))))
+  (let ((buffer-invisibility-spec
+	 (remove '(org-filtered) buffer-invisibility-spec)))
     (if (featurep 'xemacs)
 	(org-xemacs-without-invisibility
 	 (move-to-column column force buffer))
@@ -422,12 +411,8 @@ Pass BUFFER to the XEmacs version of `move-to-column'."
 	 (when focus-follows-mouse
 	   (set-mouse-position frame (1- (frame-width frame)) 0)))))
 
-(defun org-float-time (&optional time)
-  "Convert time value TIME to a floating point number.
-TIME defaults to the current time."
-  (if (featurep 'xemacs)
-      (time-to-seconds (or time (current-time)))
-    (float-time time)))
+(defalias 'org-float-time
+  (if (featurep 'xemacs) 'time-to-seconds 'float-time))
 
 ;; `user-error' is only available from 24.2.50 on
 (unless (fboundp 'user-error)
@@ -488,6 +473,11 @@ LIMIT."
 	      (goto-char pos)
 	      (looking-at (concat "\\(?:"  regexp "\\)\\'")))))
       (not (null pos)))))
+
+(defalias 'org-font-lock-ensure
+  (if (fboundp 'org-font-lock-ensure)
+      #'font-lock-ensure
+    (lambda (_beg _end) (font-lock-fontify-buffer))))
 
 (defun org-floor* (x &optional y)
   "Return a list of the floor of X and the fractional part of X.

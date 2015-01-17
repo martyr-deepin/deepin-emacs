@@ -1,7 +1,7 @@
 ;;; project-am.el --- A project management scheme based on automake files.
 
-;; Copyright (C) 1998-2000, 2003, 2005, 2007-2014
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 1998-2000, 2003, 2005, 2007-2015 Free Software
+;; Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Old-Version: 0.0.3
@@ -409,7 +409,7 @@ Argument COMMAND is the command to use for compiling the target."
 	  (setq default-directory dd)
 	  (setq cmd (read-from-minibuffer
 		     "Run (like this): "
-		     (concat (ede-target-name obj))))
+		     (concat "./" (ede-target-name obj))))
 	  (ede-shell-run-something obj cmd))
       (kill-buffer tb))))
 
@@ -428,12 +428,8 @@ Argument COMMAND is the command to use for compiling the target."
 If a given set of projects has already been loaded, then do nothing
 but return the project for the directory given.
 Optional ROOTPROJ is the root EDE project."
-  (let* ((ede-constructing t)
-	 (amo (object-assoc (expand-file-name "Makefile.am" directory)
-			    'file ede-projects)))
-    (when (not amo)
-      (setq amo (project-am-load-makefile directory)))
-    amo))
+  ;; Just jump into creating the project from the Makefiles.
+  (project-am-load-makefile directory))
 
 (defun project-am-find-topmost-level (dir)
   "Find the topmost automakefile starting with DIR."
@@ -857,13 +853,13 @@ Argument FILE is the file to extract the end directory name from."
 (defun project-am-preferred-target-type (file)
   "For FILE, return the preferred type for that file."
   (cond ((string-match "\\.texi?\\(nfo\\)$" file)
-	 project-am-texinfo)
+	 'project-am-texinfo)
 	((string-match "\\.[0-9]$" file)
-	 project-am-man)
+	 'project-am-man)
 	((string-match "\\.el$" file)
-	 project-am-lisp)
+	 'project-am-lisp)
 	(t
-	 project-am-program)))
+	 'project-am-program)))
 
 (defmethod ede-buffer-header-file((this project-am-objectcode) buffer)
   "There are no default header files."

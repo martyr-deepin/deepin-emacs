@@ -1,6 +1,6 @@
 ;;; org-entities.el --- Support for special entities in Org-mode
 
-;; Copyright (C) 2010-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>,
 ;;         Ulf Stegemann <ulf at zeitform dot de>
@@ -27,9 +27,8 @@
 
 ;;; Code:
 
-(require 'org-macs)
-
-(declare-function org-table-align "org-table" ())
+(declare-function org-toggle-pretty-entities "org"       ())
+(declare-function org-table-align            "org-table" ())
 
 (eval-when-compile
   (require 'cl))
@@ -568,6 +567,7 @@ Kind can be any of `latex', `html', `ascii', `latin1', or `utf8'."
     (goto-char pos)
     (org-table-align)))
 
+(defvar org-pretty-entities) ;; declare defcustom from org
 (defun org-entities-help ()
   "Create a Help buffer with all available entities."
   (interactive)

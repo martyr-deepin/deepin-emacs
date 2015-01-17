@@ -1,5 +1,5 @@
 /* Filesystem notifications support for GNU Emacs on the Microsoft Windows API.
-   Copyright (C) 2012-2014 Free Software Foundation, Inc.
+   Copyright (C) 2012-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -118,9 +118,7 @@ BYTE file_notifications[16384];
 DWORD notifications_size;
 void *notifications_desc;
 
-static Lisp_Object Qfile_name, Qdirectory_name, Qattributes, Qsize;
-static Lisp_Object Qlast_write_time, Qlast_access_time, Qcreation_time;
-static Lisp_Object Qsecurity_desc, Qsubtree, watch_list;
+static Lisp_Object watch_list;
 
 /* Signal to the main thread that we have file notifications for it to
    process.  */
@@ -582,7 +580,7 @@ generate notifications correctly, though.  */)
 	report_file_error ("Cannot watch file", Fcons (file, Qnil));
     }
   /* Store watch object in watch list. */
-  watch_descriptor = XIL ((EMACS_INT)dirwatch);
+  watch_descriptor = make_pointer_integer (dirwatch);
   watch_object = Fcons (watch_descriptor, callback);
   watch_list = Fcons (watch_object, watch_list);
 
@@ -607,7 +605,7 @@ WATCH-DESCRIPTOR should be an object returned by `w32notify-add-watch'.  */)
   if (!NILP (watch_object))
     {
       watch_list = Fdelete (watch_object, watch_list);
-      dirwatch = (struct notification *)XLI (watch_descriptor);
+      dirwatch = (struct notification *)XINTPTR (watch_descriptor);
       if (w32_valid_pointer_p (dirwatch, sizeof(struct notification)))
 	status = remove_watch (dirwatch);
     }
@@ -622,7 +620,7 @@ WATCH-DESCRIPTOR should be an object returned by `w32notify-add-watch'.  */)
 Lisp_Object
 w32_get_watch_object (void *desc)
 {
-  Lisp_Object descriptor = XIL ((EMACS_INT)desc);
+  Lisp_Object descriptor = make_pointer_integer (desc);
 
   /* This is called from the input queue handling code, inside a
      critical section, so we cannot possibly QUIT if watch_list is not
@@ -642,7 +640,6 @@ syms_of_w32notify (void)
   DEFSYM (Qfile_name, "file-name");
   DEFSYM (Qdirectory_name, "directory-name");
   DEFSYM (Qattributes, "attributes");
-  DEFSYM (Qsize, "size");
   DEFSYM (Qlast_write_time, "last-write-time");
   DEFSYM (Qlast_access_time, "last-access-time");
   DEFSYM (Qcreation_time, "creation-time");

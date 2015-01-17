@@ -28,7 +28,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-Copyright (C) 1984, 1987-1989, 1993-1995, 1998-2014 Free Software
+Copyright (C) 1984, 1987-1989, 1993-1995, 1998-2015 Free Software
 Foundation, Inc.
 
 This file is not considered part of GNU Emacs.
@@ -105,17 +105,13 @@ char pot_etags_version[] = "@(#) pot revision number is 17.38.1.4";
 #ifdef MSDOS
 # undef MSDOS
 # define MSDOS true
-# include <fcntl.h>
 # include <sys/param.h>
-# include <io.h>
 #else
 # define MSDOS false
 #endif /* MSDOS */
 
 #ifdef WINDOWSNT
-# include <fcntl.h>
 # include <direct.h>
-# include <io.h>
 # define MAXPATHLEN _MAX_PATH
 # undef HAVE_NTGUI
 # undef  DOS_NT
@@ -131,6 +127,7 @@ char pot_etags_version[] = "@(#) pot revision number is 17.38.1.4";
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <binary-io.h>
 #include <c-strcase.h>
 
 #include <assert.h>
@@ -317,7 +314,7 @@ static long readline_internal (linebuffer *, FILE *);
 static bool nocase_tail (const char *);
 static void get_tag (char *, char **);
 
-static void analyse_regex (char *);
+static void analyze_regex (char *);
 static void free_regexps (void);
 static void regex_tag_multiline (void);
 static void error (const char *, ...) ATTRIBUTE_FORMAT_PRINTF (1, 2);
@@ -342,8 +339,6 @@ static char *skip_non_spaces (char *);
 static char *skip_name (char *);
 static char *savenstr (const char *, int);
 static char *savestr (const char *);
-static char *etags_strchr (const char *, int);
-static char *etags_strrchr (const char *, int);
 static char *etags_getcwd (void);
 static char *relative_filename (char *, char *);
 static char *absolute_filename (char *, char *);
@@ -1002,13 +997,8 @@ main (int argc, char **argv)
   linebuffer filename_lb;
   bool help_asked = false;
   ptrdiff_t len;
- char *optstring;
- int opt;
-
-
-#ifdef DOS_NT
-  _fmode = O_BINARY;   /* all of files are treated as binary files */
-#endif /* DOS_NT */
+  char *optstring;
+  int opt;
 
   progname = argv[0];
   nincluded_files = 0;
@@ -1195,15 +1185,10 @@ main (int argc, char **argv)
       if (streq (tagfile, "-"))
 	{
 	  tagf = stdout;
-#ifdef DOS_NT
-	  /* Switch redirected `stdout' to binary mode (setting `_fmode'
-	     doesn't take effect until after `stdout' is already open). */
-	  if (!isatty (fileno (stdout)))
-	    setmode (fileno (stdout), O_BINARY);
-#endif /* DOS_NT */
+	  SET_BINARY (fileno (stdout));
 	}
       else
-	tagf = fopen (tagfile, append_to_tagfile ? "a" : "w");
+	tagf = fopen (tagfile, append_to_tagfile ? "ab" : "wb");
       if (tagf == NULL)
 	pfatal (tagfile);
     }
@@ -1222,7 +1207,7 @@ main (int argc, char **argv)
 	  lang = argbuffer[i].lang;
 	  break;
 	case at_regexp:
-	  analyse_regex (argbuffer[i].what);
+	  analyze_regex (argbuffer[i].what);
 	  break;
 	case at_filename:
 	      this_file = argbuffer[i].what;
@@ -1292,13 +1277,13 @@ main (int argc, char **argv)
 	    default:
 	      continue;		/* the for loop */
 	    }
-	  strcpy (cmd, "mv ");
-	  strcat (cmd, tagfile);
-	  strcat (cmd, " OTAGS;fgrep -v '\t");
-	  strcat (cmd, argbuffer[i].what);
-	  strcat (cmd, "\t' OTAGS >");
-	  strcat (cmd, tagfile);
-	  strcat (cmd, ";rm OTAGS");
+	  char *z = stpcpy (cmd, "mv ");
+	  z = stpcpy (z, tagfile);
+	  z = stpcpy (z, " OTAGS;fgrep -v '\t");
+	  z = stpcpy (z, argbuffer[i].what);
+	  z = stpcpy (z, "\t' OTAGS >");
+	  z = stpcpy (z, tagfile);
+	  strcpy (z, ";rm OTAGS");
 	  if (system (cmd) != EXIT_SUCCESS)
 	    fatal ("failed to execute shell command", (char *)NULL);
 	}
@@ -1306,7 +1291,7 @@ main (int argc, char **argv)
       append_to_tagfile = true;
     }
 
-  tagf = fopen (tagfile, append_to_tagfile ? "a" : "w");
+  tagf = fopen (tagfile, append_to_tagfile ? "ab" : "wb");
   if (tagf == NULL)
     pfatal (tagfile);
   put_entries (nodehead);	/* write all the tags (CTAGS) */
@@ -1322,10 +1307,10 @@ main (int argc, char **argv)
 	/* Maybe these should be used:
 	   setenv ("LC_COLLATE", "C", 1);
 	   setenv ("LC_ALL", "C", 1); */
-	strcpy (cmd, "sort -u -o ");
-	strcat (cmd, tagfile);
-	strcat (cmd, " ");
-	strcat (cmd, tagfile);
+	char *z = stpcpy (cmd, "sort -u -o ");
+	z = stpcpy (z, tagfile);
+	*z++ = ' ';
+	strcpy (z, tagfile);
 	exit (system (cmd));
       }
   return EXIT_SUCCESS;
@@ -1347,8 +1332,8 @@ get_compressor_from_suffix (char *file, char **extptr)
 
   /* File has been processed by canonicalize_filename,
      so we don't need to consider backslashes on DOS_NT.  */
-  slash = etags_strrchr (file, '/');
-  suffix = etags_strrchr (file, '.');
+  slash = strrchr (file, '/');
+  suffix = strrchr (file, '.');
   if (suffix == NULL || suffix < slash)
     return NULL;
   if (extptr != NULL)
@@ -1435,7 +1420,7 @@ get_language_from_filename (char *file, int case_sensitive)
 	  return lang;
 
   /* If not found, try suffix after last dot. */
-  suffix = etags_strrchr (file, '.');
+  suffix = strrchr (file, '.');
   if (suffix == NULL)
     return NULL;
   suffix += 1;
@@ -1547,11 +1532,11 @@ process_file_name (char *file, language *lang)
   if (real_name == compressed_name)
     {
       char *cmd = concat (compr->command, " ", real_name);
-      inf = (FILE *) popen (cmd, "r");
+      inf = popen (cmd, "rb");
       free (cmd);
     }
   else
-    inf = fopen (real_name, "r");
+    inf = fopen (real_name, "rb");
   if (inf == NULL)
     {
       perror (real_name);
@@ -1712,7 +1697,7 @@ find_entries (FILE *inf)
       /* Set lp to point at the first char after the last slash in the
          line or, if no slashes, at the first nonblank.  Then set cp to
 	 the first successive blank and terminate the string. */
-      lp = etags_strrchr (lb.buffer+2, '/');
+      lp = strrchr (lb.buffer+2, '/');
       if (lp != NULL)
 	lp += 1;
       else
@@ -1897,9 +1882,9 @@ pfnote (char *name, bool is_func, char *linestart, int linelen, int lno,
   /* If ctags mode, change name "main" to M<thisfilename>. */
   if (CTAGS && !cxref_style && streq (name, "main"))
     {
-      register char *fp = etags_strrchr (curfdp->taggedfname, '/');
+      char *fp = strrchr (curfdp->taggedfname, '/');
       np->name = concat ("M", fp == NULL ? curfdp->taggedfname : fp + 1, "");
-      fp = etags_strrchr (np->name, '.');
+      fp = strrchr (np->name, '.');
       if (fp != NULL && fp[1] != '\0' && fp[2] == '\0')
 	fp[0] = '\0';
     }
@@ -3442,8 +3427,9 @@ C_entries (int c_ext, FILE *inf)
 	    case omethodtag:
 	    case omethodparm:
 	      objdef = omethodcolon;
-	      linebuffer_setlen (&token_name, token_name.len + 1);
-	      strcat (token_name.buffer, ":");
+	      int toklen = token_name.len;
+	      linebuffer_setlen (&token_name, toklen + 1);
+	      strcpy (token_name.buffer + toklen, ":");
 	      break;
 	    }
 	  if (structdef == stagseen)
@@ -4129,7 +4115,7 @@ Ada_funcs (FILE *inf)
 	  /* Skip a string i.e. "abcd". */
 	  if (inquote || (*dbp == '"'))
 	    {
-	      dbp = etags_strchr (dbp + !inquote, '"');
+	      dbp = strchr (dbp + !inquote, '"');
 	      if (dbp != NULL)
 		{
 		  inquote = false;
@@ -4287,7 +4273,7 @@ Perl_functions (FILE *inf)
 	    cp++;
 	  if (cp == sp)
 	    continue;		/* nothing found */
-	  if ((pos = etags_strchr (sp, ':')) != NULL
+	  if ((pos = strchr (sp, ':')) != NULL
 	      && pos < cp && pos[1] == ':')
 	    /* The name is already qualified. */
 	    make_tag (sp, cp - sp, true,
@@ -4747,6 +4733,9 @@ Lisp_functions (FILE *inf)
 	    }
 	}
 
+      if (strneq (dbp + 1, "cl-", 3) || strneq (dbp + 1, "CL-", 3))
+	dbp += 3;
+
       if (strneq (dbp+1, "def", 3) || strneq (dbp+1, "DEF", 3))
 	{
 	  dbp = skip_non_spaces (dbp);
@@ -5039,7 +5028,7 @@ TEX_decode_env (const char *evarname, const char *defenv)
 
   /* Allocate a token table */
   for (len = 1, p = env; p;)
-    if ((p = etags_strchr (p, ':')) && *++p != '\0')
+    if ((p = strchr (p, ':')) && *++p != '\0')
       len++;
   TEX_toktab = xnew (len, linebuffer);
 
@@ -5047,7 +5036,7 @@ TEX_decode_env (const char *evarname, const char *defenv)
   /* zero-length strings (leading ':', "::" and trailing ':') */
   for (i = 0; *env != '\0';)
     {
-      p = etags_strchr (env, ':');
+      p = strchr (env, ':');
       if (!p)			/* End of environment string. */
 	p = env + strlen (env);
       if (p - env > 0)
@@ -5585,7 +5574,7 @@ scan_separators (char *name)
 /* Look at the argument of --regex or --no-regex and do the right
    thing.  Same for each line of a regexp file. */
 static void
-analyse_regex (char *regex_arg)
+analyze_regex (char *regex_arg)
 {
   if (regex_arg == NULL)
     {
@@ -5611,12 +5600,12 @@ analyse_regex (char *regex_arg)
 	char *regexfile = regex_arg + 1;
 
 	/* regexfile is a file containing regexps, one per line. */
-	regexfp = fopen (regexfile, "r");
+	regexfp = fopen (regexfile, "rb");
 	if (regexfp == NULL)
 	  pfatal (regexfile);
 	linebuffer_init (&regexbuf);
 	while (readline_internal (&regexbuf, regexfp) > 0)
-	  analyse_regex (regexbuf.buffer);
+	  analyze_regex (regexbuf.buffer);
 	free (regexbuf.buffer);
 	fclose (regexfp);
       }
@@ -5777,9 +5766,9 @@ substitute (char *in, char *out, struct re_registers *regs)
   /* Pass 1: figure out how much to allocate by finding all \N strings. */
   if (out[size - 1] == '\\')
     fatal ("pattern error in \"%s\"", out);
-  for (t = etags_strchr (out, '\\');
+  for (t = strchr (out, '\\');
        t != NULL;
-       t = etags_strchr (t + 2, '\\'))
+       t = strchr (t + 2, '\\'))
     if (ISDIGIT (t[1]))
       {
 	dig = t[1] - '0';
@@ -6061,7 +6050,7 @@ readline (linebuffer *lbp, FILE *stream)
 	    {
 	      char *endp = lbp->buffer + start;
 
-	      while ((endp = etags_strchr (endp, '"')) != NULL
+	      while ((endp = strchr (endp, '"')) != NULL
 		     && endp[-1] == '\\')
 		endp++;
 	      if (endp != NULL)
@@ -6246,43 +6235,6 @@ savenstr (const char *cp, int len)
   return memcpy (dp, cp, len);
 }
 
-/*
- * Return the ptr in sp at which the character c last
- * appears; NULL if not found
- *
- * Identical to POSIX strrchr, included for portability.
- */
-static char *
-etags_strrchr (register const char *sp, register int c)
-{
-  register const char *r;
-
-  r = NULL;
-  do
-    {
-      if (*sp == c)
-	r = sp;
-  } while (*sp++);
-  return (char *)r;
-}
-
-/*
- * Return the ptr in sp at which the character c first
- * appears; NULL if not found
- *
- * Identical to POSIX strchr, included for portability.
- */
-static char *
-etags_strchr (register const char *sp, register int c)
-{
-  do
-    {
-      if (*sp == c)
-	return (char *)sp;
-    } while (*sp++);
-  return NULL;
-}
-
 /* Skip spaces (end of string is not space), return new pointer. */
 static char *
 skip_spaces (char *cp)
@@ -6408,15 +6360,15 @@ relative_filename (char *file, char *dir)
 
   /* Build a sequence of "../" strings for the resulting relative file name. */
   i = 0;
-  while ((dp = etags_strchr (dp + 1, '/')) != NULL)
+  while ((dp = strchr (dp + 1, '/')) != NULL)
     i += 1;
   res = xnew (3*i + strlen (fp + 1) + 1, char);
-  res[0] = '\0';
+  char *z = res;
   while (i-- > 0)
-    strcat (res, "../");
+    z = stpcpy (z, "../");
 
   /* Add the file name relative to the common root of file and dir. */
-  strcat (res, fp + 1);
+  strcpy (z, fp + 1);
   free (afn);
 
   return res;
@@ -6441,7 +6393,7 @@ absolute_filename (char *file, char *dir)
     res = concat (dir, file, "");
 
   /* Delete the "/dirname/.." and "/." substrings. */
-  slashp = etags_strchr (res, '/');
+  slashp = strchr (res, '/');
   while (slashp != NULL && slashp[0] != '\0')
     {
       if (slashp[1] == '.')
@@ -6473,7 +6425,7 @@ absolute_filename (char *file, char *dir)
 	    }
 	}
 
-      slashp = etags_strchr (slashp + 1, '/');
+      slashp = strchr (slashp + 1, '/');
     }
 
   if (res[0] == '\0')		/* just a safety net: should never happen */
@@ -6494,7 +6446,7 @@ absolute_dirname (char *file, char *dir)
   char *slashp, *res;
   char save;
 
-  slashp = etags_strrchr (file, '/');
+  slashp = strrchr (file, '/');
   if (slashp == NULL)
     return savestr (dir);
   save = slashp[1];

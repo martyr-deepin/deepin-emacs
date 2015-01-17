@@ -1,6 +1,6 @@
-;;; find-func.el --- find the definition of the Emacs Lisp function near point
+;;; find-func.el --- find the definition of the Emacs Lisp function near point  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997, 1999, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Jens Petersen <petersen@kurims.kyoto-u.ac.jp>
 ;; Maintainer: petersen@kurims.kyoto-u.ac.jp
@@ -59,7 +59,7 @@
   (concat
    "^\\s-*(\\(def\\(ine-skeleton\\|ine-generic-mode\\|ine-derived-mode\\|\
 ine\\(?:-global\\)?-minor-mode\\|ine-compilation-mode\\|un-cvs-mode\\|\
-foo\\|[^icfgv]\\(\\w\\|\\s_\\)+\\*?\\)\\|easy-mmode-define-[a-z-]+\\|easy-menu-define\\|\
+foo\\|\\(?:[^icfv]\\|g[^r]\\)\\(\\w\\|\\s_\\)+\\*?\\)\\|easy-mmode-define-[a-z-]+\\|easy-menu-define\\|\
 menu-bar-make-toggle\\)"
    find-function-space-re
    "\\('\\|\(quote \\)?%s\\(\\s-\\|$\\|\(\\|\)\\)")
@@ -106,7 +106,10 @@ Please send improvements and fixes to the maintainer."
     (defface . find-face-regexp))
   "Alist mapping definition types into regexp variables.
 Each regexp variable's value should actually be a format string
-to be used to substitute the desired symbol name into the regexp.")
+to be used to substitute the desired symbol name into the regexp.
+Instead of regexp variable, types can be mapped to functions as well,
+in which case the function is called with one argument (the object
+we're looking for) and it should search for it.")
 (put 'find-function-regexp-alist 'risky-local-variable t)
 
 (defcustom find-function-source-path nil
@@ -178,8 +181,7 @@ LIBRARY should be a string (the name of the library)."
 
 (defvar find-function-C-source-directory
   (let ((dir (expand-file-name "src" source-directory)))
-    (when (and (file-directory-p dir) (file-readable-p dir))
-      dir))
+    (if (file-accessible-directory-p dir) dir))
   "Directory where the C source files of Emacs can be found.
 If nil, do not try to find the source code of functions and variables
 defined in C.")
@@ -283,34 +285,77 @@ The search is done in the source for library LIBRARY."
     (let* ((filename (find-library-name library))
 	   (regexp-symbol (cdr (assq type find-function-regexp-alist))))
       (with-current-buffer (find-file-noselect filename)
-	(let ((regexp (format (symbol-value regexp-symbol)
-			      ;; Entry for ` (backquote) macro in loaddefs.el,
-			      ;; (defalias (quote \`)..., has a \ but
-			      ;; (symbol-name symbol) doesn't.  Add an
-			      ;; optional \ to catch this.
-			      (concat "\\\\?"
-				      (regexp-quote (symbol-name symbol)))))
+	(let ((regexp (if (functionp regexp-symbol) regexp-symbol
+                        (format (symbol-value regexp-symbol)
+                                ;; Entry for ` (backquote) macro in loaddefs.el,
+                                ;; (defalias (quote \`)..., has a \ but
+                                ;; (symbol-name symbol) doesn't.  Add an
+                                ;; optional \ to catch this.
+                                (concat "\\\\?"
+                                        (regexp-quote (symbol-name symbol))))))
 	      (case-fold-search))
 	  (with-syntax-table emacs-lisp-mode-syntax-table
 	    (goto-char (point-min))
-	    (if (or (re-search-forward regexp nil t)
-                    ;; `regexp' matches definitions using known forms like
-                    ;; `defun', or `defvar'.  But some functions/variables
-                    ;; are defined using special macros (or functions), so
-                    ;; if `regexp' can't find the definition, we look for
-                    ;; something of the form "(SOMETHING <symbol> ...)".
-                    ;; This fails to distinguish function definitions from
-                    ;; variable declarations (or even uses thereof), but is
-                    ;; a good pragmatic fallback.
-		    (re-search-forward
-		     (concat "^([^ ]+" find-function-space-re "['(]?"
-			     (regexp-quote (symbol-name symbol))
-			     "\\_>")
-		     nil t))
+	    (if (if (functionp regexp)
+                    (funcall regexp symbol)
+                  (or (re-search-forward regexp nil t)
+                      ;; `regexp' matches definitions using known forms like
+                      ;; `defun', or `defvar'.  But some functions/variables
+                      ;; are defined using special macros (or functions), so
+                      ;; if `regexp' can't find the definition, we look for
+                      ;; something of the form "(SOMETHING <symbol> ...)".
+                      ;; This fails to distinguish function definitions from
+                      ;; variable declarations (or even uses thereof), but is
+                      ;; a good pragmatic fallback.
+                      (re-search-forward
+                       (concat "^([^ ]+" find-function-space-re "['(]?"
+                               (regexp-quote (symbol-name symbol))
+                               "\\_>")
+                       nil t)))
 		(progn
 		  (beginning-of-line)
 		  (cons (current-buffer) (point)))
 	      (cons (current-buffer) nil))))))))
+
+(defun find-function-library (function &optional lisp-only verbose)
+  "Return the pair (ORIG-FUNCTION . LIBRARY) for FUNCTION.
+
+ORIG-FUNCTION is the original name, after removing all advice and
+resolving aliases.  LIBRARY is an absolute file name, a relative
+file name inside the C sources directory, or a name of an
+autoloaded feature.
+
+If ORIG-FUNCTION is a built-in function and LISP-ONLY is non-nil,
+signal an error.
+
+If VERBOSE is non-nil, and FUNCTION is an alias, display a
+message about the whole chain of aliases."
+  (let ((def (if (symbolp function)
+                 (symbol-function (find-function-advised-original function))))
+        aliases)
+    ;; FIXME for completeness, it might be nice to print something like:
+    ;; foo (which is advised), which is an alias for bar (which is advised).
+    (while (and def (symbolp def))
+      (or (eq def function)
+          (not verbose)
+          (setq aliases (if aliases
+                            (concat aliases
+                                    (format ", which is an alias for `%s'"
+                                            (symbol-name def)))
+                          (format "`%s' is an alias for `%s'"
+                                  function (symbol-name def)))))
+      (setq function (symbol-function (find-function-advised-original function))
+            def (symbol-function (find-function-advised-original function))))
+    (if aliases
+        (message "%s" aliases))
+    (cons function
+          (cond
+           ((autoloadp def) (nth 1 def))
+           ((subrp def)
+            (if lisp-only
+                (error "%s is a built-in function" function))
+            (help-C-file-name def 'subr))
+           ((symbol-file function 'defun))))))
 
 ;;;###autoload
 (defun find-function-noselect (function &optional lisp-only)
@@ -330,30 +375,8 @@ searched for in `find-function-source-path' if non-nil, otherwise
 in `load-path'."
   (if (not function)
     (error "You didn't specify a function"))
-  (let ((def (symbol-function (find-function-advised-original function)))
-	aliases)
-    ;; FIXME for completeness, it might be nice to print something like:
-    ;; foo (which is advised), which is an alias for bar (which is advised).
-    (while (symbolp def)
-      (or (eq def function)
-	  (if aliases
-	      (setq aliases (concat aliases
-				    (format ", which is an alias for `%s'"
-					    (symbol-name def))))
-	    (setq aliases (format "`%s' is an alias for `%s'"
-				  function (symbol-name def)))))
-      (setq function (symbol-function (find-function-advised-original function))
-	    def (symbol-function (find-function-advised-original function))))
-    (if aliases
-	(message "%s" aliases))
-    (let ((library
-	   (cond ((autoloadp def) (nth 1 def))
-		 ((subrp def)
-		  (if lisp-only
-		      (error "%s is a built-in function" function))
-		  (help-C-file-name def 'subr))
-		 ((symbol-file function 'defun)))))
-      (find-function-search-for-symbol function nil library))))
+  (let ((func-lib (find-function-library function lisp-only t)))
+    (find-function-search-for-symbol (car func-lib) nil (cdr func-lib))))
 
 (defun find-function-read (&optional type)
   "Read and return an interned symbol, defaulting to the one near point.
@@ -392,7 +415,6 @@ See also `find-function-after-hook'.
 
 Set mark before moving, if the buffer already existed."
   (let* ((orig-point (point))
-	(orig-buf (window-buffer))
 	(orig-buffers (buffer-list))
 	(buffer-point (save-excursion
 			(find-definition-noselect symbol type)))

@@ -2,7 +2,7 @@
 #define EMACS_W32_H
 
 /* Support routines for the NT version of Emacs.
-   Copyright (C) 1994, 2001-2014 Free Software Foundation, Inc.
+   Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -144,10 +144,10 @@ extern char * w32_strerror (int error_no);
 extern int w32_valid_pointer_p (void *, int);
 
 /* Get long (aka "true") form of file name, if it exists.  */
-extern BOOL w32_get_long_filename (char * name, char * buf, int size);
+extern BOOL w32_get_long_filename (const char * name, char * buf, int size);
 
 /* Get the short (a.k.a. "8+3") form of a file name.  */
-extern unsigned int w32_get_short_filename (char *, char *, int);
+extern unsigned int w32_get_short_filename (const char *, char *, int);
 
 /* Prepare our standard handles for proper inheritance by child processes.  */
 extern void prepare_standard_handles (int in, int out,
@@ -172,7 +172,6 @@ extern void init_timers (void);
 extern int _sys_read_ahead (int fd);
 extern int _sys_wait_accept (int fd);
 
-extern Lisp_Object QCloaded_from;
 extern HMODULE w32_delayed_load (Lisp_Object);
 
 extern int (WINAPI *pMultiByteToWideChar)(UINT,DWORD,LPCSTR,int,LPWSTR,int);
@@ -206,6 +205,13 @@ extern void register_child (pid_t, int);
 extern void sys_sleep (int);
 extern int sys_link (const char *, const char *);
 
+/* Return total and free memory info.  */
+extern int w32_memory_info (unsigned long long *, unsigned long long *,
+			    unsigned long long *, unsigned long long *);
+
+/* Compare 2 UTF-8 strings in locale-dependent fashion.  */
+extern int w32_compare_strings (const char *, const char *, char *, int);
+
 #ifdef HAVE_GNUTLS
 #include <gnutls/gnutls.h>
 
@@ -217,5 +223,18 @@ extern ssize_t emacs_gnutls_pull (gnutls_transport_ptr_t p,
 extern ssize_t emacs_gnutls_push (gnutls_transport_ptr_t p,
                                   const void* buf, size_t sz);
 #endif /* HAVE_GNUTLS */
+
+/* Definine a function that will be loaded from a DLL.  */
+#define DEF_DLL_FN(type, func, args) static type (FAR CDECL *fn_##func) args
+
+/* Load a function from the DLL.  */
+#define LOAD_DLL_FN(lib, func)						\
+  do									\
+    {									\
+      fn_##func = (void *) GetProcAddress (lib, #func);			\
+      if (!fn_##func)							\
+	return false;							\
+    }									\
+  while (false)
 
 #endif /* EMACS_W32_H */

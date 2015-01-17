@@ -1,7 +1,7 @@
 #!/bin/sh
-### autogen.sh - tool to help build Emacs from a bzr checkout
+### autogen.sh - tool to help build Emacs from a repository checkout
 
-## Copyright (C) 2011-2014 Free Software Foundation, Inc.
+## Copyright (C) 2011-2015 Free Software Foundation, Inc.
 
 ## Author: Glenn Morris <rgm@gnu.org>
 ## Maintainer: emacs-devel@gnu.org
@@ -23,8 +23,8 @@
 
 ### Commentary:
 
-## The Emacs bzr repository does not include the configure script
-## (and associated helpers).  The first time you fetch Emacs from bzr,
+## The Emacs repository does not include the configure script (and
+## associated helpers).  The first time you fetch Emacs from the repo,
 ## run this script to generate the necessary files.
 ## For more details, see the file INSTALL.REPO.
 
@@ -32,7 +32,7 @@
 
 ## Tools we need:
 ## Note that we respect the values of AUTOCONF etc, like autoreconf does.
-progs="autoconf automake pkg-config"
+progs="autoconf automake"
 
 ## Minimum versions we need:
 autoconf_min=`sed -n 's/^ *AC_PREREQ(\([0-9\.]*\)).*/\1/p' configure.ac`
@@ -41,7 +41,6 @@ autoconf_min=`sed -n 's/^ *AC_PREREQ(\([0-9\.]*\)).*/\1/p' configure.ac`
 ## AM_INIT_AUTOMAKE call.
 automake_min=`sed -n 's/^ *AM_INIT_AUTOMAKE(\([0-9\.]*\)).*/\1/p' configure.ac`
 
-pkg_config_min=`sed -n 's/^ *PKG_PROG_PKG_CONFIG(\([0-9\.]*\)).*/\1/p' configure.ac`
 
 ## $1 = program, eg "autoconf".
 ## Echo the version string, eg "2.59".
@@ -146,7 +145,7 @@ if [ x"$missing" != x ]; then
 
     cat <<EOF
 
-Building Emacs from Bzr requires the following specialized programs:
+Building Emacs from the repository requires the following specialized programs:
 EOF
 
     for prog in $progs; do
@@ -205,97 +204,8 @@ EOF
     exit 1
 fi
 
-# If automake is installed in a nonstandard location, find the standard
-# location if possible and append it to ACLOCAL_PATH.  That way, it will
-# find the pkg.m4 that is installed in the standard location.
-echo "Checking for pkg.m4..."
-AUTORECONF_ENV=
-env_space=
-ac_dir=`aclocal --print-ac-dir` || {
-    cat <<EOF
-There was a problem running 'aclocal --print-ac-dir'.
-The aclocal program is part of automake.
-Please check your automake installation.
-EOF
-
-    exit 1
-}
-
-test -n "$ac_dir" && test -r "$ac_dir/pkg.m4" || {
-
-  # Maybe ACLOCAL_PATH is already set-up.
-  if test -n "$ACLOCAL_PATH"; then
-    oIFS=$IFS
-    IFS=:
-    for dir in $ACLOCAL_PATH; do
-      if test -r "$dir/pkg.m4"; then
-  	AUTORECONF_ENV="ACLOCAL_PATH='$ACLOCAL_PATH'"
-        env_space=' '
-  	break
-      fi
-    done
-    IFS=$oIFS
-  fi
-
-  if test -z "$AUTORECONF_ENV"; then
-    oIFS=$IFS
-    IFS=:
-    before_first_aclocal=true
-    for dir in $PATH; do
-      if test -x "$dir/aclocal"; then
-        if $before_first_aclocal; then
-          before_first_aclocal=false
-        elif ac_dir=`"$dir/aclocal" --print-ac-dir` && test -r "$ac_dir/pkg.m4"
-        then
-          case $ACLOCAL_PATH in
-            '') ACLOCAL_PATH=$ac_dir;;
-            ?*) ACLOCAL_PATH=$ACLOCAL_PATH:$ac_dir;;
-          esac
-          export ACLOCAL_PATH
-          AUTORECONF_ENV="ACLOCAL_PATH='$ACLOCAL_PATH'"
-          env_space=' '
-          break
-        fi
-      fi
-    done
-    IFS=$oIFS
-  fi
-
-  ## OK, maybe pkg-config is in a weird place (eg on hydra).
-  if test -z "$AUTORECONF_ENV"; then
-    oIFS=$IFS
-    IFS=:
-    for dir in $PATH; do
-      if test -x "$dir/pkg-config"; then
-        ac_dir=`echo "$dir" | sed 's|bin$|share/aclocal|'`
-        if test -r "$ac_dir/pkg.m4"; then
-          case $ACLOCAL_PATH in
-            '') ACLOCAL_PATH=$ac_dir;;
-            ?*) ACLOCAL_PATH=$ACLOCAL_PATH:$ac_dir;;
-          esac
-          export ACLOCAL_PATH
-          AUTORECONF_ENV="ACLOCAL_PATH='$ACLOCAL_PATH'"
-          env_space=' '
-          break
-        fi
-      fi
-    done
-    IFS=$oIFS
-  fi
-
-  if test -z "$AUTORECONF_ENV"; then
-    cat <<EOF
-The version of aclocal that you are using cannot find the pkg.m4 file that
-pkg-config provides.  If it is installed in some unusual directory /FOO/BAR,
-set ACLOCAL_PATH='/FOO/BAR' in the environment and run this script again.
-EOF
-    exit 1
-  fi
-}
-echo ok
-
 echo 'Your system has the required tools.'
-echo "Running \"$AUTORECONF_ENV${env_space}autoreconf -fi -I m4\" ..."
+echo "Running 'autoreconf -fi -I m4' ..."
 
 
 ## Let autoreconf figure out what, if anything, needs doing.
@@ -306,7 +216,47 @@ autoreconf -fi -I m4 || exit $?
 ## cause 'make' to needlessly run 'autoheader'.
 echo timestamp > src/stamp-h.in || exit
 
-echo "You can now run \"./configure$env_space$AUTORECONF_ENV\"."
+## Install Git hooks, if using Git.
+if test -d .git/hooks; then
+    tailored_hooks=
+    sample_hooks=
+
+    for hook in commit-msg pre-commit; do
+	cmp build-aux/git-hooks/$hook .git/hooks/$hook >/dev/null 2>&1 ||
+	tailored_hooks="$tailored_hooks $hook"
+    done
+    for hook in applypatch-msg pre-applypatch; do
+	cmp .git/hooks/$hook.sample .git/hooks/$hook >/dev/null 2>&1 ||
+	sample_hooks="$sample_hooks $hook"
+    done
+
+    if test -n "$tailored_hooks$sample_hooks"; then
+	echo "Installing git hooks..."
+
+	case `cp --help 2>/dev/null` in
+	  *--backup*--verbose*)
+	    cp_options='--backup=numbered --verbose';;
+	  *)
+	    cp_options='-f';;
+	esac
+
+	if test -n "$tailored_hooks"; then
+	    for hook in $tailored_hooks; do
+		cp $cp_options build-aux/git-hooks/$hook .git/hooks || exit
+		chmod a-w .git/hooks/$hook || exit
+	    done
+	fi
+
+	if test -n "$sample_hooks"; then
+	    for hook in $sample_hooks; do
+		cp $cp_options .git/hooks/$hook.sample .git/hooks/$hook || exit
+		chmod a-w .git/hooks/$hook || exit
+	    done
+	fi
+    fi
+fi
+
+echo "You can now run './configure'."
 
 exit 0
 

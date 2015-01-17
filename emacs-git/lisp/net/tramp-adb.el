@@ -1,8 +1,8 @@
 ;;; tramp-adb.el --- Functions for calling Android Debug Bridge from Tramp
 
-;; Copyright (C) 2011-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2015 Free Software Foundation, Inc.
 
-;; Author: Juergen Hoetzel <juergen@archlinux.org>
+;; Author: Jürgen Hötzel <juergen@archlinux.org>
 ;; Keywords: comm, processes
 ;; Package: tramp
 
@@ -34,7 +34,6 @@
 ;;; Code:
 
 (require 'tramp)
-(require 'time-date)
 
 ;; Pacify byte-compiler.
 (defvar directory-sep-char)
@@ -316,17 +315,18 @@ pass to the OPERATION."
 (defun tramp-adb-handle-file-attributes (filename &optional id-format)
   "Like `file-attributes' for Tramp files."
   (unless id-format (setq id-format 'integer))
-  (with-parsed-tramp-file-name filename nil
-    (with-tramp-file-property
-	v localname (format "file-attributes-%s" id-format)
-      (and
-       (tramp-adb-send-command-and-check
-	v (format "%s -d -l %s"
-		  (tramp-adb-get-ls-command v)
-		  (tramp-shell-quote-argument localname)))
-       (with-current-buffer (tramp-get-buffer v)
-	 (tramp-adb-sh-fix-ls-output)
-	 (cdar (tramp-do-parse-file-attributes-with-ls v id-format)))))))
+  (ignore-errors
+    (with-parsed-tramp-file-name filename nil
+      (with-tramp-file-property
+	  v localname (format "file-attributes-%s" id-format)
+	(and
+	 (tramp-adb-send-command-and-check
+	  v (format "%s -d -l %s"
+		    (tramp-adb-get-ls-command v)
+		    (tramp-shell-quote-argument localname)))
+	 (with-current-buffer (tramp-get-buffer v)
+	   (tramp-adb-sh-fix-ls-output)
+	   (cdar (tramp-do-parse-file-attributes-with-ls v id-format))))))))
 
 (defun tramp-do-parse-file-attributes-with-ls (vec &optional id-format)
   "Parse `file-attributes' for Tramp files using the ls(1) command."
@@ -458,9 +458,7 @@ Emacs dired can't find files."
       (insert "  " (mapconcat 'identity sorted-lines "\n  ")))
     ;; Add final newline.
     (goto-char (point-max))
-    (unless (= (point) (line-beginning-position))
-      (insert "\n"))))
-
+    (unless (bolp) (insert "\n"))))
 
 (defun tramp-adb-ls-output-time-less-p (a b)
   "Sort \"ls\" output by time, descending."
@@ -469,7 +467,7 @@ Emacs dired can't find files."
     (setq time-a (apply 'encode-time (parse-time-string (match-string 0 a))))
     (string-match tramp-adb-ls-date-regexp b)
     (setq time-b (apply 'encode-time (parse-time-string (match-string 0 b))))
-    (tramp-time-less-p time-b time-a)))
+    (time-less-p time-b time-a)))
 
 (defun tramp-adb-ls-output-name-less-p (a b)
   "Sort \"ls\" output by name, ascending."
@@ -609,10 +607,10 @@ But handle the case, if the \"test\" command is not available."
        'write-region
        (list start end tmpfile append 'no-message lockname confirm))
       (with-tramp-progress-reporter
-	  v 3 (format "Moving tmp file %s to %s" tmpfile filename)
+	  v 3 (format "Moving tmp file `%s' to `%s'" tmpfile filename)
 	(unwind-protect
 	    (when (tramp-adb-execute-adb-command v "push" tmpfile localname)
-	      (tramp-error v 'file-error "Cannot write: `%s' filename"))
+	      (tramp-error v 'file-error "Cannot write: `%s'" filename))
 	  (delete-file tmpfile)))
 
       (when (or (eq visit t) (stringp visit))
@@ -796,16 +794,18 @@ PRESERVE-UID-GID and PRESERVE-EXTENDED-ATTRIBUTES are completely ignored."
       ;; directory.
       (condition-case nil
 	  (progn
-	    (setq ret 0)
-	    (tramp-adb-barf-unless-okay
-	     v (format "(cd %s; %s)"
-		       (tramp-shell-quote-argument localname) command)
-	     "")
-	    ;; We should show the output anyway.
+	    (setq ret
+		  (if (tramp-adb-send-command-and-check
+		       v
+		       (format "(cd %s; %s)"
+			       (tramp-shell-quote-argument localname) command))
+		      ;; Set return status accordingly.
+		      0 1))
+	    ;; We should add the output anyway.
 	    (when outbuf
 	      (with-current-buffer outbuf
 		(insert-buffer-substring (tramp-get-connection-buffer v)))
-	      (when display (display-buffer outbuf))))
+	      (when (and display (get-buffer-window outbuf t)) (redisplay))))
 	;; When the user did interrupt, we should do it also.  We use
 	;; return code -1 as marker.
 	(quit
@@ -998,7 +998,8 @@ PRESERVE-UID-GID and PRESERVE-EXTENDED-ATTRIBUTES are completely ignored."
   (with-temp-buffer
     (prog1
 	(unless
-	    (zerop (apply 'tramp-call-process tramp-adb-program nil t nil args))
+	    (zerop
+	     (apply 'tramp-call-process vec tramp-adb-program nil t nil args))
 	  (buffer-string))
       (tramp-message vec 6 "%s" (buffer-string)))))
 
@@ -1031,9 +1032,10 @@ This happens for Android >= 4.0."
 
 (defun tramp-adb-send-command-and-check
   (vec command)
-  "Run COMMAND and and check its exit status.
-Sends `echo $?' along with the COMMAND for checking the exit status.  If
-COMMAND is nil, just sends `echo $?'.  Returns the exit status found."
+  "Run COMMAND and check its exit status.
+Sends `echo $?' along with the COMMAND for checking the exit
+status.  If COMMAND is nil, just sends `echo $?'.  Returns nil if
+the exit status is not equal 0, and t otherwise."
   (tramp-adb-send-command
    vec (if command
 	   (format "%s; echo tramp_exit_status $?" command)
@@ -1107,10 +1109,7 @@ connection if a previous connection has died for some reason."
 	(and p (processp p) (memq (process-status p) '(run open)))
       (save-match-data
 	(when (and p (processp p)) (delete-process p))
-	(setq tramp-current-method (tramp-file-name-method vec)
-	      tramp-current-user (tramp-file-name-user vec)
-	      tramp-current-host (tramp-file-name-host vec)
-	      devices (mapcar 'cadr (tramp-adb-parse-device-names nil)))
+	(setq devices (mapcar 'cadr (tramp-adb-parse-device-names nil)))
 	(if (not devices)
 	    (tramp-error vec 'file-error "No device connected"))
 	(if (and (> (length host) 0) (not (member host devices)))

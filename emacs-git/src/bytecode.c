@@ -1,5 +1,5 @@
 /* Execution of byte code produced by bytecomp.el.
-   Copyright (C) 1985-1988, 1993, 2000-2014 Free Software Foundation,
+   Copyright (C) 1985-1988, 1993, 2000-2015 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -36,8 +36,10 @@ by Hallvard:
 #include <config.h>
 
 #include "lisp.h"
+#include "blockinput.h"
 #include "character.h"
 #include "buffer.h"
+#include "keyboard.h"
 #include "syntax.h"
 #include "window.h"
 
@@ -67,7 +69,6 @@ by Hallvard:
 
 #ifdef BYTE_CODE_METER
 
-Lisp_Object Qbyte_code_meter;
 #define METER_2(code1, code2) AREF (AREF (Vbyte_code_meter, code1), code2)
 #define METER_1(code) METER_2 (0, code)
 
@@ -292,8 +293,6 @@ enum byte_code_op
     Bscan_buffer = 0153, /* No longer generated as of v18.  */
     Bset_mark = 0163, /* this loser is no longer generated as of v18 */
 #endif
-
-    B__dummy__ = 0  /* Pacify C89.  */
 };
 
 /* Whether to maintain a `top' and `bottom' field in the stack frame.  */
@@ -390,7 +389,11 @@ unmark_byte_stack (void)
 
 /* Fetch the next byte from the bytecode stream.  */
 
+#ifdef BYTE_CODE_SAFE
+#define FETCH (eassert (stack.byte_string_start == SDATA (stack.byte_string)), *stack.pc++)
+#else
 #define FETCH *stack.pc++
+#endif
 
 /* Fetch two bytes from the bytecode stream and make a 16-bit number
    out of them.  */
@@ -1104,9 +1107,6 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
 	  goto pushhandler;
 	CASE (Bpushconditioncase): /* New in 24.4.  */
 	  {
-	    extern EMACS_INT lisp_eval_depth;
-	    extern int poll_suppress_count;
-	    extern int interrupt_input_blocked;
 	    struct handler *c;
 	    Lisp_Object tag;
 	    int dest;

@@ -1,6 +1,6 @@
 ;;; chart.el --- Draw charts (bar charts, etc)  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1996, 1998-1999, 2001, 2004-2005, 2007-2014 Free
+;; Copyright (C) 1996, 1998-1999, 2001, 2004-2005, 2007-2015 Free
 ;; Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam  <zappo@gnu.org>
@@ -422,7 +422,7 @@ or is created with the bounds of SEQ."
 	(if (stringp (car (oref seq data)))
 	    (let ((labels (oref seq data)))
 	      (if (not axis)
-		  (setq axis (make-instance chart-axis-names
+		  (setq axis (make-instance 'chart-axis-names
 					    :name (oref seq name)
 					    :items labels
 					    :chart c))
@@ -430,7 +430,7 @@ or is created with the bounds of SEQ."
 	  (let ((range (cons 0 1))
 		(l (oref seq data)))
 	    (if (not axis)
-		(setq axis (make-instance chart-axis-range
+		(setq axis (make-instance 'chart-axis-range
 					  :name (oref seq name)
 					  :chart c)))
 	    (while l
@@ -577,19 +577,19 @@ labeled NUMTITLE.
 Optional arguments:
 Set the chart's max element display to MAX, and sort lists with
 SORT-PRED if desired."
-  (let ((nc (make-instance chart-bar
+  (let ((nc (make-instance 'chart-bar
 			   :title title
 			   :key-label "8-m"  ; This is a text key pic
 			   :direction dir
 			   ))
 	(iv (eq dir 'vertical)))
     (chart-add-sequence nc
-			(make-instance chart-sequece
+			(make-instance 'chart-sequece
 				       :data namelst
 				       :name nametitle)
 			(if iv 'x-axis 'y-axis))
     (chart-add-sequence nc
-			(make-instance chart-sequece
+			(make-instance 'chart-sequece
 				       :data numlst
 				       :name numtitle)
 			(if iv 'y-axis 'x-axis))

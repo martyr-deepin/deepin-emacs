@@ -118,7 +118,7 @@
 2004-12-15  Edward O'Connor  <ted@oconnor.cx>
 
 	* erc.el (erc-send-ctcp-message): Only upcase the ctcp command,
-	and not the entire message.  Revision 1.707 had broken /me.
+	and not the entire message.  Brian Palmer's change of 2004-12-12 had broken /me.
 	Shouting is bad! :)
 
 2004-12-14  Diane Murray  <disumu@x3y2z1.net>
@@ -1979,7 +1979,7 @@
 
 2004-01-12  Lawrence Mitchell  <wence@gmx.li>
 
-	* erc.el (erc-bol): Fix bug introduced in revision 1.601.
+	* erc.el (erc-bol): Fix bug introduced in my changes from 2004-01-11.
 
 2004-01-12  Lawrence Mitchell  <wence@gmx.li>
 
@@ -2072,7 +2072,7 @@
 
 See ChangeLog.03 for earlier changes.
 
-	Copyright (C) 2004, 2006-2014 Free Software Foundation, Inc.
+	Copyright (C) 2004, 2006-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

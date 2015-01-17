@@ -1,6 +1,6 @@
 ;;; calc-forms.el --- data format conversion functions for Calc
 
-;; Copyright (C) 1990-1993, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
 ;; Maintainer: Jay Belanger <jay.p.belanger@gmail.com>
@@ -273,7 +273,10 @@
 	(m (math-normalize (nth 2 a)))
 	(s (let ((calc-internal-prec (max (- calc-internal-prec 4) 3)))
 	     (math-normalize (nth 3 a)))))
-    (if (math-negp h)
+    (if (or 
+         (math-negp h)
+         (and (= h 0) (math-negp m))
+         (and (= h 0) (= m 0) (math-negp s)))
 	(progn
 	  (if (math-posp s)
 	      (setq s (math-add s -60)

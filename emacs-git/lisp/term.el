@@ -1,6 +1,6 @@
 ;;; term.el --- general command interpreter in a window stuff
 
-;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2014 Free Software
+;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Per Bothner <per@bothner.com>
@@ -165,15 +165,13 @@
 ;;  full advantage of this package
 ;;
 ;;  (add-hook 'term-mode-hook
-;;  		  (function
-;;  		   (lambda ()
-;;  			 (setq term-prompt-regexp "^[^#$%>\n]*[#$%>] *")
-;;  			 (make-local-variable 'mouse-yank-at-point)
-;;  			 (make-local-variable 'transient-mark-mode)
-;;  			 (setq mouse-yank-at-point t)
-;;  			 (setq transient-mark-mode nil)
-;;  			 (auto-fill-mode -1)
-;;  			 (setq tab-width 8 ))))
+;;  	      (function
+;;  	       (lambda ()
+;;  	             (setq term-prompt-regexp "^[^#$%>\n]*[#$%>] *")
+;;  	             (setq-local mouse-yank-at-point t)
+;;  	             (setq-local transient-mark-mode nil)
+;;  	             (auto-fill-mode -1)
+;;  	             (setq tab-width 8 ))))
 ;;
 ;;
 ;;             ----------------------------------------
@@ -974,6 +972,9 @@ is buffer-local."
   (if (and (not (featurep 'xemacs))
 	   (display-graphic-p)
 	   overflow-newline-into-fringe
+	   ;; Subtract 1 from the width when any fringe has zero width,
+	   ;; not just the right fringe.  Bug#18601.
+	   (/= (frame-parameter nil 'left-fringe) 0)
 	   (/= (frame-parameter nil 'right-fringe) 0))
       (window-body-width)
     (1- (window-body-width))))
@@ -1251,16 +1252,7 @@ without any interpretation."
     (run-hooks 'mouse-leave-buffer-hook)
     (setq this-command 'yank)
     (mouse-set-point click)
-    (term-send-raw-string
-     ;; From `mouse-yank-primary':
-     (or (if (fboundp 'x-get-selection-value)
-             (if (eq system-type 'windows-nt)
-                 (or (x-get-selection 'PRIMARY)
-                     (x-get-selection-value))
-               (or (x-get-selection-value)
-                   (x-get-selection 'PRIMARY)))
-	   (x-get-selection 'PRIMARY))
-	 (error "No selection is available")))))
+    (term-send-raw-string (gui-get-primary-selection))))
 
 (defun term-paste ()
   "Insert the last stretch of killed text at point."
@@ -3632,7 +3624,7 @@ all pending output has been dealt with."))
 	    (if (< down 0) term-scroll-start term-scroll-end))))
     (when (or (and (< down 0) (< scroll-needed 0))
 	      (and (> down 0) (> scroll-needed 0)))
-      (let ((save-point (copy-marker (point))) (save-top))
+      (let ((save-point (point-marker)) (save-top))
 	(goto-char term-home-marker)
 	(cond (term-scroll-with-delete
 	       (if (< down 0)

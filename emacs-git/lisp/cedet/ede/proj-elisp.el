@@ -1,6 +1,6 @@
 ;;; ede-proj-elisp.el --- EDE Generic Project Emacs Lisp support
 
-;; Copyright (C) 1998-2005, 2007-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2005, 2007-2015 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: project, make
@@ -267,7 +267,8 @@ is found, such as a `-version' variable, or the standard header."
 	  (while paths
 	    (ede-proj-elisp-add-path (car paths))
 	    (setq paths (cdr paths))))
-	(save-buffer)) )))
+	(save-buffer)
+	(kill-buffer)))))
 
 (defmethod ede-proj-flush-autoconf ((this ede-proj-target-elisp))
   "Flush the configure file (current buffer) to accommodate THIS."

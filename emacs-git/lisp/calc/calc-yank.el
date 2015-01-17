@@ -1,6 +1,6 @@
 ;;; calc-yank.el --- kill-ring functionality for Calc
 
-;; Copyright (C) 1990-1993, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
 ;; Maintainer: Jay Belanger <jay.p.belanger@gmail.com>
@@ -143,10 +143,7 @@ TEXT and CALCVAL are the TEXT and internal structure of stack entries.")
   "Set the contents of the Calc register REGISTER to (TEXT . CALCVAL),
 as well as set the contents of the Emacs register REGISTER to TEXT."
   (set-register register text)
-  (let ((aelt (assq register calc-register-alist)))
-    (if aelt
-        (setcdr aelt (cons text calcval))
-      (push (cons register (cons text calcval)) calc-register-alist))))
+  (setf (alist-get register calc-register-alist) (cons text calcval)))
 
 (defun calc-get-register (reg)
   "Return the CALCVAL portion of the contents of the Calc register REG,

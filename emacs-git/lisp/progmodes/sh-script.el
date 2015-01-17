@@ -1,6 +1,7 @@
 ;;; sh-script.el --- shell-script editing commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1997, 1999, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1997, 1999, 2001-2015 Free Software Foundation,
+;; Inc.
 
 ;; Author: Daniel Pfeiffer <occitan@esperanto.org>
 ;; Version: 2.0f
@@ -237,6 +238,7 @@
     (ksh88 . jsh)
     (oash . sh)
     (pdksh . ksh88)
+    (mksh . pdksh)
     (posix . sh)
     (tcsh . csh)
     (wksh . ksh88)
@@ -262,6 +264,7 @@ sh		Bourne Shell
       ksh	Korn Shell '93
 	dtksh	CDE Desktop Korn Shell
       pdksh	Public Domain Korn Shell
+        mksh    MirOS BSD Korn Shell
       wksh	Window Korn Shell
       zsh	Z Shell
   oash		SCO OA (curses) Shell
@@ -271,7 +274,6 @@ sh		Bourne Shell
   :version "24.4"                       ; added dash
   :group 'sh-script)
 
-
 (defcustom sh-alias-alist
   (append (if (eq system-type 'gnu/linux)
 	     '((csh . tcsh)
@@ -279,11 +281,20 @@ sh		Bourne Shell
 	 ;; for the time being
 	 '((ksh . ksh88)
            (bash2 . bash)
-	   (sh5 . sh)))
+	   (sh5 . sh)
+           ;; Android's system shell
+           ("^/system/bin/sh$" . mksh)))
   "Alist for transforming shell names to what they really are.
-Use this where the name of the executable doesn't correspond to the type of
-shell it really is."
-  :type '(repeat (cons symbol symbol))
+Use this where the name of the executable doesn't correspond to
+the type of shell it really is.  Keys are regular expressions
+matched against the full path of the interpreter.  (For backward
+compatibility, keys may also be symbols, which are matched
+against the interpreter's basename.  The values are symbols
+naming the shell."
+  :type '(repeat (cons (radio
+                        (regexp :tag "Regular expression")
+                        (symbol :tag "Basename"))
+                       (symbol :tag "Shell")))
   :group 'sh-script)
 
 
@@ -387,15 +398,20 @@ the car and cdr are the same symbol.")
   "Non-nil if `sh-shell-variables' is initialized.")
 
 (defun sh-canonicalize-shell (shell)
-  "Convert a shell name SHELL to the one we should handle it as."
-  (if (string-match "\\.exe\\'" shell)
-      (setq shell (substring shell 0 (match-beginning 0))))
-  (or (symbolp shell)
-      (setq shell (intern shell)))
-  (or (cdr (assq shell sh-alias-alist))
-      shell))
+  "Convert a shell name SHELL to the one we should handle it as.
+SHELL is a full path to the shell interpreter; return a shell
+name symbol."
+  (cl-loop
+     with shell = (cond ((string-match "\\.exe\\'" shell)
+                         (substring shell 0 (match-beginning 0)))
+                        (t shell))
+     with shell-base = (intern (file-name-nondirectory shell))
+     for (key . value) in sh-alias-alist
+     if (and (stringp key) (string-match key shell)) return value
+     if (eq key shell-base) return value
+     finally return shell-base))
 
-(defvar sh-shell (sh-canonicalize-shell (file-name-nondirectory sh-shell-file))
+(defvar sh-shell (sh-canonicalize-shell sh-shell-file)
   "The shell being programmed.  This is set by \\[sh-set-shell].")
 ;;;###autoload(put 'sh-shell 'safe-local-variable 'symbolp)
 
@@ -466,6 +482,9 @@ the car and cdr are the same symbol.")
 	?~ "_"
 	?, "_"
 	?= "."
+	?\; "."
+	?| "."
+	?& "."
 	?< "."
 	?> ".")
   "The syntax table to use for Shell-Script mode.
@@ -892,7 +911,7 @@ See `sh-feature'.")
      (:foreground "tan1" ))
     (t
      (:weight bold)))
-  "Face to show a here-document"
+  "Face to show a here-document."
   :group 'sh-indentation)
 
 ;; These colors are probably icky.  It's just a placeholder though.
@@ -903,7 +922,7 @@ See `sh-feature'.")
      (:foreground "magenta"))
     (t
      (:weight bold)))
-  "Face to show quoted execs like ``"
+  "Face to show quoted execs like `blabla`."
   :group 'sh-indentation)
 (define-obsolete-face-alias 'sh-heredoc-face 'sh-heredoc "22.1")
 (defvar sh-heredoc-face 'sh-heredoc)
@@ -1033,13 +1052,11 @@ Point is at the beginning of the next line."
   "Search for a subshell embedded in a string.
 Find all the unescaped \" characters within said subshell, remembering that
 subshells can nest."
-  ;; FIXME: This can (and often does) match multiple lines, yet it makes no
-  ;; effort to handle multiline cases correctly, so it ends up being
-  ;; rather flaky.
   (when (eq ?\" (nth 3 (syntax-ppss))) ; Check we matched an opening quote.
     ;; bingo we have a $( or a ` inside a ""
     (let (;; `state' can be: double-quote, backquote, code.
           (state (if (eq (char-before) ?`) 'backquote 'code))
+          (startpos (point))
           ;; Stacked states in the context.
           (states '(double-quote)))
       (while (and state (progn (skip-chars-forward "^'\\\\\"`$()" limit)
@@ -1070,7 +1087,12 @@ subshells can nest."
                  (`double-quote nil)
                  (_ (setq state (pop states)))))
           (_ (error "Internal error in sh-font-lock-quoted-subshell")))
-        (forward-char 1)))))
+        (forward-char 1))
+      (when (< startpos (line-beginning-position))
+        (put-text-property startpos (point) 'syntax-multiline t)
+        (add-hook 'syntax-propertize-extend-region-functions
+                  'syntax-propertize-multiline nil t))
+      )))
 
 
 (defun sh-is-quoted-p (pos)
@@ -1533,6 +1555,12 @@ When the region is active, send the region instead."
 
 ;; mode-command and utility functions
 
+(defun sh-after-hack-local-variables ()
+  (when (assq 'sh-shell file-local-variables-alist)
+    (sh-set-shell (if (symbolp sh-shell)
+                      (symbol-name sh-shell)
+                    sh-shell))))
+
 ;;;###autoload
 (define-derived-mode sh-mode prog-mode "Shell-script"
   "Major mode for editing shell scripts.
@@ -1643,7 +1671,9 @@ with your script for an edit-interpret-debug cycle."
          ((string-match "[.]csh\\>"    buffer-file-name) "csh")
 	 ((equal (file-name-nondirectory buffer-file-name) ".profile") "sh")
          (t sh-shell-file))
-   nil nil))
+   nil nil)
+  (add-hook 'hack-local-variables-hook
+    #'sh-after-hack-local-variables nil t))
 
 ;;;###autoload
 (defalias 'shell-script-mode 'sh-mode)
@@ -1837,6 +1867,40 @@ Does not preserve point."
    ((equal tok "in") (sh-smie--sh-keyword-in-p))
    (t (sh-smie--keyword-p))))
 
+(defun sh-smie--default-forward-token ()
+  (forward-comment (point-max))
+  (buffer-substring-no-properties
+   (point)
+   (progn (if (zerop (skip-syntax-forward "."))
+              (while (progn (skip-syntax-forward "w_'")
+                            (looking-at "\\\\"))
+                (forward-char 2)))
+          (point))))
+
+(defun sh-smie--default-backward-token ()
+  (forward-comment (- (point)))
+  (let ((pos (point))
+        (n (skip-syntax-backward ".")))
+    (if (or (zerop n)
+            (and (eq n -1)
+                 (let ((p (point)))
+                   (if (eq -1 (% (skip-syntax-backward "\\") 2))
+                       t
+                     (goto-char p)
+                     nil))))
+        (while
+            (progn (skip-syntax-backward "w_'")
+                   (or (not (zerop (skip-syntax-backward "\\")))
+                       (when (eq ?\\ (char-before (1- (point))))
+                         (let ((p (point)))
+                           (forward-char -1)
+                           (if (eq -1 (% (skip-syntax-backward "\\") 2))
+                               t
+                             (goto-char p)
+                             nil))))))
+      (goto-char (- (point) (% (skip-syntax-backward "\\") 2))))
+    (buffer-substring-no-properties (point) pos)))
+
 (defun sh-smie-sh-forward-token ()
   (if (and (looking-at "[ \t]*\\(?:#\\|\\(\\s|\\)\\|$\\)")
            (save-excursion
@@ -1865,7 +1929,7 @@ Does not preserve point."
         tok))
      (t
       (let* ((pos (point))
-             (tok (smie-default-forward-token)))
+             (tok (sh-smie--default-forward-token)))
         (cond
          ((equal tok ")") "case-)")
          ((equal tok "(") "case-(")
@@ -1909,7 +1973,7 @@ Does not preserve point."
       (goto-char (match-beginning 1))
       (match-string-no-properties 1))
      (t
-      (let ((tok (smie-default-backward-token)))
+      (let ((tok (sh-smie--default-backward-token)))
         (cond
          ((equal tok ")") "case-)")
          ((equal tok "(") "case-(")
@@ -1939,20 +2003,25 @@ May return nil if the line should not be treated as continued."
     (`(:after . "case-)") (- (sh-var-value 'sh-indent-for-case-alt)
                              (sh-var-value 'sh-indent-for-case-label)))
     ((and `(:before . ,_)
-          (guard (when sh-indent-after-continuation
-                   (save-excursion
-                     (ignore-errors
-                       (skip-chars-backward " \t")
-                       (sh-smie--looking-back-at-continuation-p))))))
-     ;; After a line-continuation, make sure the rest is indented.
-     (let* ((sh-indent-after-continuation nil)
-            (indent (smie-indent-calculate))
-            (initial (sh-smie--continuation-start-indent)))
-       (when (and (numberp indent) (numberp initial)
-                  (<= indent initial))
-         `(column . ,(+ initial sh-indentation)))))
-    (`(:before . ,(or `"(" `"{" `"["))
-     (if (smie-rule-hanging-p) (smie-rule-parent)))
+          ;; After a line-continuation, make sure the rest is indented.
+          (guard sh-indent-after-continuation)
+          (guard (save-excursion
+                   (ignore-errors
+                     (skip-chars-backward " \t")
+                     (sh-smie--looking-back-at-continuation-p))))
+          (let initial (sh-smie--continuation-start-indent))
+          (guard (let* ((sh-indent-after-continuation nil)
+                        (indent (smie-indent-calculate)))
+                   (and (numberp indent) (numberp initial)
+                        (<= indent initial)))))
+     `(column . ,(+ initial sh-indentation)))
+    (`(:before . ,(or `"(" `"{" `"[" "while" "if" "for" "case"))
+     (if (not (smie-rule-prev-p "&&" "||" "|"))
+         (when (smie-rule-hanging-p)
+           (smie-rule-parent))
+       (unless (smie-rule-bolp)
+	 (while (equal "|" (nth 2 (smie-backward-sexp 'halfexp))))
+	 `(column . ,(smie-indent-virtual)))))
     ;; FIXME: Maybe this handling of ;; should be made into
     ;; a smie-rule-terminator function that takes the substitute ";" as arg.
     (`(:before . ,(or `";;" `";&" `";;&"))
@@ -1970,7 +2039,12 @@ May return nil if the line should not be treated as continued."
                             (smie-rule-bolp))))
                  (current-column)
                (smie-indent-calculate)))))
-    (`(:after . "|") (if (smie-rule-parent-p "|") nil 4))
+    (`(:before . ,(or `"|" `"&&" `"||"))
+     (unless (smie-rule-parent-p token)
+       (smie-backward-sexp token)
+       `(column . ,(+ (funcall smie-rules-function :elem 'basic)
+                      (smie-indent-virtual)))))
+
     ;; Attempt at backward compatibility with the old config variables.
     (`(:before . "fi") (sh-var-value 'sh-indent-for-fi))
     (`(:before . "done") (sh-var-value 'sh-indent-for-done))
@@ -2091,7 +2165,7 @@ Point should be before the newline."
      ;;    tok))
      (t
       (let* ((pos (point))
-             (tok (smie-default-forward-token)))
+             (tok (sh-smie--default-forward-token)))
         (cond
          ;; ((equal tok ")") "case-)")
          ((and tok (string-match "\\`[a-z]" tok)
@@ -2132,7 +2206,7 @@ Point should be before the newline."
      ;;  (goto-char (match-beginning 1))
      ;;  (match-string-no-properties 1))
      (t
-      (let ((tok (smie-default-backward-token)))
+      (let ((tok (sh-smie--default-backward-token)))
         (cond
          ;; ((equal tok ")") "case-)")
          ((and tok (string-match "\\`[a-z]" tok)
@@ -2253,9 +2327,7 @@ Calls the value of `sh-set-shell-hook' if set."
 		     t))
   (if (string-match "\\.exe\\'" shell)
       (setq shell (substring shell 0 (match-beginning 0))))
-  (setq sh-shell (intern (file-name-nondirectory shell))
-	sh-shell (or (cdr (assq sh-shell sh-alias-alist))
-		     sh-shell))
+  (setq sh-shell (sh-canonicalize-shell shell))
   (if insert-flag
       (setq sh-shell-file
 	    (executable-set-magic shell (sh-feature sh-shell-arg)
@@ -2279,6 +2351,11 @@ Calls the value of `sh-set-shell-hook' if set."
         (let ((mksym (lambda (name)
                        (intern (format "sh-smie-%s-%s"
                                        sh-indent-supported-here name)))))
+	  (add-function :around (local 'smie--hanging-eolp-function)
+			(lambda (orig)
+			  (if (looking-at "[ \t]*\\\\\n")
+			      (goto-char (match-end 0))
+			    (funcall orig))))
           (smie-setup (symbol-value (funcall mksym "grammar"))
                       (funcall mksym "rules")
                       :forward-token  (funcall mksym "forward-token")
@@ -2298,11 +2375,11 @@ Calls the value of `sh-set-shell-hook' if set."
 	    (sh-make-vars-local))
 	(message "Indentation setup for shell type %s" sh-shell))
     (message "No indentation for this shell type.")
-    (setq indent-line-function 'sh-basic-indent-line))
+    (setq-local indent-line-function 'sh-basic-indent-line))
   (when font-lock-mode
     (setq font-lock-set-defaults nil)
     (font-lock-set-defaults)
-    (font-lock-fontify-buffer))
+    (font-lock-flush))
   (setq sh-shell-process nil)
   (run-hooks 'sh-set-shell-hook))
 

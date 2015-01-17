@@ -1,6 +1,6 @@
 ;;; admin.el --- utilities for Emacs administration
 
-;; Copyright (C) 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2015 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -65,17 +65,25 @@ Optional argument DATE is the release date, default today."
   "Subroutine of `set-version' and `set-copyright'."
   (find-file (expand-file-name file root))
   (goto-char (point-min))
+  (setq version (format "%s" version))
   (unless (re-search-forward rx nil :noerror)
     (user-error "Version not found in %s" file))
-  (replace-match (format "%s" version) nil nil nil 1))
+  (if (not (equal version (match-string 1)))
+      (replace-match version nil nil nil 1)
+    (kill-buffer)
+    (message "No need to update `%s'" file)))
 
-;; TODO report the progress
 (defun set-version (root version)
   "Set Emacs version to VERSION in relevant files under ROOT.
 Root must be the root of an Emacs source tree."
-  (interactive "DEmacs root directory: \nsVersion number: ")
+  (interactive (list
+		(read-directory-name "Emacs root directory: " source-directory)
+		(read-string "Version number: "
+			     (replace-regexp-in-string "\\.[0-9]+\\'" ""
+						       emacs-version))))
   (unless (file-exists-p (expand-file-name "src/emacs.c" root))
     (user-error "%s doesn't seem to be the root of an Emacs source tree" root))
+  (message "Setting version numbers...")
   ;; There's also a "version 3" (standing for GPLv3) at the end of
   ;; `README', but since `set-version-in-file' only replaces the first
   ;; occurrence, it won't be replaced.
@@ -86,83 +94,33 @@ Root must be the root of an Emacs source tree."
 		       (rx (and "AC_INIT" (1+ (not (in ?,)))
                                 ?, (0+ space)
                                 (submatch (1+ (in "0-9."))))))
-  (set-version-in-file root "doc/emacs/emacsver.texi" version
-		       (rx (and "EMACSVER" (1+ space)
-				(submatch (1+ (in "0-9."))))))
-  (set-version-in-file root "doc/man/emacs.1" version
-		       (rx (and ".TH EMACS" (1+ not-newline)
-                                "GNU Emacs" (1+ space)
-				(submatch (1+ (in "0-9."))))))
+  ;; No longer used, broken in multiple ways, updating version seems pointless.
   (set-version-in-file root "nt/config.nt" version
 		       (rx (and bol "#" (0+ blank) "define" (1+ blank)
 				"VERSION" (1+ blank) "\""
 				(submatch (1+ (in "0-9."))))))
+  ;; TODO: msdos could easily extract the version number from
+  ;; configure.ac with sed, rather than duplicating the information.
   (set-version-in-file root "msdos/sed2v2.inp" version
 		       (rx (and bol "/^#undef " (1+ not-newline)
 				"define VERSION" (1+ space) "\""
 				(submatch (1+ (in "0-9."))))))
+  ;; No longer used, broken in multiple ways, updating version seems pointless.
   (set-version-in-file root "nt/makefile.w32-in" version
 		       (rx (and "VERSION" (0+ space) "=" (0+ space)
 				(submatch (1+ (in "0-9."))))))
-  ;; nt/emacs.rc also contains the version number, but in an awkward
-  ;; format. It must contain four components, separated by commas, and
-  ;; in two places those commas are followed by space, in two other
-  ;; places they are not.
-  (let* ((version-components (append (split-string version "\\.")
-				     '("0" "0")))
-	 (comma-version
-	  (concat (car version-components) ","
-		  (cadr version-components) ","
-		  (cadr (cdr version-components)) ","
-		  (cadr (cdr (cdr version-components)))))
-	 (comma-space-version
-	  (concat (car version-components) ", "
-		  (cadr version-components) ", "
-		  (cadr (cdr version-components)) ", "
-		  (cadr (cdr (cdr version-components))))))
-    (set-version-in-file root "nt/emacs.rc" comma-version
-			 (rx (and "FILEVERSION" (1+ space)
-				  (submatch (1+ (in "0-9,"))))))
-    (set-version-in-file root "nt/emacs.rc" comma-version
-			 (rx (and "PRODUCTVERSION" (1+ space)
-				  (submatch (1+ (in "0-9,"))))))
-    (set-version-in-file root "nt/emacs.rc" comma-space-version
-			 (rx (and "\"FileVersion\"" (0+ space) ?, (0+ space)
-				  ?\" (submatch (1+ (in "0-9, "))) "\\0\"")))
-    (set-version-in-file root "nt/emacs.rc" comma-space-version
-			 (rx (and "\"ProductVersion\"" (0+ space) ?,
-				  (0+ space) ?\" (submatch (1+ (in "0-9, ")))
-				  "\\0\"")))
-    ;; Likewise for emacsclient.rc
-    (set-version-in-file root "nt/emacsclient.rc" comma-version
-			 (rx (and "FILEVERSION" (1+ space)
-				  (submatch (1+ (in "0-9,"))))))
-    (set-version-in-file root "nt/emacsclient.rc" comma-version
-			 (rx (and "PRODUCTVERSION" (1+ space)
-				  (submatch (1+ (in "0-9,"))))))
-    (set-version-in-file root "nt/emacsclient.rc" comma-space-version
-			 (rx (and "\"FileVersion\"" (0+ space) ?, (0+ space)
-				  ?\" (submatch (1+ (in "0-9, "))) "\\0\"")))
-    (set-version-in-file root "nt/emacsclient.rc" comma-space-version
-			 (rx (and "\"ProductVersion\"" (0+ space) ?,
-				  (0+ space) ?\" (submatch (1+ (in "0-9, ")))
-				  "\\0\"")))
-    ;; Major version only.
-    (when (string-match "\\([0-9]\\{2,\\}\\)" version)
-      (setq version (match-string 1 version))
-      (set-version-in-file root "src/msdos.c" version
-			   (rx (and "Vwindow_system_version" (1+ not-newline)
-				    ?\( (submatch (1+ (in "0-9"))) ?\))))
-      (set-version-in-file root "etc/refcards/ru-refcard.tex" version
-			   "\\\\newcommand{\\\\versionemacs}\\[0\\]\
-{\\([0-9]\\{2,\\}\\)}.+%.+version of Emacs")
-      (set-version-in-file root "etc/refcards/emacsver.tex" version
-			   "\\\\def\\\\versionemacs\
-{\\([0-9]\\{2,\\}\\)}.+%.+version of Emacs"))))
-
+  ;; Major version only.
+  (when (string-match "\\([0-9]\\{2,\\}\\)" version)
+    (setq version (match-string 1 version))
+    (set-version-in-file root "src/msdos.c" version
+			 (rx (and "Vwindow_system_version" (1+ not-newline)
+				  ?\( (submatch (1+ (in "0-9"))) ?\))))
+    (set-version-in-file root "etc/refcards/ru-refcard.tex" version
+			 "\\\\newcommand{\\\\versionemacs}\\[0\\]\
+{\\([0-9]\\{2,\\}\\)}.+%.+version of Emacs"))
+  (message "Setting version numbers...done"))
 
 ;; Note this makes some assumptions about form of short copyright.
-;; TODO report the progress
 (defun set-copyright (root copyright)
   "Set Emacs short copyright to COPYRIGHT in relevant files under ROOT.
 Root must be the root of an Emacs source tree."
@@ -174,6 +132,7 @@ Root must be the root of an Emacs source tree."
                          (format-time-string "%Y")))))
   (unless (file-exists-p (expand-file-name "src/emacs.c" root))
     (user-error "%s doesn't seem to be the root of an Emacs source tree" root))
+  (message "Setting copyrights...")
   (set-version-in-file root "configure.ac" copyright
 		       (rx (and bol "copyright" (0+ (not (in ?\")))
         			?\" (submatch (1+ (not (in ?\")))) ?\")))
@@ -193,9 +152,10 @@ Root must be the root of an Emacs source tree."
     (set-version-in-file root "etc/refcards/ru-refcard.tex" copyright
 			 "\\\\newcommand{\\\\cyear}\\[0\\]\
 {\\([0-9]\\{4\\}\\)}.+%.+copyright year")
-    (set-version-in-file root "etc/refcards/emacsver.tex" copyright
+    (set-version-in-file root "etc/refcards/emacsver.tex.in" copyright
 			 "\\\\def\\\\year\
-{\\([0-9]\\{4\\}\\)}.+%.+copyright year")))
+{\\([0-9]\\{4\\}\\)}.+%.+copyright year"))
+  (message "Setting copyrights...done"))
 
 ;;; Various bits of magic for generating the web manuals
 
@@ -599,6 +559,89 @@ style=\"text-align:left\">")
 	  (unless open-td
 	    (setq done t))))
 	(forward-line 1)))))
+
+
+(defconst make-manuals-dist-output-variables
+  `(("@\\(top_\\)?srcdir@" . ".")	; top_srcdir is wrong, but not used
+    ("^\\(\\(?:texinfo\\|buildinfo\\|emacs\\)dir *=\\).*" . "\\1 .")
+    ("^\\(clean:.*\\)" . "\\1 infoclean")
+    ("@MAKEINFO@" . "makeinfo")
+    ("@MKDIR_P@" . "mkdir -p")
+    ("@INFO_EXT@" . ".info")
+    ("@INFO_OPTS@" . "")
+    ("@SHELL@" . "/bin/bash")
+    ("@prefix@" . "/usr/local")
+    ("@datarootdir@" . "${prefix}/share")
+    ("@datadir@" . "${datarootdir}")
+    ("@PACKAGE_TARNAME@" . "emacs")
+    ("@docdir@" . "${datarootdir}/doc/${PACKAGE_TARNAME}")
+    ("@\\(dvi\\|html\\|pdf\\|ps\\)dir@" . "${docdir}")
+    ("@GZIP_PROG@" . "gzip")
+    ("@INSTALL@" . "install -c")
+    ("@INSTALL_DATA@" . "${INSTALL} -m 644")
+    ("@configure_input@" . ""))
+  "Alist of (REGEXP . REPLACEMENT) pairs for `make-manuals-dist'.")
+
+(defun make-manuals-dist--1 (root type)
+  "Subroutine of `make-manuals-dist'."
+  (let* ((dest (expand-file-name "manual" root))
+	 (default-directory (progn (make-directory dest t)
+				   (file-name-as-directory dest)))
+	 (version (with-temp-buffer
+		    (insert-file-contents "../doc/emacs/emacsver.texi")
+		    (re-search-forward "@set EMACSVER \\([0-9.]+\\)")
+		    (match-string 1)))
+	 (stem (format "emacs-%s-%s" (if (equal type "emacs") "manual" type)
+		       version))
+	 (tarfile (format "%s.tar" stem)))
+    (message "Doing %s..." type)
+    (if (file-directory-p stem)
+	(delete-directory stem t))
+    (make-directory stem)
+    (copy-file "../doc/misc/texinfo.tex" stem)
+    (or (equal type "emacs") (copy-file "../doc/emacs/emacsver.texi" stem))
+    (dolist (file (directory-files (format "../doc/%s" type) t))
+      (if (or (string-match-p "\\(\\.texi\\'\\|/ChangeLog\\|/README\\'\\)" file)
+	      (and (equal type "lispintro")
+		   (string-match-p "\\.\\(eps\\|pdf\\)\\'" file)))
+	  (copy-file file stem)))
+    (with-temp-buffer
+      (let ((outvars make-manuals-dist-output-variables))
+	(push `("@version@" . ,version) outvars)
+	(insert-file-contents (format "../doc/%s/Makefile.in" type))
+	(dolist (cons outvars)
+	  (while (re-search-forward (car cons) nil t)
+	    (replace-match (cdr cons) t))
+	  (goto-char (point-min))))
+      (let (ats)
+	(while (re-search-forward "@[a-zA-Z_]+@" nil t)
+	  (setq ats t)
+	  (message "Unexpanded: %s" (match-string 0)))
+	(if ats (error "Unexpanded configure variables in Makefile?")))
+      (write-region nil nil (expand-file-name (format "%s/Makefile" stem))
+		    nil 'silent))
+    (call-process "tar" nil nil nil "-cf" tarfile stem)
+    (delete-directory stem t)
+    (message "...created %s" tarfile)))
+
+;; Does anyone actually use these tarfiles?
+(defun make-manuals-dist (root &optional type)
+  "Make the standalone manual source tarfiles for the Emacs webpage.
+ROOT should be the root of an Emacs source tree.
+Interactively with a prefix argument, prompt for TYPE.
+Optional argument TYPE is type of output (nil means all)."
+  (interactive (let ((root (read-directory-name "Emacs root directory: "
+						source-directory nil t)))
+		 (list root
+		       (if current-prefix-arg
+			   (completing-read
+			    "Type: "
+			    '("emacs" "lispref" "lispintro" "misc"))))))
+  (unless (file-exists-p (expand-file-name "src/emacs.c" root))
+    (user-error "%s doesn't seem to be the root of an Emacs source tree" root))
+  (dolist (m '("emacs" "lispref" "lispintro" "misc"))
+    (if (member type (list nil m))
+	(make-manuals-dist--1 root m))))
 
 
 ;; Stuff to check new `defcustom's got :version tags.

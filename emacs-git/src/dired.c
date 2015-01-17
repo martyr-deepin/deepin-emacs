@@ -1,5 +1,5 @@
 /* Lisp functions for making directory listings.
-   Copyright (C) 1985-1986, 1993-1994, 1999-2014 Free Software
+   Copyright (C) 1985-1986, 1993-1994, 1999-2015 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -50,13 +50,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifdef MSDOS
 #include "msdos.h"	/* for fstatat */
 #endif
-
-static Lisp_Object Qdirectory_files;
-static Lisp_Object Qdirectory_files_and_attributes;
-static Lisp_Object Qfile_name_completion;
-static Lisp_Object Qfile_name_all_completions;
-static Lisp_Object Qfile_attributes;
-static Lisp_Object Qfile_attributes_lessp;
 
 static ptrdiff_t scmp (const char *, const char *, ptrdiff_t);
 static Lisp_Object file_attributes (int, char const *, Lisp_Object);
@@ -150,6 +143,12 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
   Lisp_Object w32_save = Qnil;
 #endif
 
+  /* Don't let the compiler optimize away all copies of DIRECTORY,
+     which would break GC; see Bug#16986.  Although this is required
+     only in the common case where GC_MARK_STACK == GC_MAKE_GCPROS_NOOPS,
+     it shouldn't break anything in the other cases.  */
+  Lisp_Object volatile directory_volatile = directory;
+
   /* Because of file name handlers, these functions might call
      Ffuncall, and cause a GC.  */
   list = encoded_directory = dirfilename = Qnil;
@@ -177,10 +176,8 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
   /* Note: ENCODE_FILE and DECODE_FILE can GC because they can run
      run_pre_post_conversion_on_str which calls Lisp directly and
      indirectly.  */
-  if (STRING_MULTIBYTE (dirfilename))
-    dirfilename = ENCODE_FILE (dirfilename);
-  encoded_directory = (STRING_MULTIBYTE (directory)
-		       ? ENCODE_FILE (directory) : directory);
+  dirfilename = ENCODE_FILE (dirfilename);
+  encoded_directory = ENCODE_FILE (directory);
 
   /* Now *bufp is the compiled form of MATCH; don't call anything
      which might compile a new regexp until we're done with the loop!  */
@@ -325,6 +322,7 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
     list = Fsort (Fnreverse (list),
 		  attrs ? Qfile_attributes_lessp : Qstring_lessp);
 
+  (void) directory_volatile;
   RETURN_UNGCPRO (list);
 }
 
@@ -443,7 +441,6 @@ These are all file names in directory DIRECTORY which begin with FILE.  */)
 }
 
 static int file_name_completion_stat (int, struct dirent *, struct stat *);
-static Lisp_Object Qdefault_directory;
 
 static Lisp_Object
 file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
@@ -483,7 +480,7 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
   /* Actually, this is not quite true any more: we do most of the completion
      work with decoded file names, but we still do some filtering based
      on the encoded file name.  */
-  encoded_file = STRING_MULTIBYTE (file) ? ENCODE_FILE (file) : file;
+  encoded_file = ENCODE_FILE (file);
 
   encoded_dir = ENCODE_FILE (Fdirectory_file_name (dirname));
 
@@ -635,23 +632,14 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
       name = DECODE_FILE (name);
 
       {
-	Lisp_Object regexps;
+	Lisp_Object regexps, table = (completion_ignore_case
+				      ? Vascii_canon_table : Qnil);
 
 	/* Ignore this element if it fails to match all the regexps.  */
-	if (completion_ignore_case)
-	  {
-	    for (regexps = Vcompletion_regexp_list; CONSP (regexps);
-		 regexps = XCDR (regexps))
-	      if (fast_string_match_ignore_case (XCAR (regexps), name) < 0)
-		break;
-	  }
-	else
-	  {
-	    for (regexps = Vcompletion_regexp_list; CONSP (regexps);
-		 regexps = XCDR (regexps))
-	      if (fast_string_match (XCAR (regexps), name) < 0)
-		break;
-	  }
+	for (regexps = Vcompletion_regexp_list; CONSP (regexps);
+	     regexps = XCDR (regexps))
+	  if (fast_string_match_internal (XCAR (regexps), name, table) < 0)
+	    break;
 
 	if (CONSP (regexps))
 	  continue;
@@ -902,7 +890,10 @@ so last access time will always be midnight of that day.  */)
   Lisp_Object encoded;
   Lisp_Object handler;
 
-  filename = Fexpand_file_name (filename, Qnil);
+  filename = internal_condition_case_2 (Fexpand_file_name, filename, Qnil,
+					Qt, Fidentity);
+  if (!STRINGP (filename))
+    return Qnil;
 
   /* If the file name has special constructs in it,
      call the corresponding file handler.  */

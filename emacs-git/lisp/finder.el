@@ -1,6 +1,7 @@
 ;;; finder.el --- topic & keyword-based code finder
 
-;; Copyright (C) 1992, 1997-1999, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 1997-1999, 2001-2015 Free Software Foundation,
+;; Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
 ;; Created: 16 Jun 1992
@@ -52,7 +53,7 @@
     (frames     . "Emacs frames and window systems")
     (games	. "games, jokes and amusements")
     (hardware	. "interfacing with system hardware")
-    (help	. "on-line help systems")
+    (help	. "Emacs help systems")
     (hypermedia . "links between text or other media types")
     (i18n	. "internationalization and character-set support")
     (internal	. "code for Emacs internals, build process, defaults")

@@ -1,5 +1,5 @@
 /* Functions for memory limit warnings.
-   Copyright (C) 1990, 1992, 2001-2014 Free Software Foundation, Inc.
+   Copyright (C) 1990, 1992, 2001-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -21,7 +21,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 
 #ifdef MSDOS
-#include <dpmi.h>
+#include "dosfns.h"
 extern int etext;
 #endif
 
@@ -49,6 +49,15 @@ extern char data_start[];
    start of data.  */
 char data_start[1] = { 1 };
 # endif
+#endif
+
+/* From gmalloc.c.  */
+extern void (* __after_morecore_hook) (void);
+extern void *(*__morecore) (ptrdiff_t);
+
+/* From ralloc.c.  */
+#ifdef REL_ALLOC
+extern void *(*real_morecore) (ptrdiff_t);
 #endif
 
 /*
@@ -106,29 +115,10 @@ get_lim_data (void)
 void
 get_lim_data (void)
 {
-  _go32_dpmi_meminfo info;
-  unsigned long lim1, lim2;
+  unsigned long totalram, freeram, totalswap, freeswap;
 
-  _go32_dpmi_get_free_memory_information (&info);
-  /* DPMI server of Windows NT and its descendants reports in
-     info.available_memory a much lower amount that is really
-     available, which causes bogus "past 95% of memory limit"
-     warnings.  Try to overcome that via circumstantial evidence.  */
-  lim1 = info.available_memory;
-  lim2 = info.available_physical_pages;
-  /* DPMI Spec: "Fields that are unavailable will hold -1."  */
-  if ((long)lim1 == -1L)
-    lim1 = 0;
-  if ((long)lim2 == -1L)
-    lim2 = 0;
-  else
-    lim2 *= 4096;
-  /* Surely, the available memory is at least what we have physically
-     available, right?  */
-  if (lim1 >= lim2)
-    lim_data = lim1;
-  else
-    lim_data = lim2;
+  dos_memory_info (&totalram, &freeram, &totalswap, &freeswap);
+  lim_data = freeram;
   /* Don't believe they will give us more that 0.5 GB.   */
   if (lim_data > 512U * 1024U * 1024U)
     lim_data = 512U * 1024U * 1024U;
@@ -149,12 +139,9 @@ ret_lim_data (void)
 static void
 check_memory_limits (void)
 {
-#ifdef REL_ALLOC
-  extern void *(*real_morecore) (ptrdiff_t);
-#else
+#ifndef REL_ALLOC
   void *(*real_morecore) (ptrdiff_t) = 0;
 #endif
-  extern void *(*__morecore) (ptrdiff_t);
 
   char *cp;
   size_t five_percent;
@@ -222,8 +209,6 @@ check_memory_limits (void)
 void
 memory_warnings (void *start, void (*warnfun) (const char *))
 {
-  extern void (* __after_morecore_hook) (void);     /* From gmalloc.c */
-
   data_space_start = start ? start : data_start;
 
   warn_function = warnfun;

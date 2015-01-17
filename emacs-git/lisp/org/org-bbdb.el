@@ -1,6 +1,6 @@
 ;;; org-bbdb.el --- Support for links to BBDB entries from within Org-mode
 
-;; Copyright (C) 2004-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
 
 ;; Authors: Carsten Dominik <carsten at orgmode dot org>
 ;;       Thomas Baumann <thomas dot baumann at ch dot tum dot de>
@@ -400,8 +400,11 @@ This is used by Org to re-create the anniversary hash table."
 (defun org-bbdb-complete-link ()
   "Read a bbdb link with name completion."
   (require 'bbdb-com)
-  (concat "bbdb:"
-	  (bbdb-record-name (car (bbdb-completing-read-record "Name: ")))))
+  (let ((rec (bbdb-completing-read-record "Name: ")))
+    (concat "bbdb:"
+	    (bbdb-record-name (if (listp rec)
+				  (car rec)
+				rec)))))
 
 (defun org-bbdb-anniv-export-ical ()
   "Extract anniversaries from BBDB and convert them to icalendar format."

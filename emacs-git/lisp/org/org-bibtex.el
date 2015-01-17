@@ -1,6 +1,6 @@
 ;;; org-bibtex.el --- Org links to BibTeX entries
 ;;
-;; Copyright (C) 2007-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
 ;;
 ;; Authors: Bastien Guerry <bzg@gnu.org>
 ;;       Carsten Dominik <carsten dot dominik at gmail dot com>
@@ -203,7 +203,7 @@
     (:pages        . "One or more page numbers or range of numbers, such as 42-111 or 7,41,73-97 or 43+ (the ‘+’ in this last example indicates pages following that don’t form simple range). BibTEX requires double dashes for page ranges (--).")
     (:publisher    . "The publisher’s name.")
     (:school       . "The name of the school where a thesis was written.")
-    (:series       . "The name of a series or set of books.  When citing an entire book, the the title field gives its title and an optional series field gives the name of a series or multi-volume set in which the book is published.")
+    (:series       . "The name of a series or set of books.  When citing an entire book, the title field gives its title and an optional series field gives the name of a series or multi-volume set in which the book is published.")
     (:title        . "The work’s title, typed as explained in the LaTeX book.")
     (:type         . "The type of a technical report for example, 'Research Note'.")
     (:volume       . "The volume of a journal or multi-volume book.")

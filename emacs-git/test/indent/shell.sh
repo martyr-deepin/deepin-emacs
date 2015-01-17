@@ -23,6 +23,48 @@ case $X in
         ;;
 esac
 
+{				# bug#17621
+    foo1 &&
+	foo2 &&
+        bar
+
+    foo1 &&     \
+        foo2 && \
+        bar
+}
+
+for foo in bar; do              #  bug#17721
+    [ -e $foo ] && {
+        echo t
+    } && {
+	echo r
+    }
+done
+
+for foo in bar; do              # bug#17896
+    [ -e $foo ] && [ -e $bar ] && {
+        echo just fine thanks
+    }
+done
+
+filter_3 ()                     # bug#17842
+{
+    tr -d '"`' | tr '	' ' ' | \
+        awk -F\; -f filter.awk | \
+	grep -v "^," | sort -t, -k2,2
+}
+
+foo | bar | {
+    toto
+}
+
+grep -e "^$userregexp:" /etc/passwd | cut -d :  -f 1 | while read user ; do
+    print -u2 "user=$user"      # bug#18031
+    sudo -U $user -ll | while read line ; do
+        :
+    done
+done
+
 echo -n $(( 5 << 2 ))
 # This should not be treated as a heredoc (bug#12770).
 2

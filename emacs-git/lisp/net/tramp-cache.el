@@ -1,6 +1,6 @@
 ;;; tramp-cache.el --- file information caching for Tramp
 
-;; Copyright (C) 2000, 2005-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2000, 2005-2015 Free Software Foundation, Inc.
 
 ;; Author: Daniel Pittman <daniel@inanna.danann.net>
 ;;         Michael Albinus <michael.albinus@gmx.de>
@@ -136,7 +136,7 @@ Returns DEFAULT if not set."
 		       (tramp-time-diff (current-time) (car value))
 		       remote-file-name-inhibit-cache))
 		 (and (consp remote-file-name-inhibit-cache)
-		      (tramp-time-less-p
+		      (time-less-p
 		       remote-file-name-inhibit-cache (car value)))))
 	(setq value (cdr value))
       (setq value default))
@@ -144,7 +144,7 @@ Returns DEFAULT if not set."
     (tramp-message key 8 "%s %s %s" file property value)
     (when (>= tramp-verbose 10)
       (let* ((var (intern (concat "tramp-cache-get-count-" property)))
-	     (val (or (ignore-errors (symbol-value var)) 0)))
+	     (val (or (and (boundp var) (symbol-value var)) 0)))
 	(set var (1+ val))))
     value))
 
@@ -161,7 +161,7 @@ Returns VALUE."
     (tramp-message key 8 "%s %s %s" file property value)
     (when (>= tramp-verbose 10)
       (let* ((var (intern (concat "tramp-cache-set-count-" property)))
-	     (val (or (ignore-errors (symbol-value var)) 0)))
+	     (val (or (and (boundp var) (symbol-value var)) 0)))
 	(set var (1+ val))))
     value))
 
@@ -201,15 +201,21 @@ Remove also properties of all files in subdirectories."
 ;; Reverting or killing a buffer should also flush file properties.
 ;; They could have been changed outside Tramp.  In eshell, "ls" would
 ;; not show proper directory contents when a file has been copied or
-;; deleted before.
+;; deleted before.  We must apply `save-match-data', because it would
+;; corrupt other packages otherwise (reported from org).
 (defun tramp-flush-file-function ()
-  "Flush all Tramp cache properties from `buffer-file-name'."
-  (let ((bfn (if (stringp (buffer-file-name))
-		 (buffer-file-name)
-	       default-directory)))
-    (when (tramp-tramp-file-p bfn)
-      (with-parsed-tramp-file-name bfn nil
-	(tramp-flush-file-property v localname)))))
+  "Flush all Tramp cache properties from `buffer-file-name'.
+This is suppressed for temporary buffers."
+  (save-match-data
+    (unless (or (null (buffer-name))
+		(string-match "^\\( \\|\\*\\)" (buffer-name)))
+      (let ((bfn (if (stringp (buffer-file-name))
+		     (buffer-file-name)
+		   default-directory))
+	    (tramp-verbose 0))
+	(when (tramp-tramp-file-p bfn)
+	  (with-parsed-tramp-file-name bfn nil
+	    (tramp-flush-file-property v localname)))))))
 
 (add-hook 'before-revert-hook 'tramp-flush-file-function)
 (add-hook 'eshell-pre-command-hook 'tramp-flush-file-function)

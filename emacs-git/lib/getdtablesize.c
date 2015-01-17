@@ -1,5 +1,5 @@
 /* getdtablesize() function for platforms that don't have it.
-   Copyright (C) 2008-2014 Free Software Foundation, Inc.
+   Copyright (C) 2008-2015 Free Software Foundation, Inc.
    Written by Bruno Haible <bruno@clisp.org>, 2008.
 
    This program is free software: you can redistribute it and/or modify
@@ -102,6 +102,14 @@ rpl_getdtablesize(void)
   if (!getrlimit (RLIMIT_NOFILE, &lim) && lim.rlim_max != RLIM_INFINITY)
     return lim.rlim_max;
   return getdtablesize ();
+}
+
+#elif defined _SC_OPEN_MAX
+
+int
+getdtablesize (void)
+{
+  return sysconf (_SC_OPEN_MAX);
 }
 
 #endif

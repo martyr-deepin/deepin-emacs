@@ -1,6 +1,6 @@
 ;;; opascal.el --- major mode for editing Object Pascal source in Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-1999, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-1999, 2001-2015 Free Software Foundation, Inc.
 
 ;; Authors: Ray Blaak <blaak@infomatch.com>,
 ;;          Simon South <ssouth@member.fsf.org>
@@ -1397,7 +1397,7 @@ If before the indent, the point is moved to the indent."
   (when opascal-debug
     (opascal-ensure-buffer opascal-debug-buffer "*OPascal Debug Log*")
     (opascal-log-msg opascal-debug-buffer
-                    (concat (format-time-string "%H:%M:%S " (current-time))
+                    (concat (format-time-string "%H:%M:%S ")
                             (apply #'format (cons format-string args))
                             "\n"))))
 

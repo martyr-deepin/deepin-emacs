@@ -1,6 +1,6 @@
 ;;; calc-aent.el --- algebraic entry functions for Calc
 
-;; Copyright (C) 1990-1993, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Maintainer: Jay Belanger <jay.p.belanger@gmail.com>
@@ -52,7 +52,7 @@
   "The history list for quick-calc.")
 
 ;;;###autoload
-(defun calc-do-quick-calc ()
+(defun calc-do-quick-calc (&optional insert)
   (require 'calc-ext)
   (calc-check-defines)
   (if (eq major-mode 'calc-mode)
@@ -108,7 +108,8 @@
 		    (setq buf long))))
 	  (calc-handle-whys)
 	  (message "Result: %s" buf)))
-      (if (eq last-command-event 10)
+      (if (or insert
+              (eq last-command-event 10))
 	  (insert shortbuf)
         (kill-new shortbuf)))))
 

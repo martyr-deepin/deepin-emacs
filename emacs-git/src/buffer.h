@@ -1,6 +1,6 @@
 /* Header file for the buffer manipulation primitives.
 
-Copyright (C) 1985-1986, 1993-1995, 1997-2014 Free Software Foundation,
+Copyright (C) 1985-1986, 1993-1995, 1997-2015 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -694,10 +694,12 @@ struct buffer
      othersize draw them between margin areas and text.  */
   Lisp_Object INTERNAL_FIELD (fringes_outside_margins);
 
-  /* Width and type of scroll bar areas for windows displaying
+  /* Width, height and types of scroll bar areas for windows displaying
      this buffer.  */
   Lisp_Object INTERNAL_FIELD (scroll_bar_width);
+  Lisp_Object INTERNAL_FIELD (scroll_bar_height);
   Lisp_Object INTERNAL_FIELD (vertical_scroll_bar_type);
+  Lisp_Object INTERNAL_FIELD (horizontal_scroll_bar_type);
 
   /* Non-nil means indicate lines not displaying text (in a style
      like vi).  */
@@ -1086,6 +1088,14 @@ extern void mmap_set_vars (bool);
 extern void restore_buffer (Lisp_Object);
 extern void set_buffer_if_live (Lisp_Object);
 
+/* Return B as a struct buffer pointer, defaulting to the current buffer.  */
+
+INLINE struct buffer *
+decode_buffer (Lisp_Object b)
+{
+  return NILP (b) ? current_buffer : (CHECK_BUFFER (b), XBUFFER (b));
+}
+
 /* Set the current buffer to B.
 
    We previously set windows_or_buffers_changed here to invalidate
@@ -1118,23 +1128,19 @@ record_unwind_current_buffer (void)
 #define GET_OVERLAYS_AT(posn, overlays, noverlays, nextp, chrq)		\
   do {									\
     ptrdiff_t maxlen = 40;						\
-    overlays = alloca (maxlen * sizeof *overlays);			\
-    noverlays = overlays_at (posn, false, &overlays, &maxlen,		\
-			     nextp, NULL, chrq);			\
-    if (noverlays > maxlen)						\
+    SAFE_NALLOCA (overlays, 1, maxlen);					\
+    (noverlays) = overlays_at (posn, false, &(overlays), &maxlen,	\
+			       nextp, NULL, chrq);			\
+    if ((noverlays) > maxlen)						\
       {									\
 	maxlen = noverlays;						\
-	overlays = alloca (maxlen * sizeof *overlays);			\
-	noverlays = overlays_at (posn, false, &overlays, &maxlen,	\
-				 nextp, NULL, chrq);			\
+	SAFE_NALLOCA (overlays, 1, maxlen);				\
+	(noverlays) = overlays_at (posn, false, &(overlays), &maxlen,	\
+				   nextp, NULL, chrq);			\
       }									\
   } while (false)
 
 extern Lisp_Object Vbuffer_alist;
-extern Lisp_Object Qbefore_change_functions;
-extern Lisp_Object Qafter_change_functions;
-extern Lisp_Object Qfirst_change_hook;
-extern Lisp_Object Qpriority, Qbefore_string, Qafter_string;
 
 /* FOR_EACH_LIVE_BUFFER (LIST_VAR, BUF_VAR) followed by a statement is
    a `for' loop which iterates over the buffers from Vbuffer_alist.  */

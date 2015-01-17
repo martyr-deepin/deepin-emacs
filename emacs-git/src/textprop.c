@@ -1,5 +1,5 @@
 /* Interface code for dealing with text properties.
-   Copyright (C) 1993-1995, 1997, 1999-2014 Free Software Foundation,
+   Copyright (C) 1993-1995, 1997, 1999-2015 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -44,21 +44,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
   is enforced by the subrs installing properties onto the intervals.  */
 
 
-/* Types of hooks.  */
-static Lisp_Object Qmouse_left;
-static Lisp_Object Qmouse_entered;
-Lisp_Object Qpoint_left;
-Lisp_Object Qpoint_entered;
-Lisp_Object Qcategory;
-Lisp_Object Qlocal_map;
-
-/* Visual properties text (including strings) may have.  */
-static Lisp_Object Qforeground, Qbackground, Qunderline;
-Lisp_Object Qfont;
-static Lisp_Object Qstipple;
-Lisp_Object Qinvisible, Qintangible, Qmouse_face;
-static Lisp_Object Qread_only;
-Lisp_Object Qminibuffer_prompt;
 
 enum property_set_type
 {
@@ -66,9 +51,6 @@ enum property_set_type
   TEXT_PROPERTY_PREPEND,
   TEXT_PROPERTY_APPEND
 };
-
-/* Sticky properties.  */
-Lisp_Object Qfront_sticky, Qrear_nonsticky;
 
 /* If o1 is a cons whose cdr is a cons, return non-zero and set o2 to
    the o1's cdr.  Otherwise, return zero.  This is handy for
@@ -660,6 +642,7 @@ get_char_property_and_overlay (Lisp_Object position, register Lisp_Object prop, 
 
       set_buffer_temp (XBUFFER (object));
 
+      USE_SAFE_ALLOCA;
       GET_OVERLAYS_AT (XINT (position), overlay_vec, noverlays, NULL, 0);
       noverlays = sort_overlays (overlay_vec, noverlays, w);
 
@@ -674,9 +657,11 @@ get_char_property_and_overlay (Lisp_Object position, register Lisp_Object prop, 
 	      if (overlay)
 		/* Return the overlay we got the property from.  */
 		*overlay = overlay_vec[noverlays];
+	      SAFE_FREE ();
 	      return tem;
 	    }
 	}
+      SAFE_FREE ();
     }
 
   if (overlay)
@@ -1314,9 +1299,11 @@ specify the property to add.
 If the optional fifth argument OBJECT is a buffer (or nil, which means
 the current buffer), START and END are buffer positions (integers or
 markers).  If OBJECT is a string, START and END are 0-based indices into it.  */)
-  (Lisp_Object start, Lisp_Object end, Lisp_Object property, Lisp_Object value, Lisp_Object object)
+  (Lisp_Object start, Lisp_Object end, Lisp_Object property,
+   Lisp_Object value, Lisp_Object object)
 {
-  Fadd_text_properties (start, end, list2 (property, value), object);
+  AUTO_LIST2 (properties, property, value);
+  Fadd_text_properties (start, end, properties, object);
   return Qnil;
 }
 
@@ -1357,7 +1344,8 @@ into it.  */)
   (Lisp_Object start, Lisp_Object end, Lisp_Object face,
    Lisp_Object append, Lisp_Object object)
 {
-  add_text_properties_1 (start, end, list2 (Qface, face), object,
+  AUTO_LIST2 (properties, Qface, face);
+  add_text_properties_1 (start, end, properties, object,
 			 (NILP (append)
 			  ? TEXT_PROPERTY_PREPEND
 			  : TEXT_PROPERTY_APPEND));
@@ -1906,7 +1894,8 @@ text_property_stickiness (Lisp_Object prop, Lisp_Object pos, Lisp_Object buffer)
 /* Note this can GC when DEST is a buffer.  */
 
 Lisp_Object
-copy_text_properties (Lisp_Object start, Lisp_Object end, Lisp_Object src, Lisp_Object pos, Lisp_Object dest, Lisp_Object prop)
+copy_text_properties (Lisp_Object start, Lisp_Object end, Lisp_Object src,
+		      Lisp_Object pos, Lisp_Object dest, Lisp_Object prop)
 {
   INTERVAL i;
   Lisp_Object res;
@@ -1959,12 +1948,10 @@ copy_text_properties (Lisp_Object start, Lisp_Object end, Lisp_Object src, Lisp_
 	    plist = Fcdr (Fcdr (plist));
 	  }
       if (! NILP (plist))
-	{
-	  /* Must defer modifications to the interval tree in case src
-	     and dest refer to the same string or buffer.  */
-	  stuff = Fcons (list3 (make_number (p), make_number (p + len), plist),
-			 stuff);
-	}
+	/* Must defer modifications to the interval tree in case
+	   src and dest refer to the same string or buffer.  */
+	stuff = Fcons (list3 (make_number (p), make_number (p + len), plist),
+		       stuff);
 
       i = next_interval (i);
       if (!i)
@@ -2293,6 +2280,11 @@ verify_interval_modification (struct buffer *buf,
 		}
 	    }
 
+	  if (i->position + LENGTH (i) < end
+	      && (!NILP (BVAR (current_buffer, read_only))
+		  && NILP (Vinhibit_read_only)))
+	    xsignal1 (Qbuffer_read_only, Fcurrent_buffer ());
+
 	  i = next_interval (i);
 	}
       /* Keep going thru the interval containing the char before END.  */
@@ -2373,7 +2365,7 @@ inherits it if NONSTICKINESS is nil.  The `front-sticky' and
   interval_insert_in_front_hooks = Qnil;
 
 
-  /* Common attributes one might give text */
+  /* Common attributes one might give text.  */
 
   DEFSYM (Qforeground, "foreground");
   DEFSYM (Qbackground, "background");
@@ -2391,7 +2383,7 @@ inherits it if NONSTICKINESS is nil.  The `front-sticky' and
   DEFSYM (Qmouse_face, "mouse-face");
   DEFSYM (Qminibuffer_prompt, "minibuffer-prompt");
 
-  /* Properties that text might use to specify certain actions */
+  /* Properties that text might use to specify certain actions.  */
 
   DEFSYM (Qmouse_left, "mouse-left");
   DEFSYM (Qmouse_entered, "mouse-entered");

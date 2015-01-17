@@ -1,5 +1,5 @@
 # -*- Makefile -*- for GNU Emacs on the Microsoft Windows API.
-# Copyright (C) 2000-2014 Free Software Foundation, Inc.
+# Copyright (C) 2000-2015 Free Software Foundation, Inc.
 
 # This file is part of GNU Emacs.
 
@@ -257,11 +257,11 @@ update-subdirs-SH: doit
 
 updates: $(lisp)/subdirs.el autoloads mh-autoloads finder-data custom-deps
 
-# This is useful after "bzr up".
-bzr-update: recompile autoloads finder-data custom-deps
+# This is useful after a repository fetch.
+repo-update: recompile autoloads finder-data custom-deps
 
 # For backwards compatibility:
-cvs-update: bzr-update
+cvs-update: repo-update
 
 # Update the AUTHORS file.
 

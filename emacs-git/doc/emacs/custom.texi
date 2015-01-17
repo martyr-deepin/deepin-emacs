@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2014 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2015 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Customization
@@ -404,6 +404,16 @@ options (@pxref{Initial Options}), it will not let you save your
 customizations in your initialization file.  This is because saving
 customizations from such a session would wipe out all the other
 customizations you might have on your initialization file.
+
+  Please note that any customizations you have not chosen to save for
+future sessions will be lost when you terminate Emacs.  If you'd like
+to be prompted about unsaved customizations at termination time, add
+the following to your initialization file:
+
+@example
+(add-hook 'kill-emacs-query-functions
+          'custom-prompt-customize-unsaved-options)
+@end example
 
 @node Face Customization
 @subsection Customizing Faces

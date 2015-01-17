@@ -1,6 +1,6 @@
 ;;; mm-view.el --- functions for viewing MIME objects
 
-;; Copyright (C) 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; This file is part of GNU Emacs.
@@ -405,7 +405,7 @@
      `(lambda ()
 	(let ((inhibit-read-only t))
 	  (delete-region ,(copy-marker b t)
-			 ,(copy-marker (point))))))))
+			 ,(point-marker)))))))
 
 (defun mm-inline-audio (handle)
   (message "Not implemented"))
@@ -513,16 +513,20 @@ If MODE is not set, try to find mode automatically."
         (set (make-local-variable 'enable-local-variables) nil)
 	(with-demoted-errors
 	  (if mode
-	      (funcall mode)
+	      (save-window-excursion
+		(switch-to-buffer (current-buffer))
+		(funcall mode))
 	    (let ((auto-mode-alist
 		   (delq (rassq 'doc-view-mode-maybe auto-mode-alist)
 			 (copy-sequence auto-mode-alist))))
 	      (set-auto-mode)))
 	  ;; The mode function might have already turned on font-lock.
 	  ;; Do not fontify if the guess mode is fundamental.
-	  (unless (or (symbol-value 'font-lock-mode)
+	  (unless (or font-lock-mode
 		      (eq major-mode 'fundamental-mode))
-	    (font-lock-fontify-buffer))))
+            (if (fboundp 'font-lock-ensure)
+                (font-lock-ensure)
+              (font-lock-fontify-buffer)))))
       ;; By default, XEmacs font-lock uses non-duplicable text
       ;; properties.  This code forces all the text properties
       ;; to be copied along with the text.

@@ -1,6 +1,6 @@
 ;;; facemenu.el --- create a face menu for interactively adding fonts to text
 
-;; Copyright (C) 1994-1996, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1996, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Boris Goldowsky <boris@gnu.org>
 ;; Keywords: faces
@@ -620,7 +620,7 @@ color.  The function should accept a single argument, the color name."
 		 'help-echo
 		 (let ((hsv (apply 'color-rgb-to-hsv
 				   (color-name-to-rgb (car color)))))
-		   (format "H:%d S:%d V:%d"
+		   (format "H:%.2f S:%.2f V:%.2f"
 			   (nth 0 hsv) (nth 1 hsv) (nth 2 hsv)))))
 	(when callback
 	  (make-text-button

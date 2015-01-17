@@ -1,6 +1,6 @@
 ;;; vc-dispatcher.el -- generic command-dispatcher facility.  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
 
 ;; Author:     FSF (see below for full credits)
 ;; Maintainer: Eric S. Raymond <esr@thyrsus.com>
@@ -429,7 +429,7 @@ If the current buffer is a Dired buffer, revert it."
 ;; even if the dispatcher client mode has messed with file contents (as in,
 ;; for example, VCS keyword expansion).
 
-(declare-function view-mode-exit "view" (&optional return-to-alist exit-action all-win))
+(declare-function view-mode-exit "view" (&optional exit-only exit-action all-win))
 
 (defun vc-position-context (posn)
   "Save a bit of the text around POSN in the current buffer.
@@ -543,7 +543,7 @@ editing!"
                   (if (file-writable-p file)
                       (and view-mode
                            (let ((view-old-buffer-read-only nil))
-                             (view-mode-exit)))
+                             (view-mode-exit t)))
                     (and (not view-mode)
                          (not (eq (get major-mode 'mode-class) 'special))
                          (view-mode-enter))))
@@ -591,12 +591,19 @@ NOT-URGENT means it is ok to continue if the user says not to save."
 
 ;; Set up key bindings for use while editing log messages
 
+(declare-function log-edit-empty-buffer-p "log-edit" ())
+
 (defun vc-log-edit (fileset mode backend)
   "Set up `log-edit' for use on FILE."
   (setq default-directory
 	(buffer-local-value 'default-directory vc-parent-buffer))
+  (require 'log-edit)
   (log-edit 'vc-finish-logentry
-	    t
+	    ;; Setup a new log message if the log buffer is "empty",
+	    ;; or was previously used for a different set of files.
+	    (or (log-edit-empty-buffer-p)
+		(and (local-variable-p 'vc-log-fileset)
+		     (not (equal vc-log-fileset fileset))))
 	    `((log-edit-listfun . (lambda ()
                                     ;; FIXME: Should expand the list
                                     ;; for directories.
@@ -695,7 +702,7 @@ the buffer contents as a comment."
     ;; Now make sure we see the expanded headers
     (when log-fileset
       (mapc
-       (lambda (file) (vc-resynch-buffer file vc-keep-workfiles t))
+       (lambda (file) (vc-resynch-buffer file t t))
        log-fileset))
     (when (vc-dispatcher-browsing)
       (vc-dir-move-to-goal-column))

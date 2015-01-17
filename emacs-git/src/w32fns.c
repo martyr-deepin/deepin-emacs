@@ -1,6 +1,6 @@
 /* Graphical user interface functions for the Microsoft Windows API.
 
-Copyright (C) 1989, 1992-2014 Free Software Foundation, Inc.
+Copyright (C) 1989, 1992-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -89,26 +89,9 @@ extern void w32_free_menu_strings (HWND);
 extern const char *map_w32_filename (const char *, const char **);
 extern char * w32_strerror (int error_no);
 
-/* If non-NULL, a handle to a frame where to display the hourglass cursor.  */
-static HWND hourglass_hwnd = NULL;
-
 #ifndef IDC_HAND
 #define IDC_HAND MAKEINTRESOURCE(32649)
 #endif
-
-Lisp_Object Qsuppress_icon;
-Lisp_Object Qundefined_color;
-Lisp_Object Qcancel_timer;
-Lisp_Object Qfont_param;
-Lisp_Object Qhyper;
-Lisp_Object Qsuper;
-Lisp_Object Qmeta;
-Lisp_Object Qalt;
-Lisp_Object Qctrl;
-Lisp_Object Qcontrol;
-Lisp_Object Qshift;
-static Lisp_Object Qgeometry, Qworkarea, Qmm_size, Qframes;
-
 
 /* Prefix for system colors.  */
 #define SYSTEM_COLOR_PREFIX "System"
@@ -228,15 +211,11 @@ static int w32_unicode_gui;
 
 /* From w32menu.c  */
 extern HMENU current_popup_menu;
-static int menubar_in_use = 0;
+int menubar_in_use = 0;
 
 /* From w32uniscribe.c  */
 extern void syms_of_w32uniscribe (void);
 extern int uniscribe_available;
-
-/* Function prototypes for hourglass support.  */
-static void w32_show_hourglass (struct frame *);
-static void w32_hide_hourglass (void);
 
 #ifdef WINDOWSNT
 /* From w32inevt.c */
@@ -271,9 +250,9 @@ static unsigned int sound_type = 0xFFFFFFFF;
    the first display on the list.  */
 
 struct w32_display_info *
-check_x_display_info (Lisp_Object frame)
+check_x_display_info (Lisp_Object object)
 {
-  if (NILP (frame))
+  if (NILP (object))
     {
       struct frame *sf = XFRAME (selected_frame);
 
@@ -282,14 +261,23 @@ check_x_display_info (Lisp_Object frame)
       else
 	return &one_w32_display_info;
     }
-  else if (STRINGP (frame))
-    return x_display_info_for_name (frame);
+  else if (TERMINALP (object))
+    {
+      struct terminal *t = decode_live_terminal (object);
+
+      if (t->type != output_w32)
+        error ("Terminal %d is not a W32 display", t->id);
+
+      return t->display_info.w32;
+    }
+  else if (STRINGP (object))
+    return x_display_info_for_name (object);
   else
     {
       struct frame *f;
 
-      CHECK_LIVE_FRAME (frame);
-      f = XFRAME (frame);
+      CHECK_LIVE_FRAME (object);
+      f = XFRAME (object);
       if (! FRAME_W32_P (f))
 	error ("Non-W32 frame used");
       return FRAME_DISPLAY_INFO (f);
@@ -336,8 +324,7 @@ void x_explicitly_set_name (struct frame *, Lisp_Object, Lisp_Object);
 void x_set_menu_bar_lines (struct frame *, Lisp_Object, Lisp_Object);
 void x_set_title (struct frame *, Lisp_Object, Lisp_Object);
 void x_set_tool_bar_lines (struct frame *, Lisp_Object, Lisp_Object);
-
-
+void x_set_internal_border_width (struct frame *f, Lisp_Object, Lisp_Object);
 
 
 /* Store the screen positions of frame F into XPTR and YPTR.
@@ -1369,23 +1356,23 @@ x_set_mouse_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
     {
       CHECK_NUMBER (Vx_window_horizontal_drag_shape);
       horizontal_drag_cursor
-	= XCreateFontCursor (FRAME_X_DISPLAY (f),
+	= XCreateFontCursor (FRAME_W32_DISPLAY (f),
 			     XINT (Vx_window_horizontal_drag_shape));
     }
   else
     horizontal_drag_cursor
-      = XCreateFontCursor (FRAME_X_DISPLAY (f), XC_sb_h_double_arrow);
+      = XCreateFontCursor (FRAME_W32_DISPLAY (f), XC_sb_h_double_arrow);
 
   if (!NILP (Vx_window_vertical_drag_shape))
     {
       CHECK_NUMBER (Vx_window_vertical_drag_shape);
       vertical_drag_cursor
-	= XCreateFontCursor (FRAME_X_DISPLAY (f),
+	= XCreateFontCursor (FRAME_W32_DISPLAY (f),
 			     XINT (Vx_window_vertical_drag_shape));
     }
   else
     vertical_drag_cursor
-      = XCreateFontCursor (FRAME_X_DISPLAY (f), XC_sb_v_double_arrow);
+      = XCreateFontCursor (FRAME_W32_DISPLAY (f), XC_sb_v_double_arrow);
 
   /* Check and report errors with the above calls.  */
   x_check_errors (FRAME_W32_DISPLAY (f), "can't set cursor shape: %s");
@@ -1607,8 +1594,53 @@ x_set_icon_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
   unblock_input ();
 #endif
 }
-
 
+void
+x_clear_under_internal_border (struct frame *f)
+{
+  int border = FRAME_INTERNAL_BORDER_WIDTH (f);
+
+  /* Clear border if it's larger than before.  */
+  if (border != 0)
+    {
+      HDC hdc = get_frame_dc (f);
+      int width = FRAME_PIXEL_WIDTH (f);
+      int height = FRAME_PIXEL_HEIGHT (f);
+
+      block_input ();
+      w32_clear_area (f, hdc, 0, FRAME_TOP_MARGIN_HEIGHT (f), width, border);
+      w32_clear_area (f, hdc, 0, 0, border, height);
+      w32_clear_area (f, hdc, width - border, 0, border, height);
+      w32_clear_area (f, hdc, 0, height - border, width, border);
+      release_frame_dc (f, hdc);
+      unblock_input ();
+    }
+}
+
+
+void
+x_set_internal_border_width (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
+{
+  int border;
+
+  CHECK_TYPE_RANGED_INTEGER (int, arg);
+  border = max (XINT (arg), 0);
+
+  if (border != FRAME_INTERNAL_BORDER_WIDTH (f))
+    {
+      FRAME_INTERNAL_BORDER_WIDTH (f) = border;
+
+      if (FRAME_X_WINDOW (f) != 0)
+	{
+	  adjust_frame_size (f, -1, -1, 3, 0, Qinternal_border_width);
+
+	  if (FRAME_VISIBLE_P (f))
+	    x_clear_under_internal_border (f);
+	}
+    }
+}
+
+
 void
 x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 {
@@ -1629,7 +1661,10 @@ x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
   FRAME_MENU_BAR_LINES (f) = 0;
   FRAME_MENU_BAR_HEIGHT (f) = 0;
   if (nlines)
-    FRAME_EXTERNAL_MENU_BAR (f) = 1;
+    {
+      FRAME_EXTERNAL_MENU_BAR (f) = 1;
+      windows_or_buffers_changed = 23;
+    }
   else
     {
       if (FRAME_EXTERNAL_MENU_BAR (f) == 1)
@@ -1638,11 +1673,16 @@ x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 
       /* Adjust the frame size so that the client (text) dimensions
 	 remain the same.  This depends on FRAME_EXTERNAL_MENU_BAR being
-	 set correctly.  */
-      x_set_window_size (f, 0, FRAME_TEXT_WIDTH (f), FRAME_TEXT_HEIGHT (f), 1);
-      do_pending_window_change (0);
+	 set correctly.  Note that we resize twice: The first time upon
+	 a request from the window manager who wants to keep the height
+	 of the outer rectangle (including decorations) unchanged, and a
+	 second time because we want to keep the height of the inner
+	 rectangle (without the decorations unchanged).  */
+      adjust_frame_size (f, -1, -1, 2, 1, Qmenu_bar_lines);
+
+      /* Not sure whether this is needed.  */
+      x_clear_under_internal_border (f);
     }
-  adjust_frame_glyphs (f);
 }
 
 
@@ -1656,8 +1696,7 @@ x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 void
 x_set_tool_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 {
-  int delta, nlines, root_height;
-  int unit = FRAME_LINE_HEIGHT (f);
+  int nlines;
 
   /* Treat tool bars like menu bars.  */
   if (FRAME_MINIBUF_ONLY_P (f))
@@ -1669,66 +1708,54 @@ x_set_tool_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
   else
     nlines = 0;
 
+  x_change_tool_bar_height (f, nlines * FRAME_LINE_HEIGHT (f));
+}
+
+
+/* Set the pixel height of the tool bar of frame F to HEIGHT.  */
+void
+x_change_tool_bar_height (struct frame *f, int height)
+{
+  Lisp_Object frame;
+  int unit = FRAME_LINE_HEIGHT (f);
+  int old_height = FRAME_TOOL_BAR_HEIGHT (f);
+  int lines = (height + unit - 1) / unit;
+  int old_text_height = FRAME_TEXT_HEIGHT (f);
+
   /* Make sure we redisplay all windows in this frame.  */
   windows_or_buffers_changed = 23;
 
-  /* DELTA is in pixels now.  */
-  delta = (nlines - FRAME_TOOL_BAR_LINES (f)) * unit;
+  /* Recalculate tool bar and frame text sizes.  */
+  FRAME_TOOL_BAR_HEIGHT (f) = height;
+  FRAME_TOOL_BAR_LINES (f) = lines;
+  /* Store `tool-bar-lines' and `height' frame parameters.  */
+  store_frame_param (f, Qtool_bar_lines, make_number (lines));
+  store_frame_param (f, Qheight, make_number (FRAME_LINES (f)));
 
-  /* Don't resize the tool-bar to more than we have room for.  Note: The
-     calculations below and the subsequent call to resize_frame_windows
-     are inherently flawed because they can make the toolbar higher than
-     the containing frame.  */
-  if (delta > 0)
-    {
-      root_height = WINDOW_PIXEL_HEIGHT (XWINDOW (FRAME_ROOT_WINDOW (f)));
-      if (root_height - delta < unit)
-	{
-	  delta = root_height - unit;
-	  /* When creating a new frame and toolbar mode is enabled, we
-	     need at least one toolbar line.  */
-	  nlines = max (FRAME_TOOL_BAR_LINES (f) + delta / unit, 1);
-	}
-    }
-
-  FRAME_TOOL_BAR_LINES (f) = nlines;
-  FRAME_TOOL_BAR_HEIGHT (f) = nlines * FRAME_LINE_HEIGHT (f);
-  ++windows_or_buffers_changed;
-  resize_frame_windows (f, FRAME_TEXT_HEIGHT (f), 0, 1);
-  adjust_frame_glyphs (f);
-
-  /* We also have to make sure that the internal border at the top of
-     the frame, below the menu bar or tool bar, is redrawn when the
-     tool bar disappears.  This is so because the internal border is
-     below the tool bar if one is displayed, but is below the menu bar
-     if there isn't a tool bar.  The tool bar draws into the area
-     below the menu bar.  */
   if (FRAME_W32_WINDOW (f) && FRAME_TOOL_BAR_HEIGHT (f) == 0)
     {
       clear_frame (f);
       clear_current_matrices (f);
     }
 
-  /* If the tool bar gets smaller, the internal border below it
-     has to be cleared.  It was formerly part of the display
-     of the larger tool bar, and updating windows won't clear it.  */
-  if (FRAME_INTERNAL_BORDER_WIDTH (f) != 0 && FRAME_VISIBLE_P (f))
-    {
-      int height = FRAME_INTERNAL_BORDER_WIDTH (f);
-      int width = FRAME_PIXEL_WIDTH (f);
-      int y = nlines * unit;
-      HDC hdc = get_frame_dc (f);
-
-      block_input ();
-      w32_clear_area (f, hdc, 0, y, width, height);
-      release_frame_dc (f, hdc);
-      unblock_input ();
-    }
-
-  if (delta < 0 && WINDOWP (f->tool_bar_window))
+  if ((height < old_height) && WINDOWP (f->tool_bar_window))
     clear_glyph_matrix (XWINDOW (f->tool_bar_window)->current_matrix);
 
-  run_window_configuration_change_hook (f);
+  /* Recalculate toolbar height.  */
+  f->n_tool_bar_rows = 0;
+
+  adjust_frame_size (f, -1, -1,
+		     (!f->tool_bar_redisplayed_once ? 1
+		      : (old_height == 0 || height == 0) ? 2
+		      : 4),
+		     0, Qtool_bar_lines);
+
+  /* adjust_frame_size might not have done anything, garbage frame
+     here.  */
+  adjust_frame_glyphs (f);
+  SET_FRAME_GARBAGED (f);
+  if (FRAME_X_WINDOW (f))
+    x_clear_under_internal_border (f);
 }
 
 
@@ -1847,6 +1874,16 @@ x_set_scroll_bar_default_width (struct frame *f)
     = (FRAME_CONFIG_SCROLL_BAR_WIDTH (f) + unit - 1) / unit;
 }
 
+
+void
+x_set_scroll_bar_default_height (struct frame *f)
+{
+  int unit = FRAME_LINE_HEIGHT (f);
+
+  FRAME_CONFIG_SCROLL_BAR_HEIGHT (f) = GetSystemMetrics (SM_CXHSCROLL);
+  FRAME_CONFIG_SCROLL_BAR_LINES (f)
+    = (FRAME_CONFIG_SCROLL_BAR_HEIGHT (f) + unit - 1) / unit;
+}
 
 /* Subroutines for creating a frame.  */
 
@@ -1901,7 +1938,7 @@ w32_init_class (HINSTANCE hinst)
 }
 
 static HWND
-w32_createscrollbar (struct frame *f, struct scroll_bar * bar)
+w32_createvscrollbar (struct frame *f, struct scroll_bar * bar)
 {
   return CreateWindow ("SCROLLBAR", "", SBS_VERT | WS_CHILD | WS_VISIBLE,
 		       /* Position and size of scroll bar.  */
@@ -1909,14 +1946,22 @@ w32_createscrollbar (struct frame *f, struct scroll_bar * bar)
 		       FRAME_W32_WINDOW (f), NULL, hinst, NULL);
 }
 
+static HWND
+w32_createhscrollbar (struct frame *f, struct scroll_bar * bar)
+{
+  return CreateWindow ("SCROLLBAR", "", SBS_HORZ | WS_CHILD | WS_VISIBLE,
+		       /* Position and size of scroll bar.  */
+		       bar->left, bar->top, bar->width, bar->height,
+		       FRAME_W32_WINDOW (f), NULL, hinst, NULL);
+}
+
 static void
-w32_createwindow (struct frame *f)
+w32_createwindow (struct frame *f, int *coords)
 {
   HWND hwnd;
   RECT rect;
-  Lisp_Object top = Qunbound;
-  Lisp_Object left = Qunbound;
-  struct w32_display_info *dpyinfo = &one_w32_display_info;
+  int top;
+  int left;
 
   rect.left = rect.top = 0;
   rect.right = FRAME_PIXEL_WIDTH (f);
@@ -1931,25 +1976,21 @@ w32_createwindow (struct frame *f)
 
   if (f->size_hint_flags & USPosition || f->size_hint_flags & PPosition)
     {
-      XSETINT (left, f->left_pos);
-      XSETINT (top, f->top_pos);
+      left = f->left_pos;
+      top = f->top_pos;
     }
-  else if (EQ (left, Qunbound) && EQ (top, Qunbound))
+  else
     {
-      /* When called with RES_TYPE_NUMBER, w32_get_arg will return zero
-	 for anything that is not a number and is not Qunbound.  */
-      left = x_get_arg (dpyinfo, Qnil, Qleft, "left", "Left", RES_TYPE_NUMBER);
-      top = x_get_arg (dpyinfo, Qnil, Qtop, "top", "Top", RES_TYPE_NUMBER);
+      left = coords[0];
+      top = coords[1];
     }
 
   FRAME_W32_WINDOW (f) = hwnd
     = CreateWindow (EMACS_CLASS,
 		    f->namebuf,
 		    f->output_data.w32->dwStyle | WS_CLIPCHILDREN,
-		    EQ (left, Qunbound) ? CW_USEDEFAULT : XINT (left),
-		    EQ (top, Qunbound) ? CW_USEDEFAULT : XINT (top),
-		    rect.right - rect.left,
-		    rect.bottom - rect.top,
+		    left, top,
+		    rect.right - rect.left, rect.bottom - rect.top,
 		    NULL,
 		    NULL,
 		    hinst,
@@ -1960,7 +2001,8 @@ w32_createwindow (struct frame *f)
       SetWindowLong (hwnd, WND_FONTWIDTH_INDEX, FRAME_COLUMN_WIDTH (f));
       SetWindowLong (hwnd, WND_LINEHEIGHT_INDEX, FRAME_LINE_HEIGHT (f));
       SetWindowLong (hwnd, WND_BORDER_INDEX, FRAME_INTERNAL_BORDER_WIDTH (f));
-      SetWindowLong (hwnd, WND_SCROLLBAR_INDEX, FRAME_SCROLL_BAR_AREA_WIDTH (f));
+      SetWindowLong (hwnd, WND_VSCROLLBAR_INDEX, FRAME_SCROLL_BAR_AREA_WIDTH (f));
+      SetWindowLong (hwnd, WND_HSCROLLBAR_INDEX, FRAME_SCROLL_BAR_AREA_HEIGHT (f));
       SetWindowLong (hwnd, WND_BACKGROUND_INDEX, FRAME_BACKGROUND_PIXEL (f));
 
       /* Enable drag-n-drop.  */
@@ -2375,7 +2417,8 @@ w32_name_of_message (UINT msg)
       M (WM_EMACS_KILL),
       M (WM_EMACS_CREATEWINDOW),
       M (WM_EMACS_DONE),
-      M (WM_EMACS_CREATESCROLLBAR),
+      M (WM_EMACS_CREATEVSCROLLBAR),
+      M (WM_EMACS_CREATEHSCROLLBAR),
       M (WM_EMACS_SHOWWINDOW),
       M (WM_EMACS_SETWINDOWPOS),
       M (WM_EMACS_DESTROYWINDOW),
@@ -2392,6 +2435,7 @@ w32_name_of_message (UINT msg)
       M (WM_EMACS_SHOW_CARET),
       M (WM_EMACS_HIDE_CARET),
       M (WM_EMACS_SETCURSOR),
+      M (WM_EMACS_SHOWCURSOR),
       M (WM_EMACS_PAINT),
       M (WM_CHAR),
 #undef M
@@ -2467,7 +2511,8 @@ w32_msg_pump (deferred_msg * msg_buf)
                  the patch for XP is not publicly available until XP SP3,
                  and older versions will never be patched.  */
               CoInitialize (NULL);
-	      w32_createwindow ((struct frame *) msg.wParam);
+	      w32_createwindow ((struct frame *) msg.wParam,
+				(int *) msg.lParam);
 	      if (!PostThreadMessage (dwMainThreadId, WM_EMACS_DONE, 0, 0))
 		emacs_abort ();
 	      break;
@@ -2498,7 +2543,7 @@ w32_msg_pump (deferred_msg * msg_buf)
                  thread-safe.  The next line is okay because the cons
                  cell is never made into garbage and is not relocated by
                  GC.  */
-	      XSETCAR (XIL ((EMACS_INT) msg.lParam), Qnil);
+	      XSETCAR (make_lisp_ptr ((void *)msg.lParam, Lisp_Cons), Qnil);
 	      if (!PostThreadMessage (dwMainThreadId, WM_EMACS_DONE, 0, 0))
 		emacs_abort ();
 	      break;
@@ -2506,16 +2551,10 @@ w32_msg_pump (deferred_msg * msg_buf)
 	      {
 		int vk_code = (int) msg.wParam;
 		int cur_state = (GetKeyState (vk_code) & 1);
-		Lisp_Object new_state = XIL ((EMACS_INT) msg.lParam);
+		int new_state = msg.lParam;
 
-		/* NB: This code must be thread-safe.  It is safe to
-                   call NILP because symbols are not relocated by GC,
-                   and pointer here is not touched by GC (so the markbit
-                   can't be set).  Numbers are safe because they are
-                   immediate values.  */
-		if (NILP (new_state)
-		    || (NUMBERP (new_state)
-			&& ((XUINT (new_state)) & 1) != cur_state))
+		if (new_state == -1
+		    || ((new_state & 1) != cur_state))
 		  {
 		    one_w32_display_info.faked_key = vk_code;
 
@@ -3449,6 +3488,7 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	  track_mouse_event_fn (&tme);
 	  track_mouse_window = hwnd;
 	}
+    case WM_HSCROLL:
     case WM_VSCROLL:
       if (w32_mouse_move_interval <= 0
 	  || (msg == WM_MOUSEMOVE && button_state == 0))
@@ -3787,10 +3827,14 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       return 0;
 
     case WM_WINDOWPOSCHANGING:
-      /* Don't restrict the sizing of tip frames.  */
-      if (frame_resize_pixelwise || hwnd == tip_window)
-	return 0;
+      /* Don't restrict the sizing of any kind of frames.  If the window
+	 manager doesn't, there's no reason to do it ourselves.  */
+#if 0
+        if (frame_resize_pixelwise || hwnd == tip_window)
+#endif
+	  return 0;
 
+#if 0
       /* Don't restrict the sizing of fullscreened frames, allowing them to be
          flush with the sides of the screen.  */
       f = x_window_to_frame (dpyinfo, hwnd);
@@ -3813,7 +3857,8 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	    DWORD font_width;
 	    DWORD line_height;
 	    DWORD internal_border;
-	    DWORD scrollbar_extra;
+	    DWORD vscrollbar_extra;
+	    DWORD hscrollbar_extra;
 	    RECT wr;
 
 	    wp.length = sizeof (wp);
@@ -3824,7 +3869,8 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	    font_width = GetWindowLong (hwnd, WND_FONTWIDTH_INDEX);
 	    line_height = GetWindowLong (hwnd, WND_LINEHEIGHT_INDEX);
 	    internal_border = GetWindowLong (hwnd, WND_BORDER_INDEX);
-	    scrollbar_extra = GetWindowLong (hwnd, WND_SCROLLBAR_INDEX);
+	    vscrollbar_extra = GetWindowLong (hwnd, WND_VSCROLLBAR_INDEX);
+	    hscrollbar_extra = GetWindowLong (hwnd, WND_HSCROLLBAR_INDEX);
 
 	    leave_crit ();
 
@@ -3835,10 +3881,10 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	    /* Force width and height of client area to be exact
 	       multiples of the character cell dimensions.  */
 	    wdiff = (lppos->cx - (rect.right - rect.left)
-		     - 2 * internal_border - scrollbar_extra)
+		     - 2 * internal_border - vscrollbar_extra)
 	      % font_width;
 	    hdiff = (lppos->cy - (rect.bottom - rect.top)
-		     - 2 * internal_border)
+		     - 2 * internal_border - hscrollbar_extra)
 	      % line_height;
 
 	    if (wdiff || hdiff)
@@ -3873,6 +3919,7 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
 
       goto dflt;
+#endif
 
     case WM_GETMINMAXINFO:
       /* Hack to allow resizing the Emacs frame above the screen size.
@@ -3907,9 +3954,20 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return 0;
       }
 
-    case WM_EMACS_CREATESCROLLBAR:
-      return (LRESULT) w32_createscrollbar ((struct frame *) wParam,
-					    (struct scroll_bar *) lParam);
+    case WM_EMACS_SHOWCURSOR:
+      {
+	ShowCursor ((BOOL) wParam);
+
+	return 0;
+      }
+
+    case WM_EMACS_CREATEVSCROLLBAR:
+      return (LRESULT) w32_createvscrollbar ((struct frame *) wParam,
+					     (struct scroll_bar *) lParam);
+
+    case WM_EMACS_CREATEHSCROLLBAR:
+      return (LRESULT) w32_createhscrollbar ((struct frame *) wParam,
+					     (struct scroll_bar *) lParam);
 
     case WM_EMACS_SHOWWINDOW:
       return ShowWindow ((HWND) wParam, (WPARAM) lParam);
@@ -4068,8 +4126,25 @@ static void
 my_create_window (struct frame * f)
 {
   MSG msg;
+  static int coords[2];
+  Lisp_Object left, top;
+  struct w32_display_info *dpyinfo = &one_w32_display_info;
 
-  if (!PostThreadMessage (dwWindowsThreadId, WM_EMACS_CREATEWINDOW, (WPARAM)f, 0))
+  /* When called with RES_TYPE_NUMBER, x_get_arg will return zero for
+     anything that is not a number and is not Qunbound.  */
+  left = x_get_arg (dpyinfo, Qnil, Qleft, "left", "Left", RES_TYPE_NUMBER);
+  top = x_get_arg (dpyinfo, Qnil, Qtop, "top", "Top", RES_TYPE_NUMBER);
+  if (EQ (left, Qunbound))
+    coords[0] = CW_USEDEFAULT;
+  else
+    coords[0] = XINT (left);
+  if (EQ (top, Qunbound))
+    coords[1] = CW_USEDEFAULT;
+  else
+    coords[1] = XINT (top);
+
+  if (!PostThreadMessage (dwWindowsThreadId, WM_EMACS_CREATEWINDOW,
+			  (WPARAM)f, (LPARAM)coords))
     emacs_abort ();
   GetMessage (&msg, NULL, WM_EMACS_DONE, WM_EMACS_DONE);
 }
@@ -4112,7 +4187,8 @@ my_create_tip_window (struct frame *f)
       SetWindowLong (tip_window, WND_BACKGROUND_INDEX, FRAME_BACKGROUND_PIXEL (f));
 
       /* Tip frames have no scrollbars.  */
-      SetWindowLong (tip_window, WND_SCROLLBAR_INDEX, 0);
+      SetWindowLong (tip_window, WND_VSCROLLBAR_INDEX, 0);
+      SetWindowLong (tip_window, WND_HSCROLLBAR_INDEX, 0);
 
       /* Do this to discard the default setting specified by our parent. */
       ShowWindow (tip_window, SW_HIDE);
@@ -4244,6 +4320,17 @@ unwind_create_frame (Lisp_Object frame)
     {
 #ifdef GLYPH_DEBUG
       struct w32_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
+
+      /* If the frame's image cache refcount is still the same as our
+	 private shadow variable, it means we are unwinding a frame
+	 for which we didn't yet call init_frame_faces, where the
+	 refcount is incremented.  Therefore, we increment it here, so
+	 that free_frame_faces, called in x_free_frame_resources
+	 below, will not mistakenly decrement the counter that was not
+	 incremented yet to account for this new frame.  */
+      if (FRAME_IMAGE_CACHE (f) != NULL
+	  && FRAME_IMAGE_CACHE (f)->refcount == image_cache_refcount)
+	FRAME_IMAGE_CACHE (f)->refcount++;
 #endif
 
       x_free_frame_resources (f);
@@ -4254,7 +4341,8 @@ unwind_create_frame (Lisp_Object frame)
       eassert (dpyinfo->reference_count == dpyinfo_refcount);
       eassert ((dpyinfo->terminal->image_cache == NULL
 		&& image_cache_refcount == 0)
-	       || dpyinfo->terminal->image_cache->refcount == image_cache_refcount);
+	       || (dpyinfo->terminal->image_cache != NULL
+		   && dpyinfo->terminal->image_cache->refcount == image_cache_refcount));
 #endif
       return Qt;
     }
@@ -4332,7 +4420,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
   Lisp_Object name;
   int minibuffer_only = 0;
   long window_prompting = 0;
-  int width, height;
   ptrdiff_t count = SPECPDL_INDEX ();
   struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
   Lisp_Object display;
@@ -4400,8 +4487,9 @@ This function is an internal primitive--use `make-frame' instead.  */)
 
   XSETFRAME (frame, f);
 
-  /* By default, make scrollbars the system standard width. */
-  x_set_scroll_bar_default_width (f);
+  /* By default, make scrollbars the system standard width and height. */
+  FRAME_CONFIG_SCROLL_BAR_WIDTH (f) = GetSystemMetrics (SM_CXVSCROLL);
+  FRAME_CONFIG_SCROLL_BAR_HEIGHT (f) = GetSystemMetrics (SM_CXHSCROLL);
 
   f->terminal = dpyinfo->terminal;
 
@@ -4427,10 +4515,11 @@ This function is an internal primitive--use `make-frame' instead.  */)
 #endif /* GLYPH_DEBUG */
 
   /* Specify the parent under which to make this window.  */
-
   if (!NILP (parent))
     {
-      f->output_data.w32->parent_desc = (Window) XFASTINT (parent);
+      /* Cast to UINT_PTR shuts up compiler warnings about cast to
+	 pointer from integer of different size.  */
+      f->output_data.w32->parent_desc = (Window) (UINT_PTR) XFASTINT (parent);
       f->output_data.w32->explicit_parent = 1;
     }
   else
@@ -4450,7 +4539,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
     {
       fset_name (f, name);
       f->explicit_name = 1;
-      /* use the frame's title when getting resources for this frame.  */
+      /* Use the frame's title when getting resources for this frame.  */
       specbind (Qx_resource_name, name);
     }
 
@@ -4460,9 +4549,11 @@ This function is an internal primitive--use `make-frame' instead.  */)
 
   x_default_parameter (f, parameters, Qfont_backend, Qnil,
 		       "fontBackend", "FontBackend", RES_TYPE_STRING);
+
   /* Extract the window parameters from the supplied values
      that are needed to determine window geometry.  */
   x_default_font_parameter (f, parameters);
+
   x_default_parameter (f, parameters, Qborder_width, make_number (2),
 		       "borderWidth", "BorderWidth", RES_TYPE_NUMBER);
 
@@ -4476,7 +4567,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
 			 "internalBorder", "InternalBorder", RES_TYPE_NUMBER);
       if (! EQ (value, Qunbound))
 	parameters = Fcons (Fcons (Qinternal_border_width, value),
-                            parameters);
+			    parameters);
     }
   /* Default internalBorderWidth to 0 on Windows to match other programs.  */
   x_default_parameter (f, parameters, Qinternal_border_width, make_number (0),
@@ -4487,6 +4578,8 @@ This function is an internal primitive--use `make-frame' instead.  */)
 		       NULL, NULL, RES_TYPE_NUMBER);
   x_default_parameter (f, parameters, Qvertical_scroll_bars, Qright,
 		       "verticalScrollBars", "ScrollBars", RES_TYPE_SYMBOL);
+  x_default_parameter (f, parameters, Qhorizontal_scroll_bars, Qnil,
+		       "horizontalScrollBars", "ScrollBars", RES_TYPE_SYMBOL);
 
   /* Also do the stuff which must be set before the window exists.  */
   x_default_parameter (f, parameters, Qforeground_color, build_string ("black"),
@@ -4507,57 +4600,43 @@ This function is an internal primitive--use `make-frame' instead.  */)
 		       "rightFringe", "RightFringe", RES_TYPE_NUMBER);
   /* Process alpha here (Bug#16619).  */
   x_default_parameter (f, parameters, Qalpha, Qnil,
-                       "alpha", "Alpha", RES_TYPE_NUMBER);
+		       "alpha", "Alpha", RES_TYPE_NUMBER);
 
-  /* Init faces before x_default_parameter is called for scroll-bar
-     parameters because that function calls x_set_scroll_bar_width,
-     which calls change_frame_size, which calls Fset_window_buffer,
-     which runs hooks, which call Fvertical_motion.  At the end, we
-     end up in init_iterator with a null face cache, which should not
-     happen.  */
+  /* Init faces first since we need the frame's column width/line
+     height in various occasions.  */
   init_frame_faces (f);
 
-  /* Avoid calling window-configuration-change-hook; otherwise we
-     could get an infloop in next_frame since the frame is not yet in
-     Vframe_list.  */
-  {
-    ptrdiff_t count2 = SPECPDL_INDEX ();
+  /* The following call of change_frame_size is needed since otherwise
+     x_set_tool_bar_lines will already work with the character sizes
+     installed by init_frame_faces while the frame's pixel size is
+     still calculated from a character size of 1 and we subsequently
+     hit the (height >= 0) assertion in window_box_height.
 
-    record_unwind_protect (unwind_create_frame_1, inhibit_lisp_code);
-    inhibit_lisp_code = Qt;
+     The non-pixelwise code apparently worked around this because it
+     had one frame line vs one toolbar line which left us with a zero
+     root window height which was obviously wrong as well ...  */
+  adjust_frame_size (f, FRAME_COLS (f) * FRAME_COLUMN_WIDTH (f),
+		     FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), 5, 1,
+		     Qx_create_frame_1);
 
-    /* PXW: This is a duplicate from below.  We have to do it here since
-       otherwise x_set_tool_bar_lines will work with the character sizes
-       installed by init_frame_faces while the frame's pixel size is still
-       calculated from a character size of 1 and we subsequently hit the
-       eassert (height >= 0) assertion in window_box_height.  The
-       non-pixelwise code apparently worked around this because it had one
-       frame line vs one toolbar line which left us with a zero root
-       window height which was obviously wrong as well ...  */
-    change_frame_size (f, FRAME_COLS (f) * FRAME_COLUMN_WIDTH (f),
-		       FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), 1, 0, 0, 1);
-
-    /* The X resources controlling the menu-bar and tool-bar are
-       processed specially at startup, and reflected in the mode
-       variables; ignore them here.  */
-    x_default_parameter (f, parameters, Qmenu_bar_lines,
-			 NILP (Vmenu_bar_mode)
-			 ? make_number (0) : make_number (1),
-			 NULL, NULL, RES_TYPE_NUMBER);
-    x_default_parameter (f, parameters, Qtool_bar_lines,
-			 NILP (Vtool_bar_mode)
-			 ? make_number (0) : make_number (1),
-			 NULL, NULL, RES_TYPE_NUMBER);
-
-    unbind_to (count2, Qnil);
-  }
+  /* The X resources controlling the menu-bar and tool-bar are
+     processed specially at startup, and reflected in the mode
+     variables; ignore them here.  */
+  x_default_parameter (f, parameters, Qmenu_bar_lines,
+		       NILP (Vmenu_bar_mode)
+		       ? make_number (0) : make_number (1),
+		       NULL, NULL, RES_TYPE_NUMBER);
+  x_default_parameter (f, parameters, Qtool_bar_lines,
+		       NILP (Vtool_bar_mode)
+		       ? make_number (0) : make_number (1),
+		       NULL, NULL, RES_TYPE_NUMBER);
 
   x_default_parameter (f, parameters, Qbuffer_predicate, Qnil,
 		       "bufferPredicate", "BufferPredicate", RES_TYPE_SYMBOL);
   x_default_parameter (f, parameters, Qtitle, Qnil,
 		       "title", "Title", RES_TYPE_STRING);
   x_default_parameter (f, parameters, Qfullscreen, Qnil,
-                       "fullscreen", "Fullscreen", RES_TYPE_SYMBOL);
+		       "fullscreen", "Fullscreen", RES_TYPE_SYMBOL);
 
   f->output_data.w32->dwStyle = WS_OVERLAPPEDWINDOW;
   f->output_data.w32->parent_desc = FRAME_DISPLAY_INFO (f)->root_window;
@@ -4600,15 +4679,14 @@ This function is an internal primitive--use `make-frame' instead.  */)
 		       "cursorType", "CursorType", RES_TYPE_SYMBOL);
   x_default_parameter (f, parameters, Qscroll_bar_width, Qnil,
 		       "scrollBarWidth", "ScrollBarWidth", RES_TYPE_NUMBER);
+  x_default_parameter (f, parameters, Qscroll_bar_height, Qnil,
+		       "scrollBarHeight", "ScrollBarHeight", RES_TYPE_NUMBER);
 
-  /* Dimensions, especially FRAME_LINES (f), must be done via change_frame_size.
-     Change will not be effected unless different from the current
-     FRAME_LINES (f).  */
-  width = FRAME_TEXT_WIDTH (f);
-  height = FRAME_TEXT_HEIGHT (f);
-  FRAME_TEXT_HEIGHT (f) = 0;
-  SET_FRAME_WIDTH (f, 0);
-  change_frame_size (f, width, height, 1, 0, 0, 1);
+  /* Allow x_set_window_size, now.  */
+  f->can_x_set_window_size = true;
+
+  adjust_frame_size (f, FRAME_TEXT_WIDTH (f), FRAME_TEXT_HEIGHT (f), 0, 1,
+		     Qx_create_frame_2);
 
   /* Tell the server what size and position, etc, we want, and how
      badly we want them.  This should be done after we have the menu
@@ -4945,7 +5023,7 @@ If omitted or nil, that stands for the selected frame's display.  */)
   return Qnil;
 }
 
-static BOOL CALLBACK
+static BOOL CALLBACK ALIGN_STACK
 w32_monitor_enum (HMONITOR monitor, HDC hdc, RECT *rcMonitor, LPARAM dwData)
 {
   Lisp_Object *monitor_list = (Lisp_Object *) dwData;
@@ -5272,7 +5350,7 @@ terminate Emacs if we can't open the connection.
   {
     char basename[ MAX_PATH ], *str;
 
-    strcpy (basename, SDATA (Vinvocation_name));
+    lispstpcpy (basename, Vinvocation_name);
     str = strrchr (basename, '.');
     if (str) *str = 0;
     Vinvocation_name = build_string (basename);
@@ -5484,100 +5562,6 @@ no value of TYPE (always string in the MS Windows case).  */)
 
 #endif /* TODO */
 
-
-/***********************************************************************
-				Busy cursor
- ***********************************************************************/
-
-void
-w32_note_current_window (void)
-{
-  struct frame * f = SELECTED_FRAME ();
-
-  if (!FRAME_W32_P (f))
-    return;
-
-  hourglass_hwnd = FRAME_W32_WINDOW (f);
-}
-
-void
-show_hourglass (struct atimer *timer)
-{
-  struct frame *f;
-
-  hourglass_atimer = NULL;
-
-  block_input ();
-  f = x_window_to_frame (&one_w32_display_info,
-				       hourglass_hwnd);
-
-  if (f)
-    f->output_data.w32->hourglass_p = 0;
-  else
-    f = SELECTED_FRAME ();
-
-  if (!FRAME_W32_P (f))
-    {
-      unblock_input ();
-      return;
-    }
-
-  w32_show_hourglass (f);
-  unblock_input ();
-}
-
-void
-hide_hourglass (void)
-{
-  block_input ();
-  w32_hide_hourglass ();
-  unblock_input ();
-}
-
-
-/* Display an hourglass cursor.  Set the hourglass_p flag in display info
-   to indicate that an hourglass cursor is shown.  */
-
-static void
-w32_show_hourglass (struct frame *f)
-{
-  if (!hourglass_shown_p)
-    {
-      f->output_data.w32->hourglass_p = 1;
-      if (!menubar_in_use && !current_popup_menu)
-	SetCursor (f->output_data.w32->hourglass_cursor);
-      hourglass_shown_p = 1;
-    }
-}
-
-
-/* Hide the hourglass cursor on all frames, if it is currently shown.  */
-
-static void
-w32_hide_hourglass (void)
-{
-  if (hourglass_shown_p)
-    {
-      struct frame *f = x_window_to_frame (&one_w32_display_info,
-					   hourglass_hwnd);
-      if (f)
-	f->output_data.w32->hourglass_p = 0;
-      else
-	/* If frame was deleted, restore to selected frame's cursor.  */
-	f = SELECTED_FRAME ();
-
-      if (FRAME_W32_P (f))
-	SetCursor (f->output_data.w32->current_cursor);
-      else
-	/* No cursors on non GUI frames - restore to stock arrow cursor.  */
-	SetCursor (w32_load_cursor (IDC_ARROW));
-
-      hourglass_shown_p = 0;
-    }
-}
-
-
-
 /***********************************************************************
 				Tool tips
  ***********************************************************************/
@@ -5667,7 +5651,8 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
   f->wants_modeline = 0;
   XSETFRAME (frame, f);
 
-  buffer = Fget_buffer_create (build_string (" *tip*"));
+  AUTO_STRING (tip, " *tip*");
+  buffer = Fget_buffer_create (tip);
   /* Use set_window_buffer instead of Fset_window_buffer (see
      discussion of bug#11984, bug#12025, bug#12026).  */
   set_window_buffer (FRAME_ROOT_WINDOW (f), buffer, 0, 0);
@@ -5762,13 +5747,12 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
 		       "cursorColor", "Foreground", RES_TYPE_STRING);
   x_default_parameter (f, parms, Qborder_color, build_string ("black"),
 		       "borderColor", "BorderColor", RES_TYPE_STRING);
+  x_default_parameter (f, parms, Qalpha, Qnil,
+                       "alpha", "Alpha", RES_TYPE_NUMBER);
 
-  /* Init faces before x_default_parameter is called for scroll-bar
-     parameters because that function calls x_set_scroll_bar_width,
-     which calls change_frame_size, which calls Fset_window_buffer,
-     which runs hooks, which call Fvertical_motion.  At the end, we
-     end up in init_iterator with a null face cache, which should not
-     happen.  */
+  /* Init faces before x_default_parameter is called for the
+     scroll-bar-width parameter because otherwise we end up in
+     init_iterator with a null face cache, which should not happen.  */
   init_frame_faces (f);
 
   f->output_data.w32->dwStyle = WS_BORDER | WS_POPUP | WS_DISABLED;
@@ -5799,9 +5783,10 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
      from the current FRAME_LINES (f).  */
   width = FRAME_COLS (f);
   height = FRAME_LINES (f);
-  FRAME_LINES (f) = 0;
   SET_FRAME_COLS (f, 0);
-  change_frame_size (f, width, height, 1, 0, 0, 0);
+  SET_FRAME_LINES (f, 0);
+  adjust_frame_size (f, width * FRAME_COLUMN_WIDTH (f),
+		     height * FRAME_LINE_HEIGHT (f), 0, 1, Qnil);
 
   /* Add `tooltip' frame parameter's default value. */
   if (NILP (Fframe_parameter (frame, Qtooltip)))
@@ -5846,6 +5831,7 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
      below.  And the frame needs to be on Vframe_list or making it
      visible won't work.  */
   Vframe_list = Fcons (frame, Vframe_list);
+  f->can_x_set_window_size = true;
 
   /* Setting attributes of faces of the tooltip frame from resources
      and similar will increment face_change_count, which leads to the
@@ -6035,12 +6021,13 @@ Text larger than the specified size is clipped.  */)
 	  /* Put tooltip in topmost group and in position.  */
 	  SetWindowPos (FRAME_W32_WINDOW (f), HWND_TOPMOST,
 			root_x, root_y, 0, 0,
-			SWP_NOSIZE | SWP_NOACTIVATE);
+			SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 
 	  /* Ensure tooltip is on top of other topmost windows (eg menus).  */
 	  SetWindowPos (FRAME_W32_WINDOW (f), HWND_TOP,
 			0, 0, 0, 0,
-			SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+			SWP_NOMOVE | SWP_NOSIZE
+			| SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 
 	  unblock_input ();
 	  goto start_timer;
@@ -6142,7 +6129,7 @@ Text larger than the specified size is clipped.  */)
 		 place the cursor there.  Don't include the width of
 		 this glyph.  */
 	      last = &row->glyphs[TEXT_AREA][row->used[TEXT_AREA] - 1];
-	      if (INTEGERP (last->object))
+	      if (NILP (last->object))
 		row_width -= last->pixel_width;
 	    }
 	  else
@@ -6152,7 +6139,7 @@ Text larger than the specified size is clipped.  */)
 		 Don't count that glyph.  */
 	      struct glyph *g = row->glyphs[TEXT_AREA];
 
-	      if (g->type == STRETCH_GLYPH && INTEGERP (g->object))
+	      if (g->type == STRETCH_GLYPH && NILP (g->object))
 		{
 		  row_width -= g->pixel_width;
 		  seen_reversed_p = 1;
@@ -6201,7 +6188,7 @@ Text larger than the specified size is clipped.  */)
 	  if (row->used[TEXT_AREA] && !row->reversed_p)
 	    {
 	      last = &row->glyphs[TEXT_AREA][row->used[TEXT_AREA] - 1];
-	      if (INTEGERP (last->object))
+	      if (NILP (last->object))
 		row_width -= last->pixel_width;
 	    }
 
@@ -6238,12 +6225,13 @@ Text larger than the specified size is clipped.  */)
     SetWindowPos (FRAME_W32_WINDOW (f), HWND_TOPMOST,
 		  root_x, root_y,
 		  rect.right - rect.left + FRAME_COLUMN_WIDTH (f),
-		  rect.bottom - rect.top, SWP_NOACTIVATE);
+		  rect.bottom - rect.top, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 
     /* Ensure tooltip is on top of other topmost windows (eg menus).  */
     SetWindowPos (FRAME_W32_WINDOW (f), HWND_TOP,
 		  0, 0, 0, 0,
-		  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+		  SWP_NOMOVE | SWP_NOSIZE
+		  | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 
     /* Let redisplay know that we have made the frame visible already.  */
     SET_FRAME_VISIBLE (f, 1);
@@ -6252,8 +6240,8 @@ Text larger than the specified size is clipped.  */)
   }
 
   /* Draw into the window.  */
-  w->must_be_updated_p = 1;
-  update_single_window (w, 1);
+  w->must_be_updated_p = true;
+  update_single_window (w);
 
   unblock_input ();
 
@@ -6421,7 +6409,11 @@ or directory must exist.
 
 This function is only defined on NS, MS Windows, and X Windows with the
 Motif or Gtk toolkits.  With the Motif toolkit, ONLY-DIR-P is ignored.
-Otherwise, if ONLY-DIR-P is non-nil, the user can only select directories.  */)
+Otherwise, if ONLY-DIR-P is non-nil, the user can only select directories.
+On Windows 7 and later, the file selection dialog "remembers" the last
+directory where the user selected a file, and will open that directory
+instead of DIR on subsequent invocations of this function with the same
+value of DIR as in previous invocations; this is standard Windows behavior.  */)
   (Lisp_Object prompt, Lisp_Object dir, Lisp_Object default_filename, Lisp_Object mustmatch, Lisp_Object only_dir_p)
 {
   /* Filter index: 1: All Files, 2: Directories only  */
@@ -6880,7 +6872,7 @@ operations:
  \"runas\"   - run DOCUMENT, which must be an excutable file, with
                elevated privileges (a.k.a. \"as Administrator\").
  \"properties\"
-           - open the the property sheet dialog for DOCUMENT.
+           - open the property sheet dialog for DOCUMENT.
  nil       - invoke the default OPERATION, or \"open\" if default is
                not defined or unavailable.
 
@@ -7007,7 +6999,14 @@ a ShowWindow flag:
       Lisp_Object absdoc_encoded = ENCODE_FILE (absdoc);
 
       if (faccessat (AT_FDCWD, SSDATA (absdoc_encoded), F_OK, AT_EACCESS) == 0)
-	document = absdoc_encoded;
+	{
+	  /* ShellExecute fails if DOCUMENT is a UNC with forward
+	     slashes (expand-file-name above converts all backslashes
+	     to forward slashes).  Now that we know DOCUMENT is a
+	     file, we can mirror all forward slashes into backslashes.  */
+	  unixtodos_filename (SSDATA (absdoc_encoded));
+	  document = absdoc_encoded;
+	}
       else
 	document = ENCODE_FILE (document);
     }
@@ -7237,7 +7236,7 @@ The return value is the hotkey-id if registered, otherwise nil.  */)
       /* Notify input thread about new hot-key definition, so that it
 	 takes effect without needing to switch focus.  */
       PostThreadMessage (dwWindowsThreadId, WM_EMACS_REGISTER_HOT_KEY,
-			 (WPARAM) XLI (key), 0);
+			 (WPARAM) XINT (key), 0);
     }
 
   return key;
@@ -7257,10 +7256,17 @@ DEFUN ("w32-unregister-hot-key", Fw32_unregister_hot_key,
 
   if (!NILP (item))
     {
+      LPARAM lparam;
+
+      eassert (CONSP (item));
+      /* Pass the tail of the list as a pointer to a Lisp_Cons cell,
+	 so that it works in a --with-wide-int build as well.  */
+      lparam = (LPARAM) XUNTAG (item, Lisp_Cons);
+
       /* Notify input thread about hot-key definition being removed, so
 	 that it takes effect without needing focus switch.  */
       if (PostThreadMessage (dwWindowsThreadId, WM_EMACS_UNREGISTER_HOT_KEY,
-			     (WPARAM) XINT (XCAR (item)), (LPARAM) XLI (item)))
+			     (WPARAM) XINT (XCAR (item)), lparam))
 	{
 	  MSG msg;
 	  GetMessage (&msg, NULL, WM_EMACS_DONE, WM_EMACS_DONE);
@@ -7315,10 +7321,15 @@ DEFUN ("w32-toggle-lock-key", Fw32_toggle_lock_key,
        doc: /* Toggle the state of the lock key KEY.
 KEY can be `capslock', `kp-numlock', or `scroll'.
 If the optional parameter NEW-STATE is a number, then the state of KEY
-is set to off if the low bit of NEW-STATE is zero, otherwise on.  */)
+is set to off if the low bit of NEW-STATE is zero, otherwise on.
+If NEW-STATE is omitted or nil, the function toggles the state,
+
+Value is the new state of the key, or nil if the function failed
+to change the state.  */)
   (Lisp_Object key, Lisp_Object new_state)
 {
   int vk_code;
+  LPARAM lparam;
 
   if (EQ (key, intern ("capslock")))
     vk_code = VK_CAPITAL;
@@ -7332,8 +7343,12 @@ is set to off if the low bit of NEW-STATE is zero, otherwise on.  */)
   if (!dwWindowsThreadId)
     return make_number (w32_console_toggle_lock_key (vk_code, new_state));
 
+  if (NILP (new_state))
+    lparam = -1;
+  else
+    lparam = (XUINT (new_state)) & 1;
   if (PostThreadMessage (dwWindowsThreadId, WM_EMACS_TOGGLE_LOCK_KEY,
-			 (WPARAM) vk_code, (LPARAM) XLI (new_state)))
+			 (WPARAM) vk_code, lparam))
     {
       MSG msg;
       GetMessage (&msg, NULL, WM_EMACS_DONE, WM_EMACS_DONE);
@@ -7363,6 +7378,37 @@ This is a direct interface to the Windows API FindWindow function.  */)
   return Qt;
 }
 
+DEFUN ("w32-frame-menu-bar-size", Fw32_frame_menu_bar_size, Sw32_frame_menu_bar_size, 0, 1, 0,
+       doc: /* Return sizes of menu bar on frame FRAME.
+The return value is a list of four elements: The current width and
+height of FRAME's menu bar in pixels, the height of one menu bar line in
+a wrapped menu bar in pixels, and the height of a single line menu bar
+in pixels.
+
+If FRAME is omitted or nil, the selected frame is used.  */)
+  (Lisp_Object frame)
+{
+  struct frame *f = decode_any_frame (frame);
+  MENUBARINFO menu_bar;
+  int width, height, single_height, wrapped_height;
+
+  block_input ();
+
+  single_height = GetSystemMetrics (SM_CYMENU);
+  wrapped_height = GetSystemMetrics (SM_CYMENUSIZE);
+  menu_bar.cbSize = sizeof (menu_bar);
+  menu_bar.rcBar.right = menu_bar.rcBar.left = 0;
+  menu_bar.rcBar.top = menu_bar.rcBar.bottom = 0;
+  GetMenuBarInfo (FRAME_W32_WINDOW (f), 0xFFFFFFFD, 0, &menu_bar);
+  width = menu_bar.rcBar.right - menu_bar.rcBar.left;
+  height = menu_bar.rcBar.bottom - menu_bar.rcBar.top;
+
+  unblock_input ();
+
+  return list4 (make_number (width), make_number (height),
+		make_number (wrapped_height), make_number (single_height));
+}
+
 DEFUN ("w32-frame-rect", Fw32_frame_rect, Sw32_frame_rect, 0, 2, 0,
        doc: /* Return boundary rectangle of FRAME in screen coordinates.
 FRAME must be a live frame and defaults to the selected one.
@@ -7377,13 +7423,129 @@ title bar and decorations.  */)
   struct frame *f = decode_live_frame (frame);
   RECT rect;
 
+  block_input ();
+
   if (!NILP (client))
     GetClientRect (FRAME_W32_WINDOW (f), &rect);
   else
     GetWindowRect (FRAME_W32_WINDOW (f), &rect);
 
+  unblock_input ();
+
   return list4 (make_number (rect.left), make_number (rect.top),
 		make_number (rect.right), make_number (rect.bottom));
+}
+
+DEFUN ("x-frame-geometry", Fx_frame_geometry, Sx_frame_geometry, 0, 1, 0,
+       doc: /* Return geometric attributes of frame FRAME.
+FRAME must be a live frame and defaults to the selected one.
+
+The return value is an association list containing the following
+elements (all size values are in pixels).
+
+- `frame-outer-size' is a cons of the outer width and height of FRAME.
+  The outer size includes the title bar and the external borders as well
+  as any menu and/or tool bar of frame.
+
+- `border' is a cons of the horizontal and vertical width of FRAME's
+  external borders.
+
+- `title-bar-height' is the height of the title bar of FRAME.
+
+- `menu-bar-external' if `t' means the menu bar is by default external
+  (not included in the inner size of FRAME).
+
+- `menu-bar-size' is a cons of the width and height of the menu bar of
+  FRAME.
+
+- `tool-bar-external' if `t' means the tool bar is by default external
+  (not included in the inner size of FRAME).
+
+- `tool-bar-side' tells tells on which side the tool bar on FRAME is by
+  default and can be one of `left', `top', `right' or `bottom'.
+
+- `tool-bar-size' is a cons of the width and height of the tool bar of
+  FRAME.
+
+- `frame-inner-size' is a cons of the inner width and height of FRAME.
+  This excludes FRAME's title bar and external border as well as any
+  external menu and/or tool bar.  */)
+  (Lisp_Object frame)
+{
+  struct frame *f = decode_live_frame (frame);
+  Lisp_Object geometry = Qnil;
+  RECT frame_outer_edges, frame_inner_edges;
+  MENUBARINFO menu_bar;
+  int  border_width, border_height, title_height;
+  int single_bar_height, wrapped_bar_height, menu_bar_height;
+  Lisp_Object fullscreen = Fframe_parameter (frame, Qfullscreen);
+
+  block_input ();
+
+  /* Outer frame rectangle, including outer borders and title bar. */
+  GetWindowRect (FRAME_W32_WINDOW (f), &frame_outer_edges);
+  /* Inner frame rectangle, excluding borders and title bar.  */
+  GetClientRect (FRAME_W32_WINDOW (f), &frame_inner_edges);
+  /* Outer border.  */
+  border_width = GetSystemMetrics (SM_CXFRAME);
+  border_height = GetSystemMetrics (SM_CYFRAME);
+  /* Title bar.  */
+  title_height = GetSystemMetrics (SM_CYCAPTION);
+  /* Menu bar.  */
+  menu_bar.cbSize = sizeof (menu_bar);
+  menu_bar.rcBar.right = menu_bar.rcBar.left = 0;
+  menu_bar.rcBar.top = menu_bar.rcBar.bottom = 0;
+  GetMenuBarInfo (FRAME_W32_WINDOW (f), 0xFFFFFFFD, 0, &menu_bar);
+  single_bar_height = GetSystemMetrics (SM_CYMENU);
+  wrapped_bar_height = GetSystemMetrics (SM_CYMENUSIZE);
+  unblock_input ();
+
+  menu_bar_height = menu_bar.rcBar.bottom - menu_bar.rcBar.top;
+  /* Fix menu bar height reported by GetMenuBarInfo.  */
+  if (menu_bar_height > single_bar_height)
+    /* A wrapped menu bar.  */
+    menu_bar_height += single_bar_height - wrapped_bar_height;
+  else if (menu_bar_height > 0)
+    /* A single line menu bar.  */
+    menu_bar_height = single_bar_height;
+
+  return
+    listn (CONSTYPE_PURE, 10,
+	   Fcons (Qframe_position,
+		  Fcons (make_number (frame_outer_edges.left),
+			 make_number (frame_outer_edges.top))),
+	   Fcons (Qframe_outer_size,
+		  Fcons (make_number
+			 (frame_outer_edges.right - frame_outer_edges.left),
+			 make_number
+			 (frame_outer_edges.bottom - frame_outer_edges.top))),
+	   Fcons (Qexternal_border_size,
+		  ((EQ (fullscreen, Qfullboth) || EQ (fullscreen, Qfullscreen))
+		   ? Fcons (make_number (0), make_number (0))
+		   : Fcons (make_number (border_width),
+			    make_number (border_height)))),
+ 	   Fcons (Qtitle_height,
+		  ((EQ (fullscreen, Qfullboth) || EQ (fullscreen, Qfullscreen))
+		   ? make_number (0)
+		   : make_number (title_height))),
+	   Fcons (Qmenu_bar_external, Qt),
+	   Fcons (Qmenu_bar_size,
+		  Fcons (make_number
+			 (menu_bar.rcBar.right - menu_bar.rcBar.left),
+			 make_number (menu_bar_height))),
+	   Fcons (Qtool_bar_external, Qnil),
+	   Fcons (Qtool_bar_position, Qtop),
+	   Fcons (Qtool_bar_size,
+		  Fcons (make_number (FRAME_TOOL_BAR_LINES (f)
+				      ? (FRAME_PIXEL_WIDTH (f)
+					 - 2 * FRAME_INTERNAL_BORDER_WIDTH (f))
+				      : 0),
+			 make_number (FRAME_TOOL_BAR_HEIGHT (f)))),
+	   Fcons (Qframe_inner_size,
+		  Fcons (make_number
+			 (frame_inner_edges.right - frame_inner_edges.left),
+			 make_number
+			 (frame_inner_edges.bottom - frame_inner_edges.top))));
 }
 
 DEFUN ("w32-battery-status", Fw32_battery_status, Sw32_battery_status, 0, 0, 0,
@@ -8050,17 +8212,19 @@ frame_parm_handler w32_frame_parm_handlers[] =
   x_set_mouse_color,
   x_explicitly_set_name,
   x_set_scroll_bar_width,
+  x_set_scroll_bar_height,
   x_set_title,
   x_set_unsplittable,
   x_set_vertical_scroll_bars,
+  x_set_horizontal_scroll_bars,
   x_set_visibility,
   x_set_tool_bar_lines,
   0, /* x_set_scroll_bar_foreground, */
   0, /* x_set_scroll_bar_background, */
   x_set_screen_gamma,
   x_set_line_spacing,
-  x_set_fringe_width,
-  x_set_fringe_width,
+  x_set_left_fringe,
+  x_set_right_fringe,
   0, /* x_set_wait_for_wm, */
   x_set_fullscreen,
   x_set_font_backend,
@@ -8077,7 +8241,6 @@ syms_of_w32fns (void)
 
   w32_visible_system_caret_hwnd = NULL;
 
-  DEFSYM (Qsuppress_icon, "suppress-icon");
   DEFSYM (Qundefined_color, "undefined-color");
   DEFSYM (Qcancel_timer, "cancel-timer");
   DEFSYM (Qhyper, "hyper");
@@ -8092,8 +8255,6 @@ syms_of_w32fns (void)
   DEFSYM (Qworkarea, "workarea");
   DEFSYM (Qmm_size, "mm-size");
   DEFSYM (Qframes, "frames");
-  /* This is the end of symbol initialization.  */
-
 
   Fput (Qundefined_color, Qerror_conditions,
 	listn (CONSTYPE_PURE, 2, Qundefined_color, Qerror));
@@ -8381,6 +8542,7 @@ only be necessary if the default setting causes problems.  */);
   defsubr (&Sx_open_connection);
   defsubr (&Sx_close_connection);
   defsubr (&Sx_display_list);
+  defsubr (&Sx_frame_geometry);
   defsubr (&Sx_synchronize);
 
   /* W32 specific functions */
@@ -8397,6 +8559,7 @@ only be necessary if the default setting causes problems.  */);
   defsubr (&Sw32_toggle_lock_key);
   defsubr (&Sw32_window_exists_p);
   defsubr (&Sw32_frame_rect);
+  defsubr (&Sw32_frame_menu_bar_size);
   defsubr (&Sw32_battery_status);
 
 #ifdef WINDOWSNT
@@ -8405,9 +8568,6 @@ only be necessary if the default setting causes problems.  */);
 #endif
 
   defsubr (&Sset_message_beep);
-
-  hourglass_hwnd = NULL;
-
   defsubr (&Sx_show_tip);
   defsubr (&Sx_hide_tip);
   tip_timer = Qnil;

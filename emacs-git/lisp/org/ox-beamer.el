@@ -1,6 +1,6 @@
 ;;; ox-beamer.el --- Beamer Back-End for Org Export Engine
 
-;; Copyright (C) 2007-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik AT gmail DOT com>
 ;;         Nicolas Goaziou <n.goaziou AT gmail DOT com>
@@ -687,7 +687,7 @@ used as a communication channel."
     (cond
      ((equal type "radio")
       (let ((destination (org-export-resolve-radio-link link info)))
-	(when destination
+	(if (not destination) contents
 	  (format "\\hyperlink%s{%s}{%s}"
 		  (or (org-beamer--element-has-overlay-p link) "")
 		  (org-export-solidify-link-text
@@ -1092,6 +1092,7 @@ aid, but the tag does not have any semantic meaning."
 			  envs)
 		  '((:endgroup))
 		  '(("BMCOL" . ?|))))
+	 (org-tag-persistent-alist nil)
 	 (org-use-fast-tag-selection t)
 	 (org-fast-tag-selection-single-key t))
     (org-set-tags)

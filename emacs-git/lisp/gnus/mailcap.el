@@ -1,6 +1,6 @@
 ;;; mailcap.el --- MIME media types configuration
 
-;; Copyright (C) 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: William M. Perry <wmperry@aventail.com>
 ;;	Lars Magne Ingebrigtsen <larsi@gnus.org>
@@ -152,6 +152,10 @@ This is a compatibility function for different Emacsen."
       (non-viewer . t)
       (type   . "application/zip")
       ("copiousoutput"))
+     ("pdf"
+      (viewer . doc-view-mode)
+      (type . "application/pdf")
+      (test . (eq window-system 'x)))
      ("pdf"
       (viewer . "gv -safer %s")
       (type . "application/pdf")
@@ -1059,6 +1063,18 @@ If FORCE, re-parse even if already parsed."
 				      "%s" "?" t))))
 			     common-mime-info)))))
     commands))
+
+(defun mailcap-view-mime (type)
+  "View the data in the current buffer that has MIME type TYPE.
+`mailcap-mime-data' determines the method to use."
+  (let ((method (mailcap-mime-info type)))
+    (if (stringp method)
+	(shell-command-on-region (point-min) (point-max)
+				 ;; Use stdin as the "%s".
+				 (format method "-")
+				 (current-buffer)
+				 t)
+      (funcall method))))
 
 (provide 'mailcap)
 

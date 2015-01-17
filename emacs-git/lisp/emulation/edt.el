@@ -1,6 +1,7 @@
 ;;; edt.el --- enhanced EDT keypad mode emulation for GNU Emacs
 
-;; Copyright (C) 1986, 1992-1995, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1986, 1992-1995, 2000-2015 Free Software Foundation,
+;; Inc.
 
 ;; Author: Kevin Gallagher <Kevin.Gallagher@boeing.com>
 ;; Maintainer: Kevin Gallagher <Kevin.Gallagher@boeing.com>
@@ -2033,7 +2034,8 @@ created."
   ;; Make highlighting of selected text work properly for EDT commands.
   (if (featurep 'emacs)
       (progn
-	(setq edt-orig-transient-mark-mode transient-mark-mode)
+	(setq edt-orig-transient-mark-mode
+              (default-value 'transient-mark-mode))
 	(add-hook 'activate-mark-hook
 		  (function
 		   (lambda ()
@@ -2068,7 +2070,7 @@ created."
   (edt-reset)
   (force-mode-line-update t)
   (if (featurep 'emacs)
-    (setq transient-mark-mode edt-orig-transient-mark-mode))
+      (setq-default transient-mark-mode edt-orig-transient-mark-mode))
   (message "Original key bindings restored; EDT Emulation disabled"))
 
 (defun edt-default-menu-bar-update-buffers ()

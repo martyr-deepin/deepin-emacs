@@ -7,6 +7,11 @@ let c = 1,
 var e = 100500,
     + 1;
 
+function test ()
+{
+     return /[/]/.test ('/')     // (bug#19397)
+}
+
 var f = bar('/protocols/')
 baz();
 
@@ -47,3 +52,11 @@ var p = {
 
 var evens = [e for each (e in range(0, 21))
                if (ed % 2 == 0)];
+
+!b
+  !=b
+  !==b
+
+a++
+b +=
+  c

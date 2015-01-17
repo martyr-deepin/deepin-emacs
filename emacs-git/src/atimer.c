@@ -1,5 +1,5 @@
 /* Asynchronous timers.
-   Copyright (C) 2000-2014 Free Software Foundation, Inc.
+   Copyright (C) 2000-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -26,6 +26,11 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "atimer.h"
 #include <unistd.h>
 
+#ifdef HAVE_TIMERFD
+#include <errno.h>
+# include <sys/timerfd.h>
+#endif
+
 /* Free-list of atimer structures.  */
 
 static struct atimer *free_atimers;
@@ -40,11 +45,18 @@ static struct atimer *stopped_atimers;
 
 static struct atimer *atimers;
 
+#ifdef HAVE_ITIMERSPEC
 /* The alarm timer and whether it was properly initialized, if
    POSIX timers are available.  */
-#ifdef HAVE_ITIMERSPEC
 static timer_t alarm_timer;
 static bool alarm_timer_ok;
+
+# ifdef HAVE_TIMERFD
+/* File descriptor for timer, or -1 if it could not be created.  */
+static int timerfd;
+# else
+enum { timerfd = -1 };
+# endif
 #endif
 
 /* Block/unblock SIGALRM.  */
@@ -55,6 +67,7 @@ block_atimers (sigset_t *oldset)
   sigset_t blocked;
   sigemptyset (&blocked);
   sigaddset (&blocked, SIGALRM);
+  sigaddset (&blocked, SIGINT);
   pthread_sigmask (SIG_BLOCK, &blocked, oldset);
 }
 static void
@@ -70,20 +83,20 @@ static void schedule_atimer (struct atimer *);
 static struct atimer *append_atimer_lists (struct atimer *,
                                            struct atimer *);
 
-/* Start a new atimer of type TYPE.  TIME specifies when the timer is
+/* Start a new atimer of type TYPE.  TIMESTAMP specifies when the timer is
    ripe.  FN is the function to call when the timer fires.
    CLIENT_DATA is stored in the client_data member of the atimer
    structure returned and so made available to FN when it is called.
 
-   If TYPE is ATIMER_ABSOLUTE, TIME is the absolute time at which the
+   If TYPE is ATIMER_ABSOLUTE, TIMESTAMP is the absolute time at which the
    timer fires.
 
-   If TYPE is ATIMER_RELATIVE, the timer is ripe TIME s/us in the
+   If TYPE is ATIMER_RELATIVE, the timer is ripe TIMESTAMP seconds in the
    future.
 
    In both cases, the timer is automatically freed after it has fired.
 
-   If TYPE is ATIMER_CONTINUOUS, the timer fires every TIME s/us.
+   If TYPE is ATIMER_CONTINUOUS, the timer fires every TIMESTAMP seconds.
 
    Value is a pointer to the atimer started.  It can be used in calls
    to cancel_atimer; don't free it yourself.  */
@@ -95,8 +108,7 @@ start_atimer (enum atimer_type type, struct timespec timestamp,
   struct atimer *t;
   sigset_t oldset;
 
-  /* Round TIME up to the next full second if we don't have
-     itimers.  */
+  /* Round TIMESTAMP up to the next full second if we don't have itimers.  */
 #ifndef HAVE_SETITIMER
   if (timestamp.tv_nsec != 0 && timestamp.tv_sec < TYPE_MAXIMUM (time_t))
     timestamp = make_timespec (timestamp.tv_sec + 1, 0);
@@ -285,12 +297,20 @@ set_alarm (void)
       struct timespec now, interval;
 
 #ifdef HAVE_ITIMERSPEC
-      if (alarm_timer_ok)
+      if (0 <= timerfd || alarm_timer_ok)
 	{
 	  struct itimerspec ispec;
 	  ispec.it_value = atimers->expiration;
 	  ispec.it_interval.tv_sec = ispec.it_interval.tv_nsec = 0;
-	  if (timer_settime (alarm_timer, 0, &ispec, 0) == 0)
+# ifdef HAVE_TIMERFD
+	  if (timerfd_settime (timerfd, TFD_TIMER_ABSTIME, &ispec, 0) == 0)
+	    {
+	      add_timer_wait_descriptor (timerfd);
+	      return;
+	    }
+# endif
+	  if (alarm_timer_ok
+	      && timer_settime (alarm_timer, TIMER_ABSTIME, &ispec, 0) == 0)
 	    return;
 	}
 #endif
@@ -372,6 +392,37 @@ handle_alarm_signal (int sig)
   pending_signals = 1;
 }
 
+#ifdef HAVE_TIMERFD
+
+/* Called from wait_reading_process_output when FD, which
+   should be equal to TIMERFD, is available for reading.  */
+
+void
+timerfd_callback (int fd, void *arg)
+{
+  ptrdiff_t nbytes;
+  uint64_t expirations;
+
+  eassert (fd == timerfd);
+  nbytes = emacs_read (fd, &expirations, sizeof (expirations));
+
+  if (nbytes == sizeof (expirations))
+    {
+      /* Timer should expire just once.  */
+      eassert (expirations == 1);
+      do_pending_atimers ();
+    }
+  else if (nbytes < 0)
+    /* For some not yet known reason, we may get weird event and no
+       data on timer descriptor.  This can break Gnus at least, see:
+       http://lists.gnu.org/archive/html/emacs-devel/2014-07/msg00503.html.  */
+    eassert (errno == EAGAIN);
+  else
+    /* I don't know what else can happen with this descriptor.  */
+    emacs_abort ();
+}
+
+#endif /* HAVE_TIMERFD */
 
 /* Do pending timers.  */
 
@@ -397,23 +448,121 @@ turn_on_atimers (bool on)
   if (on)
     set_alarm ();
   else
-    alarm (0);
+    {
+#ifdef HAVE_ITIMERSPEC
+      struct itimerspec ispec;
+      memset (&ispec, 0, sizeof ispec);
+      if (alarm_timer_ok)
+	timer_settime (alarm_timer, TIMER_ABSTIME, &ispec, 0);
+# ifdef HAVE_TIMERFD
+      timerfd_settime (timerfd, TFD_TIMER_ABSTIME, &ispec, 0);
+# endif
+#endif
+      alarm (0);
+    }
 }
 
+/* This is intended to use from automated tests.  */
+
+#ifdef ENABLE_CHECKING
+
+#define MAXTIMERS 10
+
+struct atimer_result
+{
+  /* Time when we expect this timer to trigger.  */
+  struct timespec expected;
+
+  /* Timer status: -1 if not triggered, 0 if triggered
+     too early or too late, 1 if triggered timely.  */
+  int intime;
+};
+
+static void
+debug_timer_callback (struct atimer *t)
+{
+  struct timespec now = current_timespec ();
+  struct atimer_result *r = (struct atimer_result *) t->client_data;
+  int result = timespec_cmp (now, r->expected);
+
+  if (result < 0)
+    /* Too early.  */
+    r->intime = 0;
+  else if (result >= 0)
+    {
+#ifdef HAVE_SETITIMER
+      struct timespec delta = timespec_sub (now, r->expected);
+      /* Too late if later than expected + 0.01s.  FIXME:
+	 this should depend from system clock resolution.  */
+      if (timespec_cmp (delta, make_timespec (0, 10000000)) > 0)
+	r->intime = 0;
+      else
+#endif /* HAVE_SETITIMER */
+	r->intime = 1;
+    }
+}
+
+DEFUN ("debug-timer-check", Fdebug_timer_check, Sdebug_timer_check, 0, 0, 0,
+       doc: /* Run internal self-tests to check timers subsystem.
+Return t if all self-tests are passed, nil otherwise.  */)
+  (void)
+{
+  int i, ok;
+  struct atimer *timer;
+  struct atimer_result *results[MAXTIMERS];
+  struct timespec t = make_timespec (0, 0);
+
+  /* Arm MAXTIMERS relative timers to trigger with 0.1s intervals.  */
+  for (i = 0; i < MAXTIMERS; i++)
+    {
+      results[i] = xmalloc (sizeof (struct atimer_result));
+      t = timespec_add (t, make_timespec (0, 100000000));
+      results[i]->expected = timespec_add (current_timespec (), t);
+      results[i]->intime = -1;
+      timer = start_atimer (ATIMER_RELATIVE, t,
+			    debug_timer_callback, results[i]);
+    }
+
+  /* Wait for 1s but process timers.  */
+  wait_reading_process_output (1, 0, 0, false, Qnil, NULL, 0);
+  /* Shut up the compiler by "using" this variable.  */
+  (void) timer;
+
+  for (i = 0, ok = 0; i < MAXTIMERS; i++)
+    ok += results[i]->intime, xfree (results[i]);
+
+  return ok == MAXTIMERS ? Qt : Qnil;
+}
+
+#endif /* ENABLE_CHECKING */
 
 void
 init_atimer (void)
 {
-  struct sigaction action;
 #ifdef HAVE_ITIMERSPEC
-  struct sigevent sigev;
-  sigev.sigev_notify = SIGEV_SIGNAL;
-  sigev.sigev_signo = SIGALRM;
-  sigev.sigev_value.sival_ptr = &alarm_timer;
-  alarm_timer_ok = timer_create (CLOCK_REALTIME, &sigev, &alarm_timer) == 0;
+# ifdef HAVE_TIMERFD
+  /* Until this feature is considered stable, you can ask to not use it.  */
+  timerfd = (egetenv ("EMACS_IGNORE_TIMERFD") ? -1 :
+	     timerfd_create (CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC));
+# endif
+  if (timerfd < 0)
+    {
+      struct sigevent sigev;
+      sigev.sigev_notify = SIGEV_SIGNAL;
+      sigev.sigev_signo = SIGALRM;
+      sigev.sigev_value.sival_ptr = &alarm_timer;
+      alarm_timer_ok
+	= timer_create (CLOCK_REALTIME, &sigev, &alarm_timer) == 0;
+    }
 #endif
   free_atimers = stopped_atimers = atimers = NULL;
-  /* pending_signals is initialized in init_keyboard.*/
+
+  /* pending_signals is initialized in init_keyboard.  */
+  struct sigaction action;
   emacs_sigaction_init (&action, handle_alarm_signal);
   sigaction (SIGALRM, &action, 0);
+
+#ifdef ENABLE_CHECKING
+  defsubr (&Sdebug_timer_check);
+#endif
 }

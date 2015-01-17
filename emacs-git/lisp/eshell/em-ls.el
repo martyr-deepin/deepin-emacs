@@ -1,6 +1,6 @@
 ;;; em-ls.el --- implementation of ls in Lisp  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -490,7 +490,7 @@ whose cdr is the list of file attributes."
 		" " (format-time-string
 		     (concat
 		      eshell-ls-date-format " "
-		      (if (= (nth 5 (decode-time (current-time)))
+		      (if (= (nth 5 (decode-time))
 			     (nth 5 (decode-time
 				     (nth (cond
 					   ((eq sort-method 'by-atime) 4)

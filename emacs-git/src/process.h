@@ -1,5 +1,5 @@
 /* Definitions for asynchronous process control in GNU Emacs.
-   Copyright (C) 1985, 1994, 2001-2014 Free Software Foundation, Inc.
+   Copyright (C) 1985, 1994, 2001-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -162,6 +162,9 @@ struct Lisp_Process
     gnutls_session_t gnutls_state;
     gnutls_certificate_client_credentials gnutls_x509_cred;
     gnutls_anon_client_credentials_t gnutls_anon_cred;
+    gnutls_x509_crt_t gnutls_certificate;
+    unsigned int gnutls_peer_verification;
+    unsigned int gnutls_extra_peer_verification;
     int gnutls_log_level;
     int gnutls_handshakes_tried;
     bool_bf gnutls_p : 1;
@@ -194,15 +197,6 @@ pset_gnutls_cred_type (struct Lisp_Process *p, Lisp_Object val)
    when exiting.  */
 extern bool inhibit_sentinels;
 
-extern Lisp_Object Qeuid, Qegid, Qcomm, Qstate, Qppid, Qpgrp, Qsess, Qttname;
-extern Lisp_Object Qminflt, Qmajflt, Qcminflt, Qcmajflt, Qutime, Qstime;
-extern Lisp_Object Qcutime, Qpri, Qnice, Qthcount, Qstart, Qvsize, Qrss, Qargs;
-extern Lisp_Object Quser, Qgroup, Qetime, Qpcpu, Qpmem, Qtpgid, Qcstime;
-extern Lisp_Object Qtime, Qctime;
-extern Lisp_Object QCspeed;
-extern Lisp_Object QCbytesize, QCstopbits, QCparity, Qodd, Qeven;
-extern Lisp_Object QCflowcontrol, Qhw, Qsw, QCsummary;
-
 /* Exit statuses for GNU programs that exec other programs.  */
 enum
 {
@@ -213,8 +207,6 @@ enum
 
 /* Defined in callproc.c.  */
 
-extern void block_child_signal (sigset_t *);
-extern void unblock_child_signal (sigset_t const *);
 extern Lisp_Object encode_current_directory (void);
 extern void record_kill_process (struct Lisp_Process *, Lisp_Object);
 
@@ -227,9 +219,7 @@ extern Lisp_Object system_process_attributes (Lisp_Object);
 
 extern void record_deleted_pid (pid_t, Lisp_Object);
 struct sockaddr;
-#ifdef WINDOWSNT
 extern Lisp_Object conv_sockaddr_to_lisp (struct sockaddr *, int);
-#endif
 extern void hold_keyboard_input (void);
 extern void unhold_keyboard_input (void);
 extern bool kbd_on_hold_p (void);
@@ -240,13 +230,13 @@ extern void add_read_fd (int fd, fd_callback func, void *data);
 extern void delete_read_fd (int fd);
 extern void add_write_fd (int fd, fd_callback func, void *data);
 extern void delete_write_fd (int fd);
-#ifdef NS_IMPL_GNUSTEP
 extern void catch_child_signal (void);
-#endif
 
 #ifdef WINDOWSNT
 extern Lisp_Object network_interface_list (void);
 extern Lisp_Object network_interface_info (Lisp_Object);
 #endif
+
+extern Lisp_Object remove_slash_colon (Lisp_Object);
 
 INLINE_HEADER_END

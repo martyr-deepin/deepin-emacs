@@ -67,20 +67,15 @@ INLINE_HEADER_BEGIN
 #define BYTE8_TO_CHAR(byte) ((byte) + 0x3FFF00)
 
 #define UNIBYTE_TO_CHAR(byte) \
-  (ASCII_BYTE_P (byte) ? (byte) : BYTE8_TO_CHAR (byte))
+  (ASCII_CHAR_P (byte) ? (byte) : BYTE8_TO_CHAR (byte))
 
 /* Return the raw 8-bit byte for character C.  */
-#define CHAR_TO_BYTE8(c)	\
-  (CHAR_BYTE8_P (c)		\
-   ? (c) - 0x3FFF00		\
-   : multibyte_char_to_unibyte (c))
+#define CHAR_TO_BYTE8(c) (CHAR_BYTE8_P (c) ? (c) - 0x3FFF00 : (c & 0xFF))
 
 /* Return the raw 8-bit byte for character C,
    or -1 if C doesn't correspond to a byte.  */
-#define CHAR_TO_BYTE_SAFE(c)	\
-  (CHAR_BYTE8_P (c)		\
-   ? (c) - 0x3FFF00		\
-   : multibyte_char_to_unibyte_safe (c))
+#define CHAR_TO_BYTE_SAFE(c)						\
+  (ASCII_CHAR_P (c) ? c : (CHAR_BYTE8_P (c) ? (c) - 0x3FFF00 : -1))
 
 /* Nonzero iff BYTE is the 1st byte of a multibyte form of a character
    that corresponds to a raw 8-bit byte.  */
@@ -100,13 +95,6 @@ INLINE_HEADER_BEGIN
 
 /* This is the maximum byte length of multibyte form.  */
 #define MAX_MULTIBYTE_LENGTH 5
-
-/* Return a Lisp character whose character code is C.  Assumes C is
-   a valid character code.  */
-#define make_char(c) make_number (c)
-
-/* Nonzero iff C is an ASCII byte.  */
-#define ASCII_BYTE_P(c) UNSIGNED_CMP (c, <, 0x80)
 
 /* Nonzero iff X is a character.  */
 #define CHARACTERP(x) (NATNUMP (x) && XFASTINT (x) <= MAX_CHAR)
@@ -222,7 +210,7 @@ INLINE_HEADER_BEGIN
 
 /* Nonzero iff BYTE starts a character in a multibyte form.
    This is equivalent to:
-	(ASCII_BYTE_P (byte) || LEADING_CODE_P (byte))  */
+	(ASCII_CHAR_P (byte) || LEADING_CODE_P (byte))  */
 #define CHAR_HEAD_P(byte) (((byte) & 0xC0) != 0x80)
 
 /* How many bytes a character that starts with BYTE occupies in a
@@ -656,8 +644,6 @@ extern int string_char (const unsigned char *,
                         const unsigned char **, int *);
 
 extern int translate_char (Lisp_Object, int c);
-extern void parse_str_as_multibyte (const unsigned char *,
-				    ptrdiff_t, ptrdiff_t *, ptrdiff_t *);
 extern ptrdiff_t count_size_as_multibyte (const unsigned char *, ptrdiff_t);
 extern ptrdiff_t str_as_multibyte (unsigned char *, ptrdiff_t, ptrdiff_t,
 				   ptrdiff_t *);
@@ -671,13 +657,26 @@ extern ptrdiff_t c_string_width (const unsigned char *, ptrdiff_t, int,
 extern ptrdiff_t lisp_string_width (Lisp_Object, ptrdiff_t,
 				    ptrdiff_t *, ptrdiff_t *);
 
-extern Lisp_Object Qcharacterp;
 extern Lisp_Object Vchar_unify_table;
 extern Lisp_Object string_escape_byte8 (Lisp_Object);
 
 /* Return a translation table of id number ID.  */
 #define GET_TRANSLATION_TABLE(id) \
   (XCDR (XVECTOR (Vtranslation_table_vector)->contents[(id)]))
+
+/* Look up the element in char table OBJ at index CH, and return it as
+   an integer.  If the element is not a character, return CH itself.  */
+
+INLINE int
+char_table_translate (Lisp_Object obj, int ch)
+{
+  /* This internal function is expected to be called with valid arguments,
+     so there is a eassert instead of CHECK_xxx for the sake of speed.  */
+  eassert (CHAR_VALID_P (ch));
+  eassert (CHAR_TABLE_P (obj));
+  obj = CHAR_TABLE_REF (obj, ch);
+  return CHARACTERP (obj) ? XINT (obj) : ch;
+}
 
 INLINE_HEADER_END
 

@@ -1,5 +1,5 @@
 ;;; org-mobile.el --- Code for asymmetric sync with a mobile device
-;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -1074,7 +1074,7 @@ be returned that indicates what went wrong."
 	    ;; which prevents correct insertion when point is invisible
 	    (org-show-subtree)
 	    (end-of-line 1)
-	    (org-insert-heading-respect-content '(16) t)
+	    (org-insert-heading-respect-content t)
 	    (org-demote))
 	(beginning-of-line)
 	(insert "* "))

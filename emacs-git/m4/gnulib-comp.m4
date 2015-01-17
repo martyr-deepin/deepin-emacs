@@ -1,5 +1,5 @@
 # DO NOT EDIT! GENERATED AUTOMATICALLY!
-# Copyright (C) 2002-2014 Free Software Foundation, Inc.
+# Copyright (C) 2002-2015 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -119,17 +119,11 @@ AC_DEFUN([gl_EARLY],
   # Code from module stat:
   # Code from module stat-time:
   # Code from module stdalign:
-  # Code from module stdarg:
-  dnl Some compilers (e.g., AIX 5.3 cc) need to be in c99 mode
-  dnl for the builtin va_copy to work.  With Autoconf 2.60 or later,
-  dnl gl_PROG_CC_C99 arranges for this.  With older Autoconf gl_PROG_CC_C99
-  dnl shouldn't hurt, though installers are on their own to set c99 mode.
-  gl_PROG_CC_C99
-  # Code from module stdbool:
   # Code from module stddef:
   # Code from module stdint:
   # Code from module stdio:
   # Code from module stdlib:
+  # Code from module stpcpy:
   # Code from module strftime:
   # Code from module string:
   # Code from module strtoimax:
@@ -153,7 +147,9 @@ AC_DEFUN([gl_EARLY],
   # Code from module unsetenv:
   # Code from module update-copyright:
   # Code from module utimens:
+  # Code from module vararrays:
   # Code from module verify:
+  # Code from module vla:
   # Code from module warnings:
   # Code from module xalloc-oversized:
 ])
@@ -327,7 +323,7 @@ AC_DEFUN([gl_INIT],
   fi
   gl_UNISTD_MODULE_INDICATOR([readlink])
   gl_FUNC_READLINKAT
-  if test $HAVE_READLINKAT = 0; then
+  if test $HAVE_READLINKAT = 0 || test $REPLACE_READLINKAT = 1; then
     AC_LIBOBJ([readlinkat])
   fi
   gl_UNISTD_MODULE_INDICATOR([readlinkat])
@@ -342,12 +338,16 @@ AC_DEFUN([gl_INIT],
   gl_STAT_TIME
   gl_STAT_BIRTHTIME
   gl_STDALIGN_H
-  gl_STDARG_H
-  AM_STDBOOL_H
   gl_STDDEF_H
   gl_STDINT_H
   gl_STDIO_H
   gl_STDLIB_H
+  gl_FUNC_STPCPY
+  if test $HAVE_STPCPY = 0; then
+    AC_LIBOBJ([stpcpy])
+    gl_PREREQ_STPCPY
+  fi
+  gl_STRING_MODULE_INDICATOR([stpcpy])
   gl_FUNC_GNU_STRFTIME
   gl_HEADER_STRING_H
   gl_FUNC_STRTOIMAX
@@ -392,6 +392,7 @@ AC_DEFUN([gl_INIT],
   fi
   gl_STDLIB_MODULE_INDICATOR([unsetenv])
   gl_UTIMENS
+  AC_C_VARARRAYS
   gl_gnulib_enabled_260941c0e5dc67ec9e87d1fb321c300b=false
   gl_gnulib_enabled_dosname=false
   gl_gnulib_enabled_euidaccess=false
@@ -891,12 +892,11 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/stat-time.h
   lib/stat.c
   lib/stdalign.in.h
-  lib/stdarg.in.h
-  lib/stdbool.in.h
   lib/stddef.in.h
   lib/stdint.in.h
   lib/stdio.in.h
   lib/stdlib.in.h
+  lib/stpcpy.c
   lib/strftime.c
   lib/strftime.h
   lib/string.in.h
@@ -927,6 +927,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/utimens.c
   lib/utimens.h
   lib/verify.h
+  lib/vla.h
   lib/xalloc-oversized.h
   m4/00gnulib.m4
   m4/absolute-header.m4
@@ -998,12 +999,11 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/stat-time.m4
   m4/stat.m4
   m4/stdalign.m4
-  m4/stdarg.m4
-  m4/stdbool.m4
   m4/stddef_h.m4
   m4/stdint.m4
   m4/stdio_h.m4
   m4/stdlib_h.m4
+  m4/stpcpy.m4
   m4/strftime.m4
   m4/string_h.m4
   m4/strtoimax.m4
@@ -1026,6 +1026,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/utimbuf.m4
   m4/utimens.m4
   m4/utimes.m4
+  m4/vararrays.m4
   m4/warn-on-use.m4
   m4/warnings.m4
   m4/wchar_t.m4

@@ -1,6 +1,6 @@
 ;;; octave.el --- editing octave source files under emacs  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1997, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Kurt Hornik <Kurt.Hornik@wu-wien.ac.at>
 ;;	   John Eaton <jwe@octave.org>
@@ -45,13 +45,13 @@
     (defun completion-table-with-cache (fun &optional ignore-case)
       ;; See eg bug#11906.
       (let* (last-arg last-result
-                      (new-fun
-                       (lambda (arg)
-                         (if (and last-arg (string-prefix-p last-arg arg ignore-case))
-                             last-result
-                           (prog1
-                               (setq last-result (funcall fun arg))
-                             (setq last-arg arg))))))
+             (new-fun
+              (lambda (arg)
+                (if (and last-arg (string-prefix-p last-arg arg ignore-case))
+                    last-result
+                  (prog1
+                      (setq last-result (funcall fun arg))
+                    (setq last-arg arg))))))
         (completion-table-dynamic new-fun)))))
 (eval-when-compile
   (unless (fboundp 'setq-local)
@@ -747,9 +747,10 @@ Key bindings:
   (setq-local info-lookup-mode 'octave-mode)
   (setq-local eldoc-documentation-function 'octave-eldoc-function)
 
-  (setq comint-input-ring-file-name
-        (or (getenv "OCTAVE_HISTFILE") "~/.octave_hist")
-        comint-input-ring-size (or (getenv "OCTAVE_HISTSIZE") 1024))
+  (setq-local comint-input-ring-file-name
+              (or (getenv "OCTAVE_HISTFILE") "~/.octave_hist"))
+  (setq-local comint-input-ring-size
+              (string-to-number (or (getenv "OCTAVE_HISTSIZE") "1024")))
   (comint-read-input-ring t)
   (setq-local comint-dynamic-complete-functions
               inferior-octave-dynamic-complete-functions)

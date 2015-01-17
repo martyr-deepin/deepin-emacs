@@ -1,6 +1,6 @@
 ;;; gametree.el --- manage game analysis trees in Emacs
 
-;; Copyright (C) 1997, 1999, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Ian T Zimmerman <itz@rahul.net>
 ;; Created: Wed Dec 10 07:41:46 PST 1997
@@ -590,31 +590,30 @@ shogi, etc.) players, it is a slightly modified version of Outline mode.
   (add-hook 'write-contents-hooks 'gametree-save-and-hack-layout))
 
 ;;;; Goodies for mousing users
-(and (fboundp 'track-mouse)
-     (defun gametree-mouse-break-line-here (event)
-       (interactive "e")
-       (mouse-set-point event)
-       (gametree-break-line-here))
-     (defun gametree-mouse-show-children-and-entry (event)
-       (interactive "e")
-       (mouse-set-point event)
-       (gametree-show-children-and-entry))
-     (defun gametree-mouse-show-subtree (event)
-       (interactive "e")
-       (mouse-set-point event)
-       (show-subtree))
-     (defun gametree-mouse-hide-subtree (event)
-       (interactive "e")
-       (mouse-set-point event)
-       (hide-subtree))
-     (define-key gametree-mode-map [M-down-mouse-2 M-mouse-2]
-       'gametree-mouse-break-line-here)
-     (define-key gametree-mode-map [S-down-mouse-1 S-mouse-1]
-       'gametree-mouse-show-children-and-entry)
-     (define-key gametree-mode-map [S-down-mouse-2 S-mouse-2]
-       'gametree-mouse-show-subtree)
-     (define-key gametree-mode-map [S-down-mouse-3 S-mouse-3]
-       'gametree-mouse-hide-subtree))
+(defun gametree-mouse-break-line-here (event)
+  (interactive "e")
+  (mouse-set-point event)
+  (gametree-break-line-here))
+(defun gametree-mouse-show-children-and-entry (event)
+  (interactive "e")
+  (mouse-set-point event)
+  (gametree-show-children-and-entry))
+(defun gametree-mouse-show-subtree (event)
+  (interactive "e")
+  (mouse-set-point event)
+  (show-subtree))
+(defun gametree-mouse-hide-subtree (event)
+  (interactive "e")
+  (mouse-set-point event)
+  (hide-subtree))
+(define-key gametree-mode-map [M-down-mouse-2 M-mouse-2]
+  'gametree-mouse-break-line-here)
+(define-key gametree-mode-map [S-down-mouse-1 S-mouse-1]
+  'gametree-mouse-show-children-and-entry)
+(define-key gametree-mode-map [S-down-mouse-2 S-mouse-2]
+  'gametree-mouse-show-subtree)
+(define-key gametree-mode-map [S-down-mouse-3 S-mouse-3]
+  'gametree-mouse-hide-subtree)
 
 (provide 'gametree)
 

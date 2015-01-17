@@ -1,6 +1,6 @@
 ;;; org-clock.el --- The time clocking code for Org-mode
 
-;; Copyright (C) 2004-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -1046,9 +1046,9 @@ If `only-dangling-p' is non-nil, only ask to resolve dangling
 			(lambda (clock)
 			  (format
 			   "Dangling clock started %d mins ago"
-			   (floor
-			    (/ (- (org-float-time (current-time))
-				  (org-float-time (cdr clock))) 60))))))
+			   (floor (- (org-float-time)
+				     (org-float-time (cdr clock)))
+				  60)))))
 		   (or last-valid
 		       (cdr clock)))))))))))
 
@@ -1368,7 +1368,7 @@ decides which time to use."
       (current-time))
      ((equal cmt "today")
       (setq org--msg-extra "showing today's task time.")
-      (let* ((dt (decode-time (current-time))))
+      (let* ((dt (decode-time)))
 	(setq dt (append (list 0 0 0) (nthcdr 3 dt)))
 	(if org-extend-today-until
 	    (setf (nth 2 dt) org-extend-today-until))
@@ -1927,7 +1927,7 @@ fontified, and then returned."
     (org-mode)
     (org-create-dblock props)
     (org-update-dblock)
-    (font-lock-fontify-buffer)
+    (org-font-lock-ensure)
     (forward-line 2)
     (buffer-substring (point) (progn
 				(re-search-forward "^[ \t]*#\\+END" nil t)
@@ -2029,7 +2029,7 @@ If MSTART is non-nil, use this number to specify the starting day of a
 month (1 is the first day of the month).
 If you can combine both, the month starting day will have priority."
   (if (integerp key) (setq key (intern (number-to-string key))))
-  (let* ((tm (decode-time (or time (current-time))))
+  (let* ((tm (decode-time time))
 	 (s 0) (m (nth 1 tm)) (h (nth 2 tm))
 	 (d (nth 3 tm)) (month (nth 4 tm)) (y (nth 5 tm))
 	 (dow (nth 6 tm))
@@ -2556,13 +2556,10 @@ from the dynamic block definition."
     total-time))
 
 (defun org-clocktable-indent-string (level)
-  (if (= level 1)
-      ""
-    (let ((str "\\__"))
-      (while (> level 2)
-	(setq level (1- level)
-	      str (concat str "___")))
-      (concat str " "))))
+  (if (= level 1) ""
+    (let ((str " "))
+      (dotimes (k (1- level) str)
+	(setq str (concat "\\emsp" str))))))
 
 (defun org-clocktable-steps (params)
   "Step through the range to make a number of clock tables."
@@ -2673,10 +2670,8 @@ TIME:      The sum of all time spend in this tree, in minutes.  This time
     (when (and te (listp te))
       (setq te (format "%4d-%02d-%02d" (nth 2 te) (car te) (nth 1 te))))
     ;; Now the times are strings we can parse.
-    (if ts (setq ts (org-float-time
-		     (seconds-to-time (org-matcher-time ts)))))
-    (if te (setq te (org-float-time
-		     (seconds-to-time (org-matcher-time te)))))
+    (if ts (setq ts (org-matcher-time ts)))
+    (if te (setq te (org-matcher-time te)))
     (save-excursion
       (org-clock-sum ts te
 		     (unless (null matcher)
@@ -2816,8 +2811,8 @@ The details of what will be saved are regulated by the variable
 	  (delete-region (point-min) (point-max))
 	  ;;Store clock
 	  (insert (format ";; org-persist.el - %s at %s\n"
-			  system-name (format-time-string
-				       (cdr org-time-stamp-formats))))
+			  (system-name) (format-time-string
+					 (cdr org-time-stamp-formats))))
 	  (if (and (memq org-clock-persist '(t clock))
 		   (setq b (org-clocking-buffer))
 		   (setq b (or (buffer-base-buffer b) b))

@@ -1,6 +1,6 @@
 /* Lisp object printing and output streams.
 
-Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2014 Free Software
+Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2015 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -37,14 +37,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "termhooks.h"		/* For struct terminal.  */
 #include "font.h"
 
-Lisp_Object Qstandard_output;
-
-static Lisp_Object Qtemp_buffer_setup_hook;
-
-/* These are used to print like we read.  */
-
-static Lisp_Object Qfloat_output_format;
-
 #include <float.h>
 #include <ftoastr.h>
 
@@ -58,6 +50,9 @@ static ptrdiff_t new_backquote_output;
 #define PRINT_CIRCLE 200
 static Lisp_Object being_printed[PRINT_CIRCLE];
 
+/* Last char printed to stdout by printchar.  */
+static unsigned int printchar_stdout_last;
+
 /* When printing into a buffer, first we put the text in this
    block, then insert it all at once.  */
 static char *print_buffer;
@@ -68,9 +63,6 @@ static ptrdiff_t print_buffer_size;
 static ptrdiff_t print_buffer_pos;
 /* Bytes stored in print_buffer.  */
 static ptrdiff_t print_buffer_pos_byte;
-
-Lisp_Object Qprint_escape_newlines;
-static Lisp_Object Qprint_escape_multibyte, Qprint_escape_nonascii;
 
 /* Vprint_number_table is a table, that keeps objects that are going to
    be printed, to allow use of #n= and #n# to express sharing.
@@ -169,11 +161,13 @@ bool print_output_debug_flag EXTERNALLY_VISIBLE = 1;
        if (print_buffer_pos != print_buffer_pos_byte			\
 	   && NILP (BVAR (current_buffer, enable_multibyte_characters)))\
 	 {								\
-	   unsigned char *temp = alloca (print_buffer_pos + 1);		\
+	   USE_SAFE_ALLOCA;						\
+	   unsigned char *temp = SAFE_ALLOCA (print_buffer_pos + 1);	\
 	   copy_text ((unsigned char *) print_buffer, temp,		\
 		      print_buffer_pos_byte, 1, 0);			\
 	   insert_1_both ((char *) temp, print_buffer_pos,		\
 			  print_buffer_pos, 0, 1, 0);			\
+	   SAFE_FREE ();						\
 	 }								\
        else								\
 	 insert_1_both (print_buffer, print_buffer_pos,			\
@@ -236,6 +230,7 @@ printchar (unsigned int ch, Lisp_Object fun)
 	}
       else if (noninteractive)
 	{
+	  printchar_stdout_last = ch;
 	  fwrite (str, 1, len, stdout);
 	  noninteractive_need_newline = 1;
 	}
@@ -501,7 +496,7 @@ temp_output_buffer_setup (const char *bufname)
   Ferase_buffer ();
   XSETBUFFER (buf, current_buffer);
 
-  Frun_hooks (1, &Qtemp_buffer_setup_hook);
+  run_hook (Qtemp_buffer_setup_hook);
 
   unbind_to (count, Qnil);
 
@@ -513,19 +508,33 @@ static void print_preprocess (Lisp_Object);
 static void print_preprocess_string (INTERVAL, Lisp_Object);
 static void print_object (Lisp_Object, Lisp_Object, bool);
 
-DEFUN ("terpri", Fterpri, Sterpri, 0, 1, 0,
+DEFUN ("terpri", Fterpri, Sterpri, 0, 2, 0,
        doc: /* Output a newline to stream PRINTCHARFUN.
+If ENSURE is non-nil only output a newline if not already at the
+beginning of a line.  Value is non-nil if a newline is printed.
 If PRINTCHARFUN is omitted or nil, the value of `standard-output' is used.  */)
-  (Lisp_Object printcharfun)
+  (Lisp_Object printcharfun, Lisp_Object ensure)
 {
-  PRINTDECLARE;
+  Lisp_Object val = Qnil;
 
+  PRINTDECLARE;
   if (NILP (printcharfun))
     printcharfun = Vstandard_output;
   PRINTPREPARE;
-  PRINTCHAR ('\n');
+
+  if (NILP (ensure))
+    val = Qt;
+  /* Difficult to check if at line beginning so abort.  */
+  else if (FUNCTIONP (printcharfun))
+    signal_error ("Unsupported function argument", printcharfun);
+  else if (noninteractive && !NILP (printcharfun))
+    val = printchar_stdout_last == 10 ? Qnil : Qt;
+  else if (NILP (Fbolp ()))
+    val = Qt;
+
+  if (!NILP (val)) PRINTCHAR ('\n');
   PRINTFINISH;
-  return Qt;
+  return val;
 }
 
 DEFUN ("prin1", Fprin1, Sprin1, 1, 2, 0,
@@ -581,7 +590,6 @@ A printed representation of an object is text which describes that object.  */)
 {
   Lisp_Object printcharfun;
   bool prev_abort_on_gc;
-  /* struct gcpro gcpro1, gcpro2; */
   Lisp_Object save_deactivate_mark;
   ptrdiff_t count = SPECPDL_INDEX ();
   struct buffer *previous;
@@ -595,7 +603,6 @@ A printed representation of an object is text which describes that object.  */)
        but we don't want to deactivate the mark just for that.
        No need for specbind, since errors deactivate the mark.  */
     save_deactivate_mark = Vdeactivate_mark;
-    /* GCPRO2 (object, save_deactivate_mark); */
     prev_abort_on_gc = abort_on_gc;
     abort_on_gc = 1;
 
@@ -619,7 +626,6 @@ A printed representation of an object is text which describes that object.  */)
   set_buffer_internal (previous);
 
   Vdeactivate_mark = save_deactivate_mark;
-  /* UNGCPRO; */
 
   abort_on_gc = prev_abort_on_gc;
   return unbind_to (count, object);
@@ -698,10 +704,6 @@ is used instead.  */)
   UNGCPRO;
   return object;
 }
-
-/* The subroutine object for external-debugging-output is kept here
-   for the convenience of the debugger.  */
-Lisp_Object Qexternal_debugging_output;
 
 DEFUN ("external-debugging-output", Fexternal_debugging_output, Sexternal_debugging_output, 1, 1, 0,
        doc: /* Write CHARACTER to stderr.
@@ -1228,7 +1230,8 @@ print_preprocess (Lisp_Object obj)
 	  size = ASIZE (obj);
 	  if (size & PSEUDOVECTOR_FLAG)
 	    size &= PSEUDOVECTOR_SIZE_MASK;
-	  for (i = 0; i < size; i++)
+	  for (i = (SUB_CHAR_TABLE_P (obj)
+		    ? SUB_CHAR_TABLE_OFFSET : 0); i < size; i++)
 	    print_preprocess (AREF (obj, i));
 	  if (HASH_TABLE_P (obj))
 	    { /* For hash tables, the key_and_value slot is past
@@ -1472,7 +1475,7 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 		  strout (outbuf, len, len, printcharfun);
 		}
 	      else if (! multibyte
-		       && SINGLE_BYTE_CHAR_P (c) && ! ASCII_BYTE_P (c)
+		       && SINGLE_BYTE_CHAR_P (c) && ! ASCII_CHAR_P (c)
 		       && print_escape_nonascii)
 		{
 		  /* When printing in a multibyte buffer
@@ -1968,7 +1971,7 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 		 Otherwise we'll make a line extremely long, which
 		 results in slow redisplay.  */
 	      if (SUB_CHAR_TABLE_P (obj)
-		  && XINT (XSUB_CHAR_TABLE (obj)->depth) == 3)
+		  && XSUB_CHAR_TABLE (obj)->depth == 3)
 		PRINTCHAR ('\n');
 	      PRINTCHAR ('#');
 	      PRINTCHAR ('^');
@@ -1981,16 +1984,24 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 
 	  PRINTCHAR ('[');
 	  {
-	    register int i;
+	    int i, idx = SUB_CHAR_TABLE_P (obj) ? SUB_CHAR_TABLE_OFFSET : 0;
 	    register Lisp_Object tem;
 	    ptrdiff_t real_size = size;
+
+	    /* For a sub char-table, print heading non-Lisp data first.  */
+	    if (SUB_CHAR_TABLE_P (obj))
+	      {
+		i = sprintf (buf, "%d %d", XSUB_CHAR_TABLE (obj)->depth,
+			     XSUB_CHAR_TABLE (obj)->min_char);
+		strout (buf, i, i, printcharfun);
+	      }
 
 	    /* Don't print more elements than the specified maximum.  */
 	    if (NATNUMP (Vprint_length)
 		&& XFASTINT (Vprint_length) < size)
 	      size = XFASTINT (Vprint_length);
 
-	    for (i = 0; i < size; i++)
+	    for (i = idx; i < size; i++)
 	      {
 		if (i) PRINTCHAR (' ');
 		tem = AREF (obj, i);
@@ -2072,14 +2083,16 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 		for (i = 0; i < limit; i++)
 		  {
 		    Lisp_Object maybe = area[i];
+		    int valid = valid_lisp_object_p (maybe);
 
-		    if (valid_lisp_object_p (maybe) > 0)
+		    if (0 < valid)
 		      {
 			PRINTCHAR (' ');
 			print_object (maybe, printcharfun, escapeflag);
 		      }
 		    else
-		      strout (" <invalid>", -1, -1, printcharfun);
+		      strout (valid ? " <some>" : " <invalid>",
+			      -1, -1, printcharfun);
 		  }
 		if (i == limit && i < amount)
 		  strout (" ...", 4, 4, printcharfun);
@@ -2192,7 +2205,10 @@ print_interval (INTERVAL interval, Lisp_Object printcharfun)
 void
 init_print_once (void)
 {
+  /* The subroutine object for external-debugging-output is kept here
+     for the convenience of the debugger.  */
   DEFSYM (Qexternal_debugging_output, "external-debugging-output");
+
   defsubr (&Sexternal_debugging_output);
 }
 

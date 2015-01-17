@@ -1,6 +1,6 @@
 ;;; org-src.el --- Source code examples in Org
 ;;
-;; Copyright (C) 2004-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;	   Bastien Guerry <bzg@gnu.org>
@@ -376,23 +376,21 @@ the display of windows containing the Org buffer and the code buffer."
 	  (when (fboundp edit-prep-func)
 	    (funcall edit-prep-func full-info)))
 	(or org-edit-src-code-timer
+	    (zerop org-edit-src-auto-save-idle-delay)
 	    (setq org-edit-src-code-timer
-		  (unless (zerop org-edit-src-auto-save-idle-delay)
-		    (run-with-idle-timer
-		     org-edit-src-auto-save-idle-delay t
-		     (lambda ()
-		       (cond
-			((and (string-match "\*Org Src" (buffer-name))
-			      (buffer-modified-p))
-			 (org-edit-src-save))
-			((not
-			  (delq nil (mapcar
-				     (lambda (b)
-				       (string-match "\*Org Src" (buffer-name b)))
-				     (buffer-list))))
-			 (cancel-timer org-edit-src-code-timer)
-			 (setq org-edit-src-code-timer)))))))))
-	t)))
+		  (run-with-idle-timer
+		   org-edit-src-auto-save-idle-delay t
+		   (lambda ()
+		     (cond
+		      ((org-string-match-p "\\`\\*Org Src" (buffer-name))
+		       (when (buffer-modified-p) (org-edit-src-save)))
+		      ((not (org-some (lambda (b)
+					(org-string-match-p "\\`\\*Org Src"
+							    (buffer-name b)))
+				      (buffer-list)))
+		       (cancel-timer org-edit-src-code-timer)
+		       (setq org-edit-src-code-timer nil))))))))
+      t)))
 
 (defun org-edit-src-continue (e)
   "Continue editing source blocks." ;; Fixme: be more accurate
@@ -757,8 +755,8 @@ with \",*\", \",#+\", \",,*\" and \",,#+\"."
       (delete-region beg (max beg end))
       (unless (string-match "\\`[ \t]*\\'" code)
 	(insert code))
-      	;; Make sure the overlay stays in place
-	(when (eq context 'save) (move-overlay ovl beg (point)))
+      ;; Make sure the overlay stays in place
+      (when (eq context 'save) (move-overlay ovl beg (point)))
       (goto-char beg)
       (if single (just-one-space)))
     (if (memq t (mapcar (lambda (overlay)
@@ -774,9 +772,6 @@ with \",*\", \",#+\", \",,*\" and \",,#+\"."
     (unless (eq context 'save)
       (move-marker beg nil)
       (move-marker end nil)))
-  (when org-edit-src-code-timer
-    (cancel-timer org-edit-src-code-timer)
-    (setq org-edit-src-code-timer nil))
   (unless (eq context 'save)
     (when org-edit-src-saved-temp-window-config
       (set-window-configuration org-edit-src-saved-temp-window-config)
@@ -923,7 +918,7 @@ fontification of code blocks see `org-src-fontify-block' and
 	    (delete-region (point-min) (point-max))
 	    (insert string " ") ;; so there's a final property change
 	    (unless (eq major-mode lang-mode) (funcall lang-mode))
-	    (font-lock-fontify-buffer)
+            (org-font-lock-ensure)
 	    (setq pos (point-min))
 	    (while (setq next (next-single-property-change pos 'face))
 	      (put-text-property

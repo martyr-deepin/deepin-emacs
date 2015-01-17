@@ -1,6 +1,6 @@
 ;;; ada-mode.el --- major-mode for editing Ada sources
 
-;; Copyright (C) 1994-1995, 1997-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1995, 1997-2015 Free Software Foundation, Inc.
 
 ;; Author: Rolf Ebert      <ebert@inf.enst.fr>
 ;;      Markus Heritsch <Markus.Heritsch@studbox.uni-stuttgart.de>
@@ -31,11 +31,6 @@
 ;; independent from the GNU Ada compiler GNAT, distributed by Ada
 ;; Core Technologies.  All the other files rely heavily on features
 ;; provided only by GNAT.
-;;
-;; Note: this mode will not work with Emacs 19. If you are on a VMS
-;; system, where the latest version of Emacs is 19.28, you will need
-;; another file, called ada-vms.el, that provides some required
-;; functions.
 
 ;;; Usage:
 ;; Emacs should enter Ada mode automatically when you load an Ada file.

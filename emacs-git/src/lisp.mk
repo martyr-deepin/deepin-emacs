@@ -1,6 +1,6 @@
 ### lisp.mk --- src/Makefile fragment for GNU Emacs
 
-## Copyright (C) 1985, 1987-1988, 1993-1995, 1999-2014 Free Software
+## Copyright (C) 1985, 1987-1988, 1993-1995, 1999-2015 Free Software
 ## Foundation, Inc.
 
 ## This file is part of GNU Emacs.
@@ -132,6 +132,7 @@ lisp = \
 	$(lispsource)/textmodes/paragraphs.elc \
 	$(lispsource)/progmodes/prog-mode.elc \
 	$(lispsource)/emacs-lisp/lisp-mode.elc \
+	$(lispsource)/progmodes/elisp-mode.elc \
 	$(lispsource)/textmodes/text-mode.elc \
 	$(lispsource)/textmodes/fill.elc \
 	$(lispsource)/newcomment.elc \
@@ -152,7 +153,6 @@ lisp = \
 	$(lispsource)/term/w32-win.elc \
 	$(lispsource)/ls-lisp.elc \
 	$(lispsource)/disp-table.elc \
-	$(lispsource)/w32-common-fns.elc \
 	$(lispsource)/dos-w32.elc \
 	$(lispsource)/w32-fns.elc \
 	$(lispsource)/dos-fns.elc \
@@ -165,6 +165,7 @@ lisp = \
 	$(lispsource)/vc/vc-hooks.elc \
 	$(lispsource)/vc/ediff-hook.elc \
 	$(lispsource)/electric.elc \
+	$(lispsource)/emacs-lisp/eldoc.elc \
 	$(lispsource)/uniquify.elc \
 	$(lispsource)/tooltip.elc
 

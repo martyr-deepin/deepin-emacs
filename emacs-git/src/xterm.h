@@ -1,5 +1,5 @@
 /* Definitions and headers for communication with X protocol.
-   Copyright (C) 1989, 1993-1994, 1998-2014 Free Software Foundation,
+   Copyright (C) 1989, 1993-1994, 1998-2015 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -47,7 +47,6 @@ typedef Widget xt_or_gtk_widget;
 
 /* Some definitions to reduce conditionals.  */
 typedef GtkWidget *xt_or_gtk_widget;
-#define XtParent(x) (gtk_widget_get_parent (x))
 #undef XSync
 #define XSync(d, b) do { gdk_window_process_all_updates (); \
                          XSync (d, b);  } while (false)
@@ -77,6 +76,8 @@ typedef GtkWidget *xt_or_gtk_widget;
 
 #include "dispextern.h"
 #include "termhooks.h"
+
+INLINE_HEADER_BEGIN
 
 /* Black and white pixel values for the screen which frame F is on.  */
 #define BLACK_PIX_DEFAULT(f)					\
@@ -137,6 +138,9 @@ struct x_display_info
   /* This says how to access this display in Xlib.  */
   Display *display;
 
+  /* A connection number (file descriptor) for the display.  */
+  int connection;
+
   /* This is a cons cell of the form (NAME . FONT-LIST-CACHE).  */
   Lisp_Object name_list_element;
 
@@ -174,8 +178,15 @@ struct x_display_info
   /* The cursor to use for vertical scroll bars.  */
   Cursor vertical_scroll_bar_cursor;
 
-  /* The invisible cursor used for pointer blanking.  */
+  /* The cursor to use for horizontal scroll bars.  */
+  Cursor horizontal_scroll_bar_cursor;
+
+  /* The invisible cursor used for pointer blanking.
+     Unused if this display supports Xfixes extension.  */
   Cursor invisible_cursor;
+
+  /* Function used to toggle pointer visibility on this display.  */
+  void (*toggle_visible_pointer) (struct frame *, bool);
 
 #ifdef USE_GTK
   /* The GDK cursor for scroll bars and popup menus.  */
@@ -274,8 +285,8 @@ struct x_display_info
   /* More atoms for Ghostscript support.  */
   Atom Xatom_DONE, Xatom_PAGE;
 
-  /* Atom used in toolkit scroll bar client messages.  */
-  Atom Xatom_Scrollbar;
+  /* Atoms used in toolkit scroll bar client messages.  */
+  Atom Xatom_Scrollbar, Xatom_Horizontal_Scrollbar;
 
   /* Atom used in XEmbed client messages.  */
   Atom Xatom_XEMBED, Xatom_XEMBED_INFO;
@@ -423,11 +434,11 @@ extern void select_visual (struct x_display_info *);
 
 struct x_output
 {
-  /* Height of menu bar widget, in pixels.
-     Zero if not using the X toolkit.
-     When using the toolkit, this value is not meaningful
-     if the menubar is turned off.  */
+#if defined (USE_X_TOOLKIT) || defined (USE_GTK)
+  /* Height of menu bar widget, in pixels.  This value
+     is not meaningful if the menubar is turned off.  */
   int menubar_height;
+#endif
 
   /* Height of tool bar widget, in pixels.  top_height is used if tool bar
      at top, bottom_height if tool bar is at the bottom.
@@ -488,10 +499,6 @@ struct x_output
   GtkWidget *menubar_widget;
   /* The tool bar in this frame  */
   GtkWidget *toolbar_widget;
-#ifdef HAVE_GTK_HANDLE_BOX_NEW
-/* The handle box that makes the tool bar detachable.  */
-  GtkWidget *handlebox_widget;
-#endif
   /* True if tool bar is packed into the hbox widget (i.e. vertical).  */
   bool_bf toolbar_in_hbox : 1;
   bool_bf toolbar_is_packed : 1;
@@ -536,10 +543,12 @@ struct x_output
      bars).  */
   unsigned long scroll_bar_background_pixel;
 
-  /* Top and bottom shadow colors for 3d toolkit scrollbars.  -1 means
-     let the scroll compute them itself.  */
+#if defined (USE_LUCID) && defined (USE_TOOLKIT_SCROLL_BARS)
+  /* Top and bottom shadow colors for 3D Lucid scrollbars.
+     -1 means let the scroll compute them itself.  */
   unsigned long scroll_bar_top_shadow_pixel;
   unsigned long scroll_bar_bottom_shadow_pixel;
+#endif
 
   /* Descriptor for the cursor in use for this window.  */
   Cursor text_cursor;
@@ -600,9 +609,6 @@ struct x_output
      false, tell Xt not to wait.  */
   bool_bf wait_for_wm : 1;
 
-  /* True if _NET_WM_STATE_HIDDEN is set for this frame.  */
-  bool_bf net_wm_state_hidden_seen : 1;
-
 #ifdef HAVE_X_I18N
   /* Input context (currently, this means Compose key handler setup).  */
   XIC xic;
@@ -640,6 +646,13 @@ struct x_output
   int move_offset_top;
   int move_offset_left;
 };
+
+/* Extreme 'short' and 'long' values suitable for libX11.  */
+#define X_SHRT_MAX 0x7fff
+#define X_SHRT_MIN (-1 - X_SHRT_MAX)
+#define X_LONG_MAX 0x7fffffff
+#define X_LONG_MIN (-1 - X_LONG_MAX)
+#define X_ULONG_MAX 0xffffffffUL
 
 #define No_Cursor (None)
 
@@ -709,10 +722,14 @@ enum
 #endif /* !USE_GTK */
 #endif
 
+#if defined (USE_X_TOOLKIT) || defined (USE_GTK)
+#define FRAME_MENUBAR_HEIGHT(f) ((f)->output_data.x->menubar_height)
+#else
+#define FRAME_MENUBAR_HEIGHT(f) ((void) f, 0)
+#endif /* USE_X_TOOLKIT || USE_GTK */
 
 #define FRAME_FONT(f) ((f)->output_data.x->font)
 #define FRAME_FONTSET(f) ((f)->output_data.x->fontset)
-#define FRAME_MENUBAR_HEIGHT(f) ((f)->output_data.x->menubar_height)
 #define FRAME_TOOLBAR_TOP_HEIGHT(f) ((f)->output_data.x->toolbar_top_height)
 #define FRAME_TOOLBAR_BOTTOM_HEIGHT(f) \
   ((f)->output_data.x->toolbar_bottom_height)
@@ -811,6 +828,14 @@ struct scroll_bar
   /* Last scroll bar part seen in xaw_jump_callback and xaw_scroll_callback.  */
   enum scroll_bar_part last_seen_part;
 #endif
+
+#if defined (USE_TOOLKIT_SCROLL_BARS) && !defined (USE_GTK)
+  /* Last value of whole for horizontal scrollbars.  */
+  int whole;
+#endif
+
+  /* True if the scroll bar is horizontal.  */
+  bool horizontal;
 };
 
 /* Turning a lisp vector value into a pointer to a struct scroll_bar.  */
@@ -857,6 +882,28 @@ struct scroll_bar
 #define VERTICAL_SCROLL_BAR_INSIDE_HEIGHT(f, height) \
   ((height) - VERTICAL_SCROLL_BAR_TOP_BORDER - VERTICAL_SCROLL_BAR_BOTTOM_BORDER)
 
+/* Return the inside height of a horizontal scroll bar, given the outside
+   height.  */
+#define HORIZONTAL_SCROLL_BAR_INSIDE_HEIGHT(f, height)	\
+  ((height) \
+   - HORIZONTAL_SCROLL_BAR_TOP_BORDER \
+   - HORIZONTAL_SCROLL_BAR_BOTTOM_BORDER)
+
+/* Return the length of the rectangle within which the left part of the
+   handle must stay.  This isn't equivalent to the inside width, because
+   the scroll bar handle has a minimum width.
+
+   This is the real range of motion for the scroll bar, so when we're
+   scaling buffer positions to scroll bar positions, we use this, not
+   HORIZONTAL_SCROLL_BAR_INSIDE_WIDTH.  */
+#define HORIZONTAL_SCROLL_BAR_LEFT_RANGE(f, width) \
+  (HORIZONTAL_SCROLL_BAR_INSIDE_WIDTH (f, width) - HORIZONTAL_SCROLL_BAR_MIN_HANDLE)
+
+/* Return the inside width of horizontal scroll bar, given the outside
+   width.  See HORIZONTAL_SCROLL_BAR_LEFT_RANGE too.  */
+#define HORIZONTAL_SCROLL_BAR_INSIDE_WIDTH(f, width) \
+  ((width) - HORIZONTAL_SCROLL_BAR_LEFT_BORDER - HORIZONTAL_SCROLL_BAR_LEFT_BORDER)
+
 
 /* Border widths for scroll bars.
 
@@ -874,8 +921,14 @@ struct scroll_bar
 #define VERTICAL_SCROLL_BAR_TOP_BORDER (2)
 #define VERTICAL_SCROLL_BAR_BOTTOM_BORDER (2)
 
+#define HORIZONTAL_SCROLL_BAR_LEFT_BORDER (2)
+#define HORIZONTAL_SCROLL_BAR_RIGHT_BORDER (2)
+#define HORIZONTAL_SCROLL_BAR_TOP_BORDER (2)
+#define HORIZONTAL_SCROLL_BAR_BOTTOM_BORDER (2)
+
 /* Minimum lengths for scroll bar handles, in pixels.  */
 #define VERTICAL_SCROLL_BAR_MIN_HANDLE (5)
+#define HORIZONTAL_SCROLL_BAR_MIN_HANDLE (5)
 
 /* If a struct input_event has a kind which is SELECTION_REQUEST_EVENT
    or SELECTION_CLEAR_EVENT, then its contents are really described
@@ -887,15 +940,21 @@ struct scroll_bar
 struct selection_input_event
 {
   int kind;
-  Display *display;
+  struct x_display_info *dpyinfo;
   /* We spell it with an "o" here because X does.  */
   Window requestor;
   Atom selection, target, property;
   Time time;
 };
 
-#define SELECTION_EVENT_DISPLAY(eventp)	\
-  (((struct selection_input_event *) (eventp))->display)
+/* Unlike macros below, this can't be used as an lvalue.  */
+INLINE Display *
+SELECTION_EVENT_DISPLAY (struct input_event *ev)
+{
+  return ((struct selection_input_event *) ev)->dpyinfo->display;
+}
+#define SELECTION_EVENT_DPYINFO(eventp) \
+  (((struct selection_input_event *) (eventp))->dpyinfo)
 /* We spell it with an "o" here because X does.  */
 #define SELECTION_EVENT_REQUESTOR(eventp)	\
   (((struct selection_input_event *) (eventp))->requestor)
@@ -911,6 +970,7 @@ struct selection_input_event
 /* From xfns.c.  */
 
 extern void x_free_gcs (struct frame *);
+extern void x_relative_mouse_position (struct frame *, int *, int *);
 
 /* From xrdb.c.  */
 
@@ -919,16 +979,13 @@ XrmDatabase x_load_resources (Display *, const char *, const char *,
 
 /* Defined in xterm.c */
 
-extern int x_text_icon (struct frame *, const char *);
+extern bool x_text_icon (struct frame *, const char *);
 extern void x_catch_errors (Display *);
 extern void x_check_errors (Display *, const char *)
   ATTRIBUTE_FORMAT_PRINTF (2, 0);
 extern bool x_had_errors_p (Display *);
 extern void x_uncatch_errors (void);
 extern void x_clear_errors (Display *);
-extern void x_set_window_size (struct frame *, int, int, int, bool);
-extern void x_set_mouse_position (struct frame *, int, int);
-extern void x_set_mouse_pixel_position (struct frame *, int, int);
 extern void xembed_request_focus (struct frame *);
 extern void x_ewmh_activate_frame (struct frame *);
 extern void x_delete_terminal (struct terminal *terminal);
@@ -943,7 +1000,6 @@ extern bool x_alloc_lighter_color_for_widget (Widget, Display *, Colormap,
 					      double, int);
 #endif
 extern bool x_alloc_nearest_color (struct frame *, Colormap, XColor *);
-extern void x_query_color (struct frame *f, XColor *);
 extern void x_clear_area (Display *, Window, int, int, int, int);
 #if !defined USE_X_TOOLKIT && !defined USE_GTK
 extern void x_mouse_leave (struct x_display_info *);
@@ -953,11 +1009,31 @@ extern void x_mouse_leave (struct x_display_info *);
 extern int x_dispatch_event (XEvent *, Display *);
 #endif
 extern int x_x_to_emacs_modifiers (struct x_display_info *, int);
-extern int x_display_pixel_height (struct x_display_info *);
-extern int x_display_pixel_width (struct x_display_info *);
+
+INLINE int
+x_display_pixel_height (struct x_display_info *dpyinfo)
+{
+  return HeightOfScreen (dpyinfo->screen);
+}
+
+INLINE int
+x_display_pixel_width (struct x_display_info *dpyinfo)
+{
+  return WidthOfScreen (dpyinfo->screen);
+}
+
+INLINE void
+x_display_set_last_user_time (struct x_display_info *dpyinfo, Time t)
+{
+#ifdef ENABLE_CHECKING
+  eassert (t <= X_ULONG_MAX);
+#endif
+  dpyinfo->last_user_time = t;
+}
 
 extern void x_set_sticky (struct frame *, Lisp_Object, Lisp_Object);
 extern void x_wait_for_event (struct frame *, int);
+extern void x_clear_under_internal_border (struct frame *f);
 
 /* Defined in xselect.c.  */
 
@@ -973,10 +1049,10 @@ extern void x_send_client_event (Lisp_Object display,
                                  Lisp_Object format,
                                  Lisp_Object values);
 
-extern int x_handle_dnd_message (struct frame *,
-                                 const XClientMessageEvent *,
-                                 struct x_display_info *,
-                                 struct input_event *);
+extern bool x_handle_dnd_message (struct frame *,
+				  const XClientMessageEvent *,
+				  struct x_display_info *,
+				  struct input_event *);
 extern int x_check_property_data (Lisp_Object);
 extern void x_fill_property_data (Display *,
                                   Lisp_Object,
@@ -990,16 +1066,11 @@ extern Lisp_Object x_property_data_to_lisp (struct frame *,
 extern void x_clipboard_manager_save_frame (Lisp_Object);
 extern void x_clipboard_manager_save_all (void);
 
-/* Defined in xfns.c */
-
-extern Lisp_Object x_get_focus_frame (struct frame *);
-
 #ifdef USE_GTK
 extern int xg_set_icon (struct frame *, Lisp_Object);
 extern int xg_set_icon_from_xpm_data (struct frame *, const char **);
 #endif /* USE_GTK */
 
-extern void x_implicitly_set_name (struct frame *, Lisp_Object, Lisp_Object);
 extern void xic_free_xfontset (struct frame *);
 extern void create_frame_xic (struct frame *);
 extern void destroy_frame_xic (struct frame *);
@@ -1028,34 +1099,18 @@ extern Lisp_Object xw_popup_dialog (struct frame *, Lisp_Object, Lisp_Object);
 #endif
 
 #if defined USE_GTK || defined USE_MOTIF
-extern void x_menu_set_in_use (int);
+extern void x_menu_set_in_use (bool);
 #endif
-#ifdef USE_MOTIF
 extern void x_menu_wait_for_event (void *data);
-#endif
-extern int popup_activated (void);
 extern void initialize_frame_menubar (struct frame *);
-
-/* Defined in widget.c */
-
-#ifdef USE_X_TOOLKIT
-extern void widget_store_internal_border (Widget);
-#endif
 
 /* Defined in xsmfns.c */
 #ifdef HAVE_X_SM
 extern void x_session_initialize (struct x_display_info *dpyinfo);
-extern int x_session_have_connection (void);
+extern bool x_session_have_connection (void);
 extern void x_session_close (void);
 #endif
 
-/* Defined in xterm.c */
-
-extern Lisp_Object Qx_gtk_map_stock;
-
-#if !defined USE_X_TOOLKIT && !defined USE_GTK
-extern void x_clear_under_internal_border (struct frame *f);
-#endif
 
 /* Is the frame embedded into another application? */
 
@@ -1075,5 +1130,7 @@ extern void x_clear_under_internal_border (struct frame *f);
    (nr).y = (ry),					\
    (nr).width = (rwidth),				\
    (nr).height = (rheight))
+
+INLINE_HEADER_END
 
 #endif /* XTERM_H */

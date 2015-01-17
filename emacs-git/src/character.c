@@ -1,6 +1,6 @@
 /* Basic character support.
 
-Copyright (C) 2001-2014 Free Software Foundation, Inc.
+Copyright (C) 2001-2015 Free Software Foundation, Inc.
 Copyright (C) 1995, 1997, 1998, 2001 Electrotechnical Laboratory, JAPAN.
   Licensed to the Free Software Foundation.
 Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
@@ -48,15 +48,9 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #endif /* emacs */
 
-Lisp_Object Qcharacterp;
-
-static Lisp_Object Qauto_fill_chars;
-
 /* Char-table of information about which character to unify to which
    Unicode character.  Mainly used by the macro MAYBE_UNIFY_CHAR.  */
 Lisp_Object Vchar_unify_table;
-
-static Lisp_Object Qchar_script_table;
 
 
 
@@ -233,45 +227,21 @@ translate_char (Lisp_Object table, int c)
   return c;
 }
 
-/* Convert ASCII or 8-bit character C to unibyte.  If C is none of
-   them, return (C & 0xFF).  */
-
-int
-multibyte_char_to_unibyte (int c)
-{
-  if (c < 0x80)
-    return c;
-  if (CHAR_BYTE8_P (c))
-    return CHAR_TO_BYTE8 (c);
-  return (c & 0xFF);
-}
-
-/* Like multibyte_char_to_unibyte, but return -1 if C is not supported
-   by charset_unibyte.  */
-
-int
-multibyte_char_to_unibyte_safe (int c)
-{
-  if (c < 0x80)
-    return c;
-  if (CHAR_BYTE8_P (c))
-    return CHAR_TO_BYTE8 (c);
-  return -1;
-}
-
 DEFUN ("characterp", Fcharacterp, Scharacterp, 1, 2, 0,
        doc: /* Return non-nil if OBJECT is a character.
 In Emacs Lisp, characters are represented by character codes, which
 are non-negative integers.  The function `max-char' returns the
 maximum character code.
-usage: (characterp OBJECT)  */)
+usage: (characterp OBJECT)  */
+       attributes: const)
   (Lisp_Object object, Lisp_Object ignore)
 {
   return (CHARACTERP (object) ? Qt : Qnil);
 }
 
 DEFUN ("max-char", Fmax_char, Smax_char, 0, 0, 0,
-       doc: /* Return the character of the maximum code.  */)
+       doc: /* Return the character of the maximum code.  */
+       attributes: const)
   (void)
 {
   return make_number (MAX_CHAR);

@@ -1,6 +1,6 @@
 ;;; mm-util.el --- Utility functions for Mule and low level things
 
-;; Copyright (C) 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	MORIOKA Tomohiko <morioka@jaist.ac.jp>
@@ -1243,6 +1243,7 @@ evaluating FORMS but it is no longer done.  So, some programs assuming
 it if any may malfunction."
   (if (featurep 'xemacs)
       `(progn ,@forms)
+    (message "Warning: Using brain-dead macro `mm-with-unibyte-current-buffer'!")
     (let ((multibyte (make-symbol "multibyte")))
       `(let ((,multibyte enable-multibyte-characters))
 	 (when ,multibyte
@@ -1253,6 +1254,7 @@ it if any may malfunction."
 	     (set-buffer-multibyte t)))))))
 (put 'mm-with-unibyte-current-buffer 'lisp-indent-function 0)
 (put 'mm-with-unibyte-current-buffer 'edebug-form-spec '(body))
+(make-obsolete 'mm-with-unibyte-current-buffer nil "25.1")
 
 (defun mm-find-charset-region (b e)
   "Return a list of Emacs charsets in the region B to E."
@@ -1374,8 +1376,6 @@ If INHIBIT is non-nil, inhibit `mm-inhibit-file-name-handlers'."
     (write-region start end filename append visit lockname)))
 
 (autoload 'gmm-write-region "gmm-utils")
-(declare-function help-function-arglist "help-fns"
-		  (def &optional preserve-names))
 
 ;; It is not a MIME function, but some MIME functions use it.
 (if (and (fboundp 'make-temp-file)

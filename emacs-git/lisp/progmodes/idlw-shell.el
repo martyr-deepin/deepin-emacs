@@ -1,6 +1,6 @@
 ;; idlw-shell.el --- run IDL as an inferior process of Emacs.
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Authors: J.D. Smith <jdsmith@as.arizona.edu>
 ;;          Carsten Dominik <dominik@astro.uva.nl>
@@ -40,7 +40,7 @@
 ;;
 ;; New versions of IDLWAVE, documentation, and more information
 ;; available from:
-;;                 http://idlwave.org
+;;                 http://github.com/jdtsmith/idlwave
 ;;
 ;; INSTALLATION:
 ;; =============
@@ -58,7 +58,7 @@
 ;;   The newest version of this file can be found on the maintainers
 ;;   web site.
 ;;
-;;     http://idlwave.org
+;;     http://github.com/jdtsmith/idlwave
 ;;
 ;; DOCUMENTATION
 ;; =============
@@ -590,27 +590,28 @@ TYPE is either 'pro' or 'rinfo', and `idlwave-shell-temp-pro-file' or
 
 (defun idlwave-shell-make-temp-file (prefix)
   "Create a temporary file."
-  ; Hard coded make-temp-file for Emacs<21
-  (if (fboundp 'make-temp-file)
+  (if (featurep 'emacs)
       (make-temp-file prefix)
-    (let (file
-	  (temp-file-dir (if (boundp 'temporary-file-directory)
-			     temporary-file-directory
-			   "/tmp")))
-      (while (condition-case ()
-		 (progn
-		   (setq file
-			 (make-temp-name
-			  (expand-file-name prefix temp-file-dir)))
-                   (if (featurep 'xemacs)
-		       (write-region "" nil file nil 'silent nil)
-		     (write-region "" nil file nil 'silent nil 'excl))
-		   nil)
-	       (file-already-exists t))
-	;; the file was somehow created by someone else between
-	;; `make-temp-name' and `write-region', let's try again.
-	nil)
-      file)))
+    (if (fboundp 'make-temp-file)
+	(make-temp-file prefix)
+      (let (file
+	    (temp-file-dir (if (boundp 'temporary-file-directory)
+			       temporary-file-directory
+			     "/tmp")))
+	(while (condition-case ()
+		   (progn
+		     (setq file
+			   (make-temp-name
+			    (expand-file-name prefix temp-file-dir)))
+		     (if (featurep 'xemacs)
+			 (write-region "" nil file nil 'silent nil)
+		       (write-region "" nil file nil 'silent nil 'excl))
+		     nil)
+		 (file-already-exists t))
+	  ;; the file was somehow created by someone else between
+	  ;; `make-temp-name' and `write-region', let's try again.
+	  nil)
+	file))))
 
 
 (defvar idlwave-shell-dirstack-query "cd,current=___cur & print,___cur"
@@ -922,7 +923,7 @@ IDL has currently stepped.")
    Info documentation for this package is available.  Use \\[idlwave-info]
    to display (complain to your sysadmin if that does not work).
    For PostScript and HTML versions of the documentation, check IDLWAVE's
-   homepage at URL `http://idlwave.org'.
+   homepage at URL `http://github.com/jdtsmith/idlwave'.
    IDLWAVE has customize support - see the group `idlwave'.
 
 8. Keybindings

@@ -1,5 +1,5 @@
 /* Elisp bindings for D-Bus.
-   Copyright (C) 2007-2014 Free Software Foundation, Inc.
+   Copyright (C) 2007-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -41,37 +41,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #endif
 
 
-/* Subroutines.  */
-static Lisp_Object Qdbus__init_bus;
-static Lisp_Object Qdbus_get_unique_name;
-static Lisp_Object Qdbus_message_internal;
-
-/* D-Bus error symbol.  */
-static Lisp_Object Qdbus_error;
-
-/* Lisp symbols of the system and session buses.  */
-static Lisp_Object QCdbus_system_bus, QCdbus_session_bus;
-
-/* Lisp symbol for method call timeout.  */
-static Lisp_Object QCdbus_timeout;
-
-/* Lisp symbols of D-Bus types.  */
-static Lisp_Object QCdbus_type_byte, QCdbus_type_boolean;
-static Lisp_Object QCdbus_type_int16, QCdbus_type_uint16;
-static Lisp_Object QCdbus_type_int32, QCdbus_type_uint32;
-static Lisp_Object QCdbus_type_int64, QCdbus_type_uint64;
-static Lisp_Object QCdbus_type_double, QCdbus_type_string;
-static Lisp_Object QCdbus_type_object_path, QCdbus_type_signature;
-#ifdef DBUS_TYPE_UNIX_FD
-static Lisp_Object QCdbus_type_unix_fd;
-#endif
-static Lisp_Object QCdbus_type_array, QCdbus_type_variant;
-static Lisp_Object QCdbus_type_struct, QCdbus_type_dict_entry;
-
-/* Lisp symbols of objects in `dbus-registered-objects-table'.  */
-static Lisp_Object QCdbus_registered_serial, QCdbus_registered_method;
-static Lisp_Object QCdbus_registered_signal;
-
 /* Alist of D-Bus buses we are polling for messages.
    The key is the symbol or string of the bus, and the value is the
    connection address.  */
@@ -142,10 +111,7 @@ static bool xd_in_read_queued_messages = 0;
   } while (0)
 
 #else /* !DBUS_DEBUG */
-# if __STDC_VERSION__ < 199901
-#  define XD_DEBUG_MESSAGE (void) /* Pre-C99 compilers cannot debug.  */
-# else
-#  define XD_DEBUG_MESSAGE(...)						\
+# define XD_DEBUG_MESSAGE(...)						\
   do {									\
     if (!NILP (Vdbus_debug))						\
       {									\
@@ -154,7 +120,6 @@ static bool xd_in_read_queued_messages = 0;
 	message ("%s: %s", __func__, s);				\
       }									\
   } while (0)
-# endif
 # define XD_DEBUG_VALID_LISP_OBJECT_P(object)
 #endif
 
@@ -361,7 +326,7 @@ xd_signature_cat (char *signature, char const *x)
   ptrdiff_t xlen = strlen (x);
   if (DBUS_MAXIMUM_SIGNATURE_LENGTH - xlen <= siglen)
     string_overflow ();
-  strcat (signature, x);
+  strcpy (signature + siglen, x);
 }
 
 /* Compute SIGNATURE of OBJECT.  It must have a form that it can be
@@ -765,7 +730,7 @@ xd_append_arg (int dtype, Lisp_Object object, DBusMessageIter *iter)
 		&& STRINGP (CAR_SAFE (XD_NEXT_VALUE (object)))
 		&& NILP (CDR_SAFE (XD_NEXT_VALUE (object))))
 	      {
-		strcpy (signature, SSDATA (CAR_SAFE (XD_NEXT_VALUE (object))));
+		lispstpcpy (signature, CAR_SAFE (XD_NEXT_VALUE (object)));
 		object = CDR_SAFE (XD_NEXT_VALUE (object));
 	      }
 
@@ -1058,6 +1023,7 @@ xd_remove_watch (DBusWatch *watch, void *data)
 
   /* Unset session environment.  */
 #if 0
+  /* This is buggy, since unsetenv is not thread-safe.  */
   if (XSYMBOL (QCdbus_session_bus) == data)
     {
       XD_DEBUG_MESSAGE ("unsetenv DBUS_SESSION_BUS_ADDRESS");
@@ -1222,9 +1188,6 @@ this connection to those buses.  */)
       /* Add bus to list of registered buses.  */
       XSETFASTINT (val, (intptr_t) connection);
       xd_registered_buses = Fcons (Fcons (bus, val), xd_registered_buses);
-
-      /* We do not want to abort.  */
-      xputenv ("DBUS_FATAL_WARNINGS=0");
 
       /* Cleanup.  */
       dbus_error_free (&derror);
@@ -1742,6 +1705,13 @@ xd_read_queued_messages (int fd, void *data)
 
 
 void
+init_dbusbind (void)
+{
+  /* We do not want to abort.  */
+  xputenv ("DBUS_FATAL_WARNINGS=0");
+}
+
+void
 syms_of_dbusbind (void)
 {
 
@@ -1754,15 +1724,21 @@ syms_of_dbusbind (void)
   DEFSYM (Qdbus_message_internal, "dbus-message-internal");
   defsubr (&Sdbus_message_internal);
 
+  /* D-Bus error symbol.  */
   DEFSYM (Qdbus_error, "dbus-error");
   Fput (Qdbus_error, Qerror_conditions,
 	list2 (Qdbus_error, Qerror));
   Fput (Qdbus_error, Qerror_message,
 	build_pure_c_string ("D-Bus error"));
 
+  /* Lisp symbols of the system and session buses.  */
   DEFSYM (QCdbus_system_bus, ":system");
   DEFSYM (QCdbus_session_bus, ":session");
+
+  /* Lisp symbol for method call timeout.  */
   DEFSYM (QCdbus_timeout, ":timeout");
+
+  /* Lisp symbols of D-Bus types.  */
   DEFSYM (QCdbus_type_byte, ":byte");
   DEFSYM (QCdbus_type_boolean, ":boolean");
   DEFSYM (QCdbus_type_int16, ":int16");
@@ -1782,6 +1758,8 @@ syms_of_dbusbind (void)
   DEFSYM (QCdbus_type_variant, ":variant");
   DEFSYM (QCdbus_type_struct, ":struct");
   DEFSYM (QCdbus_type_dict_entry, ":dict-entry");
+
+  /* Lisp symbols of objects in `dbus-registered-objects-table'.  */
   DEFSYM (QCdbus_registered_serial, ":serial");
   DEFSYM (QCdbus_registered_method, ":method");
   DEFSYM (QCdbus_registered_signal, ":signal");

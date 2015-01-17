@@ -1,6 +1,6 @@
 ;;; ediff.el --- a comprehensive visual interface to diff & patch
 
-;; Copyright (C) 1994-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2015 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Created: February 2, 1994
@@ -64,7 +64,7 @@
 ;; compressed files.  Details are given below.
 
 ;; Finally, Ediff supports directory-level comparison, merging and patching.
-;; See the on-line manual for details.
+;; See the Ediff manual for details.
 
 ;; This package builds upon the ideas borrowed from emerge.el and several
 ;; Ediff's functions are adaptations from emerge.el.  Much of the functionality

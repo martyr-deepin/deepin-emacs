@@ -1,6 +1,6 @@
 ;;; align.el --- align text to a specific column, by regexp -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -1130,13 +1130,8 @@ TAB-STOP specifies whether SPACING refers to tab-stop boundaries."
       column
     (if (not tab-stop)
 	(+ column spacing)
-      (let ((stops tab-stop-list))
-	(while stops
-	  (if (and (> (car stops) column)
-		   (= (setq spacing (1- spacing)) 0))
-	      (setq column (car stops)
-		    stops nil)
-	    (setq stops (cdr stops)))))
+      (dotimes (_ spacing)
+	(setq column (indent-next-tab-stop column)))
       column)))
 
 (defsubst align-column (pos)

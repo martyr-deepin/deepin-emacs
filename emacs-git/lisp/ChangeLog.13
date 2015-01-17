@@ -3373,7 +3373,7 @@
 	allout regexp's formfeed alternative group, when present.
 
 	(allout-write-file-hook-handler): Rectify mangling of the error
-	handling.  It was broken in version 1.100, where an `error'
+	handling.  It was broken in 2007-12-06T19:56:41Z!deego@gnufans.org, where an `error'
 	condition-case handler was apparently reformatted as if it was a
 	call to the error function.  An apparent repair attempt in version
 	1.101 situated the original body of the error handling code as
@@ -3984,7 +3984,7 @@
 	* ibuffer.el (ibuffer-mode): Fix typo in previous change.
 
 2008-01-17  Vinicius Jose Latorre  <viniciusjl@ig.com.br>
-            Miles Bader  <miles@gnu.org>
+	    Miles Bader  <miles@gnu.org>
 
 	* blank-mode.el: New file.  Minor mode to visualize (HARD) SPACE,
 	TAB, NEWLINE.  Miles Bader <miles@gnu.org> wrote the original code
@@ -5480,7 +5480,7 @@
 	(verilog-insert-indices): Escape braces in doc strings.
 
 2007-12-08  Michael McNamara  <mac@verilog.com>
-            Wilson Snyder  <wsnyder@wsnyder.org>
+	    Wilson Snyder  <wsnyder@wsnyder.org>
 
 	* progmodes/verilog-mode.el: New file.
 
@@ -5909,7 +5909,7 @@
 
 2007-12-03  Karl Fogel  <kfogel@red-bean.com>
 
-	* saveplace.el (save-place-quiet): Remove, reverting 1.39.
+	* saveplace.el (save-place-quiet): Remove, reverting 2007-12-02T19:54:46Z!kfogel@red-bean.com.
 	(save-place-alist-to-file, load-save-place-alist-from-file):
 	Don't print non-error messages at all, there's really no need.
 	Do print if there's a problem, and clarify message in that case.
@@ -6984,7 +6984,7 @@
 2007-11-19  Juanma Barranquero  <lekktu@gmail.com>
 
 	* replace.el (map-query-replace-regexp): Doc fix (revert part of
-	revision 1.104, made on 2000-05-21 with no ChangeLog entry).
+	2000-05-21T17:04:47Z!fx@gnu.org made on 2000-05-21 with no ChangeLog entry).
 
 2007-11-19  Dan Nicolaescu  <dann@ics.uci.edu>
 
@@ -12758,7 +12758,7 @@
 2007-08-20  Thien-Thi Nguyen  <ttn@gnuvola.org>
 
 	* vc-rcs.el (vc-rcs-annotate-command):
-	Fix bug introduced 2007-07-18 (revision 1.51):
+	Fix bug introduced 2007-07-18T16:32:40Z!esr@snark.thyrsus.com:
 	Add back :vc-annotate-prefix propertization.
 
 2007-08-20  Andreas Schwab  <schwab@suse.de>
@@ -13486,7 +13486,7 @@
 	Use native Emacs functions, when appropriate.
 
 2007-08-01  Dan Nicolaescu  <dann@ics.uci.edu>
-            Stefan Monnier  <monnier@iro.umontreal.ca>
+	    Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* vc.el: Document new VC operation `extra-menu'.
 
@@ -14462,7 +14462,7 @@
 
 2007-07-15  Karl Fogel  <kfogel@red-bean.com>
 
-	* bookmark.el: Revert revision 1.90 (commitid mWoPbju3pgNotDps),
+	* bookmark.el: Revert 2007-07-13T18:16:17Z!kfogel@red-bean.com,
 	thus restoring bookmark bindings to three slots under C-x r.  See
 	http://lists.gnu.org/archive/html/emacs-devel/2007-07/msg00705.html.
 
@@ -16697,7 +16697,7 @@ See ChangeLog.12 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2007-2014 Free Software Foundation, Inc.
+  Copyright (C) 2007-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

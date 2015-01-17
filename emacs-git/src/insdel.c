@@ -1,6 +1,7 @@
 /* Buffer insertion/deletion and gap motion for GNU Emacs.
 
-Copyright (C) 1985-1986, 1993-1995, 1997-2014 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993-1995, 1997-2015 Free Software Foundation,
+Inc.
 
 This file is part of GNU Emacs.
 
@@ -50,8 +51,6 @@ static Lisp_Object combine_after_change_list;
 
 /* Buffer which combine_after_change_list is about.  */
 static Lisp_Object combine_after_change_buffer;
-
-Lisp_Object Qinhibit_modification_hooks;
 
 static void signal_before_change (ptrdiff_t, ptrdiff_t, ptrdiff_t *);
 
@@ -203,6 +202,25 @@ gap_right (ptrdiff_t charpos, ptrdiff_t bytepos)
   QUIT;
 }
 
+/* If the selected window's old pointm is adjacent or covered by the
+   region from FROM to TO, unsuspend auto hscroll in that window.  */
+
+static void
+adjust_suspend_auto_hscroll (ptrdiff_t from, ptrdiff_t to)
+{
+  if (WINDOWP (selected_window))
+    {
+      struct window *w = XWINDOW (selected_window);
+
+      if (BUFFERP (w->contents)
+	  && XBUFFER (w->contents) == current_buffer
+	  && XMARKER (w->old_pointm)->charpos >= from
+	  && XMARKER (w->old_pointm)->charpos <= to)
+	w->suspend_auto_hscroll = 0;
+    }
+}
+
+
 /* Adjust all markers for a deletion
    whose range in bytes is FROM_BYTE to TO_BYTE.
    The range in charpos is FROM to TO.
@@ -217,6 +235,7 @@ adjust_markers_for_delete (ptrdiff_t from, ptrdiff_t from_byte,
   struct Lisp_Marker *m;
   ptrdiff_t charpos;
 
+  adjust_suspend_auto_hscroll (from, to);
   for (m = BUF_MARKERS (current_buffer); m; m = m->next)
     {
       charpos = m->charpos;
@@ -256,6 +275,7 @@ adjust_markers_for_insert (ptrdiff_t from, ptrdiff_t from_byte,
   ptrdiff_t nchars = to - from;
   ptrdiff_t nbytes = to_byte - from_byte;
 
+  adjust_suspend_auto_hscroll (from, to);
   for (m = BUF_MARKERS (current_buffer); m; m = m->next)
     {
       eassert (m->bytepos >= m->charpos
@@ -321,6 +341,7 @@ adjust_markers_for_replace (ptrdiff_t from, ptrdiff_t from_byte,
   ptrdiff_t diff_chars = new_chars - old_chars;
   ptrdiff_t diff_bytes = new_bytes - old_bytes;
 
+  adjust_suspend_auto_hscroll (from, from + old_chars);
   for (m = BUF_MARKERS (current_buffer); m; m = m->next)
     {
       if (m->bytepos >= prev_to_byte)
@@ -701,7 +722,7 @@ count_combining_after (const unsigned char *string,
 	(2) POS is the last of the current buffer.
 	(3) A character at POS can't be a following byte of multibyte
 	    character.  */
-  if (length > 0 && ASCII_BYTE_P (string[length - 1])) /* case (1) */
+  if (length > 0 && ASCII_CHAR_P (string[length - 1])) /* case (1) */
     return 0;
   if (pos_byte == Z_BYTE)	/* case (2) */
     return 0;
@@ -1180,10 +1201,10 @@ adjust_after_replace (ptrdiff_t from, ptrdiff_t from_byte,
 
   /* Update various buffer positions for the new text.  */
   GAP_SIZE -= len_byte;
-  ZV += len; Z+= len;
+  ZV += len; Z += len;
   ZV_BYTE += len_byte; Z_BYTE += len_byte;
   GPT += len; GPT_BYTE += len_byte;
-  if (GAP_SIZE > 0) *(GPT_ADDR) = 0; /* Put an anchor. */
+  if (GAP_SIZE > 0) *(GPT_ADDR) = 0; /* Put an anchor.  */
 
   if (nchars_del > 0)
     adjust_markers_for_replace (from, from_byte, nchars_del, nbytes_del,
@@ -1206,7 +1227,7 @@ adjust_after_replace (ptrdiff_t from, ptrdiff_t from_byte,
   if (from < PT)
     adjust_point (len - nchars_del, len_byte - nbytes_del);
 
-  /* As byte combining will decrease Z, we must check this again. */
+  /* As byte combining will decrease Z, we must check this again.  */
   if (Z - GPT < END_UNCHANGED)
     END_UNCHANGED = Z - GPT;
 
@@ -1577,7 +1598,7 @@ del_range_byte (ptrdiff_t from_byte, ptrdiff_t to_byte, bool prepare)
 {
   ptrdiff_t from, to;
 
-  /* Make args be valid */
+  /* Make args be valid.  */
   if (from_byte < BEGV_BYTE)
     from_byte = BEGV_BYTE;
   if (to_byte > ZV_BYTE)
@@ -1659,7 +1680,7 @@ del_range_both (ptrdiff_t from, ptrdiff_t from_byte,
 /* Delete a range of text, specified both as character positions
    and byte positions.  FROM and TO are character positions,
    while FROM_BYTE and TO_BYTE are byte positions.
-   If RET_STRING, the deleted area is returned as a string. */
+   If RET_STRING, the deleted area is returned as a string.  */
 
 Lisp_Object
 del_range_2 (ptrdiff_t from, ptrdiff_t from_byte,
@@ -1758,8 +1779,6 @@ modify_text (ptrdiff_t start, ptrdiff_t end)
   bset_point_before_scroll (current_buffer, Qnil);
 }
 
-Lisp_Object Qregion_extract_function;
-
 /* Check that it is okay to modify the buffer between START and END,
    which are char positions.
 
@@ -1775,9 +1794,11 @@ prepare_to_modify_buffer_1 (ptrdiff_t start, ptrdiff_t end,
 			    ptrdiff_t *preserve_ptr)
 {
   struct buffer *base_buffer;
+  Lisp_Object temp;
 
+  XSETFASTINT (temp, start);
   if (!NILP (BVAR (current_buffer, read_only)))
-    Fbarf_if_buffer_read_only ();
+    Fbarf_if_buffer_read_only (temp);
 
   bset_redisplay (current_buffer);
 
@@ -1970,7 +1991,7 @@ signal_before_change (ptrdiff_t start_int, ptrdiff_t end_int,
     {
       PRESERVE_VALUE;
       PRESERVE_START_END;
-      Frun_hooks (1, &Qfirst_change_hook);
+      run_hook (Qfirst_change_hook);
     }
 
   /* Now run the before-change-functions if any.  */

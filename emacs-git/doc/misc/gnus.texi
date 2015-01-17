@@ -2,7 +2,7 @@
 
 @include gnus-overrides.texi
 
-@setfilename ../../info/gnus
+@setfilename ../../info/gnus.info
 @settitle Gnus Manual
 @syncodeindex fn cp
 @syncodeindex vr cp
@@ -11,13 +11,13 @@
 @documentencoding UTF-8
 
 @copying
-Copyright @copyright{} 1995--2014 Free Software Foundation, Inc.
+Copyright @copyright{} 1995--2015 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3 or
 any later version published by the Free Software Foundation; with no
-Invariant Sections, with the Front-Cover texts being ``A GNU Manual'',
+Invariant Sections, with the Front-Cover Texts being ``A GNU Manual'',
 and with the Back-Cover Texts as in (a) below.  A copy of the license
 is included in the section entitled ``GNU Free Documentation License''.
 
@@ -618,6 +618,7 @@ Article Buffer
 
 * Hiding Headers::              Deciding what headers should be displayed.
 * Using MIME::                  Pushing articles through @acronym{MIME} before reading them.
+* HTML::                        Reading @acronym{HTML} messages.
 * Customizing Articles::        Tailoring the look of the articles.
 * Article Keymap::              Keystrokes available in the article buffer.
 * Misc Article::                Other stuff.
@@ -2880,12 +2881,17 @@ news group.
 @item gcc-self
 @cindex gcc-self
 If @code{(gcc-self . t)} is present in the group parameter list, newly
-composed messages will be @code{Gcc}'d to the current group.  If
+composed messages will be @code{gcc}d to the current group.  If
 @code{(gcc-self . none)} is present, no @code{Gcc:} header will be
-generated, if @code{(gcc-self . "string")} is present, this string will
-be inserted literally as a @code{gcc} header.  This parameter takes
-precedence over any default @code{Gcc} rules as described later
-(@pxref{Archived Messages}), with the exception for messages to resend.
+generated, if @code{(gcc-self . "group")} is present, this string will
+be inserted literally as a @code{Gcc:} header.  It should be a group
+name.  The @code{gcc-self} value may also be a list of strings and
+@code{t}, e.g., @code{(gcc-self "group1" "group2" t)} means to
+@code{gcc} the newly composed message into the groups @code{"group1"}
+and @code{"group2"}, and into the current group.  The @code{gcc-self}
+parameter takes precedence over any default @code{Gcc} rules as
+described later (@pxref{Archived Messages}), with the exception for
+messages to resend.
 
 @strong{Caveat}: Adding @code{(gcc-self . t)} to the parameter list of
 @code{nntp} groups (or the like) isn't valid.  An @code{nntp} server
@@ -11756,20 +11762,30 @@ Also @pxref{MIME Commands}.
 @section @acronym{HTML}
 @cindex @acronym{HTML}
 
-If you have @code{w3m} installed on your system, Gnus can display
-@acronym{HTML} articles in the article buffer.  There are many Gnus
-add-ons for doing this, using various approaches, but there's one
-(sort of) built-in method that's used by default.
+Gnus can display @acronym{HTML} articles nicely formatted in the
+article buffer.  There are many methods for doing that, but two of
+them are kind of default methods.
 
-For a complete overview, consult @xref{Display Customization,
-,Display Customization, emacs-mime, The Emacs MIME Manual}.  This
-section only describes the default method.
+If your Emacs copy has been built with libxml2 support, then Gnus uses
+Emacs' built-in, plain elisp Simple HTML Renderer @code{shr}
+@footnote{@code{shr} displays colors as declared in the @acronym{HTML}
+article but tries to adjust them in order to be readable.  If you
+prefer more contrast, @xref{FAQ 4-16}.} which is also used by Emacs'
+browser EWW (@pxref{EWW, ,EWW, emacs, The Emacs Manual}).
+
+If your Emacs copy lacks libxml2 support but you have @code{w3m}
+installed on your system, Gnus uses that to render @acronym{HTML} mail
+and display the results in the article buffer (@code{gnus-w3m}).
+
+For a complete overview, consult @xref{Display Customization, ,Display
+Customization, emacs-mime, The Emacs MIME Manual}.  This section only
+describes the default method.
 
 @table @code
 @item mm-text-html-renderer
 @vindex mm-text-html-renderer
-If set to @code{gnus-article-html}, Gnus will use the built-in method,
-that's based on @code{w3m}.
+If set to @code{shr}, Gnus uses its own simple @acronym{HTML}
+renderer.  If set to @code{gnus-w3m}, it uses @code{w3m}.
 
 @item gnus-blocked-images
 @vindex gnus-blocked-images
@@ -12537,7 +12553,7 @@ you're in, you could say something like the following:
 Modify to suit your needs.
 
 @vindex gnus-message-highlight-citation
-If @code{gnus-message-highlight-citation} is t, different levels of
+If @code{gnus-message-highlight-citation} is @code{t}, different levels of
 citations are highlighted like in Gnus article buffers also in message
 mode buffers.
 
@@ -12813,10 +12829,12 @@ variable, which is a vector of the following headers: number subject
 from date id references chars lines xref extra.
 
 In the case of a string value, if the @code{match} is a regular
-expression, a @samp{gnus-match-substitute-replacement} is proceed on
-the value to replace the positional parameters @samp{\@var{n}} by the
-corresponding parenthetical matches (see @xref{Replacing Match,,
-Replacing the Text that Matched, elisp, The Emacs Lisp Reference Manual}.)
+expression, or if it takes the form @code{(header @var{match}
+@var{regexp})}, a @samp{gnus-match-substitute-replacement} is proceed
+on the value to replace the positional parameters @samp{\@var{n}} by
+the corresponding parenthetical matches (see @xref{Replacing Match,,
+Replacing the Text that Matched, elisp, The Emacs Lisp Reference
+Manual}.)
 
 @vindex message-reply-headers
 
@@ -12848,6 +12866,10 @@ So here's a new example:
         ;; @r{If I'm replying to Larsi, set the Organization header.}
         ((header "from" "larsi.*org")
          (Organization "Somewhere, Inc."))
+        ;; @r{Reply to a message from the same subaddress the message}
+        ;; @r{was sent to.}
+        ((header "x-original-to" "me\\(\\+.+\\)@@example.org")
+         (address "me\\1@@example.org"))
         ((posting-from-work-p) ;; @r{A user defined function}
          (signature-file "~/.work-signature")
          (address "user@@bar.foo")
@@ -20487,7 +20509,7 @@ matches.  This takes a long time in big groups.
 You can inhibit this slow scoring on headers or body by setting the
 variable @code{gnus-inhibit-slow-scoring}.  If
 @code{gnus-inhibit-slow-scoring} is regexp, slow scoring is inhibited if
-the group matches the regexp.  If it is t, slow scoring on it is
+the group matches the regexp.  If it is @code{t}, slow scoring on it is
 inhibited for all groups.
 
 Now, there's not much you can do about the slowness for news groups, but for
@@ -21414,18 +21436,19 @@ three items unique to nnir summary buffers:
 %g    Article original short group name (string)
 @end example
 
-If nil (the default) this will use @code{gnus-summary-line-format}.
+If @code{nil} (the default) this will use @code{gnus-summary-line-format}.
 
 @item nnir-retrieve-headers-override-function
-If non-nil, a function that retrieves article headers rather than using
+If non-@code{nil}, a function that retrieves article headers rather than using
 the gnus built-in function.  This function takes an article list and
 group as arguments and populates the `nntp-server-buffer' with the
 retrieved headers.  It should then return either 'nov or 'headers
 indicating the retrieved header format.  Failure to retrieve headers
 should return @code{nil}.
 
-If this variable is nil, or if the provided function returns nil for a
-search result, @code{gnus-retrieve-headers} will be called instead."
+If this variable is @code{nil}, or if the provided function returns
+@code{nil} for a search result, @code{gnus-retrieve-headers} will be
+called instead."
 
 
 @end table
@@ -21928,7 +21951,7 @@ original article yet, @code{nnmairix} will use an additional mairix
 search for determining the file name of the article.  This, of course, is
 way slower than the registry---if you set hundreds or even thousands of
 marks this way, it might take some time.  You can avoid this situation by
-setting @code{nnmairix-only-use-registry} to t.
+setting @code{nnmairix-only-use-registry} to @code{t}.
 
 Maybe you also want to propagate marks the other way round, i.e., if you
 tick an article in a "real" mail group, you'd like to have the same
@@ -24874,7 +24897,7 @@ classified as spammers.
 While @code{spam-use-BBDB-exclusive} @emph{can} be used as an alias
 for @code{spam-use-BBDB} as far as @code{spam.el} is concerned, it is
 @emph{not} a separate back end.  If you set
-@code{spam-use-BBDB-exclusive} to t, @emph{all} your BBDB splitting
+@code{spam-use-BBDB-exclusive} to @code{t}, @emph{all} your BBDB splitting
 will be exclusive.
 
 @end defvar
@@ -25930,17 +25953,34 @@ the word ``archive'' is not followed.
 
 @defvar gnus-registry-max-entries
 The number (an integer or @code{nil} for unlimited) of entries the
-registry will keep.
+registry will keep.  If the registry has reached or exceeded this
+size, it will reject insertion of new entries.
 @end defvar
 
-@defvar gnus-registry-max-pruned-entries
-The maximum number (an integer or @code{nil} for unlimited) of entries
-the registry will keep after pruning.
+@defvar gnus-registry-prune-factor
+This option (a float between 0 and 1) controls how much the registry
+is cut back during pruning.  In order to prevent constant pruning, the
+registry will be pruned back to less than
+@code{gnus-registry-max-entries}.  This option controls exactly how
+much less: the target is calculated as the maximum number of entries
+minus the maximum number times this factor.  The default is 0.1:
+i.e. if your registry is limited to 50000 entries, pruning will try to
+cut back to 45000 entries.  Entries with keys marked as precious will
+not be pruned.
+@end defvar
+
+@defvar gnus-registry-default-sort-function
+This option specifies how registry entries are sorted during pruning.
+If a function is given, it should sort least valuable entries first,
+as pruning starts from the beginning of the list.  The default value
+is @code{gnus-registry-sort-by-creation-time}, which proposes the
+oldest entries for pruning.  Set to nil to perform no sorting, which
+will speed up the pruning process.
 @end defvar
 
 @defvar gnus-registry-cache-file
 The file where the registry will be stored between Gnus sessions.  By
-default the file name is @code{.gnus.registry.eioio} in the same
+default the file name is @code{.gnus.registry.eieio} in the same
 directory as your @code{.newsrc.eld}.
 @end defvar
 

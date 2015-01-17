@@ -1,6 +1,6 @@
 ;;; apropos.el --- apropos commands for users and programmers
 
-;; Copyright (C) 1989, 1994-1995, 2001-2014 Free Software Foundation,
+;; Copyright (C) 1989, 1994-1995, 2001-2015 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Joe Wells <jbw@bigbird.bu.edu>
@@ -718,7 +718,7 @@ the output includes key-bindings of commands."
 		 (setq doc (list (car properties)))
 		 (while (setq properties (cdr (cdr properties)))
 		   (setq doc (cons (car properties) doc)))
-		 (mapconcat #'symbol-name (nreverse doc) " "))
+		 (mapconcat (lambda (p) (format "%s" p)) (nreverse doc) " "))
 	       (when (get symbol 'widget-type)
 		 (apropos-documentation-property
 		  symbol 'widget-documentation t))

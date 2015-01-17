@@ -1,6 +1,6 @@
 ;;; prolog.el --- major mode for Prolog (and Mercury) -*- lexical-binding:t -*-
 
-;; Copyright (C) 1986-1987, 1997-1999, 2002-2003, 2011-2014 Free
+;; Copyright (C) 1986-1987, 1997-1999, 2002-2003, 2011-2015 Free
 ;; Software Foundation, Inc.
 
 ;; Authors: Emil Åström <emil_astrom(at)hotmail(dot)com>
@@ -1079,7 +1079,7 @@ VERSION is of the format (Major . Minor)"
   ;; Inherited from the old prolog.el.
   (define-key map "\e\C-x" 'prolog-consult-region)
   (define-key map "\C-c\C-l" 'prolog-consult-file)
-  (define-key map "\C-c\C-z" 'switch-to-prolog))
+  (define-key map "\C-c\C-z" 'run-prolog))
 
 (defun prolog-mode-keybindings-inferior (_map)
   "Define keybindings for inferior Prolog mode in MAP."
@@ -1240,6 +1240,8 @@ To find out what version of Prolog mode you are running, enter
         ((string-match "\\`[rf] *[0-9]*\\'" str) nil) ;r(edo) or f(ail)
         (t t)))
 
+;; This statement was missing in Emacs 24.1, 24.2, 24.3.
+(define-obsolete-function-alias 'switch-to-prolog 'run-prolog "24.1")
 ;;;###autoload
 (defun run-prolog (arg)
   "Run an inferior Prolog process, input and output via buffer *prolog*.
@@ -3137,7 +3139,7 @@ the following comma and whitespace, if any."
                  (eq (char-before) ?_)
                  (save-excursion
                    (skip-chars-backward "[:alpha:]_")
-                   (looking-at "\\<_[_[:upper:]][[:alnum:]_]*\\_>")))
+                   (looking-at "\\_<[_[:upper:]][[:alnum:]_]*\\_>")))
         (replace-match "_")
         (skip-chars-forward ", \t\n")))))
 
@@ -3340,8 +3342,6 @@ PREFIX is the prefix of the search regexp."
     ["Mark clause" prolog-mark-clause t]
     ["Mark predicate" prolog-mark-predicate t]
     ["Mark paragraph" mark-paragraph t]
-    ;;"---"
-    ;;["Fontify buffer" font-lock-fontify-buffer t]
     ))
 
 (defun prolog-menu ()

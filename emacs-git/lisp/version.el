@@ -1,6 +1,6 @@
 ;;; version.el --- record version number of Emacs
 
-;; Copyright (C) 1985, 1992, 1994-1995, 1999-2014 Free Software
+;; Copyright (C) 1985, 1992, 1994-1995, 1999-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -187,8 +187,8 @@ only ask the VCS if we cannot find any information ourselves."
 	   (let ((default-directory (file-name-as-directory dir)))
 	     (and (eq 0
 		      (condition-case nil
-			  (call-process "git" nil '(t nil) nil "log"
-					"-1" "--pretty=format:%N")
+			  (call-process "git" nil '(t nil) nil "rev-parse"
+					"HEAD")
 			(error nil)))
 		  (not (zerop (buffer-size)))
 		  (replace-regexp-in-string "\n" "" (buffer-string))))))))

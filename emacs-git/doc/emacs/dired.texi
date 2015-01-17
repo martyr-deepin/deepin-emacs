@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2014 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2015 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Dired
@@ -522,7 +522,7 @@ flags on all the files that have no marks, while unflagging all those
 that already have @samp{D} flags:
 
 @example
-* c D t  * c SPC D  * c t SPC
+* c D t  * c @key{SPC} D  * c t @key{SPC}
 @end example
 
 This assumes that no files were already marked with @samp{t}.

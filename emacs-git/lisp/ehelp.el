@@ -1,6 +1,6 @@
 ;;; ehelp.el --- bindings for electric-help mode -*- lexical-binding: t -*-
 
-;; Copyright (C) 1986, 1995, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1986, 1995, 2000-2015 Free Software Foundation, Inc.
 
 ;; Author: Richard Mlynarik
 ;; (according to ack.texi and authors.el)
@@ -25,7 +25,7 @@
 ;;; Commentary:
 
 ;; This package provides a pre-packaged `Electric Help Mode' for
-;; browsing on-line help screens.  There is one entry point,
+;; browsing Emacs help screens.  There is one entry point,
 ;; `with-electric-help'; all you have to give it is a no-argument
 ;; function that generates the actual text of the help into the current
 ;; buffer.

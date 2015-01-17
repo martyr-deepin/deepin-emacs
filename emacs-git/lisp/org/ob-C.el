@@ -1,6 +1,6 @@
 ;;; ob-C.el --- org-babel functions for C and similar languages
 
-;; Copyright (C) 2010-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -30,6 +30,8 @@
 ;; - not much in the way of error feedback
 
 ;;; Code:
+(eval-when-compile
+  (require 'cl))
 (require 'ob)
 (require 'cc-mode)
 

@@ -1,3 +1,267 @@
+2015-01-16  Eli Zaretskii  <eliz@gnu.org>
+
+	* Makefile.in (AM_V_RC, am__v_RC_, am__v_RC_0, am__v_RC_1): New
+	macros.
+	(emacsclient.res): Use $(AM_V_RC).
+
+2015-01-16  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Give up on -Wsuggest-attribute=const
+	* make-docfile.c (write_globals):
+	Remove special hack for Fnext_read_file_uses_dialog_p
+
+2015-01-13  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Don't say Fnext_read_file_uses_dialog_p is const
+	* make-docfile.c (write_globals):
+	Add a special hack for Fnext_read_file_uses_dialog_p.
+
+2015-01-13  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	Support DEFUN attributes.
+	* make-docfile.c (struct global): New field 'flags'.
+	(DEFUN_noreturn, DEFUN_const): New enum bitfields.
+	(add_global): Now return pointer to global.
+	(write_globals): Add _Noreturn and ATTRIBUTE_CONST attributes
+	if requested by global's flags.
+	(stream_match): New function.
+	(scan_c_stream): Recognize 'attributes:' of DEFUN.
+
+2015-01-10  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Port to 32-bit --with-wide-int
+	* make-docfile.c (write_globals): Define and use symbols like
+	iQnil (a small integer, like 0) rather than aQnil (an address
+	constant).
+
+	Port to 32-bit Sun C 5.12 sparc
+	* make-docfile.c (close_emacs_globals): Align lispsym to GCALIGNMENT.
+	The alignment is required on all platforms; it just happens to have
+	been properly aligned on the previous platforms we tested.
+
+2015-01-05  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Use 0 for Qnil
+	* make-docfile.c (compare_globals): Consider 'nil' to be the least.
+
+	Compute C decls for DEFSYMs automatically
+	Fixes Bug#15880.
+	* make-docfile.c: Revamp to generate table of symbols, too.
+	Include <stdbool.h>.
+	(xstrdup): New function.
+	(main): Don't process the same file twice.
+	(SYMBOL): New constant in enum global_type.
+	(struct symbol): Turn 'value' member into a union, either v.value
+	for int or v.svalue for string.  All uses changed.
+	(add_global): New arg svalue, which overrides value, so that globals
+	can have a string value.
+	(close_emacs_global): New arg num_symbols; all uses changed.
+	Output lispsym decl.
+	(write_globals): Output symbol globals too.  Output more
+	ATTRIBUTE_CONST, now that Qnil etc. are C constants.
+	Output defsym_name table.
+	(scan_c_file): Move most of guts into ...
+	(scan_c_stream): ... new function.  Scan for DEFSYMs and
+	record symbols found.  Don't read past EOF if file doesn't
+	end in newline.
+
+2015-01-04  Paul Eggert  <eggert@cs.ucla.edu>
+
+	'temacs -nw' should not call missing functions
+	* make-docfile.c (write_globals):
+	Declare Fframe_windows_min_size with ATTRIBUTE_CONST, too.  Sort.
+
+	Less 'make' chatter for lib-src
+	* Makefile.in (blessmail): Less 'make' chatter here.
+
+2014-12-27  Eli Zaretskii  <eliz@gnu.org>
+
+	* Makefile.in (etags_libs, ebrowse${EXEEXT}, profile${EXEEXT})
+	(make-docfile${EXEEXT}, movemail${EXEEXT})
+	(update-game-score${EXEEXT}): Put $(NTLIB) before $(LOADLIBES),
+	since GCC sometimes calls stpcpy when it sees strcpy, under
+	optimization switches.
+
+2014-12-25  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* ebrowse.c (sym_scope_1, operator_name, open_file):
+	* emacsclient.c (get_server_config, set_local_socket)
+	(start_daemon_and_retry_set_socket):
+	* etags.c (main, C_entries, relative_filename):
+	* pop.c (sendline):
+	* update-game-score.c (main):
+	Rewrite to avoid the need for strcat, typically by using stpcpy
+	and/or lispstpcpy.  strcat tends to be part of O(N**2) algorithms.
+
+2014-12-14  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* etags.c (analyze_regex): Rename from analyse_regex.
+
+2014-12-14  Glenn Morris  <rgm@gnu.org>
+
+	* grep-changelog: Remove file.
+	* Makefile.in (INSTALLABLE_SCRIPTS): Remove.
+	(all, install, uninstall): Remove INSTALLABLE_SCRIPTS.
+
+2014-11-23  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (emacsclient.res): Fix yesterday's thinko.
+
+2014-11-22  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (emacsclient.res): Update deps for nt/emacsclient.rc
+	now being in the build directory, not the source directory.
+
+	* Makefile.in (emacsclient.res): Add dependency on icons/emacs.ico.
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* Merge in all changes up to 24.4 release.
+
+2014-09-23  Paul Eggert  <eggert@cs.ucla.edu>
+
+	movemail: don't dump core if the current time is outlandish
+	* movemail.c (popmail): Check for mbx_delimit_begin failure.
+	(mbx_delimit_begin): Fail if the current time is so outlandish
+	that localtime would fail or asctime would have undefined
+	behavior.  Use strftime to avoid asctime undefined behavior.
+
+2014-09-01  Paul Eggert  <eggert@cs.ucla.edu>
+
+	--enable-silent-rules now suppresses more chatter.
+	* Makefile.in (AM_DEFAULT_VERBOSITY, AM_V_CC, am__v_CC_)
+	(am__v_CC_0, am__v_CC_1, AM_V_CCLD, am__v_CCLD_, am__v_CCLD_0)
+	(am__v_CCLD_1): New macros, taken from Automake.
+	(regex.o, etags${EXEEXT}, ctags${EXEEXT}, ebrowse${EXEEXT})
+	(profile${EXEEXT}, make-docfile${EXEEXT}, movemail${EXEEXT})
+	(pop.o, emacsclient${EXEEXT}, emacsclientw${EXEEXT})
+	(emacsclientw${EXEEXT}, ntlib.o, hexl${EXEEXT})
+	(update-game-score${EXEEXT}): Use them.
+
+	* etags.c (emacs_strchr, emacs_strrchr): Remove.
+	All uses replaced by strchr and strrchr, which are on all
+	target platforms now.
+
+2014-07-15  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Use "b" flag more consistently; avoid "t" (Bug#18006).
+	* make-docfile.c (READ_TEXT): Remove; all uses replaced by "r".
+	(READ_BINARY): Remove; all uses replaced by "rb".
+
+2014-07-14  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Use binary-io module, O_BINARY, and "b" flag (Bug#18006).
+	* etags.c, hexl.c, make-docfile.c:
+	Include binary-io.h instead of fcntl.h and/or io.h.
+	(main): Use set_binary_mode or SET_BINARY
+	in place of handcrafted code.
+	* etags.c (main) [DOS_NT]:
+	* movemail.c (main) [WINDOWSNT]:
+	Don't mess with _fmode.
+	* etags.c (main, process_file_name, analyse_regex):
+	Use fopen/popen's "b" flag instead.
+	* movemail.c (main, popmail): Use open/lk_open/mkostemp's O_BINARY
+	instead.
+
+2014-07-13  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* make-docfile.c: Simplify a bit, to simplify further refactoring.
+	(outfile): Remove static var.  All uses changed to use stdout,
+	since it's always stdout anyway.  While we're at it, prefer
+	putchar/puts/fputs to printf when there are no format strings.
+	(main): Use freopen rather than fopen, so that stdout is reused.
+	Move O_BINARY stuff after the freopen, so it affects the
+	reopened file.
+	(write_c_args): Omit first arg, since it's always stdout now.
+	All uses changed.
+
+2014-07-12  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* etags.c (Lisp_functions): Also record cl-defun etc. (Bug#17965)
+
+2014-06-26  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (blessmail): Depend on lisp/mail/blessmail.el.
+	Use $<, $@.
+	(regex.o, etags${EXEEXT}, ctags${EXEEXT}, ebrowse${EXEEXT})
+	(profile${EXEEXT}, make-docfile${EXEEXT}, movemail${EXEEXT})
+	(pop.o, emacsclient${EXEEXT}, emacsclientw${EXEEXT}, ntlib.o)
+	(hexl${EXEEXT}, update-game-score${EXEEXT}, emacsclient.res): Use $<.
+	(ctags${EXEEXT}): Add $srcdir to dependency rather than using VPATH.
+
+2014-06-17  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Omit redundant extern decls.
+	* emacsclient.c (getenv): Remove decl.
+	* make-docfile.c (write_globals): Add ATTRIBUTE_CONST for
+	Fbyteorder, Ftool_bar_height, Fmax_char, Fidentity.
+
+2014-06-15  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (LDFLAGS): Explicitly set via configure.
+
+2014-06-15  Eli Zaretskii  <eliz@gnu.org>
+
+	* Makefile.in (CPPFLAGS): Define.
+
+2014-06-15  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (../lib/libgnu.a):
+	Use `make -C' rather than `cd && make'.
+
+	* Makefile.in (bootstrap-clean): New.
+
+2014-06-13  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (../lib/libgnu.a):
+	GNU make automatically passes command-line arguments to sub-makes.
+
+2014-05-26  Eli Zaretskii  <eliz@gnu.org>
+
+	* ntlib.h (lseek): Don't redirect to _lseek.
+
+2014-05-26  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Fix rcs2log problems with CVS.  Reported by Glenn Morris in
+	<http://lists.gnu.org/archive/html/emacs-devel/2014-05/msg00277.html>.
+	Plus, fix some security and filename quoting problems.
+	* rcs2log (logdir): Prefer mktemp if available.
+	(logdir, llogdir): Work even if TMPDIR begins with '-' or has spaces.
+	(output_authors, main awk script): Parse more-recent CVS output format.
+
+2014-05-19  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Remove dependencies on getline and getdelim.
+	Also, remove update-game-scores's limits on game scores and
+	simplify its file-locking code.
+	* update-game-score.c (struct score_entry): Unify the username and
+	data members to a single user_data member, since they don't need to be
+	changed independently and getdelim and getline aren't helpful.
+	Make the score member char *, not intmax_t, so that scores are not
+	limited to intmax_t.  All uses changed.
+	(lose_syserr): A zero errno stands for invalid data in score file.
+	(normalize_integer): New function.
+	(main): Use it.  Check for invalid scores.  Omit redundant stat check.
+	(read_score): First arg is now a string, not a FILE *.  All uses
+	changed.  Do not use getdelim or getline; that's way simpler.
+	(read_scores): Read the whole file, and let read_score handle each
+	line.
+	(score_compare): Compare strings representing integers, not integers.
+	(write_scores) [DOS_NT]: Eliminate unnecessary chmod.
+	(lock_file): Simplify locking code, eliminating goto.
+	Check for unlink failure.
+
+2014-05-18  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Port ctags+etags build to Sun C 5.12.
+	* Makefile.in (etags_args): Remove, replacing with ...
+	(etags_cflags, etags_libs): New macros.  All uses changed.
+	(ctags${EXEEXT}): Don't compile etags.c, as compiling etags.c in
+	parallel (once for ctags, once for etags) breaks parallel makes
+	with compilers that use the source file name to name temporaries,
+	such as Sun C 5.12.  Instead, compile ctags.c.
+	* ctags.c: New file.
+
 2014-05-04  Paul Eggert  <eggert@cs.ucla.edu>
 
 	Handle systems without WCONTINUED consistently.  (Bug#15110, 17339)
@@ -705,7 +969,7 @@
 	Use _Noreturn rather than NO_RETURN.
 	No need for separate decl merely because of _Noreturn.
 
-2012-06-24  Samuel Bronson  <naesten@gmail.com>  (tiny change)
+2012-06-24  Samuel Bronson  <naesten@gmail.com>
 
 	* emacsclient.c (set_local_socket): Fix compiler warning (Bug#7838).
 
@@ -847,7 +1111,7 @@
 2012-04-14  Juanma Barranquero  <lekktu@gmail.com>
 
 	* emacsclient.c (decode_options) [WINDOWSNT]:
-	Call ttyname instead of passing its address (typo in revno:106608).
+	Call ttyname instead of passing its address (typo in 2011-12-04T17:13:01Z!lekktu@gmail.com).
 
 2012-04-07  Eli Zaretskii  <eliz@gnu.org>
 
@@ -1602,7 +1866,7 @@
 2010-07-12  Eli Zaretskii  <eliz@gnu.org>
 
 	* makefile.w32-in (lisp2): Change hebrew.el to hebrew.elc (see
-	revno 100789).
+	2010-07-12T05:25:46Z!handa@etlken).
 
 2010-07-11  Andreas Schwab  <schwab@linux-m68k.org>
 
@@ -2851,7 +3115,7 @@
 	filter), show help instead of blindingly dumping every single
 	ChangeLog available.  Doc fix.  Update version.
 
-2006-11-02  Tim Van Holder  <tim.vanholder@gmail.com>  (tiny change)
+2006-11-02  Tim Van Holder  <tim.vanholder@gmail.com>
 
 	* emacsclient.c [WINDOWSNT]: Define HAVE_INET_SOCKETS.
 	[!WINDOWSNT]: Include <netinet/in.h> if available.
@@ -2876,7 +3140,7 @@
 	(set_tcp_socket): Prefer O_NONBLOCK, then O_NDELAY, then FIONBIO
 	to set the socket in non-blocking mode.
 
-2006-10-31  Tim Van Holder  <tim.vanholder@gmail.com>  (tiny change)
+2006-10-31  Tim Van Holder  <tim.vanholder@gmail.com>
 
 	* emacsclient.c [!WINDOWSNT]: Include <netinet/in.h> and <sys/ioctl.h>.
 	(INVALID_SOCKET): Define.
@@ -3313,7 +3577,7 @@
 2004-04-17  Paul Eggert  <eggert@gnu.org>
 
 	* rcs2log (Help): Clarify wording of the usage message.
-	Problem reported by Alan Mackenzie in
+	Reported by Alan Mackenzie in
 	<http://mail.gnu.org/archive/html/bug-gnu-emacs/2004-04/msg00188.html>.
 
 2004-04-07  Stefan Monnier  <monnier@iro.umontreal.ca>
@@ -7590,7 +7854,7 @@
 	(consider_token): DEFUNs now treated like funcs in ctags mode.
 
 	* etags.c (LEVEL_OK_FOR_FUNCDEF): Remove.
-	(C_entries): Optimized the test that used LEVEL_OK_FOR_FUNCDEF.
+	(C_entries): Optimize the test that used LEVEL_OK_FOR_FUNCDEF.
 	(C_entries): Remove a piece of useless code.
 	(C_entries): Making typedef tags is delayed until a semicolon
 	is met.  This handles "typedef int X, Y, Z;" correctly.
@@ -7990,7 +8254,7 @@
 	* Makefile.in (prefix, bindir, libdir, srcdir): New variables, as
 	described in the top-level Makefile.
 	(UTILITIES): Add make-path to the list of utility programs.
-	(../arch-lib): Replaced by the ${archlibdir} target, which places
+	(../arch-lib): Replace by the ${archlibdir} target, which places
 	the executables in their permanent home.
 	(install, install.sysv, install.xenix): Consolidated into one
 	target which should work under all circumstances, modulo a few
@@ -8239,7 +8503,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1988-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1988-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

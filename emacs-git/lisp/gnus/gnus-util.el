@@ -1,6 +1,6 @@
 ;;; gnus-util.el --- utility functions for Gnus
 
-;; Copyright (C) 1996-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -313,14 +313,10 @@ Symbols are also allowed; their print names are used instead."
 
 ;; Every version of Emacs Gnus supports has built-in float-time.
 ;; The featurep test silences an irritating compiler warning.
-(eval-and-compile
+(defalias 'gnus-float-time
   (if (or (featurep 'emacs)
 	  (fboundp 'float-time))
-      (defalias 'gnus-float-time 'float-time)
-    (defun gnus-float-time (&optional time)
-      "Convert time value TIME to a floating point number.
-TIME defaults to the current time."
-      (time-to-seconds (or time (current-time))))))
+      'float-time 'time-to-seconds))
 
 ;;; Keymap macros.
 
@@ -389,19 +385,20 @@ TIME defaults to the current time."
 
 (defun gnus-seconds-today ()
   "Return the number of seconds passed today."
-  (let ((now (decode-time (current-time))))
+  (let ((now (decode-time)))
     (+ (car now) (* (car (cdr now)) 60) (* (car (nthcdr 2 now)) 3600))))
 
 (defun gnus-seconds-month ()
   "Return the number of seconds passed this month."
-  (let ((now (decode-time (current-time))))
+  (let ((now (decode-time)))
     (+ (car now) (* (car (cdr now)) 60) (* (car (nthcdr 2 now)) 3600)
        (* (- (car (nthcdr 3 now)) 1) 3600 24))))
 
 (defun gnus-seconds-year ()
   "Return the number of seconds passed this year."
-  (let ((now (decode-time (current-time)))
-	(days (format-time-string "%j" (current-time))))
+  (let* ((current (current-time))
+	 (now (decode-time current))
+	 (days (format-time-string "%j" current)))
     (+ (car now) (* (car (cdr now)) 60) (* (car (nthcdr 2 now)) 3600)
        (* (- (string-to-number days) 1) 3600 24))))
 
@@ -1910,17 +1907,25 @@ Sizes are in pixels."
                    image)))
       image)))
 
+(eval-when-compile (require 'gmm-utils))
 (defun gnus-recursive-directory-files (dir)
-  "Return all regular files below DIR."
-  (let (files)
-    (dolist (file (directory-files dir t))
-      (when (and (not (member (file-name-nondirectory file) '("." "..")))
-		 (file-readable-p file))
-	(cond
-	 ((file-regular-p file)
-	  (push file files))
-	 ((file-directory-p file)
-	  (setq files (append (gnus-recursive-directory-files file) files))))))
+  "Return all regular files below DIR.
+The first found will be returned if a file has hard or symbolic links."
+  (let (files attr attrs)
+    (gmm-labels
+	((fn (directory)
+	     (dolist (file (directory-files directory t))
+	       (setq attr (file-attributes (file-truename file)))
+	       (when (and (not (member attr attrs))
+			  (not (member (file-name-nondirectory file)
+				       '("." "..")))
+			  (file-readable-p file))
+		 (push attr attrs)
+		 (cond ((file-regular-p file)
+			(push file files))
+		       ((file-directory-p file)
+			(fn file)))))))
+      (fn dir))
     files))
 
 (defun gnus-list-memq-of-list (elements list)

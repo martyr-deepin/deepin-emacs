@@ -1,6 +1,6 @@
 ;;; msb.el --- customizable buffer-selection with multiple menus
 
-;; Copyright (C) 1993-1995, 1997-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 1997-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Lindberg <lars.lindberg@home.se>
 ;; Maintainer: emacs-devel@gnu.org
@@ -1064,7 +1064,7 @@ variable `msb-menu-cond'."
     list))
 
 (defun msb--make-keymap-menu (raw-menu)
-  (let ((end (cons '(nil) 'menu-bar-select-buffer))
+  (let ((end 'menu-bar-select-buffer)
 	(mcount 0))
     (mapcar
      (lambda (sub-menu)
@@ -1105,13 +1105,12 @@ variable `msb-menu-cond'."
 	    (setcdr (nthcdr msb-max-menu-items frames) nil))
 	  (setq frames-menu
 		(nconc
-		 (list 'frame f-title '(nil) 'keymap f-title)
+		 (list 'frame f-title 'keymap f-title)
 		 (mapcar
 		  (lambda (frame)
 		    (nconc
 		     (list (frame-parameter frame 'name)
-			   (frame-parameter frame 'name)
-			   (cons nil nil))
+			   (frame-parameter frame 'name))
                      `(lambda ()
                         (interactive) (menu-bar-select-frame ,frame))))
 		  frames)))))

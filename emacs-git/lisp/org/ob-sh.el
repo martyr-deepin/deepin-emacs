@@ -1,6 +1,6 @@
 ;;; ob-sh.el --- org-babel functions for shell evaluation
 
-;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -123,7 +123,13 @@ Emacs-lisp table, otherwise return the results as a string."
   (when (and session (not (string= session "none")))
     (save-window-excursion
       (or (org-babel-comint-buffer-livep session)
-          (progn (shell session) (get-buffer (current-buffer)))))))
+          (progn
+	    (shell session)
+	    ;; Needed for Emacs 23 since the marker is initially
+	    ;; undefined and the filter functions try to use it without
+	    ;; checking.
+	    (set-marker comint-last-output-start (point))
+	    (get-buffer (current-buffer)))))))
 
 (defvar org-babel-sh-eoe-indicator "echo 'org_babel_sh_eoe'"
   "String to indicate that evaluation has completed.")

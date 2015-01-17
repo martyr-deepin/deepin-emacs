@@ -1,6 +1,6 @@
 ;; idlwave.el --- IDL editing mode for GNU Emacs
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Authors: J.D. Smith <jdsmith@as.arizona.edu>
 ;;          Carsten Dominik <dominik@science.uva.nl>
@@ -44,7 +44,7 @@
 ;;
 ;; New versions of IDLWAVE, documentation, and more information
 ;; available from:
-;;                 http://idlwave.org
+;;                 http://github.com/jdtsmith/idlwave
 ;;
 ;; INSTALLATION
 ;; ============
@@ -64,7 +64,7 @@
 ;; The newest version of this file is available from the maintainer's
 ;; Webpage:
 ;;
-;;   http://idlwave.org
+;;   http://github.com/jdtsmith/idlwave
 ;;
 ;; DOCUMENTATION
 ;; =============
@@ -179,7 +179,7 @@
   "Major mode for editing IDL .pro files."
   :tag "IDLWAVE"
   :link '(url-link :tag "Home Page"
-		   "http://idlwave.org")
+		   "http://github.com/jdtsmith/idlwave")
   :link '(emacs-commentary-link :tag "Commentary in idlw-shell.el"
 				"idlw-shell.el")
   :link '(emacs-commentary-link :tag "Commentary in idlwave.el" "idlwave.el")
@@ -1878,7 +1878,8 @@ The main features of this mode are
    Info documentation for this package is available.  Use
    \\[idlwave-info] to display (complain to your sysadmin if that does
    not work).  For Postscript, PDF, and HTML versions of the
-   documentation, check IDLWAVE's homepage at URL `http://idlwave.org'.
+   documentation, check IDLWAVE's homepage at URL
+   `http://github.com/jdtsmith/idlwave'.
    IDLWAVE has customize support - see the group `idlwave'.
 
 10.Keybindings
@@ -3712,7 +3713,7 @@ expression to enter.
 The lines containing S1 and S2 are reindented using `indent-region'
 unless the optional second argument NOINDENT is non-nil."
   (if (derived-mode-p 'idlwave-shell-mode)
-      ;; This is a gross hack to avoit template abbrev expansion
+      ;; This is a gross hack to avoid template abbrev expansion
       ;; in the shell.  FIXME: This is a dirty hack.
       (if (and (eq this-command 'self-insert-command)
 	       (equal last-abbrev-location (point)))

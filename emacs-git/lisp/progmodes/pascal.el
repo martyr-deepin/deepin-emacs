@@ -1,6 +1,6 @@
 ;;; pascal.el --- major mode for editing pascal source in Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2015 Free Software Foundation, Inc.
 
 ;; Author: Espen Skoglund <esk@gnu.org>
 ;; Keywords: languages
@@ -26,8 +26,8 @@
 ;; =====
 
 ;; Emacs should enter Pascal mode when you find a Pascal source file.
-;; When you have entered Pascal mode, you may get more info by pressing
-;; C-h m. You may also get online help describing various functions by:
+;; When you have entered Pascal mode, you can get more info by pressing
+;; C-h m.  You can also get help describing various functions by:
 ;; C-h f <Name of function you want described>
 
 ;; If you want to customize Pascal mode to fit you better, you may add

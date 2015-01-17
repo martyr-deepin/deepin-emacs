@@ -1,5 +1,5 @@
 /* GNU Emacs routines to deal with syntax tables; also word and list parsing.
-   Copyright (C) 1985, 1987, 1993-1995, 1997-1999, 2001-2014 Free
+   Copyright (C) 1985, 1987, 1993-1995, 1997-1999, 2001-2015 Free
    Software Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -136,9 +136,6 @@ enum
     ST_COMMENT_STYLE = 256 + 1,
     ST_STRING_STYLE = 256 + 2
   };
-
-static Lisp_Object Qsyntax_table_p;
-static Lisp_Object Qsyntax_table, Qscan_error;
 
 /* This is the internal form of the parse state used in parse-partial-sexp.  */
 
@@ -530,17 +527,6 @@ find_defun_start (ptrdiff_t pos, ptrdiff_t pos_byte)
 {
   ptrdiff_t opoint = PT, opoint_byte = PT_BYTE;
 
-  if (!open_paren_in_column_0_is_defun_start)
-    {
-      find_start_value = BEGV;
-      find_start_value_byte = BEGV_BYTE;
-      find_start_buffer = current_buffer;
-      find_start_modiff = MODIFF;
-      find_start_begv = BEGV;
-      find_start_pos = pos;
-      return BEGV;
-    }
-
   /* Use previous finding, if it's valid and applies to this inquiry.  */
   if (current_buffer == find_start_buffer
       /* Reuse the defun-start even if POS is a little farther on.
@@ -551,6 +537,13 @@ find_defun_start (ptrdiff_t pos, ptrdiff_t pos_byte)
       && BEGV == find_start_begv
       && MODIFF == find_start_modiff)
     return find_start_value;
+
+  if (!open_paren_in_column_0_is_defun_start)
+    {
+      find_start_value = BEGV;
+      find_start_value_byte = BEGV_BYTE;
+      goto found;
+    }
 
   /* Back up to start of line.  */
   scan_newline (pos, pos_byte, BEGV, BEGV_BYTE, -1, 1);
@@ -582,12 +575,13 @@ find_defun_start (ptrdiff_t pos, ptrdiff_t pos_byte)
   /* Record what we found, for the next try.  */
   find_start_value = PT;
   find_start_value_byte = PT_BYTE;
+  TEMP_SET_PT_BOTH (opoint, opoint_byte);
+
+ found:
   find_start_buffer = current_buffer;
   find_start_modiff = MODIFF;
   find_start_begv = BEGV;
   find_start_pos = pos;
-
-  TEMP_SET_PT_BOTH (opoint, opoint_byte);
 
   return find_start_value;
 }
@@ -828,7 +822,7 @@ back_comment (ptrdiff_t from, ptrdiff_t from_byte, ptrdiff_t stop,
     {
       from = comment_end;
       from_byte = comment_end_byte;
-      UPDATE_SYNTAX_TABLE_FORWARD (comment_end - 1);
+      UPDATE_SYNTAX_TABLE_FORWARD (comment_end);
     }
   /* If comstart_pos is set and we get here (ie. didn't jump to `lossage'
      or `done'), then we've found the beginning of the non-nested comment.  */
@@ -838,10 +832,10 @@ back_comment (ptrdiff_t from, ptrdiff_t from_byte, ptrdiff_t stop,
       from_byte = comstart_byte;
       UPDATE_SYNTAX_TABLE_FORWARD (from - 1);
     }
-  else
+  else lossage:
     {
       struct lisp_parse_state state;
-    lossage:
+      bool adjusted = true;
       /* We had two kinds of string delimiters mixed up
 	 together.  Decode this going forwards.
 	 Scan fwd from a known safe place (beginning-of-defun)
@@ -852,6 +846,7 @@ back_comment (ptrdiff_t from, ptrdiff_t from_byte, ptrdiff_t stop,
 	{
 	  defun_start = find_defun_start (comment_end, comment_end_byte);
 	  defun_start_byte = find_start_value_byte;
+	  adjusted = (defun_start > BEGV);
 	}
       do
 	{
@@ -860,6 +855,16 @@ back_comment (ptrdiff_t from, ptrdiff_t from_byte, ptrdiff_t stop,
 			      comment_end, TYPE_MINIMUM (EMACS_INT),
 			      0, Qnil, 0);
 	  defun_start = comment_end;
+	  if (!adjusted)
+	    {
+	      adjusted = true;
+	      find_start_value
+		= CONSP (state.levelstarts) ? XINT (XCAR (state.levelstarts))
+		: state.thislevelstart >= 0 ? state.thislevelstart
+		: find_start_value;
+	      find_start_value_byte = CHAR_TO_BYTE (find_start_value);
+	    }
+
 	  if (state.incomment == (comnested ? 1 : -1)
 	      && state.comstyle == comstyle)
 	    from = state.comstr_start;
@@ -1223,7 +1228,7 @@ DEFUN ("internal-describe-syntax-value", Finternal_describe_syntax_value,
   syntax_code = XINT (first) & INT_MAX;
   code = syntax_code & 0377;
   start1 = SYNTAX_FLAGS_COMSTART_FIRST (syntax_code);
-  start2 = SYNTAX_FLAGS_COMSTART_SECOND (syntax_code);;
+  start2 = SYNTAX_FLAGS_COMSTART_SECOND (syntax_code);
   end1 = SYNTAX_FLAGS_COMEND_FIRST (syntax_code);
   end2 = SYNTAX_FLAGS_COMEND_SECOND (syntax_code);
   prefix = SYNTAX_FLAGS_PREFIX (syntax_code);
@@ -1559,6 +1564,7 @@ skip_chars (bool forwardp, Lisp_Object string, Lisp_Object lim,
   const unsigned char *str;
   int len;
   Lisp_Object iso_classes;
+  USE_SAFE_ALLOCA;
 
   CHECK_STRING (string);
   iso_classes = Qnil;
@@ -1691,7 +1697,7 @@ skip_chars (bool forwardp, Lisp_Object string, Lisp_Object lim,
 	  memcpy (himap, fastmap + 0200, 0200);
 	  himap[0200] = 0;
 	  memset (fastmap + 0200, 0, 0200);
-	  char_ranges = alloca (sizeof *char_ranges * 128 * 2);
+	  SAFE_NALLOCA (char_ranges, 2, 128);
 	  i = 0;
 
 	  while ((p1 = memchr (himap + i, 1, 0200 - i)))
@@ -1715,7 +1721,7 @@ skip_chars (bool forwardp, Lisp_Object string, Lisp_Object lim,
     }
   else				/* STRING is multibyte */
     {
-      char_ranges = alloca (sizeof *char_ranges * SCHARS (string) * 2);
+      SAFE_NALLOCA (char_ranges, 2, SCHARS (string));
 
       while (i_byte < size_byte)
 	{
@@ -2024,6 +2030,7 @@ skip_chars (bool forwardp, Lisp_Object string, Lisp_Object lim,
     SET_PT_BOTH (pos, pos_byte);
     immediate_quit = 0;
 
+    SAFE_FREE ();
     return make_number (PT - start_point);
   }
 }
@@ -2849,10 +2856,13 @@ scan_lists (EMACS_INT from, EMACS_INT count, EMACS_INT depth, bool sexpflag)
 	    case Smath:
 	      if (!sexpflag)
 		break;
-	      temp_pos = dec_bytepos (from_byte);
-	      UPDATE_SYNTAX_TABLE_BACKWARD (from - 1);
-	      if (from != stop && c == FETCH_CHAR_AS_MULTIBYTE (temp_pos))
-		DEC_BOTH (from, from_byte);
+	      if (from > BEGV)
+		{
+		  temp_pos = dec_bytepos (from_byte);
+		  UPDATE_SYNTAX_TABLE_BACKWARD (from - 1);
+		  if (from != stop && c == FETCH_CHAR_AS_MULTIBYTE (temp_pos))
+		    DEC_BOTH (from, from_byte);
+		}
 	      if (mathexit)
 		{
 		  mathexit = 0;
@@ -3486,11 +3496,6 @@ init_syntax_once (void)
 
   /* This has to be done here, before we call Fmake_char_table.  */
   DEFSYM (Qsyntax_table, "syntax-table");
-
-  /* This variable is DEFSYMed in alloc.c and not initialized yet, so
-     intern it here.  NOTE: you must guarantee that init_syntax_once
-     is called before all other users of this variable.  */
-  Qchar_table_extra_slots = intern_c_string ("char-table-extra-slots");
 
   /* Create objects which can be shared among syntax tables.  */
   Vsyntax_code_object = make_uninit_vector (Smax);

@@ -1,6 +1,7 @@
 ;;; startup.el --- process Emacs shell arguments  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1992, 1994-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1992, 1994-2015 Free Software Foundation,
+;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -42,20 +43,21 @@
   "Buffer to show after starting Emacs.
 If the value is nil and `inhibit-startup-screen' is nil, show the
 startup screen.  If the value is a string, switch to a buffer
-visiting the file or directory specified by that string.  If the
-value is a function, switch to the buffer returned by that
-function.  If t, open the `*scratch*' buffer.
+visiting the file or directory that the string specifies.  If the
+value is a function, call it with no arguments and switch to the buffer
+that it returns.  If t, open the `*scratch*' buffer.
 
-A string value also causes emacsclient to open the specified file
-or directory when no target file is specified."
+If you use `emacsclient' with no target file, then it obeys any
+string or function value that this variable has."
   :type '(choice
 	  (const     :tag "Startup screen" nil)
 	  (directory :tag "Directory" :value "~/")
 	  (file      :tag "File" :value "~/.emacs")
-	  (const     :tag "Notes buffer" remember-notes)
+	  ;; Note sure about hard-coding this as an option...
+	  (const     :tag "Remember Mode notes buffer" remember-notes)
 	  (function  :tag "Function")
 	  (const     :tag "Lisp scratch buffer" t))
-  :version "24.4"
+  :version "23.1"
   :group 'initialization)
 
 (defcustom inhibit-startup-screen nil
@@ -303,9 +305,12 @@ keys for use under X.  It is used in a fashion analogous to the
 environment variable TERM.")
 
 (defvar window-setup-hook nil
-  "Normal hook run to initialize window system display.
-Emacs runs this hook after processing the command line arguments and loading
-the user's init file.")
+  "Normal hook run after loading init files and handling the command line.
+This is very similar to `emacs-startup-hook'.  The only difference
+is that this hook runs after frame parameters have been set up in
+response to any settings from your init file.  Unless this matters
+to you, use `emacs-startup-hook' instead.  (The name of this hook
+is due to historical reasons, and does not reflect its purpose very well.)")
 
 (defcustom initial-major-mode 'lisp-interaction-mode
   "Major mode command symbol to use for the initial `*scratch*' buffer."
@@ -353,6 +358,8 @@ this variable usefully is to set it while building and dumping Emacs."
   :initialize 'custom-initialize-default
   :set (lambda (_variable _value)
 	  (error "Customizing `site-run-file' does not work")))
+
+(make-obsolete-variable 'system-name "use (system-name) instead" "25.1")
 
 (defcustom mail-host-address nil
   "Name of this machine, for purposes of naming users.
@@ -417,21 +424,6 @@ Warning Warning!!!  Pure space overflow    !!!Warning Warning
   :type 'directory
   :initialize 'custom-initialize-delay)
 
-(defvar package--builtin-versions
-  ;; Mostly populated by loaddefs.el via autoload-builtin-package-versions.
-  (purecopy `((emacs . ,(version-to-list emacs-version))))
-  "Alist giving the version of each versioned builtin package.
-I.e. each element of the list is of the form (NAME . VERSION) where
-NAME is the package name as a symbol, and VERSION is its version
-as a list.")
-
-(defun package--description-file (dir)
-  (concat (let ((subdir (file-name-nondirectory
-                         (directory-file-name dir))))
-            (if (string-match "\\([^.].*?\\)-\\([0-9]+\\(?:[.][0-9]+\\|\\(?:pre\\|beta\\|alpha\\)[0-9]+\\)*\\)" subdir)
-                (match-string 1 subdir) subdir))
-          "-pkg.el"))
-
 (defun normal-top-level-add-subdirs-to-load-path ()
   "Add all subdirectories of `default-directory' to `load-path'.
 More precisely, this uses only the subdirectories whose names
@@ -493,7 +485,7 @@ It sets `command-line-processed', processes the command-line,
 reads the initialization files, etc.
 It is the default value of the variable `top-level'."
   (if command-line-processed
-      (message "Back to top level.")
+      (message internal--top-level-message)
     (setq command-line-processed t)
 
     ;; Look in each dir in load-path for a subdirs.el file.  If we
@@ -715,20 +707,17 @@ It is the default value of the variable `top-level'."
 (defconst tool-bar-images-pixel-height 24
   "Height in pixels of images in the tool-bar.")
 
-(defvar tool-bar-originally-present nil
-  "Non-nil if tool-bars are present before user and site init files are read.")
-
-(defvar handle-args-function-alist '((nil . tty-handle-args))
-  "Functions for processing window-system dependent command-line arguments.
+(gui-method-declare handle-args-function #'tty-handle-args
+  "Method for processing window-system dependent command-line arguments.
 Window system startup files should add their own function to this
-alist, which should parse the command line arguments.  Those
+method, which should parse the command line arguments.  Those
 pertaining to the window system should be processed and removed
 from the returned command line.")
 
-(defvar window-system-initialization-alist '((nil . ignore))
-  "Alist of window-system initialization functions.
-Window-system startup files should add their own initialization
-function to this list.  The function should take no arguments,
+(gui-method-declare window-system-initialization #'ignore
+  "Method for window-system initialization.
+Window-system startup files should add their own implementation
+to this method.  The function should take no arguments,
 and initialize the window system environment to prepare for
 opening the first frame (e.g. open a connection to an X server).")
 
@@ -964,13 +953,11 @@ please check its value")
       ;; Process window-system specific command line parameters.
       (setq command-line-args
 	    (funcall
-	     (or (cdr (assq initial-window-system handle-args-function-alist))
-		 (error "Unsupported window system `%s'" initial-window-system))
+             (gui-method handle-args-function initial-window-system)
 	     command-line-args))
       ;; Initialize the window system. (Open connection, etc.)
       (funcall
-       (or (cdr (assq initial-window-system window-system-initialization-alist))
-	   (error "Unsupported window system `%s'" initial-window-system)))
+       (gui-method window-system-initialization initial-window-system))
       (put initial-window-system 'window-system-initialized t))
     ;; If there was an error, print the error message and exit.
     (error
@@ -1037,18 +1024,6 @@ please check its value")
   ;; window-system-initialization-alist.
   (or (eq initial-window-system 'pc)
       (tty-register-default-colors))
-
-  ;; Record whether the tool-bar is present before the user and site
-  ;; init files are processed.  frame-notice-user-settings uses this
-  ;; to determine if the tool-bar has been disabled by the init files,
-  ;; and the frame needs to be resized.
-  (when (fboundp 'frame-notice-user-settings)
-    (let ((tool-bar-lines (or (assq 'tool-bar-lines initial-frame-alist)
-                              (assq 'tool-bar-lines default-frame-alist))))
-      (setq tool-bar-originally-present
-            (and tool-bar-lines
-                 (cdr tool-bar-lines)
-                 (not (eq 0 (cdr tool-bar-lines)))))))
 
   (let ((old-scalable-fonts-allowed scalable-fonts-allowed)
 	(old-face-ignored-fonts face-ignored-fonts))
@@ -1178,18 +1153,25 @@ please check its value")
 		(funcall inner)
 		(setq init-file-had-error nil))
 	    (error
-	     (display-warning
-	      'initialization
-	      (format "An error occurred while loading `%s':\n\n%s%s%s\n\n\
+	     ;; Postpone displaying the warning until all hooks
+	     ;; in `after-init-hook' like `desktop-read' will finalize
+	     ;; possible changes in the window configuration.
+	     (add-hook
+	      'after-init-hook
+	      (lambda ()
+		(display-warning
+		 'initialization
+		 (format "An error occurred while loading `%s':\n\n%s%s%s\n\n\
 To ensure normal operation, you should investigate and remove the
 cause of the error in your initialization file.  Start Emacs with
 the `--debug-init' option to view a complete error backtrace."
-		      user-init-file
-		      (get (car error) 'error-message)
-		      (if (cdr error) ": " "")
-		      (mapconcat (lambda (s) (prin1-to-string s t))
-                                 (cdr error) ", "))
-	      :warning)
+			 user-init-file
+			 (get (car error) 'error-message)
+			 (if (cdr error) ": " "")
+			 (mapconcat (lambda (s) (prin1-to-string s t))
+				    (cdr error) ", "))
+		 :warning))
+	      t)
 	     (setq init-file-had-error t))))
 
       (if (and deactivate-mark transient-mark-mode)
@@ -1307,7 +1289,7 @@ the `--debug-init' option to view a complete error backtrace."
   (let (warned)
     (dolist (dir load-path)
       (and (not warned)
-	   (string-match-p "/[._]emacs\\.d/?\\'" dir)
+	   (stringp dir)
 	   (string-equal (file-name-as-directory (expand-file-name dir))
 			 (expand-file-name user-emacs-directory))
 	   (setq warned t)
@@ -1315,9 +1297,10 @@ the `--debug-init' option to view a complete error backtrace."
 			    (format "Your `load-path' seems to contain
 your `.emacs.d' directory: %s\n\
 This is likely to cause problems...\n\
-Consider using a subdirectory instead, e.g.: %s" dir
-(expand-file-name "lisp" user-emacs-directory))
-			     :warning))))
+Consider using a subdirectory instead, e.g.: %s"
+                                    dir (expand-file-name
+                                         "lisp" user-emacs-directory))
+                            :warning))))
 
   ;; If -batch, terminate after processing the command options.
   (if noninteractive (kill-emacs t))
@@ -1483,9 +1466,7 @@ Each element in the list should be a list of strings or pairs
 	      (goto-char (point-min))))
      "\tMany people have contributed code included in GNU Emacs\n"
      :link ("Contributing"
-	    ,(lambda (_button)
-	      (view-file (expand-file-name "CONTRIBUTE" data-directory))
-	      (goto-char (point-min))))
+	    ,(lambda (_button) (info "(emacs)Contributing")))
      "\tHow to contribute improvements to Emacs\n"
      "\n"
      :link ("GNU and Freedom" ,(lambda (_button) (describe-gnu-project)))
@@ -1512,7 +1493,10 @@ Each element in the list should be a list of strings or pairs
 	      (title (with-temp-buffer
 		       (insert-file-contents
 			(expand-file-name tut tutorial-directory)
-			nil 0 256)
+			;; Read the entire file, to make sure any
+			;; coding cookies and other local variables
+			;; get acted upon.
+			nil)
 		       (search-forward ".")
 		       (buffer-substring (point-min) (1- (point))))))
 	 ;; If there is a specific tutorial for the current language
@@ -1801,7 +1785,7 @@ we put it on this frame."
   (let (chosen-frame)
     ;; MS-Windows needs this to have a chance to make the initial
     ;; frame visible.
-    (if (eq system-type 'windows-nt)
+    (if (eq (window-system) 'w32)
 	(sit-for 0 t))
     (dolist (frame (append (frame-list) (list (selected-frame))))
       (if (and (frame-visible-p frame)
@@ -2056,9 +2040,7 @@ Type \\[describe-distribution] for information on "))
 
   (insert-button "Contributing"
 		 'action
-		 (lambda (_button)
-		   (view-file (expand-file-name "CONTRIBUTE" data-directory))
-		   (goto-char (point-min)))
+		 (lambda (_button) (info "(emacs)Contributing"))
 		 'follow-link t)
   (insert "\tHow to contribute improvements to Emacs\n\n")
 

@@ -1,6 +1,6 @@
 ;;; rcirc.el --- default, simple IRC client          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2005-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2015 Free Software Foundation, Inc.
 
 ;; Author: Ryan Yeske <rcyeske@gmail.com>
 ;; Maintainers: Ryan Yeske <rcyeske@gmail.com>,
@@ -145,11 +145,13 @@ for connections using SSL/TLS."
 
 (defcustom rcirc-fill-column nil
   "Column beyond which automatic line-wrapping should happen.
-If nil, use value of `fill-column'.  If 'frame-width, use the
-maximum frame width."
-  :type '(choice (const :tag "Value of `fill-column'")
-		 (const :tag "Full frame width" frame-width)
-		 (integer :tag "Number of columns"))
+If nil, use value of `fill-column'.
+If a function (e.g., `frame-text-width' or `window-text-width'),
+call it to compute the number of columns."
+  :risky t                              ; can get funcalled
+  :type '(choice (const :tag "Value of `fill-column'" nil)
+		 (integer :tag "Number of columns")
+		 (function :tag "Function returning the number of columns"))
   :group 'rcirc)
 
 (defcustom rcirc-fill-prefix nil
@@ -597,10 +599,10 @@ If ARG is non-nil, instead prompt for connection parameters."
   `(with-current-buffer rcirc-server-buffer
      ,@body))
 
-(defun rcirc-float-time ()
+(defalias 'rcirc-float-time
   (if (featurep 'xemacs)
-      (time-to-seconds (current-time))
-    (float-time)))
+      'time-to-seconds
+    'float-time))
 
 (defun rcirc-prompt-for-encryption (server-plist)
   "Prompt the user for the encryption method to use.
@@ -658,6 +660,16 @@ is non-nil."
   "Hook functions called when the process sentinel is called.
 Functions are called with PROCESS and SENTINEL arguments.")
 
+(defcustom rcirc-reconnect-delay 0
+  "The minimum interval in seconds between reconnect attempts.
+When 0, do not auto-reconnect."
+  :version "25.1"
+  :type 'integer
+  :group 'rcirc)
+
+(defvar rcirc-last-connect-time nil
+  "The last time the buffer was connected.")
+
 (defun rcirc-sentinel (process sentinel)
   "Called when PROCESS receives SENTINEL."
   (let ((sentinel (replace-regexp-in-string "\n" "" sentinel)))
@@ -669,8 +681,17 @@ Functions are called with PROCESS and SENTINEL arguments.")
 		       (format "%s: %s (%S)"
 			       (process-name process)
 			       sentinel
-			       (process-status process)) (not rcirc-target))
+			       (process-status process))
+                       (not rcirc-target))
 	  (rcirc-disconnect-buffer)))
+      (when (and (string= sentinel "deleted")
+                 (< 0 rcirc-reconnect-delay))
+        (let ((now (current-time)))
+          (when (or (null rcirc-last-connect-time)
+                    (< rcirc-reconnect-delay
+                       (float-time (time-subtract now rcirc-last-connect-time))))
+            (setq rcirc-last-connect-time now)
+            (rcirc-cmd-reconnect nil))))
       (run-hook-with-args 'rcirc-sentinel-functions process sentinel))))
 
 (defun rcirc-disconnect-buffer (&optional buffer)
@@ -784,11 +805,11 @@ Function is called with PROCESS, COMMAND, SENDER, ARGS and LINE.")
 (defun rcirc-buffer-process (&optional buffer)
   "Return the process associated with channel BUFFER.
 With no argument or nil as argument, use the current buffer."
-  (let ((buffer (or buffer (if (buffer-live-p rcirc-server-buffer)
-			       rcirc-server-buffer
-			     (error "Server buffer deleted")))))
-    (or (with-current-buffer buffer rcirc-process)
-	rcirc-process)))
+  (let ((buffer (or buffer (and (buffer-live-p rcirc-server-buffer)
+				rcirc-server-buffer))))
+    (if buffer
+        (with-current-buffer buffer rcirc-process)
+      rcirc-process)))
 
 (defun rcirc-server-name (process)
   "Return PROCESS server name, given by the 001 response."
@@ -1007,6 +1028,7 @@ This number is independent of the number of lines in the buffer.")
   (setq-local fill-paragraph-function 'rcirc-fill-paragraph)
   (setq-local rcirc-recent-quit-alist nil)
   (setq-local rcirc-current-line 0)
+  (setq-local rcirc-last-connect-time (current-time))
 
   (use-hard-newlines t)
   (setq-local rcirc-short-buffer-name nil)
@@ -1884,7 +1906,9 @@ Uninteresting lines are those whose responses are listed in
 	(message "Rcirc-Omit mode enabled"))
     (remove-from-invisibility-spec '(rcirc-omit . nil))
     (message "Rcirc-Omit mode disabled"))
-    (recenter (when (> (point) rcirc-prompt-start-marker) -1)))
+  (dolist (window (get-buffer-window-list (current-buffer)))
+    (with-selected-window window
+      (recenter (when (> (point) rcirc-prompt-start-marker) -1)))))
 
 (defun rcirc-switch-to-server-buffer ()
   "Switch to the server buffer associated with current channel buffer."
@@ -2511,11 +2535,10 @@ If ARG is given, opens the URL in a new browser window."
     (let ((fill-prefix
 	   (or rcirc-fill-prefix
 	       (make-string (- (point) (line-beginning-position)) ?\s)))
-	  (fill-column (- (cond ((eq rcirc-fill-column 'frame-width)
-				 (1- (frame-width)))
-				(rcirc-fill-column
-				 rcirc-fill-column)
-				(t fill-column))
+	  (fill-column (- (cond ((null rcirc-fill-column) fill-column)
+                                ((functionp rcirc-fill-column)
+				 (funcall rcirc-fill-column))
+				(t rcirc-fill-column))
 			  ;; make sure ... doesn't cause line wrapping
 			  3)))
       (fill-region (point) (point-max) nil t))))

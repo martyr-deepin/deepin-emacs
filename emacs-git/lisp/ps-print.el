@@ -1,6 +1,6 @@
 ;;; ps-print.el --- print text from the buffer as PostScript
 
-;; Copyright (C) 1993-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2015 Free Software Foundation, Inc.
 
 ;; Author: Jim Thompson (was <thompson@wg2.waii.com>)
 ;;	Jacques Duthen (was <duthen@cegelec-red.fr>)
@@ -20,7 +20,7 @@ Emacs without changes to the version number.  When reporting bugs, please also
 report the version of Emacs, if any, that ps-print was distributed with.
 
 Please send all bug fixes and enhancements to
-	Vinicius Jose Latorre <viniciusjl@ig.com.br>.")
+	bug-gnu-emacs@gnu.org and Vinicius Jose Latorre <viniciusjl@ig.com.br>.")
 
 ;; This file is part of GNU Emacs.
 
@@ -3822,6 +3822,7 @@ If `ps-prefix-quote' is nil, it's set to t after generating string."
 
 (defun ps-get (alist-sym key)
   "Return element from association list ALIST-SYM which car is `eq' to KEY."
+  (declare (obsolete alist-get "25.1"))
   (assq key (symbol-value alist-sym)))
 
 
@@ -3829,6 +3830,7 @@ If `ps-prefix-quote' is nil, it's set to t after generating string."
   "Store element (KEY . VALUE) into association list ALIST-SYM.
 If KEY already exists in ALIST-SYM, modify cdr to VALUE.
 It can be retrieved with `(ps-get ALIST-SYM KEY)'."
+  (declare (obsolete "use (setf (alist-get ..) ..) instead" "25.1"))
   (let ((elt: (assq key (symbol-value alist-sym)))) ; to avoid name conflict
     (if elt:
 	(setcdr elt: value)
@@ -3839,6 +3841,7 @@ It can be retrieved with `(ps-get ALIST-SYM KEY)'."
 
 (defun ps-del (alist-sym key)
   "Delete by side effect element KEY from association list ALIST-SYM."
+  (declare (obsolete "use (setf (alist-get k alist nil t) nil) instead" "25.1"))
   (let ((a:list: (symbol-value alist-sym)) ; to avoid name conflict
 	old)
     (while a:list:
@@ -6589,7 +6592,7 @@ If FACE is not a valid face name, use default face."
 ;; To make this file smaller, some commands go in a separate file.
 ;; But autoload them here to make the separation invisible.
 
-;;;### (autoloads nil "ps-mule" "ps-mule.el" "173235d6520575a877c25be437fb9e5f")
+;;;### (autoloads nil "ps-mule" "ps-mule.el" "231b07356e5a37ebf517c613a3a12bba")
 ;;; Generated autoloads from ps-mule.el
 
 (defvar ps-multibyte-buffer nil "\

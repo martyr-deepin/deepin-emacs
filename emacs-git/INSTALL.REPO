@@ -12,8 +12,6 @@ autoconf  - at least the version specified near the start of
   configure.ac (in the AC_PREREQ command).
 automake  - at least the version specified near the start of
   configure.ac (in the AM_INIT_AUTOMAKE command).
-pkg-config - at least version specified in the PKG_PROG_PKG_CONFIG
-  command in configure.ac
 makeinfo  - not strictly necessary, but highly recommended, so that
   you can build the manuals.
 
@@ -54,11 +52,6 @@ If either of the above partial procedures fails, try 'make bootstrap'.
 If CPU time is not an issue, 'make bootstrap' is the most thorough way
 to rebuild, and avoid any spurious problems.
 
-Users of non-Posix systems (MS-Windows, etc.) should run the
-platform-specific configuration scripts ('nt/configure.bat',
-'config.bat', etc.) before 'make'; the rest of the procedure is
-applicable to those systems as well.
-
 Because the repository version of Emacs is a work in progress, it will
 sometimes fail to build.  Please wait a day or so (and check the
 archives of the emacs-buildstatus, emacs-devel, and bug-gnu-emacs
@@ -69,7 +62,7 @@ never platform-specific.
 
 
 
-Copyright (C) 2002-2014 Free Software Foundation, Inc.
+Copyright (C) 2002-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 

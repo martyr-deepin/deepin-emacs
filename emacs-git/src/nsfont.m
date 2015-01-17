@@ -1,6 +1,6 @@
 /* Font back-end driver for the NeXT/Open/GNUstep and MacOSX window system.
    See font.h
-   Copyright (C) 2006-2014 Free Software Foundation, Inc.
+   Copyright (C) 2006-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -45,11 +45,6 @@ Author: Adrian Robert (arobert@cogsci.ucsd.edu)
 #define NSFONT_TRACE 0
 #define LCD_SMOOTHING_MARGIN 2
 
-extern Lisp_Object Qns;
-extern Lisp_Object Qnormal, Qbold, Qitalic;
-static Lisp_Object Qapple, Qroman, Qmedium;
-static Lisp_Object Qcondensed, Qexpanded;
-extern Lisp_Object Qappend;
 extern float ns_antialias_threshold;
 
 
@@ -627,8 +622,8 @@ static Lisp_Object nsfont_open (struct frame *f, Lisp_Object font_entity,
 static void nsfont_close (struct font *font);
 static int nsfont_has_char (Lisp_Object entity, int c);
 static unsigned int nsfont_encode_char (struct font *font, int c);
-static int nsfont_text_extents (struct font *font, unsigned int *code,
-                                int nglyphs, struct font_metrics *metrics);
+static void nsfont_text_extents (struct font *font, unsigned int *code,
+				 int nglyphs, struct font_metrics *metrics);
 static int nsfont_draw (struct glyph_string *s, int from, int to, int x, int y,
                         bool with_background);
 
@@ -649,7 +644,7 @@ struct font_driver nsfont_driver =
     nsfont_encode_char,
     nsfont_text_extents,
     nsfont_draw,
-    /* excluded: get_bitmap, free_bitmap, get_outline, free_outline,
+    /* excluded: get_bitmap, free_bitmap,
                  anchor_point, otf_capability, otf_driver,
       		 start_for_frame, end_for_frame, shape */
   };
@@ -830,9 +825,6 @@ nsfont_open (struct frame *f, Lisp_Object font_entity, int pixel_size)
   font->baseline_offset = 0;
   font->relative_compose = 0;
 
-  font->props[FONT_FORMAT_INDEX] = Qns;
-  font->props[FONT_FILE_INDEX] = Qnil;
-
   {
     const char *fontName = [[nsfont fontName] UTF8String];
 
@@ -945,6 +937,8 @@ nsfont_close (struct font *font)
 	  xfree (font_info->glyphs[i]);
 	  xfree (font_info->metrics[i]);
 	}
+      xfree (font_info->glyphs);
+      xfree (font_info->metrics);
       [font_info->nsfont release];
 #ifdef NS_IMPL_COCOA
       CGFontRelease (font_info->cgfont);
@@ -989,9 +983,9 @@ nsfont_encode_char (struct font *font, int c)
 /* Perform the size computation of glyphs of FONT and fill in members
    of METRICS.  The glyphs are specified by their glyph codes in
    CODE (length NGLYPHS). */
-static int
-nsfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
-                     struct font_metrics *metrics)
+static void
+nsfont_text_extents (struct font *font, unsigned int *code,
+		     int nglyphs, struct font_metrics *metrics)
 {
   struct nsfont_info *font_info = (struct nsfont_info *)font;
   struct font_metrics *pcm;
@@ -1001,7 +995,7 @@ nsfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
 
   memset (metrics, 0, sizeof (struct font_metrics));
 
-  for (i =0; i<nglyphs; i++)
+  for (i = 0; i < nglyphs; i++)
     {
       /* get metrics for this glyph, filling cache if need be */
       /* TODO: get metrics for whole string from an NSLayoutManager
@@ -1025,8 +1019,6 @@ nsfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
     }
 
   metrics->width = totalWidth;
-
-  return totalWidth; /* not specified in doc, but xfont.c does it */
 }
 
 
@@ -1037,14 +1029,18 @@ nsfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
 static int
 nsfont_draw (struct glyph_string *s, int from, int to, int x, int y,
              bool with_background)
-/* NOTE: focus and clip must be set
-     also, currently assumed (true in nsterm.m call) from ==0, to ==nchars */
+/* NOTE: focus and clip must be set */
 {
   static unsigned char cbuf[1024];
   unsigned char *c = cbuf;
 #ifdef NS_IMPL_GNUSTEP
+#if GNUSTEP_GUI_MAJOR_VERSION > 0 || GNUSTEP_GUI_MINOR_VERSION > 22
+  static CGFloat advances[1024];
+  CGFloat *adv = advances;
+#else
   static float advances[1024];
   float *adv = advances;
+#endif
 #else
   static CGSize advances[1024];
   CGSize *adv = advances;
@@ -1056,7 +1052,6 @@ nsfont_draw (struct glyph_string *s, int from, int to, int x, int y,
   unsigned short *t = s->char2b;
   int i, len, flags;
   char isComposite = s->first_glyph->type == COMPOSITE_GLYPH;
-  int end = isComposite ? s->cmp_to : s->nchars;
 
   block_input ();
 
@@ -1098,8 +1093,8 @@ nsfont_draw (struct glyph_string *s, int from, int to, int x, int y,
     int cwidth, twidth = 0;
     int hi, lo;
     /* FIXME: composition: no vertical displacement is considered. */
-    t += s->cmp_from; /* advance into composition */
-    for (i = s->cmp_from; i < end; i++, t++)
+    t += from; /* advance into composition */
+    for (i = from; i < to; i++, t++)
       {
         hi = (*t & 0xFF00) >> 8;
         lo = *t & 0x00FF;
@@ -1193,7 +1188,7 @@ nsfont_draw (struct glyph_string *s, int from, int to, int x, int y,
 
 
   /* set up for character rendering */
-  r.origin.y = s->ybase;
+  r.origin.y = y;
 
   col = (NS_FACE_FOREGROUND (face) != 0
          ? ns_lookup_indexed_color (NS_FACE_FOREGROUND (face), s->f)
@@ -1275,13 +1270,13 @@ nsfont_draw (struct glyph_string *s, int from, int to, int x, int y,
     [col set];
 
     CGContextSetTextPosition (gcontext, r.origin.x, r.origin.y);
-    CGContextShowGlyphsWithAdvances (gcontext, s->char2b + s->cmp_from,
+    CGContextShowGlyphsWithAdvances (gcontext, s->char2b + from,
                                      advances, len);
 
     if (face->overstrike)
       {
         CGContextSetTextPosition (gcontext, r.origin.x+0.5, r.origin.y);
-        CGContextShowGlyphsWithAdvances (gcontext, s->char2b + s->cmp_from,
+        CGContextShowGlyphsWithAdvances (gcontext, s->char2b + from,
                                          advances, len);
       }
 
@@ -1493,7 +1488,7 @@ ns_glyph_metrics (struct nsfont_info *font_info, unsigned char block)
         characterIndex: (NSUInteger)charIndex
 {
   len = glyphIndex+length;
-  for (i =glyphIndex; i<len; i++) 
+  for (i =glyphIndex; i<len; i++)
     cglyphs[i] = glyphs[i-glyphIndex];
   if (len > maxGlyph)
     maxGlyph = len;

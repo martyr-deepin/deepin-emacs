@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2014 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2015 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Processes
@@ -63,6 +63,8 @@ Processes}.
 
 @node Subprocess Creation
 @section Functions that Create Subprocesses
+@cindex create subprocess
+@cindex process creation
 
   There are three primitives that create a new subprocess in which to run
 a program.  One of them, @code{start-process}, creates an asynchronous
@@ -734,6 +736,7 @@ happen sooner or later).
 
 @node Process Information
 @section Process Information
+@cindex process information
 
   Several functions return information about processes.
 
@@ -1484,7 +1487,7 @@ The arguments @var{seconds} and @var{millisec} let you specify timeout
 periods.  The former specifies a period measured in seconds and the
 latter specifies one measured in milliseconds.  The two time periods
 thus specified are added together, and @code{accept-process-output}
-returns after that much time, whether or not there has been any
+returns after that much time, even if there is no
 subprocess output.
 
 The argument @var{millisec} is obsolete (and should not be used),
@@ -1502,7 +1505,8 @@ recommended, but may be necessary for specific applications, such as
 speech synthesis.
 
 The function @code{accept-process-output} returns non-@code{nil} if it
-did get some output, or @code{nil} if the timeout expired before output
+got output from @var{process}, or from any process if @var{process} is
+@code{nil}.  It returns @code{nil} if the timeout expired before output
 arrived.
 @end defun
 
@@ -2040,6 +2044,12 @@ Regular expression matching a successful @acronym{STARTTLS} negotiation.
 If non-@code{nil}, do opportunistic @acronym{STARTTLS} upgrades even if Emacs
 doesn't have built-in @acronym{TLS} support.
 
+@item :warn-unless-encrypted @var{boolean}
+If non-@code{nil}, and @code{:return-value} is also non-@code{nil},
+Emacs will warn if the connection isn't encrypted.  This is useful for
+protocols like @acronym{IMAP} and the like, where most users would
+expect the network traffic to be encrypted.
+
 @item :client-certificate @var{list-or-t}
 Either a list of the form @code{(@var{key-file} @var{cert-file})},
 naming the certificate key file and certificate file itself, or
@@ -2064,6 +2074,7 @@ The connection type: @samp{plain} or @samp{tls}.
 @end table
 
 @end defun
+
 
 @node Network Servers
 @section Network Servers

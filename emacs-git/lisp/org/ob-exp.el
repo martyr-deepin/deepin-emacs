@@ -1,6 +1,6 @@
 ;;; ob-exp.el --- Exportation of org-babel source blocks
 
-;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	Dan Davison
@@ -24,6 +24,7 @@
 
 ;;; Code:
 (require 'ob-core)
+(require 'org-src)
 (eval-when-compile
   (require 'cl))
 

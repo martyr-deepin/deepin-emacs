@@ -1,6 +1,6 @@
 /* Process support for GNU Emacs on the Microsoft Windows API.
 
-Copyright (C) 1992, 1995, 1999-2014 Free Software Foundation, Inc.
+Copyright (C) 1992, 1995, 1999-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -32,6 +32,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <signal.h>
 #include <sys/file.h>
 #include <mbstring.h>
+#include <locale.h>
 
 /* must include CRT headers *before* config.h */
 #include <config.h>
@@ -70,8 +71,6 @@ extern BOOL WINAPI IsValidLocale (LCID, DWORD);
   ((void *)((section)->PointerToRawData					\
 	    + ((DWORD_PTR)(var) - (section)->VirtualAddress)		\
 	    + (filedata).file_base))
-
-Lisp_Object Qhigh, Qlow;
 
 /* Signal handlers...SIG_DFL == 0 so this is initialized correctly.  */
 static signal_handler sig_handlers[NSIG];
@@ -1077,6 +1076,7 @@ create_child (char *exe, char *cmdline, char *env, int is_gui_app,
   DWORD flags;
   char dir[ MAX_PATH ];
   char *p;
+  const char *ext;
 
   if (cp == NULL) emacs_abort ();
 
@@ -1114,6 +1114,15 @@ create_child (char *exe, char *cmdline, char *env, int is_gui_app,
   for (p = dir; *p; p = CharNextA (p))
     if (*p == '/')
       *p = '\\';
+
+  /* CreateProcess handles batch files as exe specially.  This special
+     handling fails when both the batch file and arguments are quoted.
+     We pass NULL as exe to avoid the special handling. */
+  if (exe && cmdline[0] == '"' &&
+      (ext = strrchr (exe, '.')) &&
+      (xstrcasecmp (ext, ".bat") == 0
+       || xstrcasecmp (ext, ".cmd") == 0))
+      exe = NULL;
 
   flags = (!NILP (Vw32_start_process_share_console)
 	   ? CREATE_NEW_PROCESS_GROUP
@@ -1604,6 +1613,15 @@ sys_spawnve (int mode, char *cmdname, char **argv, char **envp)
       program = ENCODE_FILE (full);
       cmdname = SDATA (program);
     }
+  else
+    {
+      char *p = alloca (strlen (cmdname) + 1);
+
+      /* Don't change the command name we were passed by our caller
+	 (unixtodos_filename below will destructively mirror forward
+	 slashes).  */
+      cmdname = strcpy (p, cmdname);
+    }
 
   /* make sure argv[0] and cmdname are both in DOS format */
   unixtodos_filename (cmdname);
@@ -1645,10 +1663,7 @@ sys_spawnve (int mode, char *cmdname, char **argv, char **envp)
       if (egetenv ("CMDPROXY"))
 	strcpy (cmdname, egetenv ("CMDPROXY"));
       else
-	{
-	  strcpy (cmdname, SDATA (Vinvocation_directory));
-	  strcat (cmdname, "cmdproxy.exe");
-	}
+	strcpy (lispstpcpy (cmdname, Vinvocation_directory), "cmdproxy.exe");
 
       /* Can't use unixtodos_filename here, since that needs its file
 	 name argument encoded in UTF-8.  */
@@ -2908,7 +2923,7 @@ int_from_hex (char * s)
    function isn't given a context pointer.  */
 Lisp_Object Vw32_valid_locale_ids;
 
-static BOOL CALLBACK
+static BOOL CALLBACK ALIGN_STACK
 enum_locale_fn (LPTSTR localeNum)
 {
   DWORD id = int_from_hex (localeNum);
@@ -2972,7 +2987,7 @@ If successful, the new locale id is returned, otherwise nil.  */)
    function isn't given a context pointer.  */
 Lisp_Object Vw32_valid_codepages;
 
-static BOOL CALLBACK
+static BOOL CALLBACK ALIGN_STACK
 enum_codepage_fn (LPTSTR codepageNum)
 {
   DWORD id = atoi (codepageNum);
@@ -3053,17 +3068,27 @@ If successful, the new CP is returned, otherwise nil.  */)
 DEFUN ("w32-get-codepage-charset", Fw32_get_codepage_charset,
        Sw32_get_codepage_charset, 1, 1, 0,
        doc: /* Return charset ID corresponding to codepage CP.
-Returns nil if the codepage is not valid.  */)
+Returns nil if the codepage is not valid or its charset ID could
+not be determined.
+
+Note that this function is only guaranteed to work with ANSI
+codepages; most console codepages are not supported and will
+yield nil.  */)
   (Lisp_Object cp)
 {
   CHARSETINFO info;
+  DWORD dwcp;
 
   CHECK_NUMBER (cp);
 
   if (!IsValidCodePage (XINT (cp)))
     return Qnil;
 
-  if (TranslateCharsetInfo ((DWORD *) XINT (cp), &info, TCI_SRCCODEPAGE))
+  /* Going through a temporary DWORD variable avoids compiler warning
+     about cast to pointer from integer of different size, when
+     building --with-wide-int.  */
+  dwcp = XINT (cp);
+  if (TranslateCharsetInfo ((DWORD *) dwcp, &info, TCI_SRCCODEPAGE))
     return make_number (info.ciCharset);
 
   return Qnil;
@@ -3122,8 +3147,8 @@ If successful, the new layout id is returned, otherwise nil.  */)
   CHECK_NUMBER_CAR (layout);
   CHECK_NUMBER_CDR (layout);
 
- kl = (HKL) ((XINT (XCAR (layout)) & 0xffff)
-	     | (XINT (XCDR (layout)) << 16));
+  kl = (HKL) (UINT_PTR) ((XINT (XCAR (layout)) & 0xffff)
+			 | (XINT (XCDR (layout)) << 16));
 
   /* Synchronize layout with input thread.  */
   if (dwWindowsThreadId)
@@ -3142,6 +3167,192 @@ If successful, the new layout id is returned, otherwise nil.  */)
     return Qnil;
 
   return Fw32_get_keyboard_layout ();
+}
+
+/* Two variables to interface between get_lcid and the EnumLocales
+   callback function below.  */
+#ifndef LOCALE_NAME_MAX_LENGTH
+# define LOCALE_NAME_MAX_LENGTH 85
+#endif
+static LCID found_lcid;
+static char lname[3 * LOCALE_NAME_MAX_LENGTH + 1 + 1];
+
+/* Callback function for EnumLocales.  */
+static BOOL CALLBACK
+get_lcid_callback (LPTSTR locale_num_str)
+{
+  char *endp;
+  char locval[2 * LOCALE_NAME_MAX_LENGTH + 1 + 1];
+  LCID try_lcid = strtoul (locale_num_str, &endp, 16);
+
+  if (GetLocaleInfo (try_lcid, LOCALE_SABBREVLANGNAME,
+		     locval, LOCALE_NAME_MAX_LENGTH))
+    {
+      size_t locval_len;
+
+      /* This is for when they only specify the language, as in "ENU".  */
+      if (stricmp (locval, lname) == 0)
+	{
+	  found_lcid = try_lcid;
+	  return FALSE;
+	}
+      locval_len = strlen (locval);
+      strcpy (locval + locval_len, "_");
+      if (GetLocaleInfo (try_lcid, LOCALE_SABBREVCTRYNAME,
+			 locval + locval_len + 1, LOCALE_NAME_MAX_LENGTH))
+	{
+	  locval_len = strlen (locval);
+	  if (strnicmp (locval, lname, locval_len) == 0
+	      && (lname[locval_len] == '.'
+		  || lname[locval_len] == '\0'))
+	    {
+	      found_lcid = try_lcid;
+	      return FALSE;
+	    }
+	}
+    }
+  return TRUE;
+}
+
+/* Return the Locale ID (LCID) number given the locale's name, a
+   string, in LOCALE_NAME.  This works by enumerating all the locales
+   supported by the system, until we find one whose name matches
+   LOCALE_NAME.  */
+static LCID
+get_lcid (const char *locale_name)
+{
+  /* A simple cache.  */
+  static LCID last_lcid;
+  static char last_locale[1000];
+
+  /* The code below is not thread-safe, as it uses static variables.
+     But this function is called only from the Lisp thread.  */
+  if (last_lcid > 0 && strcmp (locale_name, last_locale) == 0)
+    return last_lcid;
+
+  strncpy (lname, locale_name, sizeof (lname) - 1);
+  lname[sizeof (lname) - 1] = '\0';
+  found_lcid = 0;
+  EnumSystemLocales (get_lcid_callback, LCID_SUPPORTED);
+  if (found_lcid > 0)
+    {
+      last_lcid = found_lcid;
+      strcpy (last_locale, locale_name);
+    }
+  return found_lcid;
+}
+
+#ifndef _NSLCMPERROR
+# define _NSLCMPERROR INT_MAX
+#endif
+#ifndef LINGUISTIC_IGNORECASE
+# define LINGUISTIC_IGNORECASE  0x00000010
+#endif
+
+int
+w32_compare_strings (const char *s1, const char *s2, char *locname,
+		     int ignore_case)
+{
+  LCID lcid = GetThreadLocale ();
+  wchar_t *string1_w, *string2_w;
+  int val, needed;
+  extern BOOL g_b_init_compare_string_w;
+  static int (WINAPI *pCompareStringW)(LCID, DWORD, LPCWSTR, int, LPCWSTR, int);
+  DWORD flags = 0;
+
+  USE_SAFE_ALLOCA;
+
+  /* The LCID machinery doesn't seem to support the "C" locale, so we
+     need to do that by hand.  */
+  if (locname
+      && ((locname[0] == 'C' && (locname[1] == '\0' || locname[1] == '.'))
+	  || strcmp (locname, "POSIX") == 0))
+    return (ignore_case ? stricmp (s1, s2) : strcmp (s1, s2));
+
+  if (!g_b_init_compare_string_w)
+    {
+      if (os_subtype == OS_9X)
+	{
+	  pCompareStringW = GetProcAddress (LoadLibrary ("Unicows.dll"),
+					    "CompareStringW");
+	  if (!pCompareStringW)
+	    {
+	      errno = EINVAL;
+	      /* This return value is compatible with wcscoll and
+		 other MS CRT functions.  */
+	      return _NSLCMPERROR;
+	    }
+	}
+      else
+	pCompareStringW = CompareStringW;
+
+      g_b_init_compare_string_w = 1;
+    }
+
+  needed = pMultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, s1, -1, NULL, 0);
+  if (needed > 0)
+    {
+      SAFE_NALLOCA (string1_w, 1, needed + 1);
+      pMultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, s1, -1,
+			    string1_w, needed);
+    }
+  else
+    {
+      errno = EINVAL;
+      return _NSLCMPERROR;
+    }
+
+  needed = pMultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, s2, -1, NULL, 0);
+  if (needed > 0)
+    {
+      SAFE_NALLOCA (string2_w, 1, needed + 1);
+      pMultiByteToWideChar (CP_UTF8, MB_ERR_INVALID_CHARS, s2, -1,
+			    string2_w, needed);
+    }
+  else
+    {
+      SAFE_FREE ();
+      errno = EINVAL;
+      return _NSLCMPERROR;
+    }
+
+  if (locname)
+    {
+      /* Convert locale name string to LCID.  We don't want to use
+	 LocaleNameToLCID because (a) it is only available since
+	 Vista, and (b) it doesn't accept locale names returned by
+	 'setlocale' and 'GetLocaleInfo'.  */
+      LCID new_lcid = get_lcid (locname);
+
+      if (new_lcid > 0)
+	lcid = new_lcid;
+      else
+	error ("Invalid locale %s: Invalid argument", locname);
+    }
+
+  if (ignore_case)
+    {
+      /* NORM_IGNORECASE ignores any tertiary distinction, not just
+	 case variants.  LINGUISTIC_IGNORECASE is more selective, and
+	 is sensitive to the locale's language, but it is not
+	 available before Vista.  */
+      if (w32_major_version >= 6)
+	flags |= LINGUISTIC_IGNORECASE;
+      else
+	flags |= NORM_IGNORECASE;
+    }
+  /* This approximates what glibc collation functions do when the
+     locale's codeset is UTF-8.  */
+  if (!NILP (Vw32_collate_ignore_punctuation))
+    flags |= NORM_IGNORESYMBOLS;
+  val = pCompareStringW (lcid, flags, string1_w, -1, string2_w, -1);
+  SAFE_FREE ();
+  if (!val)
+    {
+      errno = EINVAL;
+      return _NSLCMPERROR;
+    }
+  return val - 2;
 }
 
 
@@ -3253,6 +3464,20 @@ on local fixed drives.  A value of nil means never issue them.
 Any other non-nil value means do this even on remote and removable drives
 where the performance impact may be noticeable even on modern hardware.  */);
   Vw32_get_true_file_attributes = Qlocal;
+
+  DEFVAR_LISP ("w32-collate-ignore-punctuation",
+	       Vw32_collate_ignore_punctuation,
+	       doc: /* Non-nil causes string collation functions ignore punctuation on MS-Windows.
+On Posix platforms, `string-collate-lessp' and `string-collate-equalp'
+ignore punctuation characters when they compare strings, if the
+locale's codeset is UTF-8, as in \"en_US.UTF-8\".  Binding this option
+to a non-nil value will achieve a similar effect on MS-Windows, where
+locales with UTF-8 codeset are not supported.
+
+Note that setting this to non-nil will also ignore blanks and symbols
+in the strings.  So do NOT use this option when comparing file names
+for equality, only when you need to sort them.  */);
+  Vw32_collate_ignore_punctuation = Qnil;
 
   staticpro (&Vw32_valid_locale_ids);
   staticpro (&Vw32_valid_codepages);

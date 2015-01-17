@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 2000-2014 Free Software Foundation, Inc.
+@c Copyright (C) 2000-2015 Free Software Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Mac OS / GNUstep
 @appendix Emacs and Mac OS / GNUstep
@@ -12,7 +12,7 @@ the GNUstep libraries on GNU/Linux or other operating systems, or on
 Mac OS X with native window system support.  On Mac OS X, Emacs can be
 built either without window system support, with X11, or with the
 Cocoa interface; this section only applies to the Cocoa build.  This
-does not support versions of Mac OS X earlier than 10.4.
+does not support versions of Mac OS X earlier than 10.6.
 
   For various historical and technical reasons, Emacs uses the term
 @samp{Nextstep} internally, instead of ``Cocoa'' or ``Mac OS X''; for
@@ -84,15 +84,16 @@ set, which often causes the subprocesses it launches to behave differently than
 they would when launched from the shell.
 
 For the PATH and MANPATH variables, a system-wide method
-of setting PATH is recommended on Mac OS X 10.5 and later, using the
+of setting PATH is recommended on Mac OS X, using the
 @file{/etc/paths} files and the @file{/etc/paths.d} directory.
 
 @node Mac / GNUstep Customization
 @section Mac / GNUstep Customization
 
-Emacs can be customized in several ways in addition to the standard
-customization buffers and the Options menu.
-
+There are a few customization options that are specific to the
+Nextstep port.  For example, they affect things such as the modifier
+keys and the fullscreen behavior.  To see all such options, use
+@kbd{M-x customize-group @key{RET} ns @key{RET}}.
 
 @subsection Font and Color Panels
 
@@ -116,16 +117,14 @@ close the altered one.
 Useful in this context is the listing of all faces obtained by
 @kbd{M-x list-faces-display}.
 
-@subsection Customization options specific to Mac OS / GNUstep
+@cindex Core Text, on Mac OS X
+In Mac OS X, Emacs uses a Core Text based font backend
+by default.  If you prefer the older font style, enter the following
+at the command-line before starting Emacs:
 
-The following customization options are specific to the Nextstep port.
-
-@table @code
-@item ns-auto-hide-menu-bar
-Non-nil means the menu-bar is hidden by default, but appears if you
-move the mouse pointer over it.  (Requires Mac OS X 10.6 or later.)
-
-@end table
+@example
+% defaults write org.gnu.Emacs FontBackend ns
+@end example
 
 
 @node Mac / GNUstep Events

@@ -1,5 +1,5 @@
 /* Terminal control module for terminals described by TERMCAP
-   Copyright (C) 1985-1987, 1993-1995, 1998, 2000-2014 Free Software
+   Copyright (C) 1985-1987, 1993-1995, 1998, 2000-2015 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -77,7 +77,6 @@ static void tty_turn_off_highlight (struct tty_display_info *);
 static void tty_show_cursor (struct tty_display_info *);
 static void tty_hide_cursor (struct tty_display_info *);
 static void tty_background_highlight (struct tty_display_info *tty);
-static struct terminal *get_tty_terminal (Lisp_Object, bool);
 static void clear_tty_hooks (struct terminal *terminal);
 static void set_tty_hooks (struct terminal *terminal);
 static void dissociate_if_controlling_tty (int fd);
@@ -91,7 +90,7 @@ static _Noreturn void vfatal (const char *str, va_list ap)
 
 #define OUTPUT(tty, a)                                          \
   emacs_tputs ((tty), a,                                        \
-               FRAME_LINES (XFRAME (selected_frame)) - curY (tty),	\
+               FRAME_TOTAL_LINES (XFRAME (selected_frame)) - curY (tty),	\
                cmputc)
 
 #define OUTPUT1(tty, a) emacs_tputs ((tty), a, 1, cmputc)
@@ -105,9 +104,9 @@ static _Noreturn void vfatal (const char *str, va_list ap)
 
 #define OUTPUT1_IF(tty, a) do { if (a) emacs_tputs ((tty), a, 1, cmputc); } while (0)
 
-/* Display space properties */
+/* Display space properties.  */
 
-/* Chain of all tty device parameters. */
+/* Chain of all tty device parameters.  */
 struct tty_display_info *tty_list;
 
 /* Meaning of bits in no_color_video.  Each bit set means that the
@@ -130,9 +129,6 @@ enum no_color_bit
 /* The largest frame width in any call to calculate_costs.  */
 
 static int max_frame_cols;
-
-static Lisp_Object Qtty_mode_set_strings;
-static Lisp_Object Qtty_mode_reset_strings;
 
 
 
@@ -201,7 +197,7 @@ tty_set_terminal_modes (struct terminal *terminal)
              off the screen, so it won't be overwritten and lost.  */
           int i;
           current_tty = tty;
-          for (i = 0; i < FRAME_LINES (XFRAME (selected_frame)); i++)
+          for (i = 0; i < FRAME_TOTAL_LINES (XFRAME (selected_frame)); i++)
             cmputc ('\n');
         }
 
@@ -257,7 +253,7 @@ tty_set_terminal_window (struct frame *f, int size)
 {
   struct tty_display_info *tty = FRAME_TTY (f);
 
-  tty->specified_window = size ? size : FRAME_LINES (f);
+  tty->specified_window = size ? size : FRAME_TOTAL_LINES (f);
   if (FRAME_SCROLL_REGION_OK (f))
     tty_set_scroll_region (f, 0, tty->specified_window);
 }
@@ -272,9 +268,9 @@ tty_set_scroll_region (struct frame *f, int start, int stop)
     buf = tparam (tty->TS_set_scroll_region, 0, 0, start, stop - 1, 0, 0);
   else if (tty->TS_set_scroll_region_1)
     buf = tparam (tty->TS_set_scroll_region_1, 0, 0,
-		  FRAME_LINES (f), start,
-		  FRAME_LINES (f) - stop,
-		  FRAME_LINES (f));
+		  FRAME_TOTAL_LINES (f), start,
+		  FRAME_TOTAL_LINES (f) - stop,
+		  FRAME_TOTAL_LINES (f));
   else
     buf = tparam (tty->TS_set_window, 0, 0, start, 0, stop, FRAME_COLS (f));
 
@@ -446,7 +442,7 @@ tty_clear_to_end (struct frame *f)
     }
   else
     {
-      for (i = curY (tty); i < FRAME_LINES (f); i++)
+      for (i = curY (tty); i < FRAME_TOTAL_LINES (f); i++)
 	{
 	  cursor_to (f, i, 0);
 	  clear_end_of_line (f, FRAME_COLS (f));
@@ -527,9 +523,6 @@ static ptrdiff_t encode_terminal_dst_size;
    Set CODING->produced to the byte-length of the resulting byte
    sequence, and return a pointer to that byte sequence.  */
 
-#ifndef DOS_NT
-static
-#endif
 unsigned char *
 encode_terminal_code (struct glyph *src, int src_len,
 		      struct coding_system *coding)
@@ -751,7 +744,7 @@ tty_write_glyphs (struct frame *f, struct glyph *string, int len)
      since that would scroll the whole frame on some terminals.  */
 
   if (AutoWrap (tty)
-      && curY (tty) + 1 == FRAME_LINES (f)
+      && curY (tty) + 1 == FRAME_TOTAL_LINES (f)
       && (curX (tty) + len) == FRAME_COLS (f))
     len --;
   if (len <= 0)
@@ -823,7 +816,7 @@ tty_write_glyphs_with_face (register struct frame *f, register struct glyph *str
      since that would scroll the whole frame on some terminals.  */
 
   if (AutoWrap (tty)
-      && curY (tty) + 1 == FRAME_LINES (f)
+      && curY (tty) + 1 == FRAME_TOTAL_LINES (f)
       && (curX (tty) + len) == FRAME_COLS (f))
     len --;
   if (len <= 0)
@@ -1012,7 +1005,7 @@ tty_ins_del_lines (struct frame *f, int vpos, int n)
       && vpos + i >= tty->specified_window)
     return;
   if (!FRAME_MEMORY_BELOW_FRAME (f)
-      && vpos + i >= FRAME_LINES (f))
+      && vpos + i >= FRAME_TOTAL_LINES (f))
     return;
 
   if (multi)
@@ -1049,7 +1042,7 @@ tty_ins_del_lines (struct frame *f, int vpos, int n)
       && FRAME_MEMORY_BELOW_FRAME (f)
       && n < 0)
     {
-      cursor_to (f, FRAME_LINES (f) + n, 0);
+      cursor_to (f, FRAME_TOTAL_LINES (f) + n, 0);
       clear_to_end (f);
     }
 }
@@ -1517,8 +1510,7 @@ append_glyph (struct it *it)
       if (it->bidi_p)
 	{
 	  glyph->resolved_level = it->bidi_it.resolved_level;
-	  if ((it->bidi_it.type & 7) != it->bidi_it.type)
-	    emacs_abort ();
+	  eassert ((it->bidi_it.type & 7) == it->bidi_it.type);
 	  glyph->bidi_type = it->bidi_it.type;
 	}
       else
@@ -1714,8 +1706,7 @@ append_composite_glyph (struct it *it)
       if (it->bidi_p)
 	{
 	  glyph->resolved_level = it->bidi_it.resolved_level;
-	  if ((it->bidi_it.type & 7) != it->bidi_it.type)
-	    emacs_abort ();
+	  eassert ((it->bidi_it.type & 7) == it->bidi_it.type);
 	  glyph->bidi_type = it->bidi_it.type;
 	}
       else
@@ -1799,8 +1790,7 @@ append_glyphless_glyph (struct it *it, int face_id, const char *str)
   if (it->bidi_p)
     {
       glyph->resolved_level = it->bidi_it.resolved_level;
-      if ((it->bidi_it.type & 7) != it->bidi_it.type)
-	emacs_abort ();
+      eassert ((it->bidi_it.type & 7) == it->bidi_it.type);
       glyph->bidi_type = it->bidi_it.type;
     }
   else
@@ -1864,7 +1854,7 @@ produce_glyphless_glyph (struct it *it, Lisp_Object acronym)
 	    acronym = XCDR (acronym);
 	  buf[0] = '[';
 	  str = STRINGP (acronym) ? SSDATA (acronym) : "";
-	  for (len = 0; len < 6 && str[len] && ASCII_BYTE_P (str[len]); len++)
+	  for (len = 0; len < 6 && str[len] && ASCII_CHAR_P (str[len]); len++)
 	    buf[1 + len] = str[len];
 	  buf[1 + len] = ']';
 	  len += 2;
@@ -2035,11 +2025,9 @@ selected frame's terminal).  This function always returns nil if
 TERMINAL does not refer to a text terminal.  */)
   (Lisp_Object terminal)
 {
-  struct terminal *t = get_tty_terminal (terminal, 0);
-  if (!t)
-    return Qnil;
-  else
-    return t->display_info.tty->TN_max_colors > 0 ? Qt : Qnil;
+  struct terminal *t = decode_tty_terminal (terminal);
+
+  return (t && t->display_info.tty->TN_max_colors > 0) ? Qt : Qnil;
 }
 
 /* Return the number of supported colors.  */
@@ -2052,11 +2040,9 @@ selected frame's terminal).  This function always returns 0 if
 TERMINAL does not refer to a text terminal.  */)
   (Lisp_Object terminal)
 {
-  struct terminal *t = get_tty_terminal (terminal, 0);
-  if (!t)
-    return make_number (0);
-  else
-    return make_number (t->display_info.tty->TN_max_colors);
+  struct terminal *t = decode_tty_terminal (terminal);
+
+  return make_number (t ? t->display_info.tty->TN_max_colors : 0);
 }
 
 #ifndef DOS_NT
@@ -2171,52 +2157,6 @@ set_tty_color_mode (struct tty_display_info *tty, struct frame *f)
 
 #endif /* !DOS_NT */
 
-
-
-/* Return the tty display object specified by TERMINAL. */
-
-static struct terminal *
-get_tty_terminal (Lisp_Object terminal, bool throw)
-{
-  struct terminal *t = get_terminal (terminal, throw);
-
-  if (t && t->type != output_termcap && t->type != output_msdos_raw)
-    {
-      if (throw)
-        error ("Device %d is not a termcap terminal device", t->id);
-      else
-        return NULL;
-    }
-
-  return t;
-}
-
-/* Return an active termcap device that uses the tty device with the
-   given name.
-
-   This function ignores suspended devices.
-
-   Returns NULL if the named terminal device is not opened.  */
-
-struct terminal *
-get_named_tty (const char *name)
-{
-  struct terminal *t;
-
-  eassert (name);
-
-  for (t = terminal_list; t; t = t->next_terminal)
-    {
-      if ((t->type == output_termcap || t->type == output_msdos_raw)
-          && !strcmp (t->display_info.tty->name, name)
-          && TERMINAL_ACTIVE_P (t))
-        return t;
-    }
-
-  return 0;
-}
-
-
 DEFUN ("tty-type", Ftty_type, Stty_type, 0, 1, 0,
        doc: /* Return the type of the tty device that TERMINAL uses.
 Returns nil if TERMINAL is not on a tty device.
@@ -2225,15 +2165,10 @@ TERMINAL can be a terminal object, a frame, or nil (meaning the
 selected frame's terminal).  */)
   (Lisp_Object terminal)
 {
-  struct terminal *t = get_terminal (terminal, 1);
+  struct terminal *t = decode_tty_terminal (terminal);
 
-  if (t->type != output_termcap && t->type != output_msdos_raw)
-    return Qnil;
-
-  if (t->display_info.tty->type)
-    return build_string (t->display_info.tty->type);
-  else
-    return Qnil;
+  return (t && t->display_info.tty->type
+	  ? build_string (t->display_info.tty->type) : Qnil);
 }
 
 DEFUN ("controlling-tty-p", Fcontrolling_tty_p, Scontrolling_tty_p, 0, 1, 0,
@@ -2244,13 +2179,9 @@ selected frame's terminal).  This function always returns nil if
 TERMINAL is not on a tty device.  */)
   (Lisp_Object terminal)
 {
-  struct terminal *t = get_terminal (terminal, 1);
+  struct terminal *t = decode_tty_terminal (terminal);
 
-  if ((t->type != output_termcap && t->type != output_msdos_raw)
-      || strcmp (t->display_info.tty->name, DEV_TTY) != 0)
-    return Qnil;
-  else
-    return Qt;
+  return (t && !strcmp (t->display_info.tty->name, DEV_TTY) ? Qt : Qnil);
 }
 
 DEFUN ("tty-no-underline", Ftty_no_underline, Stty_no_underline, 0, 1, 0,
@@ -2264,7 +2195,7 @@ selected frame's terminal).  This function always returns nil if
 TERMINAL does not refer to a text terminal.  */)
   (Lisp_Object terminal)
 {
-  struct terminal *t = get_terminal (terminal, 1);
+  struct terminal *t = decode_live_terminal (terminal);
 
   if (t->type == output_termcap)
     t->display_info.tty->TS_enter_underline_mode = 0;
@@ -2279,7 +2210,7 @@ does not refer to a text terminal.  Otherwise, it returns the
 top-most frame on the text terminal.  */)
   (Lisp_Object terminal)
 {
-  struct terminal *t = get_terminal (terminal, 1);
+  struct terminal *t = decode_live_terminal (terminal);
 
   if (t->type == output_termcap)
     return t->display_info.tty->top_frame;
@@ -2309,11 +2240,11 @@ suspended.
 A suspended tty may be resumed by calling `resume-tty' on it.  */)
   (Lisp_Object tty)
 {
-  struct terminal *t = get_tty_terminal (tty, 1);
+  struct terminal *t = decode_tty_terminal (tty);
   FILE *f;
 
   if (!t)
-    error ("Unknown tty device");
+    error ("Attempt to suspend a non-text terminal device");
 
   f = t->display_info.tty->input;
 
@@ -2369,15 +2300,15 @@ TTY may be a terminal object, a frame, or nil (meaning the selected
 frame's terminal). */)
   (Lisp_Object tty)
 {
-  struct terminal *t = get_tty_terminal (tty, 1);
+  struct terminal *t = decode_tty_terminal (tty);
   int fd;
 
   if (!t)
-    error ("Unknown tty device");
+    error ("Attempt to resume a non-text terminal device");
 
   if (!t->display_info.tty->input)
     {
-      if (get_named_tty (t->display_info.tty->name))
+      if (get_named_terminal (t->display_info.tty->name))
         error ("Cannot resume display while another display is active on the same device");
 
 #ifdef MSDOS
@@ -2408,13 +2339,14 @@ frame's terminal). */)
 	  struct frame *f = XFRAME (t->display_info.tty->top_frame);
 	  int width, height;
 	  int old_height = FRAME_COLS (f);
-	  int old_width = FRAME_LINES (f);
+	  int old_width = FRAME_TOTAL_LINES (f);
 
 	  /* Check if terminal/window size has changed while the frame
 	     was suspended.  */
 	  get_tty_size (fileno (t->display_info.tty->input), &width, &height);
 	  if (width != old_width || height != old_height)
-	    change_frame_size (f, width, height, 0, 0, 0, 0);
+	    change_frame_size (f, width, height - FRAME_MENU_BAR_LINES (f),
+			       0, 0, 0, 0);
 	  SET_FRAME_VISIBLE (XFRAME (t->display_info.tty->top_frame), 1);
 	}
 
@@ -2542,7 +2474,7 @@ term_mouse_position (struct frame **fp, int insist, Lisp_Object *bar_window,
   (*fp)->mouse_moved = 0;
 
   *bar_window = Qnil;
-  *part = 0;
+  *part = scroll_bar_above_handle;
 
   XSETINT (*x, last_mouse_x);
   XSETINT (*y, last_mouse_y);
@@ -2775,12 +2707,6 @@ static const char *menu_help_message, *prev_menu_help_message;
    last menu help message.  */
 static int menu_help_paneno, menu_help_itemno;
 
-static Lisp_Object Qtty_menu_navigation_map, Qtty_menu_exit;
-static Lisp_Object Qtty_menu_prev_item, Qtty_menu_next_item;
-static Lisp_Object Qtty_menu_next_menu, Qtty_menu_prev_menu;
-static Lisp_Object Qtty_menu_select, Qtty_menu_ignore;
-static Lisp_Object Qtty_menu_mouse_movement;
-
 typedef struct tty_menu_struct
 {
   int count;
@@ -2897,7 +2823,7 @@ tty_menu_display (tty_menu *menu, int x, int y, int pn, int *faces,
   /* Don't try to display more menu items than the console can display
      using the available screen lines.  Exclude the echo area line, as
      it will be overwritten by the help-echo anyway.  */
-  int max_items = min (menu->count - first_item, FRAME_LINES (sf) - 1 - y);
+  int max_items = min (menu->count - first_item, FRAME_TOTAL_LINES (sf) - 1 - y);
 
   menu_help_message = NULL;
 
@@ -2934,8 +2860,7 @@ tty_menu_display (tty_menu *menu, int x, int y, int pn, int *faces,
       display_tty_menu_item (menu->text[j], max_width, face, x, y + i,
 			     menu->submenu[j] != NULL);
     }
-  update_frame_with_menu (sf);
-  cursor_to (sf, row, col);
+  update_frame_with_menu (sf, row, col);
 }
 
 /* --------------------------- X Menu emulation ---------------------- */
@@ -2946,7 +2871,6 @@ static int
 tty_menu_add_pane (tty_menu *menu, const char *txt)
 {
   int len;
-  const unsigned char *p;
 
   tty_menu_make_room (menu);
   menu->submenu[menu->count] = tty_menu_create ();
@@ -2956,15 +2880,7 @@ tty_menu_add_pane (tty_menu *menu, const char *txt)
   menu->count++;
 
   /* Update the menu width, if necessary.  */
-  for (len = 0, p = (unsigned char *) txt; *p; )
-    {
-      int ch_len;
-      int ch = STRING_CHAR_AND_LENGTH (p, ch_len);
-
-      len += CHAR_WIDTH (ch);
-      p += ch_len;
-    }
-
+  len = menu_item_width ((const unsigned char *) txt);
   if (len > menu->width)
     menu->width = len;
 
@@ -2978,7 +2894,6 @@ tty_menu_add_selection (tty_menu *menu, int pane,
 			char *txt, bool enable, char const *help_text)
 {
   int len;
-  unsigned char *p;
 
   if (pane)
     {
@@ -2994,15 +2909,7 @@ tty_menu_add_selection (tty_menu *menu, int pane,
   menu->count++;
 
   /* Update the menu width, if necessary.  */
-  for (len = 0, p = (unsigned char *) txt; *p; )
-    {
-      int ch_len;
-      int ch = STRING_CHAR_AND_LENGTH (p, ch_len);
-
-      len += CHAR_WIDTH (ch);
-      p += ch_len;
-    }
-
+  len = menu_item_width ((const unsigned char *) txt);
   if (len > menu->width)
     menu->width = len;
 
@@ -3106,7 +3013,7 @@ static void
 screen_update (struct frame *f, struct glyph_matrix *mtx)
 {
   restore_desired_matrix (f, mtx);
-  update_frame_with_menu (f);
+  update_frame_with_menu (f, -1, -1);
 }
 
 typedef enum {
@@ -3212,6 +3119,7 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
   Lisp_Object selectface;
   int first_item = 0;
   int col, row;
+  USE_SAFE_ALLOCA;
 
   /* Don't allow non-positive x0 and y0, lest the menu will wrap
      around the display.  */
@@ -3220,7 +3128,7 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
   if (y0 <= 0)
     y0 = 1;
 
-  state = alloca (menu->panecount * sizeof (struct tty_menu_state));
+  SAFE_NALLOCA (state, 1, menu->panecount);
   memset (state, 0, sizeof (*state));
   faces[0]
     = lookup_derived_face (sf, intern ("tty-menu-disabled-face"),
@@ -3255,7 +3163,7 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
 
   /* Force update of the current frame, so that the desired and the
      current matrices are identical.  */
-  update_frame_with_menu (sf);
+  update_frame_with_menu (sf, -1, -1);
   state[0].menu = menu;
   state[0].screen_behind = save_and_enable_current_matrix (sf);
 
@@ -3296,7 +3204,7 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
     {
       mi_result input_status;
       int min_y = state[0].y;
-      int max_y = min (min_y + state[0].menu->count, FRAME_LINES (sf) - 1) - 1;
+      int max_y = min (min_y + state[0].menu->count, FRAME_TOTAL_LINES (sf) - 1) - 1;
 
       input_status = read_menu_input (sf, &x, &y, min_y, max_y, &first_time);
       if (input_status)
@@ -3400,8 +3308,6 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
 			    state[statecount - 1].y,
 			    state[statecount - 1].pane,
 			    faces, x, y, first_item, 1);
-	  tty_hide_cursor (tty);
-	  fflush (tty->output);
 	  /* The call to display help-echo below will move the cursor,
 	     so remember its current position as computed by
 	     tty_menu_display.  */
@@ -3420,10 +3326,13 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
 	     item, so that screen readers and other accessibility aids
 	     know where the active region is.  */
 	  cursor_to (sf, row, col);
-	  tty_hide_cursor (tty);
-	  fflush (tty->output);
 	  prev_menu_help_message = menu_help_message;
 	}
+      /* Both tty_menu_display and help_callback invoke update_end,
+	 which calls tty_show_cursor.  Re-hide it, so it doesn't show
+	 through the menus.  */
+      tty_hide_cursor (tty);
+      fflush (tty->output);
     }
 
   sf->mouse_moved = 0;
@@ -3441,6 +3350,7 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
   discard_mouse_events ();
   if (!kbd_buffer_events_waiting ())
     clear_input_pending ();
+  SAFE_FREE ();
   return result;
 }
 
@@ -3582,9 +3492,10 @@ tty_menu_new_item_coords (struct frame *f, int which, int *x, int *y)
     }
 }
 
+/* WINDOWSNT uses this as menu_show_hook, see w32console.c.  */
 Lisp_Object
-tty_menu_show (struct frame *f, int x, int y, bool for_click, bool keymaps,
-	       Lisp_Object title, bool kbd_navigation, const char **error_name)
+tty_menu_show (struct frame *f, int x, int y, int menuflags,
+	       Lisp_Object title, const char **error_name)
 {
   tty_menu *menu;
   int pane, selidx, lpane, status;
@@ -3611,21 +3522,21 @@ tty_menu_show (struct frame *f, int x, int y, bool for_click, bool keymaps,
 
   /* Make the menu on that window.  */
   menu = tty_menu_create ();
-  if (menu == NULL)
-    {
-      *error_name = "Can't create menu";
-      return Qnil;
-    }
 
   /* Don't GC while we prepare and show the menu, because we give the
      menu functions pointers to the contents of strings.  */
   specpdl_count = inhibit_garbage_collection ();
+
+  /* Avoid crashes if, e.g., another client will connect while we
+     are in a menu.  */
+  temporarily_switch_to_single_kboard (f);
 
   /* Adjust coordinates to be root-window-relative.  */
   item_x = x += f->left_pos;
   item_y = y += f->top_pos;
 
   /* Create all the necessary panes and their items.  */
+  USE_SAFE_ALLOCA;
   maxwidth = maxlines = lines = i = 0;
   lpane = TTYM_FAILURE;
   while (i < menu_items_used)
@@ -3642,7 +3553,7 @@ tty_menu_show (struct frame *f, int x, int y, bool for_click, bool keymaps,
 	  prefix = AREF (menu_items, i + MENU_ITEMS_PANE_PREFIX);
 	  pane_string = (NILP (pane_name)
 			 ? "" : SSDATA (pane_name));
-	  if (keymaps && !NILP (prefix))
+	  if ((menuflags & MENU_KEYMAPS) && !NILP (prefix))
 	    pane_string++;
 
 	  lpane = tty_menu_add_pane (menu, pane_string);
@@ -3694,9 +3605,7 @@ tty_menu_show (struct frame *f, int x, int y, bool for_click, bool keymaps,
 
 	  if (!NILP (descrip))
 	    {
-	      /* If alloca is fast, use that to make the space,
-		 to reduce gc needs.  */
-	      item_data = (char *) alloca (maxwidth + SBYTES (descrip) + 1);
+	      item_data = SAFE_ALLOCA (maxwidth + SBYTES (descrip) + 1);
 	      memcpy (item_data, SSDATA (item_name), SBYTES (item_name));
 	      for (j = SCHARS (item_name); j < maxwidth; j++)
 		item_data[j] = ' ';
@@ -3782,7 +3691,8 @@ tty_menu_show (struct frame *f, int x, int y, bool for_click, bool keymaps,
   specbind (Qoverriding_terminal_local_map,
 	    Fsymbol_value (Qtty_menu_navigation_map));
   status = tty_menu_activate (menu, &pane, &selidx, x, y, &datap,
-			      tty_menu_help_callback, kbd_navigation);
+			      tty_menu_help_callback,
+			      menuflags & MENU_KBD_NAVIGATION);
   entry = pane_prefix = Qnil;
 
   switch (status)
@@ -3808,7 +3718,7 @@ tty_menu_show (struct frame *f, int x, int y, bool for_click, bool keymaps,
 		    {
 		      entry
 			= AREF (menu_items, i + MENU_ITEMS_ITEM_VALUE);
-		      if (keymaps != 0)
+		      if (menuflags & MENU_KEYMAPS)
 			{
 			  entry = Fcons (entry, Qnil);
 			  if (!NILP (pane_prefix))
@@ -3841,13 +3751,14 @@ tty_menu_show (struct frame *f, int x, int y, bool for_click, bool keymaps,
 	Ftop_level ();
       /* Make "Cancel" equivalent to C-g unless FOR_CLICK (which means
 	 the menu was invoked with a mouse event as POSITION).  */
-      if (! for_click)
+      if (!(menuflags & MENU_FOR_CLICK))
         Fsignal (Qquit, Qnil);
       break;
     }
 
  tty_menu_end:
 
+  SAFE_FREE ();
   unbind_to (specpdl_count, Qnil);
   return entry;
 }
@@ -3922,7 +3833,9 @@ clear_tty_hooks (struct terminal *terminal)
   terminal->frame_rehighlight_hook = 0;
   terminal->frame_raise_lower_hook = 0;
   terminal->fullscreen_hook = 0;
+  terminal->menu_show_hook = 0;
   terminal->set_vertical_scroll_bar_hook = 0;
+  terminal->set_horizontal_scroll_bar_hook = 0;
   terminal->condemn_scroll_bars_hook = 0;
   terminal->redeem_scroll_bar_hook = 0;
   terminal->judge_scroll_bars_hook = 0;
@@ -3940,43 +3853,29 @@ clear_tty_hooks (struct terminal *terminal)
 static void
 set_tty_hooks (struct terminal *terminal)
 {
-  terminal->rif = 0; /* ttys don't support window-based redisplay. */
-
   terminal->cursor_to_hook = &tty_cursor_to;
   terminal->raw_cursor_to_hook = &tty_raw_cursor_to;
-
   terminal->clear_to_end_hook = &tty_clear_to_end;
   terminal->clear_frame_hook = &tty_clear_frame;
   terminal->clear_end_of_line_hook = &tty_clear_end_of_line;
-
   terminal->ins_del_lines_hook = &tty_ins_del_lines;
-
   terminal->insert_glyphs_hook = &tty_insert_glyphs;
   terminal->write_glyphs_hook = &tty_write_glyphs;
   terminal->delete_glyphs_hook = &tty_delete_glyphs;
-
   terminal->ring_bell_hook = &tty_ring_bell;
-
   terminal->reset_terminal_modes_hook = &tty_reset_terminal_modes;
   terminal->set_terminal_modes_hook = &tty_set_terminal_modes;
-  terminal->update_begin_hook = 0; /* Not needed. */
   terminal->update_end_hook = &tty_update_end;
+#ifdef MSDOS
+  terminal->menu_show_hook = &x_menu_show;
+#else
+  terminal->menu_show_hook = &tty_menu_show;
+#endif
   terminal->set_terminal_window_hook = &tty_set_terminal_window;
-
-  terminal->mouse_position_hook = 0; /* Not needed. */
-  terminal->frame_rehighlight_hook = 0; /* Not needed. */
-  terminal->frame_raise_lower_hook = 0; /* Not needed. */
-
-  terminal->set_vertical_scroll_bar_hook = 0; /* Not needed. */
-  terminal->condemn_scroll_bars_hook = 0; /* Not needed. */
-  terminal->redeem_scroll_bar_hook = 0; /* Not needed. */
-  terminal->judge_scroll_bars_hook = 0; /* Not needed. */
-
   terminal->read_socket_hook = &tty_read_avail_input; /* keyboard.c */
-  terminal->frame_up_to_date_hook = 0; /* Not needed. */
-
   terminal->delete_frame_hook = &tty_free_frame_resources;
   terminal->delete_terminal_hook = &delete_tty;
+  /* Other hooks are NULL by default.  */
 }
 
 /* If FD is the controlling terminal, drop it.  */
@@ -4036,11 +3935,11 @@ init_tty (const char *name, const char *terminal_type, bool must_succeed)
   /* XXX Perhaps this should be made explicit by having init_tty
      always create a new terminal and separating terminal and frame
      creation on Lisp level.  */
-  terminal = get_named_tty (name);
+  terminal = get_named_terminal (name);
   if (terminal)
     return terminal;
 
-  terminal = create_terminal ();
+  terminal = create_terminal (output_termcap, NULL);
 #ifdef MSDOS
   if (been_here > 0)
     maybe_fatal (0, 0, "Attempt to create another terminal %s", "",
@@ -4054,7 +3953,6 @@ init_tty (const char *name, const char *terminal_type, bool must_succeed)
   tty->next = tty_list;
   tty_list = tty;
 
-  terminal->type = output_termcap;
   terminal->display_info.tty = tty;
   tty->terminal = terminal;
 
@@ -4080,10 +3978,10 @@ init_tty (const char *name, const char *terminal_type, bool must_succeed)
        open a frame on the same terminal.  */
     int flags = O_RDWR | O_NOCTTY | (ctty ? 0 : O_IGNORE_CTTY);
     int fd = emacs_open (name, flags, 0);
-    tty->input = tty->output =
-      ((fd < 0 || ! isatty (fd))
-       ? NULL
-       : fdopen (fd, "w+"));
+    tty->input = tty->output
+      = ((fd < 0 || ! isatty (fd))
+	 ? NULL
+	 : fdopen (fd, "w+"));
 
     if (! tty->input)
       {
@@ -4263,6 +4161,7 @@ use the Bourne shell command `TERM=... export TERM' (C-shell:\n\
     tty->specified_window = height;
 
     FRAME_VERTICAL_SCROLL_BAR_TYPE (f) = vertical_scroll_bar_none;
+    FRAME_HAS_HORIZONTAL_SCROLL_BARS (f) = 0;
     tty->char_ins_del_ok = 1;
     baud_rate = 19200;
   }
@@ -4498,7 +4397,7 @@ fatal (const char *str, ...)
 
 
 
-/* Delete the given tty terminal, closing all frames on it. */
+/* Delete the given tty terminal, closing all frames on it.  */
 
 static void
 delete_tty (struct terminal *terminal)
@@ -4523,7 +4422,7 @@ delete_tty (struct terminal *terminal)
         ;
 
       if (! p)
-        /* This should not happen. */
+        /* This should not happen.  */
         emacs_abort ();
 
       p->next = tty->next;
@@ -4531,7 +4430,7 @@ delete_tty (struct terminal *terminal)
     }
 
   /* reset_sys_modes needs a valid device, so this call needs to be
-     before delete_terminal. */
+     before delete_terminal.  */
   reset_sys_modes (tty);
 
   delete_terminal (terminal);

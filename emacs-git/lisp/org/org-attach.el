@@ -1,6 +1,6 @@
 ;;; org-attach.el --- Manage file attachments to org-mode tasks
 
-;; Copyright (C) 2008-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@newartisans.com>
 ;; Keywords: org data task
@@ -208,7 +208,9 @@ the directory and (if necessary) the corresponding ID will be created."
 	    (save-excursion
 	      (save-restriction
 		(widen)
-		(goto-char org-entry-property-inherited-from)
+		(if (marker-position org-entry-property-inherited-from)
+		    (goto-char org-entry-property-inherited-from)
+		  (org-back-to-heading t))
 		(let (org-attach-allow-inheritance)
 		  (org-attach-dir create-if-not-exists-p)))))
       (org-attach-check-absolute-path attach-dir)

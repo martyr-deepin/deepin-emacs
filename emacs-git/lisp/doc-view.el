@@ -1,6 +1,6 @@
 ;;; doc-view.el --- View PDF/PostScript/DVI files in Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
 ;;
 ;; Author: Tassilo Horn <tsdh@gnu.org>
 ;; Maintainer: Tassilo Horn <tsdh@gnu.org>
@@ -654,16 +654,10 @@ at the top edge of the page moves to the previous page."
 
 (defun doc-view-make-safe-dir (dir)
   (condition-case nil
-      (let ((umask (default-file-modes)))
-	(unwind-protect
-	    (progn
-	      ;; Create temp files with strict access rights.  It's easy to
-	      ;; loosen them later, whereas it's impossible to close the
-	      ;; time-window of loose permissions otherwise.
-	      (set-default-file-modes #o0700)
-	      (make-directory dir))
-	  ;; Reset the umask.
-	  (set-default-file-modes umask)))
+      ;; Create temp files with strict access rights.  It's easy to
+      ;; loosen them later, whereas it's impossible to close the
+      ;; time-window of loose permissions otherwise.
+      (with-file-modes #o0700 (make-directory dir))
     (file-already-exists
      (when (file-symlink-p dir)
        (error "Danger: %s points to a symbolic link" dir))
@@ -1398,18 +1392,28 @@ For now these keys are useful:
   (tooltip-show (doc-view-current-info)))
 
 (defun doc-view-open-text ()
-  "Open a buffer with the current doc's contents as text."
+  "Display the current doc's contents as text."
   (interactive)
   (if doc-view--current-converter-processes
       (message "DocView: please wait till conversion finished.")
     (let ((txt (expand-file-name "doc.txt" (doc-view--current-cache-dir))))
       (if (file-readable-p txt)
-	  (let ((name (concat "Text contents of "
-			      (file-name-nondirectory buffer-file-name)))
-		(dir (file-name-directory buffer-file-name)))
-	    (with-current-buffer (find-file txt)
-	      (rename-buffer name)
-	      (setq default-directory dir)))
+	  (let ((inhibit-read-only t)
+		(buffer-undo-list t)
+		(dv-bfn doc-view--buffer-file-name))
+	    (erase-buffer)
+	    (set-buffer-multibyte t)
+	    (insert-file-contents txt)
+	    (text-mode)
+	    (setq-local doc-view--buffer-file-name dv-bfn)
+	    (set-buffer-modified-p nil)
+	    (doc-view-minor-mode)
+	    (add-hook 'write-file-functions
+		      (lambda ()
+			(when (eq major-mode 'text-mode)
+			  (error "Cannot save text contents of document %s"
+				 buffer-file-name)))
+		      nil t))
 	(doc-view-doc->txt txt 'doc-view-open-text)))))
 
 ;;;;; Toggle between editing and viewing
@@ -1421,20 +1425,30 @@ For now these keys are useful:
 (defun doc-view-toggle-display ()
   "Toggle between editing a document as text or viewing it."
   (interactive)
-  (if (eq major-mode 'doc-view-mode)
-      ;; Switch to editing mode
-      (progn
-	(doc-view-kill-proc)
-	(setq buffer-read-only nil)
-	;; Switch to the previously used major mode or fall back to
-	;; normal mode.
-	(doc-view-fallback-mode)
-	(doc-view-minor-mode 1))
+  (cond
+   ((eq major-mode 'doc-view-mode)
+    ;; Switch to editing mode
+    (doc-view-kill-proc)
+    (setq buffer-read-only nil)
+    ;; Switch to the previously used major mode or fall back to
+    ;; normal mode.
+    (doc-view-fallback-mode)
+    (doc-view-minor-mode 1))
+   ((eq major-mode 'text-mode)
+    (let ((buffer-undo-list t))
+      ;; We're currently viewing the document's text contents, so switch
+      ;; back to .
+      (setq buffer-read-only nil)
+      (insert-file-contents doc-view--buffer-file-name nil nil nil t)
+      (doc-view-fallback-mode)
+      (doc-view-minor-mode 1)
+      (set-buffer-modified-p nil)))
+   (t
     ;; Switch to doc-view-mode
     (when (and (buffer-modified-p)
 	       (y-or-n-p "The buffer has been modified.  Save the changes? "))
       (save-buffer))
-    (doc-view-mode)))
+    (doc-view-mode))))
 
 ;;;; Searching
 
@@ -1590,11 +1604,11 @@ If BACKWARD is non-nil, jump to the previous match."
      (concat "No PNG support is available, or some conversion utility for "
 	     (file-name-extension doc-view--buffer-file-name)
 	     " files is missing."))
-    (when (and (executable-find doc-view-pdftotext-program)
-	       (y-or-n-p
-		"Unable to render file.  View extracted text instead? "))
-      (doc-view-open-text))
-    (doc-view-toggle-display)))
+    (if (and (executable-find doc-view-pdftotext-program)
+	     (y-or-n-p
+	      "Unable to render file.  View extracted text instead? "))
+	(doc-view-open-text)
+      (doc-view-toggle-display))))
 
 (defvar bookmark-make-record-function)
 
@@ -1621,7 +1635,7 @@ If BACKWARD is non-nil, jump to the previous match."
   "Figure out the current document type (`doc-view-doc-type')."
   (let ((name-types
 	 (when buffer-file-name
-	   (cdr (assoc-ignore-case
+	   (cdr (assoc-string
                  (file-name-extension buffer-file-name)
                  '(
                    ;; DVI
@@ -1639,7 +1653,8 @@ If BACKWARD is non-nil, jump to the previous match."
                    ;; Microsoft Office formats (also handled by the odf
                    ;; conversion chain).
                    ("doc" odf) ("docx" odf) ("xls" odf) ("xlsx" odf)
-                   ("ppt" odf) ("pps" odf) ("pptx" odf))))))
+                   ("ppt" odf) ("pps" odf) ("pptx" odf))
+		 t))))
 	(content-types
 	 (save-excursion
 	   (goto-char (point-min))

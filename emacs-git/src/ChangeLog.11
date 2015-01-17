@@ -811,10 +811,10 @@
 	(GLOBAL_SOURCES): New variable.
 	* globals.h: Remove.
 	* nsselect.m (Vselection_alist): Define.  Reverts part of
-	r102904.
+	2011-01-19T22:11:33Z!jan.h.d@swipnet.se.
 	* buffer.c: Don't use "no_cell" for name of kill-buffer-hook's
 	variable.
-	* xselect.c (Vselection_alist): Define.  Reverts part of r102908.
+	* xselect.c (Vselection_alist): Define.  Reverts part of 2011-01-19T23:32:42Z!eggert@cs.ucla.edu.
 
 2011-02-08  Kenichi Handa  <handa@m17n.org>
 
@@ -1870,7 +1870,7 @@
 	Sun cc complains about this.
 
 	* coding.c (decode_coding_emacs_mule): Remove unreachable code.
-	This is a typo left over from revno 95090 dated 2009-03-06,
+	This is a typo left over from 2009-03-06T07:51:52Z!handa@m17n.org,
 	which fixed Bug#2370.  Caught by Sun cc.
 
 2011-01-15  Martin Rudalics  <rudalics@gmx.at>
@@ -2241,7 +2241,7 @@
 	* xdisp.c (try_scrolling): Avoid infloop if the first line is
 	obscured due to a vscroll (Bug#7537).
 
-2010-12-13  Jan Djärv  <jhd@zeplinf.localdomain>
+2010-12-13  Jan Djärv  <jan.h.d@swipnet.se>
 
 	* nsterm.h (FRAME_NS_TOOLBAR_HEIGHT): Rename to FRAME_TOOLBAR_HEIGHT.
 
@@ -3187,7 +3187,7 @@
 2010-10-15  Eli Zaretskii  <eliz@gnu.org>
 
 	* unexcoff.c (make_hdr): Fix prototype according to changes in
-	revno 101757.
+	2010-10-03T13:59:56Z!dann@ics.uci.edu.
 
 	* image.c (tiff_load): Cast 3rd argument to avoid compiler warning.
 
@@ -3568,7 +3568,7 @@
 2010-09-30  Juanma Barranquero  <lekktu@gmail.com>
 
 	* w32console.c (vga_stdcolor_name): Remove unused function;
-	presumed dead after revno 82799 (2007-11-30).
+	presumed dead after 2007-11-30T13:57:21Z!jasonr@gnu.org.
 
 2010-09-29  Lars Magne Ingebrigtsen  <larsi@gnus.org>
 
@@ -3997,7 +3997,7 @@
 2010-09-24  Juanma Barranquero  <lekktu@gmail.com>
 
 	Remove Windows API function pointer unused since 2005-02-15 (revno
-	60055).
+	2005-02-15T23:19:26Z!jasonr@gnu.org).
 	* w32fns.c (clipboard_sequence_fn): Don't declare.
 	(globals_of_w32fns): Don't initialize it.
 
@@ -4200,7 +4200,7 @@
 	(record_property_change, Fprimitive_undo): Adjust prototypes.
 
 2010-09-22  Juanma Barranquero  <lekktu@gmail.com>
-            Eli Zaretskii  <eliz@gnu.org>
+	    Eli Zaretskii  <eliz@gnu.org>
 
 	* w32.c (get_emacs_configuration_options): Fix buffer overrun.
 
@@ -4779,7 +4779,7 @@
 
 	* w32fns.c <w32_frame_parm_handlers>: Add a slot for the
 	x_set_tool_bar_position handler, needed to support changes from
-	2010-07-29 (revno 100939) for positioning the tool bar.  (Bug#6796)
+	2010-07-29T16:49:59Z!jan.h.d@swipnet.se for positioning the tool bar.  (Bug#6796)
 
 2010-08-16  Jan Djärv  <jan.h.d@swipnet.se>
 
@@ -4859,7 +4859,7 @@
 	(report_error, report_error_1): Ditto.
 	(write_segment): Remove "#if 0" unused code.
 	(make_hdr): Remove code that was "#ifndef NO_REMAP" before
-	NO_REMAP was removed (in revno 100928).
+	NO_REMAP was removed (in 2010-07-29T03:25:08Z!dann@ics.uci.edu).
 	(start_of_text): Remove unused function (was used only if NO_REMAP
 	was NOT defined).
 
@@ -5302,7 +5302,7 @@
 
 2010-08-06  Juanma Barranquero  <lekktu@gmail.com>
 
-	Fix changes in revnos 100982..100984 for Windows build.
+	Fix changes in 2010-08-05T23:15:24Z!dann@ics.uci.edu..2010-08-05T23:34:12Z!dann@ics.uci.edu for Windows build.
 
 	* xmenu.c [USE_X_TOOLKIT || USE_GTK]:
 	Don't declare xmalloc_widget_value and digest_single_submenu.
@@ -5953,7 +5953,7 @@
 2010-07-15  Eli Zaretskii  <eliz@gnu.org>
 
 	* fringe.c (update_window_fringes): Restore mistakenly reverted
-	code from revno 99854.1.6 merged in revno 99950.
+	code from 2010-04-17T12:33:05Z!eliz@gnu.org merged in 2010-04-20T13:31:28Z!eliz@gnu.org.
 
 2010-07-14  Jan Djärv  <jan.h.d@swipnet.se>
 
@@ -6753,13 +6753,13 @@
 	to standard C.
 
 2010-07-04  Tetsurou Okazaki  <okazaki@be.to>  (tiny change)
-            Stefan Monnier  <monnier@iro.umontreal.ca>
+	    Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* lread.c (read1): Fix up last change to not mess up `c'.
 
 2010-07-04  Juanma Barranquero  <lekktu@gmail.com>
 
-	* strftime.c: Revert conversion to standard C (revno:100708).
+	* strftime.c: Revert conversion to standard C (2010-07-04T07:50:25Z!dann@ics.uci.edu).
 
 2010-07-04  Juanma Barranquero  <lekktu@gmail.com>
 
@@ -8069,7 +8069,7 @@
 	can specify the frame to use, when applicable.  Adjust callers.
 
 2010-05-07  Vincent Belaïche  <vincent.belaiche@gmail.com>
-            Stefan Monnier  <monnier@iro.umontreal.ca>
+	    Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* floatfns.c (Fisnan, Fcopysign, Ffrexp, Fldexp): New functions.
 
@@ -8697,7 +8697,7 @@
 	(Frename_file): Preserve selinux context when renaming by copy-file.
 
 2010-04-21  Juanma Barranquero  <lekktu@gmail.com>
-            Eli Zaretskii  <eliz@gnu.org>
+	    Eli Zaretskii  <eliz@gnu.org>
 
 	Don't depend on cm.c or termcap.c on Windows, use stubs.
 	* makefile.w32-in (OBJ1): Remove cm.$(O) and termcap.$(O).
@@ -16878,7 +16878,7 @@
 	<after-change-functions>: Reflow docstrings.
 
 2008-08-04  Adrian Robert  <Adrian.B.Robert@gmail.com>
-            Ken Raeburn  <raeburn@gnu.org>
+	    Ken Raeburn  <raeburn@gnu.org>
 
 	Dock menu customization, based on a patch by Ken Raeburn, plus some
 	other fixes.
@@ -17943,7 +17943,7 @@
 	batch-compiling for bootstrap).
 
 2008-07-15  Chris Hall  <chris@web.workinglinux.com>  (tiny change)
-            YAMAMOTO Mitsuharu  <mituharu@math.s.chiba-u.ac.jp>
+	    YAMAMOTO Mitsuharu  <mituharu@math.s.chiba-u.ac.jp>
 
 	* frame.c (make_initial_frame): Call init_frame_faces(f) in
 	CANNOT_DUMP case -- fix crash due to different init order.
@@ -18561,7 +18561,7 @@
 	(USG_SHARED_LIBRARIES): Remove duplicate definition.
 
 2008-06-26  Juanma Barranquero  <lekktu@gmail.com>
-            Eli Zaretskii  <eliz@gnu.org>
+	    Eli Zaretskii  <eliz@gnu.org>
 
 	* makefile.w32-in (LOCAL_FLAGS):
 	Don't include WINDOWSNT, DOS_NT and _UCHAR_T.
@@ -18809,7 +18809,7 @@
 	the property of LFACE_FONT of LFACE (if any).
 
 2008-06-21  Seiji Zenitani  <zenitani@mac.com>
-            Ryo Yoshitake  <ryo@shiftmode.net>
+	    Ryo Yoshitake  <ryo@shiftmode.net>
 
 	* xterm.c (x_set_frame_alpha): Add x_catch_errors for bug#437.
 
@@ -19905,7 +19905,7 @@
 	* xterm.c (x_set_frame_alpha): Move declarations before statements.
 
 2008-05-21  Seiji Zenitani  <zenitani@mac.com>
-            Ryo Yoshitake  <ryo@shiftmode.net>
+	    Ryo Yoshitake  <ryo@shiftmode.net>
 
 	* frame.c (Qalpha): Add a new frame parameter `alpha'.
 	(Vframe_alpha_lower_limit): New variable.
@@ -20793,7 +20793,7 @@
 
 	* dired.c (file_name_completion): Fix up the encoding/decoding issue
 	some more.  Copy some of the code from Ftry_completions.
-	Remove special case code that dates back to revision 1.1 when the
+	Remove special case code that dates back to initial revision when the
 	slash was only added when necessary and that can't trigger nowadays.
 
 2008-04-27  Kenichi Handa  <handa@m17n.org>
@@ -31385,7 +31385,7 @@ See ChangeLog.10 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2007-2014 Free Software Foundation, Inc.
+  Copyright (C) 2007-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

@@ -1,6 +1,6 @@
 /* Simple built-in editing commands.
 
-Copyright (C) 1985, 1993-1998, 2001-2014 Free Software Foundation, Inc.
+Copyright (C) 1985, 1993-1998, 2001-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -30,11 +30,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "keymap.h"
 #include "dispextern.h"
 #include "frame.h"
-
-static Lisp_Object Qkill_forward_chars, Qkill_backward_chars;
-
-/* A possible value for a buffer's overwrite-mode variable.  */
-static Lisp_Object Qoverwrite_mode_binary;
 
 static int internal_self_insert (int, EMACS_INT);
 
@@ -131,12 +126,7 @@ successfully moved (for the return value).  */)
       count = XINT (n);
     }
 
-  if (count <= 0)
-    pos = find_newline (PT, PT_BYTE, BEGV, BEGV_BYTE, count - 1,
-			&shortage, &pos_byte, 1);
-  else
-    pos = find_newline (PT, PT_BYTE, ZV, ZV_BYTE, count,
-			&shortage, &pos_byte, 1);
+  shortage = scan_newline_from_point (count, &pos, &pos_byte);
 
   SET_PT_BOTH (pos, pos_byte);
 
@@ -280,8 +270,8 @@ At the end, it runs `post-self-insert-hook'.  */)
   bool remove_boundary = 1;
   CHECK_NUMBER (n);
 
-  if (XFASTINT (n) < 1)
-    error ("Nonpositive repetition argument %"pI"d", XFASTINT (n));
+  if (XFASTINT (n) < 0)
+    error ("Negative repetition argument %"pI"d", XFASTINT (n));
 
   if (!EQ (Vthis_command, KVAR (current_kboard, Vlast_command)))
     nonundocount = 0;
@@ -315,7 +305,7 @@ At the end, it runs `post-self-insert-hook'.  */)
     int val = internal_self_insert (character, XFASTINT (n));
     if (val == 2)
       nonundocount = 0;
-    frame_make_pointer_invisible ();
+    frame_make_pointer_invisible (SELECTED_FRAME ());
   }
 
   return Qnil;
@@ -326,9 +316,6 @@ At the end, it runs `post-self-insert-hook'.  */)
    If this insertion is suitable for direct output (completely simple),
    return 0.  A value of 1 indicates this *might* not have been simple.
    A value of 2 means this did things that call for an undo boundary.  */
-
-static Lisp_Object Qexpand_abbrev;
-static Lisp_Object Qpost_self_insert_hook;
 
 static int
 internal_self_insert (int c, EMACS_INT n)
@@ -359,9 +346,7 @@ internal_self_insert (int c, EMACS_INT n)
     }
   else
     {
-      str[0] = (SINGLE_BYTE_CHAR_P (c)
-		? c
-		: multibyte_char_to_unibyte (c));
+      str[0] = SINGLE_BYTE_CHAR_P (c) ? c : CHAR_TO_BYTE8 (c);
       len = 1;
     }
   if (!NILP (overwrite)
@@ -514,7 +499,7 @@ internal_self_insert (int c, EMACS_INT n)
     }
 
   /* Run hooks for electric keys.  */
-  Frun_hooks (1, &Qpost_self_insert_hook);
+  run_hook (Qpost_self_insert_hook);
 
   return hairy;
 }
@@ -526,7 +511,10 @@ syms_of_cmds (void)
 {
   DEFSYM (Qkill_backward_chars, "kill-backward-chars");
   DEFSYM (Qkill_forward_chars, "kill-forward-chars");
+
+  /* A possible value for a buffer's overwrite-mode variable.  */
   DEFSYM (Qoverwrite_mode_binary, "overwrite-mode-binary");
+
   DEFSYM (Qexpand_abbrev, "expand-abbrev");
   DEFSYM (Qpost_self_insert_hook, "post-self-insert-hook");
 

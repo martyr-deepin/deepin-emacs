@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2014 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2015 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Command Loop
@@ -147,6 +147,7 @@ code.
 @node Using Interactive
 @subsection Using @code{interactive}
 @cindex arguments, interactive entry
+@cindex interactive spec, using
 
   This section describes how to write the @code{interactive} form that
 makes a Lisp function an interactively-callable command, and how to
@@ -589,31 +590,26 @@ Put them into three windows, selecting the last one."
 @cindex alternatives, defining
 
 The macro @code{define-alternatives} can be used to define
-@dfn{generic commands}.  Generic commands are interactive functions
-whose implementation can be selected among several alternatives, as a
-matter of user preference.
+@dfn{generic commands}.  These are interactive functions whose
+implementation can be selected from several alternatives, as a matter
+of user preference.
 
 @defmac define-alternatives command &rest customizations
-Define the new command `COMMAND'.
+Define the new command @var{command}, a symbol.
 
-The argument `COMMAND' should be a symbol.
+When a user runs @kbd{M-x @var{command} @key{RET}} for the first time,
+Emacs prompts for which real form of the command to use, and records
+the selection by way of a custom variable.  Using a prefix argument
+repeats this process of choosing an alternative.
 
-When a user runs @kbd{M-x COMMAND @key{RET}} for the first time, Emacs
-will prompt for which alternative to use and record the selected
-command as a custom variable.
+The variable @code{@var{command}-alternatives} should contain an alist
+with alternative implementations of @var{command}.
+Until this variable is set, @code{define-alternatives} has no effect.
 
-Running @kbd{C-u M-x COMMAND @key{RET}} prompts again for an
-alternative and overwrites the previous choice.
-
-The variable @code{COMMAND-alternatives} contains an alist
-(@pxref{Association Lists}) with alternative implementations of
-`COMMAND'.  @code{define-alternatives} does not have any effect until
-this variable is set.
-
-If @var{customizations} is non-@var{nil}, it should be composed of
-alternating @code{defcustom} keywords and values to add to the
-declaration of @code{COMMAND-alternatives} (typically :group and
-:version).
+If @var{customizations} is non-@code{nil}, it should consist of
+alternating @code{defcustom} keywords (typically @code{:group} and
+@code{:version}) and values to add to the declaration of
+@code{@var{command}-alternatives}.
 @end defmac
 
 @node Interactive Call
@@ -752,6 +748,8 @@ part of the prompt.
 
 @node Distinguish Interactive
 @section Distinguish Interactive Calls
+@cindex distinguish interactive calls
+@cindex is this call interactive
 
   Sometimes a command should display additional visual feedback (such
 as an informative message in the echo area) for interactive calls
@@ -840,6 +838,7 @@ Here is another example that contrasts direct and indirect calls to
 
 @node Command Loop Info
 @section Information from the Command Loop
+@cindex command loop variables
 
 The editor command loop sets several Lisp variables to keep status
 records for itself and for commands that are run.  With the exception of
@@ -1396,8 +1395,9 @@ The position in the string where the click occurred.
 @item @var{text-pos}
 For clicks on a marginal area or on a fringe, this is the buffer
 position of the first visible character in the corresponding line in
-the window.  For other events, it is the current buffer position in
-the window.
+the window.  For clicks on the mode line or the header line, this is
+@code{nil}.  For other events, it is the buffer position closest to
+the click.
 
 @item @var{col}, @var{row}
 These are the actual column and row coordinate numbers of the glyph
@@ -1863,6 +1863,7 @@ bind it to the @code{signal usr1} event sequence:
 @node Classifying Events
 @subsection Classifying Events
 @cindex event type
+@cindex classifying events
 
   Every event has an @dfn{event type}, which classifies the event for
 key binding purposes.  For a keyboard event, the event type equals the
@@ -2052,23 +2053,24 @@ POSITION is assumed to lie in a window text area."
 @defun posn-col-row position
 This function returns a cons cell @code{(@var{col} .  @var{row})},
 containing the estimated column and row corresponding to buffer
-position @var{position}.  The return value is given in units of the
-frame's default character width and height, as computed from the
-@var{x} and @var{y} values corresponding to @var{position}.  (So, if
-the actual characters have non-default sizes, the actual row and
-column may differ from these computed values.)
+position in @var{position}.  The return value is given in units of the
+frame's default character width and default line height (including
+spacing), as computed from the @var{x} and @var{y} values
+corresponding to @var{position}.  (So, if the actual characters have
+non-default sizes, the actual row and column may differ from these
+computed values.)
 
 Note that @var{row} is counted from the top of the text area.  If the
-window possesses a header line (@pxref{Header Lines}), it is
-@emph{not} counted as the first line.
+window given by @var{position} possesses a header line (@pxref{Header
+Lines}), it is @emph{not} included in the @var{row} count.
 @end defun
 
 @defun posn-actual-col-row position
 Return the actual row and column in @var{position}, as a cons cell
 @code{(@var{col} . @var{row})}.  The values are the actual row and
-column numbers in the window.  @xref{Click Events}, for details.  It
-returns @code{nil} if @var{position} does not include actual positions
-values.
+column numbers in the window given by @var{position}.  @xref{Click
+Events}, for details.  The function returns @code{nil} if
+@var{position} does not include actual position values.
 @end defun
 
 @defun posn-string position
@@ -2587,6 +2589,9 @@ then continues to wait for a valid input character, or keyboard-quit.
 
 @node Event Mod
 @subsection Modifying and Translating Input Events
+@cindex modifiers of events
+@cindex translating input events
+@cindex event translation
 
   Emacs modifies every event it reads according to
 @code{extra-keyboard-modifiers}, then translates it through
@@ -2668,6 +2673,7 @@ at the level of @code{read-key-sequence}.
 
 @node Invoking the Input Method
 @subsection Invoking the Input Method
+@cindex invoking input method
 
   The event-reading functions invoke the current input method, if any
 (@pxref{Input Methods}).  If the value of @code{input-method-function}

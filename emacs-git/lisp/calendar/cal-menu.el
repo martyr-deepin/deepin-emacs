@@ -1,6 +1,6 @@
 ;;; cal-menu.el --- calendar functions for menu bar and popup menu support
 
-;; Copyright (C) 1994-1995, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1995, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Edward M. Reingold <reingold@cs.uiuc.edu>
 ;;         Lara Rios <lrios@coewl.cen.uiuc.edu>
@@ -277,14 +277,6 @@ is non-nil."
     ["Sunrise times for month" calendar-sunrise-sunset-month]
     ["Show diary" diary-show-all-entries]
     ["Exit calendar" calendar-exit]))
-
-;; Undocumented and probably useless.
-(defvar cal-menu-load-hook nil
-  "Hook run on loading of the `cal-menu' package.")
-(make-obsolete-variable 'cal-menu-load-hook
-                        "it will be removed in future." "23.1")
-
-(run-hooks 'cal-menu-load-hook)
 
 (provide 'cal-menu)
 

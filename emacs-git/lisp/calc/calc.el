@@ -1,6 +1,6 @@
 ;;; calc.el --- the GNU Emacs calculator
 
-;; Copyright (C) 1990-1993, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
 ;; Maintainer: Jay Belanger <jay.p.belanger@gmail.com>
@@ -147,7 +147,7 @@
 (declare-function calc-edit-finish "calc-yank" (&optional keep))
 (declare-function calc-edit-cancel "calc-yank" ())
 (declare-function calc-locate-cursor-element "calc-yank" (pt))
-(declare-function calc-do-quick-calc "calc-aent" ())
+(declare-function calc-do-quick-calc "calc-aent" (&optional insert))
 (declare-function calc-do-calc-eval "calc-aent" (str separator args))
 (declare-function calc-do-keypad "calc-keypd" (&optional full-display interactive))
 (declare-function calcFunc-unixtime "calc-forms" (date &optional zone))
@@ -1549,10 +1549,12 @@ commands given here will actually operate on the *Calculator* stack."
         (and kbuf (bury-buffer kbuf))))))
 
 ;;;###autoload
-(defun quick-calc ()
-  "Do a quick calculation in the minibuffer without invoking full Calculator."
-  (interactive)
-  (calc-do-quick-calc))
+(defun quick-calc (&optional insert)
+  "Do a quick calculation in the minibuffer without invoking full Calculator.
+With prefix argument INSERT, insert the result in the current
+buffer.  Otherwise, the result is copied into the kill ring."
+  (interactive "P")
+  (calc-do-quick-calc insert))
 
 ;;;###autoload
 (defun calc-eval (str &optional separator &rest args)
@@ -2773,9 +2775,18 @@ largest Emacs integer.")
 
 ;; Coerce integer A to be a bignum.  [B S]
 (defun math-bignum (a)
-  (if (>= a 0)
-      (cons 'bigpos (math-bignum-big a))
-    (cons 'bigneg (math-bignum-big (- a)))))
+  (cond
+   ((>= a 0)
+    (cons 'bigpos (math-bignum-big a)))
+   ((= a most-negative-fixnum)
+    ;; Note: cannot get the negation directly because
+    ;; (- most-negative-fixnum) is most-negative-fixnum.
+    ;;
+    ;; most-negative-fixnum := -most-positive-fixnum - 1
+    (math-sub (cons 'bigneg (math-bignum-big most-positive-fixnum))
+	      1))
+   (t
+    (cons 'bigneg (math-bignum-big (- a))))))
 
 (defun math-bignum-big (a)   ; [L s]
   (if (= a 0)

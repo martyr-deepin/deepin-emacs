@@ -1,6 +1,6 @@
 ;;; gnus.el --- a newsreader for GNU Emacs
 
-;; Copyright (C) 1987-1990, 1993-1998, 2000-2014 Free Software
+;; Copyright (C) 1987-1990, 1993-1998, 2000-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Masanobu UMEDA <umerin@flab.flab.fujitsu.junet>
@@ -326,8 +326,9 @@ be set in `.emacs' instead."
   (if (fboundp 'find-image)
       (defun gnus-mode-line-buffer-identification (line)
 	(let ((str (car-safe line))
-	      (load-path (mm-image-load-path)))
-	  (if (and (stringp str)
+	      (load-path (append (mm-image-load-path) load-path)))
+	  (if (and (display-graphic-p)
+		   (stringp str)
 		   (string-match "^Gnus:" str))
 	      (progn (add-text-properties
 		      0 5

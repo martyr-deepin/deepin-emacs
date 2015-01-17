@@ -1,6 +1,6 @@
 ;;; url-handlers.el --- file-name-handler stuff for URL loading
 
-;; Copyright (C) 1996-1999, 2004-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2015 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes, hypermedia
 
@@ -33,7 +33,6 @@
 (autoload 'url-expand-file-name "url-expand" "Convert url to a fully specified url, and canonicalize it.")
 (autoload 'mm-dissect-buffer "mm-decode" "Dissect the current buffer and return a list of MIME handles.")
 (autoload 'url-scheme-get-property "url-methods" "Get property of a URL SCHEME.")
-(autoload 'url-http-parse-response "url-http" "Parse just the response code.")
 
 ;; Always used after mm-dissect-buffer and defined in the same file.
 (declare-function mm-save-part-to-file "mm-decode" (handle file))
@@ -52,7 +51,7 @@
 ;; delete-directory			Finished (DAV)
 ;; delete-file				Finished (DAV)
 ;; diff-latest-backup-file
-;; directory-file-name			unnecessary (what about VMS)?
+;; directory-file-name			unnecessary
 ;; directory-files			Finished (DAV)
 ;; dired-call-process
 ;; dired-compress-file
@@ -123,7 +122,7 @@ regular expression avoids conflicts with local files that look
 like URLs \(Gnus is particularly bad at this\)."
   :group 'url
   :type 'regexp
-  :version "24.5"
+  :version "25.1"
   :set (lambda (symbol value)
 	 (let ((enable url-handler-mode))
 	   (url-handler-mode 0)
@@ -138,34 +137,41 @@ like URLs \(Gnus is particularly bad at this\)."
 	(inhibit-file-name-operation operation))
     (apply operation args)))
 
+(defvar url-file-handler-load-in-progress nil
+  "Check for recursive load.")
+
 ;;;###autoload
 (defun url-file-handler (operation &rest args)
   "Function called from the `file-name-handler-alist' routines.
 OPERATION is what needs to be done (`file-exists-p', etc).  ARGS are
 the arguments that would have been passed to OPERATION."
-  ;; Check, whether there are arguments we want pass to Tramp.
-  (if (catch :do
-	(dolist (url (cons default-directory args))
-	  (and (member
-		(url-type (url-generic-parse-url (and (stringp url) url)))
-		url-tramp-protocols)
-	       (throw :do t))))
-      (apply 'url-tramp-file-handler operation args)
-    ;; Otherwise, let's do the job.
-    (let ((fn (get operation 'url-file-handlers))
-	  (val nil)
-	  (hooked nil))
-      (if (and (not fn) (intern-soft (format "url-%s" operation))
-	       (fboundp (intern-soft (format "url-%s" operation))))
-	  (error "Missing URL handler mapping for %s" operation))
-      (if fn
-	  (setq hooked t
-		val (save-match-data (apply fn args)))
-	(setq hooked nil
-	      val (url-run-real-handler operation args)))
-      (url-debug 'handlers "%s %S%S => %S" (if hooked "Hooked" "Real")
-		 operation args val)
-      val)))
+  ;; Avoid recursive load.
+  (if (and load-in-progress url-file-handler-load-in-progress)
+      (url-run-real-handler operation args)
+    (let ((url-file-handler-load-in-progress load-in-progress))
+      ;; Check, whether there are arguments we want pass to Tramp.
+      (if (catch :do
+            (dolist (url (cons default-directory args))
+              (and (member
+                    (url-type (url-generic-parse-url (and (stringp url) url)))
+                    url-tramp-protocols)
+                   (throw :do t))))
+          (apply 'url-tramp-file-handler operation args)
+        ;; Otherwise, let's do the job.
+        (let ((fn (get operation 'url-file-handlers))
+              (val nil)
+              (hooked nil))
+          (if (and (not fn) (intern-soft (format "url-%s" operation))
+                   (fboundp (intern-soft (format "url-%s" operation))))
+              (error "Missing URL handler mapping for %s" operation))
+          (if fn
+              (setq hooked t
+                    val (save-match-data (apply fn args)))
+            (setq hooked nil
+                  val (url-run-real-handler operation args)))
+          (url-debug 'handlers "%s %S%S => %S" (if hooked "Hooked" "Real")
+                     operation args val)
+          val)))))
 
 (defun url-file-handler-identity (&rest args)
   ;; Identity function
@@ -301,17 +307,21 @@ They count bytes from the beginning of the body."
       (insert data))
     (list (length data) charset)))
 
+(defvar url-http-codes)
+
 ;;;###autoload
 (defun url-insert-file-contents (url &optional visit beg end replace)
   (let ((buffer (url-retrieve-synchronously url)))
     (unless buffer (signal 'file-error (list url "No Data")))
     (with-current-buffer buffer
-      (let ((response (url-http-parse-response)))
-        (if (and (>= response 200) (< response 300))
-            (goto-char (point-min))
-          (let ((desc (buffer-substring-no-properties (1+ (point))
-                                                      (line-end-position))))
+      ;; XXX: This is HTTP/S specific and should be moved to url-http
+      ;; instead.  See http://debbugs.gnu.org/17549.
+      (when (bound-and-true-p url-http-response-status)
+        (unless (and (>= url-http-response-status 200)
+                     (< url-http-response-status 300))
+          (let ((desc (nth 2 (assq url-http-response-status url-http-codes))))
             (kill-buffer buffer)
+            ;; Signal file-error per http://debbugs.gnu.org/16733.
             (signal 'file-error (list url desc))))))
     (if visit (setq buffer-file-name url))
     (save-excursion
@@ -326,6 +336,7 @@ They count bytes from the beginning of the body."
           ;; usual heuristic/rules that we apply to files.
           (decode-coding-inserted-region start (point) url visit beg end replace))
         (list url (car size-and-charset))))))
+
 (put 'insert-file-contents 'url-file-handlers 'url-insert-file-contents)
 
 (defun url-file-name-completion (url directory &optional predicate)

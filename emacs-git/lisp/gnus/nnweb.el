@@ -1,6 +1,6 @@
 ;;; nnweb.el --- retrieving articles via web search engines
 
-;; Copyright (C) 1996-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -438,7 +438,7 @@ Valid types include `google', `dejanews', and `gmane'.")
   t)
 
 (defun nnweb-google-identity (url)
-  "Return an unique identifier based on URL."
+  "Return a unique identifier based on URL."
   (if (string-match "selm=\\([^ &>]+\\)" url)
       (match-string 1 url)
     url))

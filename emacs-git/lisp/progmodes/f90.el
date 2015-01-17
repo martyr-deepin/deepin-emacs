@@ -1,6 +1,6 @@
 ;;; f90.el --- Fortran-90 mode (free format)  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1995-1997, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1997, 2000-2015 Free Software Foundation, Inc.
 
 ;; Author: Torbjörn Einarsson <Torbjorn.Einarsson@era.ericsson.se>
 ;; Maintainer: Glenn Morris <rgm@gnu.org>
@@ -71,8 +71,8 @@
 ;; For example:
 ;; (add-to-list 'auto-mode-alist '("\\.f\\'" . f90-mode))
 
-;; Once you have entered f90-mode, you may get more info by using
-;; the command describe-mode (C-h m). For online help use
+;; Once you have entered f90-mode, you can get more info by using
+;; the command describe-mode (C-h m).  For help use
 ;; C-h f <Name of function you want described>, or
 ;; C-h v <Name of variable you want described>.
 
@@ -830,7 +830,7 @@ Can be overridden by the value of `font-lock-maximum-decoration'.")
   (font-lock-mode 1)
   (setq font-lock-keywords
         (symbol-value (intern-soft (format "f90-font-lock-keywords-%d" n))))
-  (font-lock-fontify-buffer))
+  (font-lock-flush))
 
 (defun f90-font-lock-1 ()
   "Set `font-lock-keywords' to `f90-font-lock-keywords-1'."

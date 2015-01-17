@@ -1,6 +1,6 @@
 ;;; esh-ext.el --- commands external to Eshell  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -296,6 +296,11 @@ line of the form #!<interp>."
       (let ((fullname (if (file-name-directory file) file
 			(eshell-search-path file)))
 	    (suffixes eshell-binary-suffixes))
+	(if (and fullname
+		 (not (file-remote-p fullname))
+		 (file-remote-p default-directory))
+	    (setq fullname (expand-file-name
+			    (concat "./" fullname) default-directory)))
 	(if (and fullname (not (or eshell-force-execution
 				   (file-executable-p fullname))))
 	    (while suffixes

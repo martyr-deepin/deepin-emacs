@@ -1,6 +1,6 @@
 ;;; diff-mode.el --- a mode for viewing/editing context diffs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: convenience patch diff vc
@@ -302,14 +302,9 @@ well."
 (defvar diff-added-face 'diff-added)
 
 (defface diff-changed
-  ;; We normally apply a `shadow'-based face on the `diff-context'
-  ;; face, and keep `diff-changed' the default.
-  '((((class color grayscale) (min-colors 88)))
-    ;; If the terminal lacks sufficient colors for shadowing,
-    ;; highlight changed lines explicitly.
-    (((class color))
-     :foreground "yellow"))
+  '((t nil))
   "`diff-mode' face used to highlight changed lines."
+  :version "25.1"
   :group 'diff-mode)
 (define-obsolete-face-alias 'diff-changed-face 'diff-changed "22.1")
 (defvar diff-changed-face 'diff-changed)
@@ -343,8 +338,12 @@ well."
 (defvar diff-function-face 'diff-function)
 
 (defface diff-context
-  '((((class color grayscale) (min-colors 88)) :inherit shadow))
+  '((((class color grayscale) (min-colors 88) (background light))
+     :foreground "#333333")
+    (((class color grayscale) (min-colors 88) (background dark))
+     :foreground "#dddddd"))
   "`diff-mode' face used to highlight context and other side-information."
+  :version "25.1"
   :group 'diff-mode)
 (define-obsolete-face-alias 'diff-context-face 'diff-context "22.1")
 (defvar diff-context-face 'diff-context)
@@ -1221,6 +1220,9 @@ else cover the whole buffer."
 		(?- (cl-incf minus))
 		(?! (cl-incf bang))
 		((or ?\\ ?#) nil)
+		(?\n (if diff-valid-unified-empty-line
+			 (cl-incf space)
+		       (setq space 0 plus 0 minus 0 bang 0)))
 		(_  (setq space 0 plus 0 minus 0 bang 0)))
 	    (cond
 	     ((looking-at diff-hunk-header-re-unified)
@@ -1815,6 +1817,16 @@ With a prefix argument, try to REVERSE the hunk."
     (diff-hunk-status-msg line-offset (diff-xor reverse switched) t)))
 
 
+(defun diff-kill-applied-hunks ()
+  "Kill all hunks that have already been applied starting at point."
+  (interactive)
+  (while (not (eobp))
+    (pcase-let ((`(,buf ,line-offset ,pos ,src ,_dst ,switched)
+                 (diff-find-source-location nil nil)))
+      (if (and line-offset switched)
+          (diff-hunk-kill)
+        (diff-hunk-next)))))
+
 (defalias 'diff-mouse-goto-source 'diff-goto-source)
 
 (defun diff-goto-source (&optional other-file event)
@@ -1916,7 +1928,7 @@ For use in `add-log-current-defun-function'."
 
 ;;; Fine change highlighting.
 
-(defface diff-refine-change
+(defface diff-refine-changed
   '((((class color) (min-colors 88) (background light))
      :background "#ffff55")
     (((class color) (min-colors 88) (background dark))
@@ -1924,6 +1936,7 @@ For use in `add-log-current-defun-function'."
     (t :inverse-video t))
   "Face used for char-based changes shown by `diff-refine-hunk'."
   :group 'diff-mode)
+(define-obsolete-face-alias 'diff-refine-change 'diff-refine-changed "24.5")
 
 (defface diff-refine-removed
   '((default

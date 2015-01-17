@@ -1,6 +1,6 @@
 ;;; package-test.el --- Tests for the Emacs package system
 
-;; Copyright (C) 2013-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2015 Free Software Foundation, Inc.
 
 ;; Author: Daniel Hackney <dan@haxney.org>
 ;; Version: 1.0
@@ -89,6 +89,8 @@
   "Set up temporary locations and variables for testing."
   (declare (indent 1))
   `(let* ((package-test-user-dir (make-temp-file "pkg-test-user-dir-" t))
+          (process-environment (cons (format "HOME=%s" package-test-user-dir)
+                                     process-environment))
           (package-user-dir package-test-user-dir)
           (package-archives `(("gnu" . ,package-test-data-dir)))
           (old-yes-no-defn (symbol-function 'yes-or-no-p))
@@ -186,7 +188,8 @@ Must called from within a `tar-mode' buffer."
         (insert-file-contents (expand-file-name "simple-single-pkg.el"
                                                 simple-pkg-dir))
         (should (string= (buffer-string)
-                         (concat "(define-package \"simple-single\" \"1.3\" "
+                         (concat ";;; -*- no-byte-compile: t -*-\n"
+                                 "(define-package \"simple-single\" \"1.3\" "
                                  "\"A single-file package "
                                  "with no dependencies\" 'nil "
                                  ":url \"http://doodles.au\""
@@ -227,6 +230,23 @@ Must called from within a `tar-mode' buffer."
     (package-refresh-contents)
     (package-install 'simple-single)))
 
+(ert-deftest package-test-install-prioritized ()
+  "Install a lower version from a higher-prioritized archive."
+  (with-package-test ()
+    (let* ((newer-version (expand-file-name "data/package/newer-versions"
+                                            package-test-file-dir))
+           (package-archives `(("older" . ,package-test-data-dir)
+                               ("newer" . ,newer-version)))
+           (package-archive-priorities '(("newer" . 100))))
+
+      (package-initialize)
+      (package-refresh-contents)
+      (package-install 'simple-single)
+
+      (let ((installed (cadr (assq 'simple-single package-alist))))
+        (should (version-list-= '(1 3)
+                                (package-desc-version installed)))))))
+
 (ert-deftest package-test-install-multifile ()
   "Check properties of the installed multi-file package."
   (with-package-test (:basedir "data/package" :install '(multi-file))
@@ -264,7 +284,7 @@ Must called from within a `tar-mode' buffer."
       (should (package-installed-p 'simple-single))
       (switch-to-buffer "*Packages*")
       (goto-char (point-min))
-      (should (re-search-forward "^\\s-+simple-single\\s-+1.3\\s-+unsigned" nil t))
+      (should (re-search-forward "^\\s-+simple-single\\s-+1.3\\s-+installed" nil t))
       (goto-char (point-min))
       (should-not (re-search-forward "^\\s-+simple-single\\s-+1.3\\s-+\\(available\\|new\\)" nil t))
       (kill-buffer buf))))
@@ -286,7 +306,7 @@ Must called from within a `tar-mode' buffer."
         ;; New version should be available and old version should be installed
         (goto-char (point-min))
         (should (re-search-forward "^\\s-+simple-single\\s-+1.4\\s-+new" nil t))
-        (should (re-search-forward "^\\s-+simple-single\\s-+1.3\\s-+unsigned" nil t))
+        (should (re-search-forward "^\\s-+simple-single\\s-+1.3\\s-+installed" nil t))
 
         (goto-char (point-min))
         (should (re-search-forward "^\\s-+new-pkg\\s-+1.0\\s-+\\(available\\|new\\)" nil t))
@@ -317,7 +337,7 @@ Must called from within a `tar-mode' buffer."
     (with-fake-help-buffer
      (describe-package 'simple-single)
      (goto-char (point-min))
-     (should (search-forward "simple-single is an unsigned package." nil t))
+     (should (search-forward "simple-single is an installed package." nil t))
      (should (search-forward
               (format "Status: Installed in `%s/' (unsigned)."
                       (expand-file-name "simple-single-1.3" package-user-dir))
@@ -360,11 +380,15 @@ Must called from within a `tar-mode' buffer."
 
 (ert-deftest package-test-signed ()
   "Test verifying package signature."
-  :expected-result (condition-case nil
-		       (progn
+  (skip-unless (ignore-errors
+		 (let ((homedir (make-temp-file "package-test" t)))
+		   (unwind-protect
+		       (let ((process-environment
+			      (cons (format "HOME=%s" homedir)
+				    process-environment)))
 			 (epg-check-configuration (epg-configuration))
-			 :passed)
-		     (error :failed))
+			 t)
+		     (delete-directory homedir t)))))
   (let* ((keyring (expand-file-name "key.pub" package-test-data-dir))
 	 (package-test-data-dir
 	   (expand-file-name "data/package/signed" package-test-file-dir)))
@@ -388,6 +412,73 @@ Must called from within a `tar-mode' buffer."
 		(format "Status: Installed in `%s/'."
 			(expand-file-name "signed-good-1.0" package-user-dir))
 		nil t))))))
+
+
+
+;;; Tests for package-x features.
+
+(require 'package-x)
+
+(defvar package-x-test--single-archive-entry-1-3
+  (cons 'simple-single
+        (package-make-ac-desc '(1 3) nil
+                              "A single-file package with no dependencies"
+                              'single
+                              '((:url . "http://doodles.au"))))
+  "Expected contents of the archive entry from the \"simple-single\" package.")
+
+(defvar package-x-test--single-archive-entry-1-4
+  (cons 'simple-single
+        (package-make-ac-desc '(1 4) nil
+                              "A single-file package with no dependencies"
+                              'single
+                              nil))
+  "Expected contents of the archive entry from the updated \"simple-single\" package.")
+
+(ert-deftest package-x-test-upload-buffer ()
+  "Test creating an \"archive-contents\" file"
+  (with-package-test (:basedir "data/package"
+                               :file "simple-single-1.3.el"
+                               :upload-base t)
+    (package-upload-buffer)
+    (should (file-exists-p (expand-file-name "archive-contents"
+                                             package-archive-upload-base)))
+    (should (file-exists-p (expand-file-name "simple-single-1.3.el"
+                                             package-archive-upload-base)))
+    (should (file-exists-p (expand-file-name "simple-single-readme.txt"
+                                             package-archive-upload-base)))
+
+    (let (archive-contents)
+      (with-temp-buffer
+        (insert-file-contents
+         (expand-file-name "archive-contents"
+                           package-archive-upload-base))
+        (setq archive-contents
+              (package-read-from-string
+               (buffer-substring (point-min) (point-max)))))
+      (should (equal archive-contents
+                     (list 1 package-x-test--single-archive-entry-1-3))))))
+
+(ert-deftest package-x-test-upload-new-version ()
+  "Test uploading a new version of a package"
+  (with-package-test (:basedir "data/package"
+                               :file "simple-single-1.3.el"
+                               :upload-base t)
+    (package-upload-buffer)
+    (with-temp-buffer
+      (insert-file-contents "newer-versions/simple-single-1.4.el")
+      (package-upload-buffer))
+
+    (let (archive-contents)
+      (with-temp-buffer
+        (insert-file-contents
+         (expand-file-name "archive-contents"
+                           package-archive-upload-base))
+        (setq archive-contents
+              (package-read-from-string
+               (buffer-substring (point-min) (point-max)))))
+      (should (equal archive-contents
+                     (list 1 package-x-test--single-archive-entry-1-4))))))
 
 (provide 'package-test)
 

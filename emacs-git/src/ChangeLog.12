@@ -1,6 +1,6 @@
 2013-03-11  Glenn Morris  <rgm@gnu.org>
 
-        * Version 24.3 released.
+	* Merge in all changes up to version 24.3 release.
 
 2013-03-11  Paul Eggert  <eggert@cs.ucla.edu>
 
@@ -2327,7 +2327,7 @@
 
 2012-12-08  Fabrice Popineau  <fabrice.popineau@gmail.com>
 
-	* w32fns.c (emacs_abort): Don't do arithmetics on void pointers.
+	* w32fns.c (emacs_abort): Don't do arithmetic on void pointers.
 
 2012-12-08  Eli Zaretskii  <eliz@gnu.org>
 
@@ -2606,7 +2606,7 @@
 2012-11-30  Juanma Barranquero  <lekktu@gmail.com>
 
 	* doc.c (Fdocumentation): Re-add handling of function-documentation,
-	accidentally removed in revno:110851 (bug#13034).
+	accidentally removed in 2012-11-09T04:10:16Z!monnier@iro.umontreal.ca (bug#13034).
 
 2012-11-29  Dmitry Antipov  <dmantipov@yandex.ru>
 
@@ -4716,7 +4716,7 @@
 	defining an XRectangle structure.
 
 	* w32proc.c (RVA_TO_PTR, w32_executable_type): Fix pointer
-	arithmetics for compatibility with x64.
+	arithmetic for compatibility with x64.
 
 	* w32menu.c (add_menu_item): Use UINT_PTR instead of UINT, for
 	compatibility with x64.
@@ -10752,7 +10752,7 @@
 
 2012-06-23  Eli Zaretskii  <eliz@gnu.org>
 
-	Fix the MS-Windows build broken by revno 108687.
+	Fix the MS-Windows build broken by 2012-06-22T21:17:42Z!eggert@cs.ucla.edu.
 	* w32.c (fdutimens): New function.
 
 	* w32proc.c (sys_select): Adapt to change in the EMACS_TIME type.
@@ -11337,7 +11337,7 @@
 2012-06-08  Juanma Barranquero  <lekktu@gmail.com>
 
 	* dispnew.c (showing_window_margins_p): Wrap in #if 0 to prevent unused
-	function warning (the only call is inside #if 0 since revno:108521).
+	function warning (the only call is inside #if 0 since 2012-06-08T08:44:45Z!eliz@gnu.org).
 
 2012-06-08  Eli Zaretskii  <eliz@gnu.org>
 
@@ -12496,7 +12496,7 @@
 
 2012-05-22  Juanma Barranquero  <lekktu@gmail.com>
 
-	* makefile.w32-in: Follow-up to revno:108341.
+	* makefile.w32-in: Follow-up to 2012-05-22T16:20:27Z!eggert@cs.ucla.edu.
 	(TAGS, TAGS-gmake, CONFIG_H): Remove further references to m/intel386.h.
 
 2012-05-22  Paul Eggert  <eggert@cs.ucla.edu>
@@ -15352,7 +15352,7 @@
 2011-09-17  Eli Zaretskii  <eliz@gnu.org>
 
 	* xdisp.c (produce_stretch_glyph): Another fix for changes made on
-	2011-08-30 (revision 105619).  (Bug#9530)
+	2011-08-30T17:32:44Z!eliz@gnu.org.  (Bug#9530)
 
 2011-09-17  Eli Zaretskii  <eliz@gnu.org>
 
@@ -15462,7 +15462,7 @@
 2011-09-11  Eli Zaretskii  <eliz@gnu.org>
 
 	* xdisp.c (produce_stretch_glyph): Fix a typo made in changes from
-	2011-08-30 (revision 105619).  (Bug#9475)
+	2011-08-30T17:32:44Z!eliz@gnu.org.  (Bug#9475)
 
 2011-09-11  Lars Magne Ingebrigtsen  <larsi@gnus.org>
 
@@ -16926,7 +16926,7 @@
 2011-07-23  Eli Zaretskii  <eliz@gnu.org>
 
 	* xfns.c (unwind_create_frame) [GLYPH_DEBUG]: Adapt to changes in
-	revision 84777 on 2008-02-22.
+	2008-02-22T17:42:09Z!monnier@iro.umontreal.ca.
 
 	* xdisp.c (move_it_in_display_line_to): Record the best matching
 	position for TO_CHARPOS while scanning the line, and restore it on
@@ -17709,7 +17709,7 @@
 	Qgnutls_bootprop_verify_error (which is no longer used).
 
 	* eval.c (find_handler_clause): Remove parameters `sig' and `data',
-	unused since revno:102982 (2011-01-26).  All callers changed.
+	unused since 2011-01-26T20:02:07Z!monnier@iro.umontreal.ca.  All callers changed.
 	Also (re)move comments that are misplaced or no longer relevant.
 
 2011-07-03  Lars Magne Ingebrigtsen  <larsi@gnus.org>
@@ -19353,8 +19353,8 @@
 
 	* eval.c (Qdebug): Now static.
 	* lisp.h (Qdebug): Remove decl.  This reverts a part of the
-	2011-04-26 change (bzr 104015) that inadvertently undid part of
-	the 2011-04-14 change (bzr 103913).
+	2011-04-26T11:26:05Z!dan.colascione@gmail.com that inadvertently undid part of
+	2011-04-14T06:48:41Z!eggert@cs.ucla.edu.
 
 2011-05-29  Chong Yidong  <cyd@stupidchicken.com>
 
@@ -19657,7 +19657,7 @@
 2011-05-18  Christoph Scholtes  <cschol2112@googlemail.com>
 
 	* menu.c: Include limits.h (fixes the MS-Windows build broken by
-	revision 104625).
+	2011-06-18T18:49:19Z!cyd@stupidchicken.com).
 
 2011-05-18  Paul Eggert  <eggert@cs.ucla.edu>
 
@@ -19837,7 +19837,7 @@
 2011-05-06  Eli Zaretskii  <eliz@gnu.org>
 
 	* lread.c: Include limits.h (fixes the MS-Windows build broken by
-	revision 104134).
+	2011-05-06T07:13:19Z!eggert@cs.ucla.edu).
 
 2011-05-06  Paul Eggert  <eggert@cs.ucla.edu>
 
@@ -21608,14 +21608,14 @@
 2011-04-02  Juanma Barranquero  <lekktu@gmail.com>
 
 	* xdisp.c (display_count_lines): Remove parameter `start',
-	unused since revno:20537 (1998-01-01).  All callers changed.
+	unused since 1998-01-01T02:27:27Z!rms@gnu.org.  All callers changed.
 	(get_char_face_and_encoding): Remove parameter `multibyte_p',
-	unused since revno:87605 (2008-05-14).  All callers changed.
+	unused since 2008-05-14T01:40:23Z!handa@m17n.org.  All callers changed.
 	(fill_stretch_glyph_string): Remove parameters `row' and `area',
-	unused at least since Kim's GUI unification at revno:50135 (2003-03-16)
+	unused at least since Kim's GUI unification at 2003-03-16T20:45:46Z!storm@cua.dk
 	and thereabouts.  All callers changed.
 	(get_per_char_metric): Remove parameter `f', unused since
-	revno:87605 (2008-05-14).  All callers changed.
+	2008-05-14T01:40:23Z!handa@m17n.org.  All callers changed.
 
 2011-04-02  Jim Meyering  <meyering@redhat.com>
 
@@ -21719,11 +21719,11 @@
 
 	* dispextern.h (move_it_by_lines):
 	* xdisp.c (move_it_by_lines): Remove parameter `need_y_p', unused
-	since revno:34925 (2000-12-29).  All callers changed.
+	since 2000-12-29T14:24:09Z!gerd@gnu.org.  All callers changed.
 	(message_log_check_duplicate): Remove parameters `prev_bol' and
-	`this_bol', unused since revno:20537 (1998-01-01).  All callers changed.
+	`this_bol', unused since 1998-01-01T02:27:27Z!rms@gnu.org.  All callers changed.
 	(redisplay_internal): Remove parameter `preserve_echo_area',
-	unused since revno:25013 (1999-07-21).  All callers changed.
+	unused since 1999-07-21T21:43:52Z!gerd@gnu.org.  All callers changed.
 
 	* indent.c (Fvertical_motion):
 	* window.c (window_scroll_pixel_based, Frecenter):
@@ -21819,12 +21819,12 @@
 2011-03-28  Juanma Barranquero  <lekktu@gmail.com>
 
 	* coding.c (encode_designation_at_bol): Remove parameter `charbuf_end',
-	unused since revno:43563.1.17 (2002-03-01) and revno:84043 (2008-02-1).
+	unused since 2002-03-01T01:17:24Z!handa@m17n.org and 2008-02-01T16:01:31Z!miles@gnu.org.
 	All callers changed.
 
 	* lisp.h (multibyte_char_to_unibyte):
 	* character.c (multibyte_char_to_unibyte): Remove parameter `rev_tbl',
-	unused since revno:43563.1.16 (2002-03-01) and revno:84043 (2008-02-1).
+	unused since 2002-03-01T01:16:34Z!handa@m17n.org and 2008-02-01T16:01:31Z!miles@gnu.org.
 	* character.h (CHAR_TO_BYTE8):
 	* cmds.c (internal_self_insert):
 	* editfns.c (general_insert_function):
@@ -21854,23 +21854,23 @@
 	* dispextern.h (string_buffer_position): Remove declaration.
 
 	* print.c (strout): Remove parameter `multibyte', unused since
-	revno:25356 (1999-08-21).  All callers changed.
+	1999-08-21T19:30:21Z!gerd@gnu.org.  All callers changed.
 
 	* search.c (boyer_moore): Remove parameters `len', `pos' and `lim',
-	never used since function introduction in revno:20870 (1998-02-08).
+	never used since function introduction in 1998-02-08T21:33:56Z!rms@gnu.org.
 	All callers changed.
 
 	* w32.c (_wsa_errlist): Use braces for struct initializers.
 
 	* xdisp.c (string_buffer_position_lim): Remove parameter `w',
-	never used since function introduction in revno:36704 (2001-03-09).
+	never used since function introduction in 2001-03-09T18:41:50Z!gerd@gnu.org.
 	All callers changed.
 	(string_buffer_position): Likewise.  Also, make static (it's never
 	used outside xdisp.c).
 	(cursor_row_p): Remove parameter `w', unused since
-	revno:32591 (2000-10-17).  All callers changed.
+	2000-10-17T16:08:57Z!gerd@gnu.org.  All callers changed.
 	(decode_mode_spec): Remove parameter `precision', introduced during
-	Gerd Moellmann's rewrite at revno:25013 (1999-07-21), but never used.
+	Gerd Moellmann's rewrite at 1999-07-21T21:43:52Z!gerd@gnu.org, but never used.
 	All callers changed.
 
 2011-03-27  Jan Djärv  <jan.h.d@swipnet.se>
@@ -21912,15 +21912,15 @@
 	global variable `wget_enum_handle'.
 
 	* keymap.c (describe_vector): Remove parameters `indices' and
-	`char_table_depth', unused since revno:43563.1.32 (2002-03-01).
+	`char_table_depth', unused since 2002-03-01T01:43:26Z!handa@m17n.org.
 	(describe_map, Fdescribe_vector): Adjust calls to `describe_vector'.
 
 	* keyboard.h (timer_check, show_help_echo): Remove unused parameters.
 
 	* keyboard.c (timer_check): Remove parameter `do_it_now',
-	unused since revno:14998 (1996-04-12).
+	unused since 1996-04-12T06:01:29Z!rms@gnu.org.
 	(show_help_echo): Remove parameter `ok_to_overwrite_keystroke_echo',
-	unused since revno:86854 (2008-04-19).
+	unused since 2008-04-19T19:30:53Z!monnier@iro.umontreal.ca.
 
 	* keyboard.c (read_char):
 	* w32menu.c (w32_menu_display_help):
@@ -21933,7 +21933,7 @@
 	* xmenu.c (x_menu_wait_for_event): Adjust calls to `timer_check'.
 
 	* insdel.c (adjust_markers_gap_motion):
-	Remove; no-op since revno:20569 (1998-01-02).
+	Remove; no-op since 1998-01-02T21:29:48Z!rms@gnu.org.
 	(gap_left, gap_right): Don't call it.
 
 2011-03-25  Chong Yidong  <cyd@stupidchicken.com>
@@ -22675,7 +22675,7 @@
 	w32console.c and msdos.c.
 
 	* makefile.w32-in ($(BLD)/term.$(O), ($(BLD)/tparam.$(O)):
-	Depend on $(SRC)/tparam.h, see revno 103623.
+	Depend on $(SRC)/tparam.h, see 2011-03-11T07:24:21Z!eggert@cs.ucla.edu.
 
 2011-03-11  Paul Eggert  <eggert@cs.ucla.edu>
 
@@ -22936,7 +22936,7 @@ See ChangeLog.11 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2014 Free Software Foundation, Inc.
+  Copyright (C) 2011-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

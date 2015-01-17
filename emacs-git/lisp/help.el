@@ -1,6 +1,7 @@
 ;;; help.el --- help commands for Emacs
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2015 Free Software
+;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help, internal
@@ -23,7 +24,7 @@
 
 ;;; Commentary:
 
-;; This code implements GNU Emacs's on-line help system, the one invoked by
+;; This code implements GNU Emacs's built-in help system, the one invoked by
 ;; `M-x help-for-help'.
 
 ;;; Code:
@@ -31,6 +32,10 @@
 ;; Get the macro make-help-screen when this is compiled,
 ;; or run interpreted, but not when the compiled code is loaded.
 (eval-when-compile (require 'help-macro))
+
+;; This makes `with-output-to-temp-buffer' buffers use `help-mode'.
+(add-hook 'temp-buffer-setup-hook 'help-mode-setup)
+(add-hook 'temp-buffer-show-hook 'help-mode-finish)
 
 ;; `help-window-point-marker' is a marker you can move to a valid
 ;; position of the buffer shown in the help window in order to override
@@ -41,6 +46,9 @@
 ;; visible.
 (defvar help-window-point-marker (make-marker)
   "Marker to override default `window-point' in help windows.")
+
+(defvar help-window-old-frame nil
+  "Frame selected at the time `with-help-window' is invoked.")
 
 (defvar help-map
   (let ((map (make-sparse-keymap)))
@@ -198,13 +206,13 @@ d PATTERN   Show a list of functions, variables, and other items whose
               documentation matches the PATTERN (a list of words or a regexp).
 e           Go to the *Messages* buffer which logs echo-area messages.
 f FUNCTION  Display documentation for the given function.
-F COMMAND   Show the on-line manual's section that describes the command.
+F COMMAND   Show the Emacs manual's section that describes the command.
 g           Display information about the GNU project.
 h           Display the HELLO file which illustrates various scripts.
-i           Start the Info documentation reader: read on-line manuals.
+i           Start the Info documentation reader: read included manuals.
 I METHOD    Describe a specific input method, or RET for current.
 k KEYS      Display the full documentation for the key sequence.
-K KEYS      Show the on-line manual's section for the command bound to KEYS.
+K KEYS      Show the Emacs manual's section for the command bound to KEYS.
 l           Show last 300 input keystrokes (lossage).
 L LANG-ENV  Describes a specific language environment, or RET for current.
 m           Display documentation of current minor modes and current major mode,
@@ -214,7 +222,7 @@ p TOPIC     Find packages matching a given topic keyword.
 P PACKAGE   Describe the given Emacs Lisp package.
 r           Display the Emacs manual in Info mode.
 s           Display contents of current syntax table, plus explanations.
-S SYMBOL    Show the section for the given symbol in the on-line manual
+S SYMBOL    Show the section for the given symbol in the Info manual
               for the programming language used in this buffer.
 t           Start the Emacs learn-by-doing tutorial.
 v VARIABLE  Display the given variable's documentation and value.
@@ -444,25 +452,32 @@ is specified by the variable `message-log-max'."
   (info "(efaq)Packages that do not come with Emacs"))
 
 (defun view-lossage ()
-  "Display last 300 input keystrokes.
+  "Display last few input keystrokes and the commands run.
 
 To record all your input, use `open-dribble-file'."
   (interactive)
   (help-setup-xref (list #'view-lossage)
 		   (called-interactively-p 'interactive))
   (with-help-window (help-buffer)
+    (princ " ")
     (princ (mapconcat (lambda (key)
-			(if (or (integerp key) (symbolp key) (listp key))
-			    (single-key-description key)
-			  (prin1-to-string key nil)))
-		      (recent-keys)
+			(cond
+			 ((and (consp key) (null (car key)))
+			  (format "[%s]\n" (if (symbolp (cdr key)) (cdr key)
+					   "anonymous-command")))
+			 ((or (integerp key) (symbolp key) (listp key))
+			  (single-key-description key))
+			 (t
+			  (prin1-to-string key nil))))
+		      (recent-keys 'include-cmds)
 		      " "))
     (with-current-buffer standard-output
       (goto-char (point-min))
-      (while (progn (move-to-column 50) (not (eobp)))
-        (when (search-forward " " nil t)
-          (delete-char -1))
-        (insert "\n"))
+      (while (not (eobp))
+	(move-to-column 50)
+	(unless (eolp)
+	  (fill-region (line-beginning-position) (line-end-position)))
+	(forward-line 1))
       ;; jidanni wants to see the last keystrokes immediately.
       (set-marker help-window-point-marker (point)))))
 
@@ -517,8 +532,10 @@ If INSERT (the prefix arg) is non-nil, insert the message in the buffer."
 		(if fn
 		    (format "Where is command (default %s): " fn)
 		  "Where is command: ")
-		obarray 'commandp t))
-     (list (if (equal val "") fn (intern val)) current-prefix-arg)))
+		obarray 'commandp t nil nil
+		(and fn (symbol-name fn))))
+     (list (unless (equal val "") (intern val))
+	   current-prefix-arg)))
   (unless definition (error "No command"))
   (let ((func (indirect-function definition))
         (defs nil)
@@ -644,6 +661,68 @@ temporarily enables it to allow getting help on disabled items and buttons."
 	(princ (format "%s%s is undefined" key-desc mouse-msg))
       (princ (format "%s%s runs the command %S" key-desc mouse-msg defn)))))
 
+(defun help--key-binding-keymap (key &optional accept-default no-remap position)
+  "Return a keymap holding a binding for KEY within current keymaps.
+The effect of the arguments KEY, ACCEPT-DEFAULT, NO-REMAP and
+POSITION is as documented in the function `key-binding'."
+  (let* ((active-maps (current-active-maps t position))
+         map found)
+    ;; We loop over active maps like key-binding does.
+    (while (and
+            (not found)
+            (setq map (pop active-maps)))
+      (setq found (lookup-key map key accept-default))
+      (when (integerp found)
+        ;; The first `found' characters of KEY were found but not the
+        ;; whole sequence.
+        (setq found nil)))
+    (when found
+      (if (and (symbolp found)
+               (not no-remap)
+               (command-remapping found))
+          ;; The user might want to know in which map the binding is
+          ;; found, or in which map the remapping is found.  The
+          ;; default is to show the latter.
+          (help--key-binding-keymap (vector 'remap found))
+        map))))
+
+(defun help--binding-locus (key position)
+  "Describe in which keymap KEY is defined.
+Return a symbol pointing to that keymap if one exists ; otherwise
+return nil."
+  (let ((map (help--key-binding-keymap key t nil position)))
+    (when map
+      (catch 'found
+        (let ((advertised-syms (nconc
+                                (list 'overriding-terminal-local-map
+                                      'overriding-local-map)
+                                (delq nil
+                                      (mapcar
+                                       (lambda (mode-and-map)
+                                         (let ((mode (car mode-and-map)))
+                                           (when (symbol-value mode)
+                                             (intern-soft
+                                              (format "%s-map" mode)))))
+                                       minor-mode-map-alist))
+                                (list 'global-map
+                                      (intern-soft (format "%s-map" major-mode)))))
+              found)
+          ;; Look into these advertised symbols first.
+          (dolist (sym advertised-syms)
+            (when (and
+                   (boundp sym)
+                   (eq map (symbol-value sym)))
+              (throw 'found sym)))
+          ;; Only look in other symbols otherwise.
+          (mapatoms
+           (lambda (x)
+             (when (and (boundp x)
+                        ;; Avoid let-bound symbols.
+                        (special-variable-p x)
+                        (eq (symbol-value x) map))
+               (throw 'found x))))
+          nil)))))
+
 (defun describe-key (&optional key untranslated up-event)
   "Display documentation of the function invoked by KEY.
 KEY can be any kind of a key sequence; it can include keyboard events,
@@ -706,6 +785,7 @@ temporarily enables it to allow getting help on disabled items and buttons."
 	 (mouse-msg (if (or (memq 'click modifiers) (memq 'down modifiers)
 			    (memq 'drag modifiers)) " at that spot" ""))
 	 (defn (key-binding key t))
+         key-locus key-locus-up key-locus-up-tricky
 	 defn-up defn-up-tricky ev-type
 	 mouse-1-remapped mouse-1-tricky)
 
@@ -744,15 +824,19 @@ temporarily enables it to allow getting help on disabled items and buttons."
 		   (setcar up-event (elt mouse-1-remapped 0)))
 		  (t (setcar up-event 'mouse-2))))
 	  (setq defn-up (key-binding sequence nil nil (event-start up-event)))
+          (setq key-locus-up (help--binding-locus sequence (event-start up-event)))
 	  (when mouse-1-tricky
 	    (setq sequence (vector up-event))
 	    (aset sequence 0 'mouse-1)
-	    (setq defn-up-tricky (key-binding sequence nil nil (event-start up-event))))))
+	    (setq defn-up-tricky (key-binding sequence nil nil (event-start up-event)))
+            (setq key-locus-up-tricky (help--binding-locus sequence (event-start up-event))))))
+      (setq key-locus (help--binding-locus key (event-start event)))
       (with-help-window (help-buffer)
 	(princ (help-key-description key untranslated))
-	(princ (format "\
-%s runs the command %S, which is "
-		       mouse-msg defn))
+	(princ (format "%s runs the command %S%s, which is "
+		       mouse-msg defn (if key-locus
+                                          (format " (found in %s)" key-locus)
+                                        "")))
 	(describe-function-1 defn)
 	(when up-event
 	  (unless (or (null defn-up)
@@ -762,13 +846,15 @@ temporarily enables it to allow getting help on disabled items and buttons."
 
 ----------------- up-event %s----------------
 
-%s%s%s runs the command %S, which is "
+%s%s%s runs the command %S%s, which is "
 			   (if mouse-1-tricky "(short click) " "")
 			   (key-description (vector up-event))
 			   mouse-msg
 			   (if mouse-1-remapped
                                " is remapped to <mouse-2>, which" "")
-			   defn-up))
+			   defn-up (if key-locus-up
+                                       (format " (found in %s)" key-locus-up)
+                                     "")))
 	    (describe-function-1 defn-up))
 	  (unless (or (null defn-up-tricky)
 		      (integerp defn-up-tricky)
@@ -778,10 +864,12 @@ temporarily enables it to allow getting help on disabled items and buttons."
 ----------------- up-event (long click) ----------------
 
 Pressing <%S>%s for longer than %d milli-seconds
-runs the command %S, which is "
+runs the command %S%s, which is "
 			   ev-type mouse-msg
 			   mouse-1-click-follows-link
-			   defn-up-tricky))
+			   defn-up-tricky (if key-locus-up-tricky
+                                              (format " (found in %s)" key-locus-up-tricky)
+                                            "")))
 	    (describe-function-1 defn-up-tricky)))))))
 
 (defun describe-mode (&optional buffer)
@@ -1046,7 +1134,10 @@ of a horizontal combination, restrain its new size by
 `fit-window-to-buffer-horizontally' can inhibit resizing.
 
 If WINDOW is the root window of its frame, resize the frame
-provided `fit-frame-to-buffer' is non-nil."
+provided `fit-frame-to-buffer' is non-nil.
+
+This function may call `preserve-window-size' to preserve the
+size of WINDOW."
   (setq window (window-normalize-window window t))
   (let ((height (if (functionp temp-buffer-max-height)
 		    (with-selected-window window
@@ -1068,20 +1159,30 @@ provided `fit-frame-to-buffer' is non-nil."
 	      (and (eq quit-cadr 'frame)
 		     fit-frame-to-buffer
 		     (eq window (frame-root-window window))))
-	(fit-window-to-buffer window height nil width))))
+	(fit-window-to-buffer window height nil width nil t))))
 
 ;;; Help windows.
-(defcustom help-window-select 'other
-    "Non-nil means select help window for viewing.
+(defcustom help-window-select nil
+  "Non-nil means select help window for viewing.
 Choices are:
+
  never (nil) Select help window only if there is no other window
              on its frame.
- other       Select help window unless the selected window is the
-             only other window on the help window's frame.
+
+ other       Select help window if and only if it appears on the
+             previously selected frame, that frame contains at
+             least two other windows and the help window is
+             either new or showed a different buffer before.
+
  always (t)  Always select the help window.
 
+If this option is non-nil and the help window appears on another
+frame, then give that frame input focus too.  Note also that if
+the help window appears on another frame, it may get selected and
+its frame get input focus even if this option is nil.
+
 This option has effect if and only if the help window was created
-by `with-help-window'"
+by `with-help-window'."
   :type '(choice (const :tag "never (nil)" nil)
 		 (const :tag "other" other)
 		 (const :tag "always (t)" t))
@@ -1128,7 +1229,9 @@ Return VALUE."
   (let* ((help-buffer (when (window-live-p window)
 			(window-buffer window)))
 	 (help-setup (when (window-live-p window)
-		       (car (window-parameter window 'quit-restore)))))
+		       (car (window-parameter window 'quit-restore))))
+	 (frame (window-frame window)))
+
     (when help-buffer
       ;; Handle `help-window-point-marker'.
       (when (eq (marker-buffer help-window-point-marker) help-buffer)
@@ -1136,13 +1239,27 @@ Return VALUE."
 	;; Reset `help-window-point-marker'.
 	(set-marker help-window-point-marker nil))
 
+      ;; If the help window appears on another frame, select it if
+      ;; `help-window-select' is non-nil and give that frame input focus
+      ;; too.  See also Bug#19012.
+      (when (and help-window-select
+		 (frame-live-p help-window-old-frame)
+		 (not (eq frame help-window-old-frame)))
+	(select-window window)
+	(select-frame-set-input-focus frame))
+
       (cond
        ((or (eq window (selected-window))
-	    (and (or (eq help-window-select t)
-		     (eq help-setup 'frame)
+	    ;; If the help window is on the selected frame, select
+	    ;; it if `help-window-select' is t or `help-window-select'
+	    ;; is 'other, the frame contains at least three windows, and
+	    ;; the help window did show another buffer before.  See also
+	    ;; Bug#11039.
+	    (and (eq frame (selected-frame))
+		 (or (eq help-window-select t)
 		     (and (eq help-window-select 'other)
-			  (eq (window-frame window) (selected-frame))
-			  (> (length (window-list nil 'no-mini)) 2)))
+			  (> (length (window-list nil 'no-mini)) 2)
+			  (not (eq help-setup 'same))))
 		 (select-window window)))
 	;; The help window is or gets selected ...
 	(help-window-display-message
@@ -1151,12 +1268,13 @@ Return VALUE."
 	   ;; ... and is new, ...
 	   "Type \"q\" to delete help window")
 	  ((eq help-setup 'frame)
+	   ;; ... on a new frame, ...
 	   "Type \"q\" to quit the help frame")
 	  ((eq help-setup 'other)
 	   ;; ... or displayed some other buffer before.
 	   "Type \"q\" to restore previous buffer"))
 	 window t))
-       ((and (eq (window-frame window) (selected-frame))
+       ((and (eq (window-frame window) help-window-old-frame)
 	     (= (length (window-list nil 'no-mini)) 2))
 	;; There are two windows on the help window's frame and the
 	;; other one is the selected one.
@@ -1213,6 +1331,7 @@ the help window if the current value of the user option
 	    (cons 'help-mode-setup temp-buffer-window-setup-hook))
 	   (temp-buffer-window-show-hook
 	    (cons 'help-mode-finish temp-buffer-window-show-hook)))
+       (setq help-window-old-frame (selected-frame))
        (with-temp-buffer-window
 	,buffer-name nil 'help-window-setup (progn ,@body)))))
 

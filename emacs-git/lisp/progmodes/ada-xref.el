@@ -1,6 +1,6 @@
 ;; ada-xref.el --- for lookup and completion in Ada mode
 
-;; Copyright (C) 1994-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2015 Free Software Foundation, Inc.
 
 ;; Author: Markus Heritsch <Markus.Heritsch@studbox.uni-stuttgart.de>
 ;;      Rolf Ebert <ebert@inf.enst.fr>
@@ -650,12 +650,6 @@ Call `ada-require-project-file' first to ensure a project exists."
 	(setq ada-xref-pos-ring (cdr ada-xref-pos-ring))
 	(find-file (car (cdr pos)))
 	(goto-char (car pos)))))
-
-(defun ada-convert-file-name (name)
-  "Convert from NAME to a name that can be used by the compilation commands.
-This is overridden on VMS to convert from VMS filenames to Unix filenames."
-  name)
-;; FIXME: use convert-standard-filename instead
 
 (defun ada-set-default-project-file (file)
   "Set FILE as the current project file."
@@ -1465,7 +1459,7 @@ by replacing the file extension with `.ali'."
 	   (get-file-buffer ali-file-name))
       (kill-buffer (get-file-buffer ali-file-name)))
 
-  (let* ((name      (ada-convert-file-name file))
+  (let* ((name      (convert-standard-filename file))
 	 (body-name (or (ada-get-body-name name) name)))
 
     ;; Always recompile the body when we can.  We thus temporarily switch to a

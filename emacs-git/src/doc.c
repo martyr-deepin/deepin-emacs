@@ -1,6 +1,7 @@
 /* Record indices of function doc strings stored in a file.
 
-Copyright (C) 1985-1986, 1993-1995, 1997-2014 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993-1995, 1997-2015 Free Software Foundation,
+Inc.
 
 This file is part of GNU Emacs.
 
@@ -34,13 +35,13 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "keyboard.h"
 #include "keymap.h"
 
-Lisp_Object Qfunction_documentation;
-
 /* Buffer used for reading from documentation file.  */
 static char *get_doc_string_buffer;
 static ptrdiff_t get_doc_string_buffer_size;
 
 static unsigned char *read_bytecode_pointer;
+
+static char const sibling_etc[] = "../etc/";
 
 /* `readchar' in lread.c calls back here to fetch the next byte.
    If UNREADFLAG is 1, we unread a byte.  */
@@ -80,7 +81,6 @@ get_doc_string (Lisp_Object filepos, bool unibyte, bool definition)
 {
   char *from, *to, *name, *p, *p1;
   int fd;
-  ptrdiff_t minsize;
   int offset;
   EMACS_INT position;
   Lisp_Object file, tem, pos;
@@ -113,21 +113,14 @@ get_doc_string (Lisp_Object filepos, bool unibyte, bool definition)
 
   tem = Ffile_name_absolute_p (file);
   file = ENCODE_FILE (file);
-  if (NILP (tem))
-    {
-      Lisp_Object docdir = ENCODE_FILE (Vdoc_directory);
-      minsize = SCHARS (docdir);
-      /* sizeof ("../etc/") == 8 */
-      if (minsize < 8)
-	minsize = 8;
-      name = SAFE_ALLOCA (minsize + SCHARS (file) + 8);
-      strcpy (name, SSDATA (docdir));
-      strcat (name, SSDATA (file));
-    }
-  else
-    {
-      name = SSDATA (file);
-    }
+  Lisp_Object docdir
+    = NILP (tem) ? ENCODE_FILE (Vdoc_directory) : empty_unibyte_string;
+  ptrdiff_t docdir_sizemax = SBYTES (docdir) + 1;
+#ifndef CANNOT_DUMP
+  docdir_sizemax = max (docdir_sizemax, sizeof sibling_etc);
+#endif
+  name = SAFE_ALLOCA (docdir_sizemax + SBYTES (file));
+  lispstpcpy (lispstpcpy (name, docdir), file);
 
   fd = emacs_open (name, O_RDONLY, 0);
   if (fd < 0)
@@ -137,8 +130,7 @@ get_doc_string (Lisp_Object filepos, bool unibyte, bool definition)
 	{
 	  /* Preparing to dump; DOC file is probably not installed.
 	     So check in ../etc.  */
-	  strcpy (name, "../etc/");
-	  strcat (name, SSDATA (file));
+	  lispstpcpy (stpcpy (name, sibling_etc), file);
 
 	  fd = emacs_open (name, O_RDONLY, 0);
 	}
@@ -146,8 +138,9 @@ get_doc_string (Lisp_Object filepos, bool unibyte, bool definition)
       if (fd < 0)
 	{
 	  SAFE_FREE ();
-	  return concat3 (build_string ("Cannot open doc string file \""),
-			  file, build_string ("\"\n"));
+	  AUTO_STRING (cannot_open, "Cannot open doc string file \"");
+	  AUTO_STRING (quote_nl, "\"\n");
+	  return concat3 (cannot_open, file, quote_nl);
 	}
     }
   count = SPECPDL_INDEX ();
@@ -561,6 +554,8 @@ the same file name is found in the `doc-directory'.  */)
   char *p, *name;
   bool skip_file = 0;
   ptrdiff_t count;
+  char const *dirname;
+  ptrdiff_t dirlen;
   /* Preloaded defcustoms using custom-initialize-delay are added to
      this list, but kept unbound.  See http://debbugs.gnu.org/11565  */
   Lisp_Object delayed_init =
@@ -577,16 +572,20 @@ the same file name is found in the `doc-directory'.  */)
       (0)
 #endif /* CANNOT_DUMP */
     {
-      name = alloca (SCHARS (filename) + 14);
-      strcpy (name, "../etc/");
+      dirname = sibling_etc;
+      dirlen = sizeof sibling_etc - 1;
     }
   else
     {
       CHECK_STRING (Vdoc_directory);
-      name = alloca (SCHARS (filename) + SCHARS (Vdoc_directory) + 1);
-      strcpy (name, SSDATA (Vdoc_directory));
+      dirname = SSDATA (Vdoc_directory);
+      dirlen = SBYTES (Vdoc_directory);
     }
-  strcat (name, SSDATA (filename)); 	/*** Add this line ***/
+
+  count = SPECPDL_INDEX ();
+  USE_SAFE_ALLOCA;
+  name = SAFE_ALLOCA (dirlen + SBYTES (filename) + 1);
+  lispstpcpy (stpcpy (name, dirname), filename); 	/*** Add this line ***/
 
   /* Vbuild_files is nil when temacs is run, and non-nil after that.  */
   if (NILP (Vbuild_files))
@@ -608,7 +607,6 @@ the same file name is found in the `doc-directory'.  */)
       report_file_errno ("Opening doc string file", build_string (name),
 			 open_errno);
     }
-  count = SPECPDL_INDEX ();
   record_unwind_protect_int (close_file_unwind, fd);
   Vdoc_file_name = filename;
   filled = 0;
@@ -637,7 +635,7 @@ the same file name is found in the `doc-directory'.  */)
                   && (end[-1] == 'o' || end[-1] == 'c'))
                 {
                   ptrdiff_t len = end - p - 2;
-                  char *fromfile = alloca (len + 1);
+                  char *fromfile = SAFE_ALLOCA (len + 1);
                   memcpy (fromfile, &p[2], len);
                   fromfile[len] = 0;
                   if (fromfile[len-1] == 'c')
@@ -688,6 +686,8 @@ the same file name is found in the `doc-directory'.  */)
       filled -= end - buf;
       memmove (buf, end, filled);
     }
+
+  SAFE_FREE ();
   return unbind_to (count, Qnil);
 }
 

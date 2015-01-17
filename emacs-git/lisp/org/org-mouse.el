@@ -1,6 +1,6 @@
 ;;; org-mouse.el --- Better mouse support for org-mode
 
-;; Copyright (C) 2006-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
 
 ;; Author: Piotr Zielinski <piotr dot zielinski at gmail dot com>
 ;; Maintainer: Carsten Dominik <carsten at orgmode dot org>
@@ -953,20 +953,23 @@ This means, between the beginning of line and the point."
 		       (point)
 		       (save-excursion (goto-char start)
 				       (org-back-to-heading) (point))))
-	    (outline-end-of-subtree)
+	    (progn (org-end-of-subtree nil t)
+		   (unless (eobp) (backward-char)))
 	    (end-of-line)
 	    (if (eobp) (newline) (forward-char)))
 
 	  (when (looking-at org-outline-regexp)
 	    (let ((level (- (match-end 0) (match-beginning 0))))
 	      (when (> end (match-end 0))
-		(outline-end-of-subtree)
+		(progn (org-end-of-subtree nil t)
+		       (unless (eobp) (backward-char)))
 		(end-of-line)
 		(if (eobp) (newline) (forward-char))
 		(setq level (1+ level)))
 	      (org-paste-subtree level)
 	      (save-excursion
-		(outline-end-of-subtree)
+		(progn (org-end-of-subtree nil t)
+		       (unless (eobp) (backward-char)))
 		(when (bolp) (delete-char -1))))))))))
 
 
@@ -1003,9 +1006,9 @@ This means, between the beginning of line and the point."
 	   (org-mouse-main-buffer (current-buffer)))
       (when (eq (with-current-buffer buffer major-mode) 'org-mode)
 	(let ((endmarker (with-current-buffer buffer
-			   (outline-end-of-subtree)
-			   (forward-char 1)
-			   (copy-marker (point)))))
+			   (org-end-of-subtree nil t)
+			   (unless (eobp) (forward-char 1))
+			   (point-marker))))
 	  (org-with-remote-undo buffer
 	    (with-current-buffer buffer
 	      (widen)
@@ -1015,7 +1018,7 @@ This means, between the beginning of line and the point."
 		(and (outline-next-heading)
 		     (org-flag-heading nil)))   ; show the next heading
 	      (org-back-to-heading)
-	      (setq marker (copy-marker (point)))
+	      (setq marker (point-marker))
 	      (goto-char (max (point-at-bol) (- (point-at-eol) anticol)))
 	      (funcall command)
 	      (message "_cmd: %S" org-mouse-cmd)

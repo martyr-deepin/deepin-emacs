@@ -1,3 +1,386 @@
+2015-01-17  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* eieio.texi (Slot Options): Document :protection as unsupported.
+
+2015-01-01  Michael Albinus  <michael.albinus@gmx.de>
+
+	Sync with Tramp 2.2.11.
+	* trampver.texi: Update release number.
+
+2014-12-31  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Less 'make' chatter for Emacs doc
+	* Makefile.in (AM_DEFAULT_VERBOSITY, AM_V_GEN, am__v_GEN_)
+	(am__v_GEN_0, am__v_GEN_1): New macros, from ../../src/Makefile.in.
+	(ENVADD, $(buildinfodir)/%.info, %.html, ${buildinfodir}/ccmode.info)
+	(${buildinfodir}/efaq%.info, efaq%.html):
+	Use them.
+
+2014-12-31  Filipp Gunbin  <fgunbin@fastmail.fm>
+
+	* info.texi (Create Info buffer): Mention info-display-manual prefix.
+
+2014-12-29  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* efaq.texi (Displaying the current file name in the titlebar):
+	Prefer (system-name) to system-name.
+	* smtpmail.texi (Server workarounds): Fix grammar.
+
+2014-12-18  Eric Abrahamsen  <eric@ericabrahamsen.net>
+
+	* gnus.texi (Gnus Registry Setup): Explain pruning changes.  Mention
+	gnus-registry-prune-factor. Explain sorting changes and
+	gnus-registry-default-sort-function. Correct file extension.
+
+2014-12-17  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (About This Manual): Update instructions
+	for building the manual.
+
+2014-12-15  Alan Mackenzie  <acm@muc.de>
+
+	"Advice" is a mass noun.  Amend text accordingly.
+	* cl.texi (Obsolete Macros): Replace "an advice" with "advice".
+
+2014-12-12  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* texinfo.tex: Update from gnulib.
+
+2014-12-08  Andrey Kotlarski  <m00naticus@gmail.com>
+
+	* eww.texi (Basics): Document managing multiple eww buffers.
+
+2014-12-05  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* eww.texi (Basics): Document eww PDF viewing.
+
+2014-11-23  Ivan Shmakov  <ivan@siamics.net>
+
+	* eww.texi (Advanced): Mention the Desktop stuff (bug#18010).
+
+2014-11-23  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Remote processes): Let-bind environment variables to
+	`process-environment' when running `process-file' or
+	`start-file-process'.
+
+2014-11-19  Ivan Shmakov  <ivan@siamics.net>
+
+	* eww.texi (Basics): Document `eww-history-limit'.
+
+2014-11-14  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* org.texi (The date/time prompt, Matching tags and properties):
+	Use leading zero with 24-hour times less than 10:00.
+
+2014-11-13  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* eww.texi (Variable Index): Mention `eww-after-render-hook'.
+
+2014-11-10  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* eww.texi (Basics): Document `eww-readable'.
+
+2014-11-10  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus.texi (Top): Add missing `HTML' menu.
+	(HTML): Fix xref to FAQ 4-16.
+
+2014-11-09  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (version): Remove variable.
+	(clean): No longer delete dist tarfile.
+	(dist): Remove rule; replace with code in admin.el.
+
+2014-11-08  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (${buildinfodir}/ccmode.info)
+	(${buildinfodir}/efaq%.info): Ensure output directory exists.
+
+2014-11-07  Tassilo Horn  <tsdh@gnu.org>
+
+	* gnus.texi (HTML): Update section so that it mentions shr and w3m.
+	Also link the full EWW manual that explains more on shr, too.
+
+	* gnus-faq.texi (FAQ 4 - Reading messages, FAQ 4-16): Add Q&A on how to
+	increase contrast when displaying HTML mail with shr.
+
+	* eww.texi (Advanced): Document increasing contrast with
+	shr-color-visible-distance-min and
+	shr-color-visible-luminance-min.
+
+2014-11-02  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* auth.texi (Help for users): Explain quoting rules better.
+
+2014-10-30  Glenn Morris  <rgm@gnu.org>
+
+	* efaq.texi (Gnus does not work with NNTP): Remove; ancient.
+
+2014-10-30  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* eieio.texi (Accessing Slots, CLOS compatibility): Adjust wording
+	since `setf' is in core rather than in CL nowadays.
+
+2014-10-29  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Simplify use of current-time and friends.
+	* org.texi (Dynamic blocks): Omit unnecessary call to current-time
+	in example.
+
+2014-10-28  Christopher Schmidt  <ch@ristopher.com>
+
+	* calc.texi (Quick Calculator): Mention prefix argument of
+	`quick-calc'.
+
+2014-10-26  Eric S. Raymond  <esr@thyrsus.com>
+
+	* efaq-w32.texi: Neutralize language specific to a repository type.
+
+2014-10-25  Eric S. Raymond  <esr@thyrsus.com>
+
+	* gnus-coding.texi: Neutralize language specific to a repository type.
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* Merge in all changes up to 24.4 release.
+
+2014-10-13  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (dist): Update for new output variables.
+
+2014-10-08  Leo Liu  <sdl.web@gmail.com>
+
+	* cl.texi (Porting Common Lisp): Remove parse-integer.
+
+2014-10-06  Ulf Jasper  <ulf.jasper@web.de>
+
+	* newsticker.texi (Supported Formats): Fix order of subheading and
+	itemize.
+
+2014-10-04  Glenn Morris  <rgm@gnu.org>
+
+	* vip.texi (Other Vi Commands): Markup fix.
+
+2014-10-03  Bastien Guerry  <bzg@gnu.org>
+
+	* org.texi (Key bindings and useful functions): Fix typo.
+	Use the correct function's name.
+
+2014-10-03  Michael Brand  <michael.ch.brand@gmail.com>
+
+	* org.texi (Formula syntax for Calc): Add `f-1' to TBLFM example
+	about `nan'.
+
+2014-10-03  Nicolas Goaziou  <mail@nicolasgoaziou.fr>
+
+	* org.texi (Export settings): Be more explicit about how output
+	file name is built.
+
+	* org.texi (Headings and sectioning structure): Document menus.
+
+	* org.texi (Include files, Publishing options): Remove reference
+	to nonexistent variable.
+
+2014-10-03  Eli Zaretskii  <eliz@gnu.org>
+
+	* erc.texi (Connecting): Remove stray "OA" that failed the manual
+	build.
+
+2014-10-03  Kelvin White  <kwhite@gnu.org>
+
+	* erc.texi (Advanced Usage, Options): Add descriptions and examples
+	for erc-format-nick-function and erc-rename-buffers options.
+
+2014-09-26  Leo Liu  <sdl.web@gmail.com>
+
+	* cl.texi (Predicates on Numbers): Document cl-digit-char-p.
+	(Numerical Functions): Document cl-parse-integer.  (Bug#18557)
+
+2014-09-24  Ulf Jasper  <ulf.jasper@web.de>
+
+	* newsticker.texi: Reworked.  Document new treeview group
+	commands.  Remove VERSION, UPDATED, use EMACSVER instead.
+	Use term 'feed reader'.
+
+2014-09-04  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Less chatter in 'make' output.
+	* Makefile.in (clean): Simplify, for shorter command line.
+
+2014-08-07  Reuben Thomas  <rrt@sc3d.org>
+
+	* ediff.texi (Merging and diff3): Don't mention lack of support
+	for VMS diff, we no longer support VMS.
+
+2014-08-07  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Remote shell setup): Explain, how to change command
+	line arguments of remote "nc" listener.
+
+2014-07-31  Tassilo Horn  <tsdh@gnu.org>
+
+	* gnus.texi (Group Parameters): Document that `gcc-self' may also be a
+	list.
+
+2014-07-28  Stephen Berman  <stephen.berman@gmx.net>
+
+	* todo-mode.texi (Marked Items): Correct omission of item deletion
+	from commands applying to both todo and done items.
+
+2014-07-18  Albert Krewinkel  <albert+gnus@zeitkraut.de>
+
+	* gnus.texi (Posting Styles): Document the possibility to perform
+	string replacements when matching against headers.
+
+2014-07-09  Stephen Berman  <stephen.berman@gmx.net>
+
+	* todo-mode.texi (Levels of Organization): Comment out statement
+	that Emacs recognizes todo files by their extension, since this
+	feature has been removed due to bug#17482.
+
+2014-07-03  Michael Albinus  <michael.albinus@gmx.de>
+
+	* trampver.texi: Update release number.
+
+2014-07-03  Glenn Morris  <rgm@gnu.org>
+
+	* info.texi, mh-e.texi: "Online help" doesn't mean what it
+	used to any more.
+
+	* idlwave.texi (Introduction): Comment out dead http screenshot links.
+
+2014-06-24  Leo Liu  <sdl.web@gmail.com>
+
+	* dired-x.texi (Omitting Files in Dired, Omitting Variables):
+	Fix key binding to dired-omit-mode.  (Bug#16354)
+
+2014-06-24  Eli Zaretskii  <eliz@gnu.org>
+
+	* autotype.texi (Skeleton Language): Document the \n feature better.
+
+2014-06-23  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (%.texi): Disable implicit rules.
+
+2014-06-22  Mario Lang  <mlang@delysid.org>
+
+	* srecode.texi (Base Arguments): The the -> to the.
+
+	* org.texi (Images in ODT export): The the -> the.
+
+2014-06-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* autotype.texi (Skeleton Language): Document the feature of \n
+	when at eol.
+
+2014-06-21  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dbus.texi (Type Conversion): Formatting edits in example.
+
+2014-06-15  Michael Albinus  <michael.albinus@gmx.de>
+
+	Sync with Tramp 2.2.10.
+
+	* tramp.texi (Inline methods): Remove restriction on "telnet".
+	Recommend sharing ssh connections for "plink".
+	(External methods): Remove "sftp".  Merge "pscp" and "psftp"
+	descriptions.  Recommend sharing ssh connections.  Add "nc" method.
+	(GVFS based methods): Add "sftp".
+	(Customizing Completion, External packages, Issues):
+	Use @dots{}.
+
+	* trampver.texi: Update release number.
+
+2014-06-15  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (bootstrap-clean): New.
+
+2014-06-12  Vincent Belaïche  <vincentb1@users.sourceforge.net>
+
+	* ses.texi: Adding documentation for SES local printer functions.
+
+2014-06-12  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in: Use GNU Make features to reduce duplication.
+	(mkinfodir): Remove.
+	(${buildinfodir}): Generate using an order-only prerequisite.
+	(.dvi.ps): Replace with pattern rule.
+	($INFO_TARGETS): Mark as PHONY.
+	(${buildinfodir}): New rule.
+	(EXTRA_OPTS, need_emacsver, need_emacsver_prefix): New variables.
+	(${buildinfodir}/%.info, %.dvi, %.pdf, %.html, %.ps):
+	New pattern rules, replacing numerous previous explicit rules.
+	(info_template): New definition.
+	(gnus.dvi, gnus.pdf): Use distinct intermediate files.
+	(mostlyclean): Adjust for above gnus change.
+
+2014-06-11  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (INFO_INSTALL): Update for 2013-08-28 DOCMISC_W32 change.
+
+2014-06-10  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (INFO_EXT): Remove and replace by ".info" throughout.
+	(INFO_OPTS): Set directly rather than with configure.
+
+2014-06-08  Karl Berry  <karl@gnu.org>
+
+	* doc/info.texi (Help-^L): "mode line", "screenful",
+	stand-alone and Emacs Info both use the mode line.
+	Use x instead of weird C-x 0 to get rid of help msg
+	in standalone Info.
+
+2014-06-08  Glenn Morris  <rgm@gnu.org>
+
+	* vip.texi (Files): Defer to Emacs manual for uniquify details.
+
+	* info.texi (Help-Small-Screen): Clarify details of S-SPC.
+	(Help-Small-Screen, Help-]): Do not mention S-SPC.
+	(Emacs Info Variables): Markup fix.
+
+	* ebrowse.texi (Source Display, Finding/Viewing):
+	* erc.texi (Sample Session):
+	* ses.texi (The Basics):
+	* todo-mode.texi (Moving and Deleting Items):
+	* woman.texi (Navigation): Markup fixes re SPC, RET.
+
+2014-06-02  Glenn Morris  <rgm@gnu.org>
+
+	* efaq.texi (Finding a package with particular functionality):
+	Update example.
+	* vip.texi: Mention this is obsolete.
+
+2014-05-27  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* texinfo.tex: Update from gnulib.
+
+2014-05-26  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Specify coding if Latin-1 Emacs would misinterpret (Bug#17575).
+	* htmlfontify.texi, org.texi: Add "coding: utf-8".
+
+2014-05-26  Stephen Berman  <stephen.berman@gmx.net>
+
+	* todo-mode.texi: Update in light of changes due to bug#17482.
+	Replace numerous mistaken uses of literal quotes with proper
+	Texinfo markup.
+	(Todo Mode Entry Points): Comment out reference to using find-file
+	or Dired to visit Todo files, since this has been disabled (bug#17482).
+
+2014-05-20  Leo Liu  <sdl.web@gmail.com>
+
+	* cl.texi (List Functions, Efficiency Concerns): Update cl-endp.
+
+2014-05-13  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* texinfo.tex: Update from gnulib.
+
+2014-05-08  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Frequently Asked Questions): Mention HISTFILE
+	setting in ~/.ssh/environment.
+
 2014-05-04  Stephen Berman  <stephen.berman@gmx.net>
 
 	* todo-mode.texi: Update, improve exposition, add cross
@@ -91,14 +474,14 @@
 
 2014-03-23  Katsumi Yamaoka  <yamaoka@jpl.org>
 
-	* gnus.texi (MIME Commands): Mention
-	gnus-mime-buttonize-attachments-in-header and
+	* gnus.texi (MIME Commands):
+	Mention gnus-mime-buttonize-attachments-in-header and
 	gnus-mime-display-attachment-buttons-in-header.
 
 2014-03-23  Lars Ingebrigtsen  <larsi@gnus.org>
 
-	* message.texi (Forwarding): Mention
-	`message-forward-included-headers'.
+	* message.texi (Forwarding):
+	Mention `message-forward-included-headers'.
 
 2014-03-23  Lars Ingebrigtsen  <larsi@gnus.org>
 
@@ -4837,7 +5220,7 @@
 
 2010-07-19  Juanma Barranquero  <lekktu@gmail.com>
 
-	* org.texi: Fix typo in previous change (revno:100847).
+	* org.texi: Fix typo in previous change (2010-07-19T09:47:27Z!carsten.dominik@gmail.com).
 
 2010-07-19  Carsten Dominik  <carsten.dominik@gmail.com>
 
@@ -8618,7 +9001,7 @@
 
 	* org.texi (Installation, Activation): Split from Installation and
 	Activation.
-	(Clocking work time): Documented new features.
+	(Clocking work time): Document new features.
 
 2006-08-13  Alex Schroeder  <alex@gnu.org>
 
@@ -9219,22 +9602,22 @@
 	* emacs-mime.texi (Flowed text): Add mm-fill-flowed.  (Sync
 	2004-01-27 from the trunk).
 
-2006-02-24  Alan Mackenzie  <bug-cc-mode@gnu.org>
+2006-02-24  Alan Mackenzie  <acm@muc.de>
 
 	* cc-mode.texi: Rename c-hungry-backspace to
 	c-hungry-delete-backwards, at the request of RMS.  Leave the old
 	name as an alias.
 
-2006-02-24  Alan Mackenzie  <bug-cc-mode@gnu.org>
+2006-02-24  Alan Mackenzie  <acm@muc.de>
 
 	* cc-mode.texi: Correct the definition of c-beginning-of-defun, to
 	include the function header within the defun.
 
-2006-02-24  Alan Mackenzie  <bug-cc-mode@gnu.org>
+2006-02-24  Alan Mackenzie  <acm@muc.de>
 
 	* cc-mode.texi: Correct two typos.
 
-2006-02-24  Alan Mackenzie  <bug-cc-mode@gnu.org>
+2006-02-24  Alan Mackenzie  <acm@muc.de>
 
 	* cc-mode.texi (Comment Commands): State that C-u M-; kills any
 	existing comment.
@@ -9548,7 +9931,7 @@
 	(MIME with Emacs mail packages): Delete section about the Emacs
 	MIME FAQ (it's not reachable anymore).
 
-2005-12-08  Alan Mackenzie  <bug-cc-mode@gnu.org>
+2005-12-08  Alan Mackenzie  <acm@muc.de>
 
 	* cc-mode.texi: The manual has been extensively revised: the
 	information about using CC Mode has been separated from the larger
@@ -9776,7 +10159,7 @@
 
 2005-10-10  Carsten Dominik  <dominik@science.uva.nl>
 
-	* org.texi (Workflow states): Documented that change in keywords
+	* org.texi (Workflow states): Document that change in keywords
 	becomes active only after restart of Emacs.
 
 2005-10-08  Michael Albinus  <michael.albinus@gmx.de>
@@ -10651,7 +11034,7 @@
 
 	* Makefile.in (../info/tramp, tramp.dvi): Depend on trampver.texi.
 
-2004-08-11  Martin Stjernholm  <bug-cc-mode@gnu.org>
+2004-08-11  Martin Stjernholm  <mast@lysator.liu.se>
 
 	* cc-mode.texi: Various updates for CC Mode 5.30.9.
 
@@ -10899,7 +11282,7 @@
 
 	* eshell.texi (Known Problems): Add doc item.
 
-2003-11-22  Martin Stjernholm  <bug-cc-mode@gnu.org>
+2003-11-22  Martin Stjernholm  <mast@lysator.liu.se>
 
 	* cc-mode.texi: Update for CC Mode 5.30.
 
@@ -11655,7 +12038,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1993-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1993-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

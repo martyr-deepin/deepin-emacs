@@ -1,5 +1,5 @@
 /* Indentation functions.
-   Copyright (C) 1985-1988, 1993-1995, 1998, 2000-2014 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1998, 2000-2015 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -439,7 +439,7 @@ current_column (void)
 	    /* With a display table entry, C is displayed as is, and
 	       not displayed as \NNN or as ^N.  If C is a single-byte
 	       character, it takes one column.  If C is multi-byte in
-	       an unibyte buffer, it's translated to unibyte, so it
+	       a unibyte buffer, it's translated to unibyte, so it
 	       also takes one column.  */
 	    ++col;
 	  else
@@ -920,7 +920,7 @@ position_indentation (ptrdiff_t pos_byte)
 	  column += tab_width - column % tab_width;
 	  break;
 	default:
-	  if (ASCII_BYTE_P (p[-1])
+	  if (ASCII_CHAR_P (p[-1])
 	      || NILP (BVAR (current_buffer, enable_multibyte_characters)))
 	    return column;
 	  {
@@ -1944,9 +1944,12 @@ The optional second argument WINDOW specifies the window to use for
 parameters such as width, horizontal scrolling, and so on.
 The default is to use the selected window's parameters.
 
-LINES can optionally take the form (COLS . LINES), in which case
-the motion will not stop at the start of a screen line but on
-its column COLS (if such exists on that line, that is).
+LINES can optionally take the form (COLS . LINES), in which case the
+motion will not stop at the start of a screen line but COLS column
+from the visual start of the line (if such exists on that line, that
+is).  If the line is scrolled horizontally, COLS is interpreted
+visually, i.e., as addition to the columns of text beyond the left
+edge of the window.
 
 `vertical-motion' always uses the current buffer,
 regardless of which buffer is displayed in WINDOW.
@@ -2001,6 +2004,8 @@ whether or not it is currently displayed in some window.  */)
       int first_x;
       bool overshoot_handled = 0;
       bool disp_string_at_start_p = 0;
+      ptrdiff_t nlines = XINT (lines);
+      int vpos_init = 0;
 
       itdata = bidi_shelve_cache ();
       SET_TEXT_POS (pt, PT, PT_BYTE);
@@ -2090,18 +2095,31 @@ whether or not it is currently displayed in some window.  */)
 
 	  overshoot_handled = 1;
 	}
-      if (XINT (lines) <= 0)
+      else if (IT_CHARPOS (it) == PT - 1
+	       && FETCH_BYTE (PT - 1) == '\n'
+	       && nlines < 0)
 	{
-	  it.vpos = 0;
+	  /* The position we started from was covered by a display
+	     property, so we moved to position before the string, and
+	     backed up one line, because the character at PT - 1 is a
+	     newline.  So we need one less line to go up.  */
+	  nlines++;
+	  /* But we still need to record that one line, in order to
+	     return the correct value to the caller.  */
+	  vpos_init = -1;
+	}
+      if (nlines <= 0)
+	{
+	  it.vpos = vpos_init;
 	  /* Do this even if LINES is 0, so that we move back to the
 	     beginning of the current line as we ought.  */
-	  if (XINT (lines) == 0 || IT_CHARPOS (it) > 0)
-	    move_it_by_lines (&it, max (PTRDIFF_MIN, XINT (lines)));
+	  if (nlines == 0 || IT_CHARPOS (it) > 0)
+	    move_it_by_lines (&it, max (PTRDIFF_MIN, nlines));
 	}
       else if (overshoot_handled)
 	{
 	  it.vpos = 0;
-	  move_it_by_lines (&it, min (PTRDIFF_MAX, XINT (lines)));
+	  move_it_by_lines (&it, min (PTRDIFF_MAX, nlines));
 	}
       else
 	{
@@ -2116,30 +2134,24 @@ whether or not it is currently displayed in some window.  */)
 		  it.vpos = 0;
 		  move_it_by_lines (&it, 1);
 		}
-	      if (XINT (lines) > 1)
-		move_it_by_lines (&it, min (PTRDIFF_MAX, XINT (lines) - 1));
+	      if (nlines > 1)
+		move_it_by_lines (&it, min (PTRDIFF_MAX, nlines - 1));
 	    }
 	  else
 	    {
 	      it.vpos = 0;
-	      move_it_by_lines (&it, min (PTRDIFF_MAX, XINT (lines)));
+	      move_it_by_lines (&it, min (PTRDIFF_MAX, nlines));
 	    }
 	}
 
-      /* Move to the goal column, if one was specified.  */
+      /* Move to the goal column, if one was specified.  If the window
+	 was originally hscrolled, the goal column is interpreted as
+	 an addition to the hscroll amount.  */
       if (!NILP (lcols))
 	{
-	  /* If the window was originally hscrolled, move forward by
-	     the hscrolled amount first.  */
-	  if (first_x > 0)
-	    {
-	      move_it_in_display_line (&it, ZV, first_x, MOVE_TO_X);
-	      it.current_x = 0;
-	    }
-	  move_it_in_display_line
-	    (&it, ZV,
-	     (int)(cols * FRAME_COLUMN_WIDTH (XFRAME (w->frame)) + 0.5),
-	     MOVE_TO_X);
+	  int to_x = (int)(cols * FRAME_COLUMN_WIDTH (XFRAME (w->frame)) + 0.5);
+
+	  move_it_in_display_line (&it, ZV, first_x + to_x, MOVE_TO_X);
 	}
 
       SET_PT_BOTH (IT_CHARPOS (it), IT_BYTEPOS (it));

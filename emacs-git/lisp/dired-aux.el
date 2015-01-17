@@ -1,7 +1,7 @@
 ;;; dired-aux.el --- less commonly used parts of dired
 
-;; Copyright (C) 1985-1986, 1992, 1994, 1998, 2000-2014
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1992, 1994, 1998, 2000-2015 Free Software
+;; Foundation, Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>.
 ;; Maintainer: emacs-devel@gnu.org
@@ -2062,7 +2062,10 @@ See Info node `(emacs)Subdir switches' for more details."
     ;; inserted *after* opoint.
     (setq dirname (file-name-as-directory dirname))
     (or (and (not switches)
-	     (dired-goto-subdir dirname))
+	     (when (dired-goto-subdir dirname)
+	       (unless (dired-subdir-hidden-p dirname)
+		 (dired-initial-position dirname))
+	       t))
 	(dired-insert-subdir dirname switches no-error-if-not-dir-p))
     ;; Push mark so that it's easy to find back.  Do this after the
     ;; insert message so that the user sees the `Mark set' message.

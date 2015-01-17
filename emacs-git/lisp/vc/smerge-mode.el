@@ -1,6 +1,6 @@
 ;;; smerge-mode.el --- Minor mode to resolve diff3 conflicts -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: vc, tools, revision control, merge, diff3, cvs, conflict
@@ -116,9 +116,10 @@ Used in `smerge-diff-base-mine' and related functions."
 (define-obsolete-face-alias 'smerge-markers-face 'smerge-markers "22.1")
 (defvar smerge-markers-face 'smerge-markers)
 
-(defface smerge-refined-change
+(defface smerge-refined-changed
   '((t nil))
   "Face used for char-based changes shown by `smerge-refine'.")
+(define-obsolete-face-alias 'smerge-refined-change 'smerge-refined-changed "24.5")
 
 (defface smerge-refined-removed
   '((default
@@ -1130,6 +1131,19 @@ repeating the command will highlight other two parts."
 			   '((smerge . refine) (face . smerge-refined-removed)))
 			 (unless smerge-use-changed-face
 			   '((smerge . refine) (face . smerge-refined-added))))))
+
+(defun smerge-swap ()
+  "Swap the \"Mine\" and the \"Other\" chunks.
+Can be used before things like `smerge-keep-all' or `smerge-resolve' where the
+ordering can have some subtle influence on the result, such as preferring the
+spacing of the \"Other\" chunk."
+  (interactive)
+  (smerge-match-conflict)
+  (goto-char (match-beginning 3))
+  (let ((txt3 (delete-and-extract-region (point) (match-end 3))))
+    (insert (delete-and-extract-region (match-beginning 1) (match-end 1)))
+    (goto-char (match-beginning 1))
+    (insert txt3)))
 
 (defun smerge-diff (n1 n2)
   (smerge-match-conflict)

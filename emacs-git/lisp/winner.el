@@ -1,6 +1,6 @@
 ;;; winner.el --- Restore old window configurations
 
-;; Copyright (C) 1997-1998, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Ivar Rummelhoff <ivarru@math.uio.no>
 ;; Created: 27 Feb 1997
@@ -112,10 +112,7 @@ You may want to include buffer names such as *Help*, *Apropos*,
 ;; Save current configuration.
 ;; (Called below by `winner-save-old-configurations').
 (defun winner-remember ()
-  (let ((entry (assq (selected-frame) winner-currents)))
-    (if entry (setcdr entry (winner-conf))
-      (push (cons (selected-frame) (winner-conf))
-	    winner-currents))))
+  (setf (alist-get (selected-frame) winner-currents) (winner-conf)))
 
 ;; Consult `winner-currents'.
 (defun winner-configuration (&optional frame)

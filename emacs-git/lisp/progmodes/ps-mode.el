@@ -1,6 +1,6 @@
 ;;; ps-mode.el --- PostScript mode for GNU Emacs
 
-;; Copyright (C) 1999, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author:     Peter Kleiweg <p.c.j.kleiweg@rug.nl>
 ;; Maintainer: Peter Kleiweg <p.c.j.kleiweg@rug.nl>
@@ -61,7 +61,7 @@
 
 ;; User variables.
 
-(make-obsolete-variable 'ps-mode-auto-indent 'electric-indent-mode "24.5")
+(make-obsolete-variable 'ps-mode-auto-indent 'electric-indent-mode "25.1")
 
 (defcustom ps-mode-tab 4
   "Number of spaces to use when indenting."

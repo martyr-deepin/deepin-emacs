@@ -1,15 +1,15 @@
 Debugging GNU Emacs
 
-Copyright (C) 1985, 2000-2014 Free Software Foundation, Inc.
+Copyright (C) 1985, 2000-2015 Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 
 [People who debug Emacs on Windows using Microsoft debuggers should
 read the Windows-specific section near the end of this document.]
 
-** When you debug Emacs with GDB, you should start it in the directory
-where the executable was made (the 'src' directory in the Emacs source
-tree).  That directory has a .gdbinit file that defines various
+** When you debug Emacs with GDB, you should start GDB in the directory
+where the Emacs executable was made (the 'src' directory in the Emacs
+source tree).  That directory has a .gdbinit file that defines various
 "user-defined" commands for debugging Emacs.  (These commands are
 described below under "Examining Lisp object values" and "Debugging
 Emacs Redisplay problems".)
@@ -21,7 +21,9 @@ you will see a warning when GDB starts, like this:
   warning: File ".../src/.gdbinit" auto-loading has been declined by your `auto-load safe-path' set to "$debugdir:$datadir/auto-load".
 
 There are several ways to overcome that difficulty, they are all
-described in the node "Auto-loading safe path" in the GDB user manual.
+described in the node "Auto-loading safe path" in the GDB user
+manual.  If nothing else helps, type "source /path/to/.gdbinit RET" at
+the GDB prompt, to unconditionally load the GDB init file.
 
 ** When you are trying to analyze failed assertions or backtraces, it
 is essential to compile Emacs with flags suitable for debugging.
@@ -396,9 +398,13 @@ to start debugging.
 Don't assume Emacs is `hung'--it may instead be in an infinite loop.
 To find out which, make the problem happen under GDB and stop Emacs
 once it is not responding.  (If Emacs is using X Windows directly, you
-can stop Emacs by typing C-z at the GDB job.)  Then try stepping with
-`step'.  If Emacs is hung, the `step' command won't return.  If it is
-looping, `step' will return.
+can stop Emacs by typing C-z at the GDB job.  On MS-Windows, run Emacs
+as usual, and then attach GDB to it -- that will usually interrupt
+whatever Emacs is doing and let you perform the steps described
+below.)
+
+Then try stepping with `step'.  If Emacs is hung, the `step' command
+won't return.  If it is looping, `step' will return.
 
 If this shows Emacs is hung in a system call, stop it again and
 examine the arguments of the call.  If you report the bug, it is very
@@ -418,10 +424,11 @@ stepping, you will see where the loop starts and ends.  Also, examine
 the data being used in the loop and try to determine why the loop does
 not exit when it should.
 
-You can also trying sending Emacs SIGUSR2, which, if `debug-on-event'
-has its default value, will cause Emacs to attempt to break it out of
-its current loop and into the Lisp debugger.  This feature is useful
-when a C-level debugger is not conveniently available.
+On GNU and Unix systems, you can also trying sending Emacs SIGUSR2,
+which, if `debug-on-event' has its default value, will cause Emacs to
+attempt to break it out of its current loop and into the Lisp
+debugger.  This feature is useful when a C-level debugger is not
+conveniently available.
 
 ** If certain operations in Emacs are slower than they used to be, here
 is some advice for how to find out why.

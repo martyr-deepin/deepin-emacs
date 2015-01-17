@@ -1,6 +1,6 @@
 ;;; makeinfo.el --- run makeinfo conveniently
 
-;; Copyright (C) 1991, 1993, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1991, 1993, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Robert J. Chassell
 ;; Maintainer: emacs-devel@gnu.org
@@ -253,11 +253,12 @@ Use the \\[next-error] command to move to the next error
   (setq makeinfo-output-node-name (makeinfo-current-node))
 
   (save-excursion
-    (makeinfo-compile
-     (concat makeinfo-run-command " " makeinfo-options
-	     " " buffer-file-name)
-     nil
-     'makeinfo-compilation-sentinel-buffer)))
+    (let ((default-directory (file-name-directory buffer-file-name)))
+      (makeinfo-compile
+       (concat makeinfo-run-command " " makeinfo-options
+	       " " (file-name-nondirectory buffer-file-name))
+       nil
+       'makeinfo-compilation-sentinel-buffer))))
 
 (defun makeinfo-compilation-sentinel-buffer (proc msg)
   "Sentinel for `makeinfo-compile' run from `makeinfo-buffer'."

@@ -1,6 +1,6 @@
 ;;; gnus-fun.el --- various frivolous extension functions to Gnus
 
-;; Copyright (C) 2002-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -42,19 +42,19 @@
 
 (defcustom gnus-x-face-omit-files nil
   "Regexp to match faces in `gnus-x-face-directory' to be omitted."
-  :version "24.5"
+  :version "25.1"
   :group 'gnus-fun
   :type 'string)
 
 (defcustom gnus-face-directory (expand-file-name "faces" gnus-directory)
   "*Directory where Face PNG files are stored."
-  :version "24.5"
+  :version "25.1"
   :group 'gnus-fun
   :type 'directory)
 
 (defcustom gnus-face-omit-files nil
   "Regexp to match faces in `gnus-face-directory' to be omitted."
-  :version "24.5"
+  :version "25.1"
   :group 'gnus-fun
   :type 'string)
 
@@ -239,7 +239,7 @@ Files matching `gnus-face-omit-files' are not considered."
 
 ;;;###autoload
 (defun gnus-insert-random-face-header ()
-  "Insert a randome Face header from `gnus-face-directory'."
+  "Insert a random Face header from `gnus-face-directory'."
   (gnus--insert-random-face-with-type 'gnus-random-face 'Face))
 
 (defface gnus-x-face '((t (:foreground "black" :background "white")))
@@ -301,20 +301,21 @@ colors of the displayed X-Faces."
   (interactive)
   (shell-command "xawtv-remote snap ppm")
   (let ((file nil)
+	(tempfile (make-temp-file "gnus-face-" nil ".ppm"))
 	result)
     (while (null (setq file (directory-files "/tftpboot/sparky/tmp"
 					     t "snap.*ppm")))
       (sleep-for 1))
     (setq file (car file))
     (shell-command
-     (format "pnmcut -left 110 -top 30 -width 144 -height 144 '%s' | pnmscale -width 48 -height 48 | ppmtopgm > /tmp/gnus.face.ppm"
-	     file))
+     (format "pnmcut -left 110 -top 30 -width 144 -height 144 '%s' | pnmscale -width 48 -height 48 | ppmtopgm >> %s"
+	     file tempfile))
     (let ((gnus-convert-image-to-face-command
 	   (format "cat '%%s' | ppmquant %%d | ppmchange %s | pnmtopng"
 		   (gnus-fun-ppm-change-string))))
-      (setq result (gnus-face-from-file "/tmp/gnus.face.ppm")))
+      (setq result (gnus-face-from-file tempfile)))
     (delete-file file)
-    ;;(delete-file "/tmp/gnus.face.ppm")
+    ;;(delete-file tempfile)    ; FIXME why are we not deleting it?!
     result))
 
 (defun gnus-fun-ppm-change-string ()

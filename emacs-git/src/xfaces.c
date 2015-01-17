@@ -1,6 +1,6 @@
 /* xfaces.c -- "Face" primitives.
 
-Copyright (C) 1993-1994, 1998-2014 Free Software Foundation, Inc.
+Copyright (C) 1993-1994, 1998-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -278,56 +278,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #define FACE_CACHE_BUCKETS_SIZE 1001
 
-/* Keyword symbols used for face attribute names.  */
-
-Lisp_Object QCfamily, QCheight, QCweight, QCslant;
-static Lisp_Object QCunderline;
-static Lisp_Object QCinverse_video, QCstipple;
-Lisp_Object QCforeground, QCbackground;
-Lisp_Object QCwidth;
-static Lisp_Object QCfont, QCbold, QCitalic;
-static Lisp_Object QCreverse_video;
-static Lisp_Object QCoverline, QCstrike_through, QCbox, QCinherit;
-static Lisp_Object QCfontset, QCdistant_foreground;
-
-/* Symbols used for attribute values.  */
-
-Lisp_Object Qnormal;
-Lisp_Object Qbold;
-static Lisp_Object Qline, Qwave;
-Lisp_Object Qextra_light, Qlight;
-Lisp_Object Qsemi_light, Qsemi_bold, Qextra_bold, Qultra_bold;
-Lisp_Object Qoblique;
-Lisp_Object Qitalic;
-static Lisp_Object Qreleased_button, Qpressed_button;
-static Lisp_Object QCstyle, QCcolor, QCline_width;
-Lisp_Object Qunspecified;	/* used in dosfns.c */
-static Lisp_Object QCignore_defface;
-
 char unspecified_fg[] = "unspecified-fg", unspecified_bg[] = "unspecified-bg";
-
-/* The name of the function to call when the background of the frame
-   has changed, frame_set_background_mode.  */
-
-static Lisp_Object Qframe_set_background_mode;
-
-/* Names of basic faces.  */
-
-Lisp_Object Qdefault, Qtool_bar, Qfringe;
-static Lisp_Object Qregion;
-Lisp_Object Qheader_line, Qscroll_bar, Qcursor;
-static Lisp_Object Qborder, Qmouse, Qmenu;
-Lisp_Object Qmode_line_inactive;
-static Lisp_Object Qvertical_border;
-static Lisp_Object Qwindow_divider;
-static Lisp_Object Qwindow_divider_first_pixel;
-static Lisp_Object Qwindow_divider_last_pixel;
-
-/* The symbol `face-alias'.  A symbols having that property is an
-   alias for another face.  Value of the property is the name of
-   the aliased face.  */
-
-static Lisp_Object Qface_alias;
 
 /* Alist of alternative font families.  Each element is of the form
    (FAMILY FAMILY1 FAMILY2 ...).  If fonts of FAMILY can't be loaded,
@@ -341,32 +292,6 @@ Lisp_Object Vface_alternative_font_family_alist;
 
 Lisp_Object Vface_alternative_font_registry_alist;
 
-/* Allowed scalable fonts.  A value of nil means don't allow any
-   scalable fonts.  A value of t means allow the use of any scalable
-   font.  Otherwise, value must be a list of regular expressions.  A
-   font may be scaled if its name matches a regular expression in the
-   list.  */
-
-static Lisp_Object Qscalable_fonts_allowed;
-
-/* The symbols `foreground-color' and `background-color' which can be
-   used as part of a `face' property.  This is for compatibility with
-   Emacs 20.2.  */
-
-Lisp_Object Qforeground_color, Qbackground_color;
-
-/* The symbols `face' and `mouse-face' used as text properties.  */
-
-Lisp_Object Qface;
-
-/* Property for basic faces which other faces cannot inherit.  */
-
-static Lisp_Object Qface_no_inherit;
-
-/* Error symbol for wrong_type_argument in load_pixmap.  */
-
-static Lisp_Object Qbitmap_spec_p;
-
 /* The next ID to assign to Lisp faces.  */
 
 static int next_lface_id;
@@ -375,14 +300,6 @@ static int next_lface_id;
 
 static Lisp_Object *lface_id_to_name;
 static ptrdiff_t lface_id_to_name_size;
-
-/* TTY color-related functions (defined in tty-colors.el).  */
-
-static Lisp_Object Qtty_color_desc, Qtty_color_by_index, Qtty_color_standard_values;
-
-/* The name of the function used to compute colors on TTYs.  */
-
-static Lisp_Object Qtty_color_alist;
 
 #ifdef HAVE_WINDOW_SYSTEM
 
@@ -676,19 +593,9 @@ init_frame_faces (struct frame *f)
     }
 #endif /* HAVE_WINDOW_SYSTEM */
 
-  /* Realize basic faces.  Must have enough information in frame
-     parameters to realize basic faces at this point.  */
-#ifdef HAVE_X_WINDOWS
-  if (!FRAME_X_P (f) || FRAME_X_WINDOW (f))
-#endif
-#ifdef HAVE_NTGUI
-  if (!FRAME_WINDOW_P (f) || FRAME_W32_WINDOW (f))
-#endif
-#ifdef HAVE_NS
-  if (!FRAME_NS_P (f) || FRAME_NS_WINDOW (f))
-#endif
-    if (!realize_basic_faces (f))
-	emacs_abort ();
+  /* Realize faces early (Bug#17889).  */
+  if (!realize_basic_faces (f))
+    emacs_abort ();
 }
 
 
@@ -742,7 +649,7 @@ recompute_basic_faces (struct frame *f)
    try to free unused fonts, too.  */
 
 void
-clear_face_cache (int clear_fonts_p)
+clear_face_cache (bool clear_fonts_p)
 {
 #ifdef HAVE_WINDOW_SYSTEM
   Lisp_Object tail, frame;
@@ -1078,7 +985,7 @@ tty_color_name (struct frame *f, int idx)
 	return XCAR (coldesc);
     }
 #ifdef MSDOS
-  /* We can have an MSDOG frame under -nw for a short window of
+  /* We can have an MS-DOS frame under -nw for a short window of
      opportunity before internal_terminal_init is called.  DTRT.  */
   if (FRAME_MSDOS_P (f) && !inhibit_window_system)
     return msdos_stdcolor_name (idx);
@@ -1248,9 +1155,6 @@ load_color2 (struct frame *f, struct face *face, Lisp_Object name,
    record that fact in flags of the face so that we don't try to free
    these colors.  */
 
-#ifndef MSDOS
-static
-#endif
 unsigned long
 load_color (struct frame *f, struct face *face, Lisp_Object name,
 	    enum lface_attribute_index target_index)
@@ -3125,17 +3029,26 @@ FRAME 0 means change the face on all frames, and change the default
 		f = XFRAME (selected_frame);
 	      else
 		f = XFRAME (frame);
-	      if (! FONT_OBJECT_P (value))
-		{
-		  Lisp_Object *attrs = XVECTOR (lface)->contents;
-		  Lisp_Object font_object;
 
-		  font_object = font_load_for_lface (f, attrs, value);
-		  if (NILP (font_object))
-		    signal_error ("Font not available", value);
-		  value = font_object;
-		}
-	      set_lface_from_font (f, lface, value, 1);
+              /* FIXME:
+                 If frame is t, and selected frame is a tty frame, the font
+                 can't be realized.  An improvement would be to loop over frames
+                 for a non-tty frame and use that.  See discussion in Bug#18573.
+                 For a daemon, frame may be an initial frame (Bug#18869).  */
+              if (FRAME_WINDOW_P (f))
+                {
+                  if (! FONT_OBJECT_P (value))
+                    {
+                      Lisp_Object *attrs = XVECTOR (lface)->contents;
+                      Lisp_Object font_object;
+
+                      font_object = font_load_for_lface (f, attrs, value);
+                      if (NILP (font_object))
+                        signal_error ("Font not available", value);
+                      value = font_object;
+                    }
+                  set_lface_from_font (f, lface, value, 1);
+                }
 	    }
 	  else
 	    ASET (lface, LFACE_FONT_INDEX, value);
@@ -3411,7 +3324,8 @@ set_font_frame_param (Lisp_Object frame, Lisp_Object lface)
 	  ASET (lface, LFACE_FONT_INDEX, font);
 	}
       f->default_face_done_p = 0;
-      Fmodify_frame_parameters (frame, list1 (Fcons (Qfont, font)));
+      AUTO_FRAME_ARG (arg, Qfont, font);
+      Fmodify_frame_parameters (frame, arg);
     }
 }
 
@@ -3632,7 +3546,8 @@ with the value VALUE is relative.
 A relative value is one that doesn't entirely override whatever is
 inherited from another face.  For most possible attributes,
 the only relative value that users see is `unspecified'.
-However, for :height, floating point values are also relative.  */)
+However, for :height, floating point values are also relative.  */
+       attributes: const)
   (Lisp_Object attribute, Lisp_Object value)
 {
   if (EQ (value, Qunspecified) || (EQ (value, QCignore_defface)))
@@ -3800,18 +3715,23 @@ Default face attributes override any local face attributes.  */)
 	      && newface->font)
 	    {
 	      Lisp_Object name = newface->font->props[FONT_NAME_INDEX];
-	      Fmodify_frame_parameters (frame, list1 (Fcons (Qfont, name)));
+	      AUTO_FRAME_ARG (arg, Qfont, name);
+	      Fmodify_frame_parameters (frame, arg);
 	    }
 
 	  if (STRINGP (gvec[LFACE_FOREGROUND_INDEX]))
-	    Fmodify_frame_parameters (frame,
-				      list1 (Fcons (Qforeground_color,
-						    gvec[LFACE_FOREGROUND_INDEX])));
+	    {
+	      AUTO_FRAME_ARG (arg, Qforeground_color,
+			      gvec[LFACE_FOREGROUND_INDEX]);
+	      Fmodify_frame_parameters (frame, arg);
+	    }
 
 	  if (STRINGP (gvec[LFACE_BACKGROUND_INDEX]))
-	    Fmodify_frame_parameters (frame,
-				      list1 (Fcons (Qbackground_color,
-						    gvec[LFACE_BACKGROUND_INDEX])));
+	    {
+	      AUTO_FRAME_ARG (arg, Qbackground_color,
+			      gvec[LFACE_BACKGROUND_INDEX]);
+	      Fmodify_frame_parameters (frame, arg);
+	    }
 	}
     }
 
@@ -4101,15 +4021,15 @@ free_realized_face (struct frame *f, struct face *face)
     }
 }
 
+#ifdef HAVE_WINDOW_SYSTEM
 
-/* Prepare face FACE for subsequent display on frame F.  This
-   allocated GCs if they haven't been allocated yet or have been freed
-   by clearing the face cache.  */
+/* Prepare face FACE for subsequent display on frame F.  This must be called
+   before using X resources of FACE to allocate GCs if they haven't been
+   allocated yet or have been freed by clearing the face cache.  */
 
 void
 prepare_face_for_display (struct frame *f, struct face *face)
 {
-#ifdef HAVE_WINDOW_SYSTEM
   eassert (FRAME_WINDOW_P (f));
 
   if (face->gc == 0)
@@ -4137,10 +4057,10 @@ prepare_face_for_display (struct frame *f, struct face *face)
 	font_prepare_for_face (f, face);
       unblock_input ();
     }
-#endif /* HAVE_WINDOW_SYSTEM */
 }
 
-
+#endif /* HAVE_WINDOW_SYSTEM */
+
 /* Returns the `distance' between the colors X and Y.  */
 
 static int
@@ -5486,7 +5406,6 @@ realize_non_ascii_face (struct frame *f, Lisp_Object font_object,
   face = xmalloc (sizeof *face);
   *face = *base_face;
   face->gc = 0;
-  face->extra = NULL;
   face->overstrike
     = (! NILP (font_object)
        && FONT_WEIGHT_NAME_NUMERIC (face->lface[LFACE_WEIGHT_INDEX]) > 100
@@ -5561,7 +5480,7 @@ realize_x_face (struct face_cache *cache, Lisp_Object attrs[LFACE_VECTOR_SIZE])
 	}
       if (! FONT_OBJECT_P (attrs[LFACE_FONT_INDEX]))
 	attrs[LFACE_FONT_INDEX]
-	  = font_load_for_lface (f, attrs, attrs[LFACE_FONT_INDEX]);
+	  = font_load_for_lface (f, attrs, Ffont_spec (0, NULL));
       if (FONT_OBJECT_P (attrs[LFACE_FONT_INDEX]))
 	{
 	  face->font = XFONT_OBJECT (attrs[LFACE_FONT_INDEX]);
@@ -5994,6 +5913,7 @@ face_at_buffer_position (struct window *w, ptrdiff_t pos,
     endpos = XINT (end);
 
   /* Look at properties from overlays.  */
+  USE_SAFE_ALLOCA;
   {
     ptrdiff_t next_overlay;
 
@@ -6020,7 +5940,10 @@ face_at_buffer_position (struct window *w, ptrdiff_t pos,
   /* Optimize common cases where we can use the default face.  */
   if (noverlays == 0
       && NILP (prop))
-    return default_face->id;
+    {
+      SAFE_FREE ();
+      return default_face->id;
+    }
 
   /* Begin with attributes from the default face.  */
   memcpy (attrs, default_face->lface, sizeof attrs);
@@ -6047,6 +5970,8 @@ face_at_buffer_position (struct window *w, ptrdiff_t pos,
     }
 
   *endptr = endpos;
+
+  SAFE_FREE ();
 
   /* Look up a realized face with the given face attributes,
      or realize a new one for ASCII characters.  */
@@ -6313,7 +6238,7 @@ dump_realized_face (struct face *face)
 {
   fprintf (stderr, "ID: %d\n", face->id);
 #ifdef HAVE_X_WINDOWS
-  fprintf (stderr, "gc: %ld\n", (long) face->gc);
+  fprintf (stderr, "gc: %p\n", face->gc);
 #endif
   fprintf (stderr, "foreground: 0x%lx (%s)\n",
 	   face->foreground,
@@ -6390,9 +6315,17 @@ DEFUN ("show-face-resources", Fshow_face_resources, Sshow_face_resources,
 void
 syms_of_xfaces (void)
 {
+  /* The symbols `face' and `mouse-face' used as text properties.  */
   DEFSYM (Qface, "face");
+
+  /* Property for basic faces which other faces cannot inherit.  */
   DEFSYM (Qface_no_inherit, "face-no-inherit");
+
+  /* Error symbol for wrong_type_argument in load_pixmap.  */
   DEFSYM (Qbitmap_spec_p, "bitmap-spec-p");
+
+  /* The name of the function to call when the background of the frame
+     has changed, frame_set_background_mode.  */
   DEFSYM (Qframe_set_background_mode, "frame-set-background-mode");
 
   /* Lisp face attribute keywords.  */
@@ -6435,12 +6368,22 @@ syms_of_xfaces (void)
   DEFSYM (Qultra_bold, "ultra-bold");
   DEFSYM (Qoblique, "oblique");
   DEFSYM (Qitalic, "italic");
+
+  /* The symbols `foreground-color' and `background-color' which can be
+     used as part of a `face' property.  This is for compatibility with
+     Emacs 20.2.  */
   DEFSYM (Qbackground_color, "background-color");
   DEFSYM (Qforeground_color, "foreground-color");
+
   DEFSYM (Qunspecified, "unspecified");
   DEFSYM (QCignore_defface, ":ignore-defface");
 
+  /* The symbol `face-alias'.  A symbol having that property is an
+     alias for another face.  Value of the property is the name of
+     the aliased face.  */
   DEFSYM (Qface_alias, "face-alias");
+
+  /* Names of basic faces.  */
   DEFSYM (Qdefault, "default");
   DEFSYM (Qtool_bar, "tool-bar");
   DEFSYM (Qregion, "region");
@@ -6453,13 +6396,23 @@ syms_of_xfaces (void)
   DEFSYM (Qmouse, "mouse");
   DEFSYM (Qmode_line_inactive, "mode-line-inactive");
   DEFSYM (Qvertical_border, "vertical-border");
+
+  /* TTY color-related functions (defined in tty-colors.el).  */
   DEFSYM (Qwindow_divider, "window-divider");
   DEFSYM (Qwindow_divider_first_pixel, "window-divider-first-pixel");
   DEFSYM (Qwindow_divider_last_pixel, "window-divider-last-pixel");
   DEFSYM (Qtty_color_desc, "tty-color-desc");
   DEFSYM (Qtty_color_standard_values, "tty-color-standard-values");
   DEFSYM (Qtty_color_by_index, "tty-color-by-index");
+
+  /* The name of the function used to compute colors on TTYs.  */
   DEFSYM (Qtty_color_alist, "tty-color-alist");
+
+  /* Allowed scalable fonts.  A value of nil means don't allow any
+     scalable fonts.  A value of t means allow the use of any scalable
+     font.  Otherwise, value must be a list of regular expressions.  A
+     font may be scaled if its name matches a regular expression in the
+     list.  */
   DEFSYM (Qscalable_fonts_allowed, "scalable-fonts-allowed");
 
   Vparam_value_alist = list1 (Fcons (Qnil, Qnil));

@@ -1,6 +1,6 @@
 ;;; url-tramp.el --- file-name-handler magic invoking Tramp for some protocols
 
-;; Copyright (C) 2014 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2015 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, data, processes, hypermedia
@@ -33,7 +33,7 @@
   "List of URL protocols the work is handled by Tramp.
 They must also be covered by `url-handler-regexp'."
   :group 'url
-  :version "24.5"
+  :version "25.1"
   :type '(list string))
 
 (defun url-tramp-convert-url-to-tramp (url)

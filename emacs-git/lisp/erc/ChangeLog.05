@@ -500,7 +500,7 @@
 	(with-erc-channel-buffer): Removed.
 	(erc-ignored-reply-p): Replace `with-erc-channel-buffer' with
 	`erc-with-buffer'.
-	(erc-display-line-1): Revision 1.730 broke undo. Fix it.
+	(erc-display-line-1): Fix broken undo.
 
 2005-06-23  Michael Olson  <mwolson@gnu.org>
 
@@ -1217,7 +1217,7 @@
 
 See ChangeLog.04 for earlier changes.
 
-	Copyright (C) 2005-2014 Free Software Foundation, Inc.
+	Copyright (C) 2005-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

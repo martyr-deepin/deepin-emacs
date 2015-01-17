@@ -1,7 +1,7 @@
 ;;; help-fns.el --- Complex help functions -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2014
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2015 Free Software
+;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help, internal
@@ -183,8 +183,7 @@ OBJECT should be a symbol associated with a function, variable, or face;
   alternatively, it can be a function definition.
 If TYPE is `defvar', search for a variable definition.
 If TYPE is `defface', search for a face definition.
-If TYPE is the value returned by `symbol-function' for a function symbol,
- search for a function definition.
+If TYPE is not a symbol, search for a function definition.
 
 The return value is the absolute name of a readable file where OBJECT is
 defined.  If several such files exist, preference is given to a file
@@ -194,9 +193,10 @@ suitable file is found, return nil."
   (let* ((autoloaded (autoloadp type))
 	 (file-name (or (and autoloaded (nth 1 type))
 			(symbol-file
-			 object (if (memq type (list 'defvar 'defface))
-				    type
-				  'defun)))))
+                         ;; FIXME: Why do we have this weird "If TYPE is the
+                         ;; value returned by `symbol-function' for a function
+                         ;; symbol" exception?
+			 object (or (if (symbolp type) type) 'defun)))))
     (cond
      (autoloaded
       ;; An autoloaded function: Locate the file since `symbol-function'
@@ -452,6 +452,18 @@ FILE is the file where FUNCTION was probably defined."
                          (t "."))
                    "\n")))))
 
+(defun help-fns-short-filename (filename)
+  (let* ((abbrev (abbreviate-file-name filename))
+         (short abbrev))
+    (dolist (dir load-path)
+      (let ((rel (file-relative-name filename dir)))
+        (if (< (length rel) (length short))
+            (setq short rel)))
+      (let ((rel (file-relative-name abbrev dir)))
+        (if (< (length rel) (length short))
+            (setq short rel))))
+    short))
+
 ;;;###autoload
 (defun describe-function-1 (function)
   (let* ((advised (and (symbolp function)
@@ -483,7 +495,7 @@ FILE is the file where FUNCTION was probably defined."
 	 (beg (if (and (or (byte-code-function-p def)
 			   (keymapp def)
 			   (memq (car-safe def) '(macro lambda closure)))
-		       file-name
+		       (stringp file-name)
 		       (help-fns--autoloaded-p function file-name))
 		  (if (commandp def)
 		      "an interactive autoloaded "
@@ -501,6 +513,11 @@ FILE is the file where FUNCTION was probably defined."
 		 ;; aliases before functions.
 		 (aliased
 		  (format "an alias for `%s'" real-def))
+		 ((autoloadp def)
+		  (format "%s autoloaded %s"
+			  (if (commandp def) "an interactive" "an")
+			  (if (eq (nth 4 def) 'keymap) "keymap"
+			    (if (nth 4 def) "Lisp macro" "Lisp function"))))
 		 ((or (eq (car-safe def) 'macro)
 		      ;; For advised macros, def is a lambda
 		      ;; expression or a byte-code-function-p, so we
@@ -513,11 +530,6 @@ FILE is the file where FUNCTION was probably defined."
 		  (concat beg "Lisp function"))
 		 ((eq (car-safe def) 'closure)
 		  (concat beg "Lisp closure"))
-		 ((autoloadp def)
-		  (format "%s autoloaded %s"
-			  (if (commandp def) "an interactive" "an")
-			  (if (eq (nth 4 def) 'keymap) "keymap"
-			    (if (nth 4 def) "Lisp macro" "Lisp function"))))
 		 ((keymapp def)
 		  (let ((is-full nil)
 			(elts (cdr-safe def)))
@@ -543,7 +555,7 @@ FILE is the file where FUNCTION was probably defined."
 	;; but that's completely wrong when the user used load-file.
 	(princ (if (eq file-name 'C-source)
 		   "C source code"
-		 (file-name-nondirectory file-name)))
+		 (help-fns-short-filename file-name)))
 	(princ "'")
 	;; Make a hyperlink to the library.
 	(with-current-buffer standard-output
@@ -564,7 +576,7 @@ FILE is the file where FUNCTION was probably defined."
 			 help-enable-auto-load
 			 (string-match "\\([^\\]=\\|[^=]\\|\\`\\)\\\\[[{<]"
 				       doc-raw)
-			 (load (cadr real-def) t))
+			 (autoload-do-load real-def))
 		    (substitute-command-keys doc-raw))))
 
         (help-fns--key-bindings function)

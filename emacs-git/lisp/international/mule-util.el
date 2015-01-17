@@ -1,6 +1,6 @@
 ;;; mule-util.el --- utility functions for multilingual environment (mule)
 
-;; Copyright (C) 1997-1998, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2000-2015 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -56,6 +56,9 @@
 	(setq i (1+ i)))))
   string)
 
+(defvar truncate-string-ellipsis "..."  ;"…"
+  "String to use to indicate truncation.")
+
 ;;;###autoload
 (defun truncate-string-to-width (str end-column
 				     &optional start-column padding ellipsis)
@@ -80,11 +83,11 @@ If ELLIPSIS is non-nil, it should be a string which will replace the
 end of STR (including any padding) if it extends beyond END-COLUMN,
 unless the display width of STR is equal to or less than the display
 width of ELLIPSIS.  If it is non-nil and not a string, then ELLIPSIS
-defaults to \"...\"."
+defaults to `truncate-string-ellipsis'."
   (or start-column
       (setq start-column 0))
   (when (and ellipsis (not (stringp ellipsis)))
-    (setq ellipsis "..."))
+    (setq ellipsis truncate-string-ellipsis))
   (let ((str-len (length str))
 	(str-width (string-width str))
 	(ellipsis-len (if ellipsis (length ellipsis) 0))

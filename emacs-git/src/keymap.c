@@ -1,5 +1,5 @@
 /* Manipulation of keymaps
-   Copyright (C) 1985-1988, 1993-1995, 1998-2014 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1998-2015 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -75,12 +75,6 @@ Lisp_Object control_x_map;	/* The keymap used for globally bound
 				/* The keymap used by the minibuf for local
 				   bindings when spaces are not encouraged
 				   in the minibuf.  */
-
-/* Keymap used for minibuffers when doing completion.  */
-/* Keymap used for minibuffers when doing completion and require a match.  */
-static Lisp_Object Qkeymapp, Qnon_ascii;
-Lisp_Object Qkeymap, Qmenu_item, Qremap;
-static Lisp_Object QCadvertised_binding;
 
 /* Alist of elements like (DEL . "\d").  */
 static Lisp_Object exclude_keys;
@@ -654,8 +648,6 @@ map_keymap (Lisp_Object map, map_keymap_function_t fun, Lisp_Object args,
   UNGCPRO;
 }
 
-static Lisp_Object Qkeymap_canonicalize;
-
 /* Same as map_keymap, but does it right, properly eliminating duplicate
    bindings due to inheritance.   */
 void
@@ -727,11 +719,6 @@ get_keyelt (Lisp_Object object, bool autoload)
 	/* This is really the value.  */
 	return object;
 
-      /* If the keymap contents looks like (keymap ...) or (lambda ...)
-	 then use itself. */
-      else if (EQ (XCAR (object), Qkeymap) || EQ (XCAR (object), Qlambda))
-	return object;
-
       /* If the keymap contents looks like (menu-item name . DEFN)
 	 or (menu-item name DEFN ...) then use DEFN.
 	 This is a new format menu item.  */
@@ -768,25 +755,8 @@ get_keyelt (Lisp_Object object, bool autoload)
 	 Keymap alist elements like (CHAR MENUSTRING . DEFN)
 	 will be used by HierarKey menus.  */
       else if (STRINGP (XCAR (object)))
-	{
-	  object = XCDR (object);
-	  /* Also remove a menu help string, if any,
-	     following the menu item name.  */
-	  if (CONSP (object) && STRINGP (XCAR (object)))
-	    object = XCDR (object);
-	  /* Also remove the sublist that caches key equivalences, if any.  */
-	  if (CONSP (object) && CONSP (XCAR (object)))
-	    {
-	      Lisp_Object carcar;
-	      carcar = XCAR (XCAR (object));
-	      if (NILP (carcar) || VECTORP (carcar))
-		object = XCDR (object);
-	    }
-	}
+	object = XCDR (object);
 
-      /* If the contents are (KEYMAP . ELEMENT), go indirect.  */
-      else if (KEYMAPP (XCAR (object)))
-	error ("Wow, indirect keymap entry!!");
       else
 	return object;
     }
@@ -990,9 +960,6 @@ copy_keymap_item (Lisp_Object elt)
 	  if (CONSP (tem) && EQ (XCAR (tem), Qkeymap))
 	    XSETCAR (elt, Fcopy_keymap (tem));
 	  tem = XCDR (elt);
-	  if (CONSP (tem) && CONSP (XCAR (tem)))
-	    /* Delete cache for key equivalences.  */
-	    XSETCDR (elt, XCDR (tem));
 	}
     }
   else
@@ -1010,16 +977,6 @@ copy_keymap_item (Lisp_Object elt)
 	      XSETCDR (elt, Fcons (XCAR (tem), XCDR (tem)));
 	      elt = XCDR (elt);
 	      tem = XCDR (elt);
-	    }
-	  /* There may also be a list that caches key equivalences.
-	     Just delete it for the new keymap.  */
-	  if (CONSP (tem)
-	      && CONSP (XCAR (tem))
-	      && (NILP (XCAR (XCAR (tem)))
-		  || VECTORP (XCAR (XCAR (tem)))))
-	    {
-	      XSETCDR (elt, XCDR (tem));
-	      tem = XCDR (tem);
 	    }
 	  if (CONSP (tem) && EQ (XCAR (tem), Qkeymap))
 	    XSETCDR (elt, Fcopy_keymap (tem));
@@ -1127,9 +1084,7 @@ binding KEY to DEF is added at the front of KEYMAP.  */)
   GCPRO3 (keymap, key, def);
   keymap = get_keymap (keymap, 1, 1);
 
-  CHECK_VECTOR_OR_STRING (key);
-
-  length = XFASTINT (Flength (key));
+  length = CHECK_VECTOR_OR_STRING (key);
   if (length == 0)
     RETURN_UNGCPRO (Qnil);
 
@@ -1283,9 +1238,7 @@ recognize the default bindings, just as `read-key-sequence' does.  */)
   GCPRO2 (keymap, key);
   keymap = get_keymap (keymap, 1, 1);
 
-  CHECK_VECTOR_OR_STRING (key);
-
-  length = XFASTINT (Flength (key));
+  length = CHECK_VECTOR_OR_STRING (key);
   if (length == 0)
     RETURN_UNGCPRO (keymap);
 
@@ -1338,11 +1291,8 @@ define_as_prefix (Lisp_Object keymap, Lisp_Object c)
 static Lisp_Object
 append_key (Lisp_Object key_sequence, Lisp_Object key)
 {
-  Lisp_Object args[2];
-
-  args[0] = key_sequence;
-  args[1] = list1 (key);
-  return Fvconcat (2, args);
+  AUTO_LIST1 (key_list, key);
+  return Fvconcat (2, ((Lisp_Object []) { key_sequence, key_list }));
 }
 
 /* Given a event type C which is a symbol,
@@ -1381,11 +1331,10 @@ silly_event_symbol_error (Lisp_Object c)
       *p = 0;
 
       c = reorder_modifiers (c);
-      keystring = concat2 (build_string (new_mods), XCDR (assoc));
+      AUTO_STRING (new_mods_string, new_mods);
+      keystring = concat2 (new_mods_string, XCDR (assoc));
 
-      error ((modifiers & ~meta_modifier
-	      ? "To bind the key %s, use [?%s], not [%s]"
-	      : "To bind the key %s, use \"%s\", not [%s]"),
+      error ("To bind the key %s, use [?%s], not [%s]",
 	     SDATA (SYMBOL_NAME (c)), SDATA (keystring),
 	     SDATA (SYMBOL_NAME (c)));
     }
@@ -2041,7 +1990,6 @@ then the value includes only maps for prefixes that start with PREFIX.  */)
     }
   return maps;
 }
-static Lisp_Object Qsingle_key_description, Qkey_description;
 
 /* This function cannot GC.  */
 
@@ -2280,14 +2228,19 @@ Optional argument NO-ANGLES non-nil means don't put angle brackets
 around function keys and event symbols.  */)
   (Lisp_Object key, Lisp_Object no_angles)
 {
+  USE_SAFE_ALLOCA;
+
   if (CONSP (key) && lucid_event_type_list_p (key))
     key = Fevent_convert_list (key);
 
   if (CONSP (key) && INTEGERP (XCAR (key)) && INTEGERP (XCDR (key)))
     /* An interval from a map-char-table.  */
-    return concat3 (Fsingle_key_description (XCAR (key), no_angles),
-		    build_string (".."),
-		    Fsingle_key_description (XCDR (key), no_angles));
+    {
+      AUTO_STRING (dot_dot, "..");
+      return concat3 (Fsingle_key_description (XCAR (key), no_angles),
+		      dot_dot,
+		      Fsingle_key_description (XCDR (key), no_angles));
+    }
 
   key = EVENT_HEAD (key);
 
@@ -2303,7 +2256,6 @@ around function keys and event symbols.  */)
       if (NILP (no_angles))
 	{
 	  Lisp_Object result;
-	  USE_SAFE_ALLOCA;
 	  char *buffer = SAFE_ALLOCA (sizeof "<>"
 				      + SBYTES (SYMBOL_NAME (key)));
 	  esprintf (buffer, "<%s>", SDATA (SYMBOL_NAME (key)));
@@ -2574,9 +2526,8 @@ If FIRSTONLY has another non-nil value, prefer bindings
 that use the modifier key specified in `where-is-preferred-modifier'
 \(or their meta variants) and entirely reject menu bindings.
 
-If optional 4th arg NOINDIRECT is non-nil, don't follow indirections
-to other keymaps or slots.  This makes it possible to search for an
-indirect definition itself.
+If optional 4th arg NOINDIRECT is non-nil, don't extract the commands inside
+menu-items.  This makes it possible to search for a menu-item itself.
 
 The optional 5th arg NO-REMAP alters how command remapping is handled:
 
@@ -2925,13 +2876,14 @@ You type        Translation\n\
 	  if (!SYMBOLP (modes[i]))
 	    emacs_abort ();
 
-	  p = title = alloca (42 + SCHARS (SYMBOL_NAME (modes[i])));
+	  USE_SAFE_ALLOCA;
+	  p = title = SAFE_ALLOCA (42 + SBYTES (SYMBOL_NAME (modes[i])));
 	  *p++ = '\f';
 	  *p++ = '\n';
 	  *p++ = '`';
 	  memcpy (p, SDATA (SYMBOL_NAME (modes[i])),
-		  SCHARS (SYMBOL_NAME (modes[i])));
-	  p += SCHARS (SYMBOL_NAME (modes[i]));
+		  SBYTES (SYMBOL_NAME (modes[i])));
+	  p += SBYTES (SYMBOL_NAME (modes[i]));
 	  *p++ = '\'';
 	  memcpy (p, " Minor Mode Bindings", strlen (" Minor Mode Bindings"));
 	  p += strlen (" Minor Mode Bindings");
@@ -2940,6 +2892,7 @@ You type        Translation\n\
 	  describe_map_tree (maps[i], 1, shadow, prefix,
 			     title, nomenu, 0, 0, 0);
 	  shadow = Fcons (maps[i], shadow);
+	  SAFE_FREE ();
 	}
 
       start1 = get_local_map (BUF_PT (XBUFFER (buffer)),
@@ -3226,10 +3179,10 @@ describe_map (Lisp_Object map, Lisp_Object prefix,
 
   /* These accumulate the values from sparse keymap bindings,
      so we can sort them and handle them in order.  */
-  int length_needed = 0;
+  ptrdiff_t length_needed = 0;
   struct describe_map_elt *vect;
-  int slots_used = 0;
-  int i;
+  ptrdiff_t slots_used = 0;
+  ptrdiff_t i;
 
   suppress = Qnil;
 
@@ -3249,7 +3202,8 @@ describe_map (Lisp_Object map, Lisp_Object prefix,
   for (tail = map; CONSP (tail); tail = XCDR (tail))
     length_needed++;
 
-  vect = alloca (length_needed * sizeof *vect);
+  USE_SAFE_ALLOCA;
+  SAFE_NALLOCA (vect, 1, length_needed);
 
   for (tail = map; CONSP (tail); tail = XCDR (tail))
     {
@@ -3392,6 +3346,7 @@ describe_map (Lisp_Object map, Lisp_Object prefix,
 	}
     }
 
+  SAFE_FREE ();
   UNGCPRO;
 }
 
@@ -3400,7 +3355,7 @@ describe_vector_princ (Lisp_Object elt, Lisp_Object fun)
 {
   Findent_to (make_number (16), make_number (1));
   call1 (fun, elt);
-  Fterpri (Qnil);
+  Fterpri (Qnil, Qnil);
 }
 
 DEFUN ("describe-vector", Fdescribe_vector, Sdescribe_vector, 1, 2, 0,
@@ -3480,9 +3435,9 @@ describe_vector (Lisp_Object vector, Lisp_Object prefix, Lisp_Object args,
       /* Call Fkey_description first, to avoid GC bug for the other string.  */
       if (!NILP (prefix) && XFASTINT (Flength (prefix)) > 0)
 	{
-	  Lisp_Object tem;
-	  tem = Fkey_description (prefix, Qnil);
-	  elt_prefix = concat2 (tem, build_string (" "));
+	  Lisp_Object tem = Fkey_description (prefix, Qnil);
+	  AUTO_STRING (space, " ");
+	  elt_prefix = concat2 (tem, space);
 	}
       prefix = Qnil;
     }
@@ -3770,12 +3725,15 @@ be preferred.  */);
   Vwhere_is_preferred_modifier = Qnil;
   where_is_preferred_modifier = 0;
 
+  DEFSYM (Qmenu_bar, "menu-bar");
+  DEFSYM (Qmode_line, "mode-line");
+
   staticpro (&Vmouse_events);
   Vmouse_events = listn (CONSTYPE_PURE, 9,
-			 intern_c_string ("menu-bar"),
+			 Qmenu_bar,
 			 intern_c_string ("tool-bar"),
 			 intern_c_string ("header-line"),
-			 intern_c_string ("mode-line"),
+			 Qmode_line,
 			 intern_c_string ("mouse-1"),
 			 intern_c_string ("mouse-2"),
 			 intern_c_string ("mouse-3"),
@@ -3784,6 +3742,9 @@ be preferred.  */);
 
   DEFSYM (Qsingle_key_description, "single-key-description");
   DEFSYM (Qkey_description, "key-description");
+
+  /* Keymap used for minibuffers when doing completion.  */
+  /* Keymap used for minibuffers when doing completion and require a match.  */
   DEFSYM (Qkeymapp, "keymapp");
   DEFSYM (Qnon_ascii, "non-ascii");
   DEFSYM (Qmenu_item, "menu-item");

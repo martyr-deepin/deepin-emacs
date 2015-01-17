@@ -1,3 +1,375 @@
+2015-01-15  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* nntp.el (nntp-send-authinfo): Error out if the password is wrong.
+
+2015-01-08  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* registry.el: Don't use <class> as a variable.
+
+2014-12-29  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* message.el (message-make-fqdn):
+	* nnvirtual.el (nnvirtual-retrieve-headers)
+	(nnvirtual-update-xref-header): Prefer (system-name) to system-name,
+	and avoid naming locals 'system-name'.
+
+2014-12-29  Lars Ingebrigtsen  <larsi@gnus.org>
+
+	* mm-decode.el (mm-shr): Bind `shr-width' to `fill-column' so that
+	lines don't get overlong when responding.
+
+2014-12-19  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* gnus-group.el (gnus-read-ephemeral-bug-group):
+	Bind coding-system-for-read and coding-system-for-write only around
+	with-temp-file, and make buffer unibyte.  Don't write temp file twice.
+
+2014-12-18  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* registry.el (registry-db): Set default slot later.
+	This is because its value is not a literal integer.
+
+2014-12-18  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* mm-util.el (mm-with-unibyte-current-buffer): Mark obsolete and
+	add warning.
+
+	* gnus-art.el: Fix up compiler warnings.
+	(article-display-face, article-display-x-face): Remove unused `face'.
+	(gnus-article-browse-html-save-cid-content): Remove unused var `type'.
+	(article-date-ut): Remove unused var `first'.
+	(gnus-article-prepare): Remove unused var `gnus-article'.
+	(gnus-mime-save-part-and-strip): Remove unused var `param'.
+	(gnus-mime-inline-part): Remove unused vars `charset', `contents', and
+	`coding-system' along with corresponding dead code.
+	(gnus-mime-view-part-externally): Remove unused var
+	`mm-user-display-methods'.
+	(gnus-insert-mime-button): Let-bind gnus-tmp-id explicitly.
+	(gnus-display-mime): Remove unused var `handle'.
+	(gnus-mime-display-alternative): Remove unused var `props'.
+	(gnus-article-read-summary-keys): Remove unused var `up-to-top'.
+	(gnus-article-edit-done): Remove unused var `p'.
+	(gnus-url-mailto): Remove unused var `to'.
+	(gnus-treat-article): Let-bind gnus-treat-condition, part-number,
+	total-parts, and gnus-treat-type explicitly.  Remove unused var `elem'.
+
+2014-12-18  Eric Abrahamsen  <eric@ericabrahamsen.net>
+
+	* registry.el (registry-db): Consolidate the :max-hard and :max-soft
+	slots into a :max-size slot.
+	(registry-db-version): Add new variable for database version number.
+	(registry-prune): Use :max-size slot. Accept and use a sort-function
+	argument.
+	(registry-collect-prune-candidates): Add new function for finding
+	non-precious pruning candidates.
+	(registry-prune-hard-candidates, registry-prune-soft-candidates):
+	Remove obsolete functions.
+	(initialize-instance): Upgrade registry version when starting.
+
+	* gnus-registry.el (gnus-registry-prune-factor): Add new variable.
+	(gnus-registry-max-pruned-entries): Remove obsolete variable.
+	(gnus-registry-cache-file): Change default
+	filename extension to "eieio".
+	(gnus-registry-read): Add new function, split out from
+	`gnus-registry-load', that does the actual object reading.
+	(gnus-registry-load): Use it. Add condition case handler to check for
+	old filename extension and rename to the new one.
+	(gnus-registry-default-sort-function): New variable to specify a sort
+	function to use when pruning.
+	(gnus-registry-save, gnus-registry-insert): Use it.
+	(gnus-registry-sort-by-creation-time): Define a default sort function.
+
+2014-12-09  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* gnus-art.el (gnus-article-mime-handles): Refactor out into own
+	function for reuse.
+	(gnus-mime-buttonize-attachments-in-header): Adjust.
+
+2014-12-07  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* message.el (message-change-subject): Really check whether the subject
+	changed.
+
+2014-12-05  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* mailcap.el (mailcap-mime-data): Add doc-view-mode as a viewer for
+	PDFs.
+	(mailcap-view-mime): New function.
+
+2014-12-01  Glenn Morris  <rgm@gnu.org>
+
+	* gnus-cloud.el (gnus-cloud): Add :version tag.
+
+2014-11-29  John Mastro  <john.b.mastro@gmail.com>  (tiny change)
+
+	* auth-source.el (auth-source-macos-keychain-search-items): Return
+	result of `auth-source-macos-keychain-result-append' (bug#19074).
+
+2014-11-27  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-use-idna):
+	* gnus-sum.el (gnus-summary-idna-message):
+	* message.el (message-use-idna):
+	Protect against nil value for idna-program.
+
+	* message.el (message-use-idna): Load Mule-UCS for XEmacs 21.4.
+
+2014-11-25  Glenn Morris  <rgm@gnu.org>
+
+	* gnus-start.el (gnus-save-newsrc-file-check-timestamp):
+	Add :version tag.
+
+2014-11-23  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* pop3.el (pop3-open-server): Warn unless encrypted.
+
+	* nnimap.el (nnimap-open-connection-1): Warn unless encrypted.
+
+2014-11-17  Albert Krewinkel  <albert@zeitkraut.de>
+
+	* message.el (message-valid-fqdn-regexp): Add non-internaional new
+	TLDs.
+
+2014-11-14  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* gnus-sum.el (gnus-summary-exit-no-update): Don't query about
+	discarding changes in ephemeral groups.
+
+	* ietf-drums.el (ietf-drums-parse-address): Don't issue warnings about
+	things the user isn't interested in.
+
+2014-11-13  Julien Danjou  <jd@abydos>
+
+	* gnus-notifications.el (gnus-notifications-notify): Provide both
+	app-icon and image-path.
+
+2014-11-10  Kenjiro NAKAYAMA  <nakayamakenjiro@gmail.com>
+
+	* gnus/mm-url.el (mm-url-encode-multipart-form-data):
+	Restore to handle "multipart/form-data" by eww.
+
+2014-11-07  Tassilo Horn  <tsdh@gnu.org>
+
+	* gnus-start.el (gnus-activate-group): Fix typo reported by Tim
+	Landscheidt.
+
+2014-10-29  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Simplify use of current-time and friends.
+	* gnus-delay.el (gnus-delay-article):
+	* gnus-sum.el (gnus-summary-read-document):
+	* gnus-util.el (gnus-seconds-today, gnus-seconds-month):
+	* message.el (message-make-expires-date):
+	Omit unnecessary call to current-time.
+	* gnus-util.el (gnus-float-time): Simplify to an alias because
+	time-to-seconds now behaves like float-time with respect to nil arg.
+	(gnus-seconds-year): Don't call current-time twice to get the current
+	time stamp, as this can lead to inconsistent results.
+
+2014-10-27  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus.el (gnus-mode-line-buffer-identification):
+	Don't add image data for a non-graphic display (bug#18813).
+
+2014-10-24  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus.el (gnus-mode-line-buffer-identification): Don't shadow
+	load-path, it blocks autoloading of find-image (bug#18813).
+
+2014-10-24  enami tsugutomo  <tsugutomo.enami@jp.sony.com>
+
+	* nnimap.el (nnimap-wait-for-response): Ignore NOOP response requested
+	to keep connection open (bug#18728).
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* Merge in all changes up to 24.4 release.
+
+2014-10-15  Jorge A. Alfaro-Murillo  <jorge.alfaro-murillo@yale.edu>  (tiny change)
+
+	* message.el (message-insert-signature): Use `newline' instead of
+	inserting explicit "\n".
+
+2014-10-15  Sylvain Chouleur  <sylvain.chouleur@gmail.com>
+
+	* gnus-icalendar.el: Support vcal format timezones.
+	(gnus-icalendar-event--decode-datefield): Use icalendar functions to
+	compute dates with associated timezone.
+	(gnus-icalendar-event-from-ical): Compute all timezones.
+
+2014-10-14  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* gnus-start.el (gnus-save-newsrc-file-check-timestamp): New option to
+	check the newsrc.eld file's timestamp before saving it.
+	(gnus-save-newsrc-file): Use it, with a prompt when the newsrc.eld
+	timestamp has changed to be newer.
+
+2014-10-06  Jan Tatarik  <jan.tatarik@gmail.com>
+
+	* gnus-icalendar.el (gnus-icalendar-identities):
+	Include message-alternative-emails.
+
+2014-10-04  Alan Schmitt  <alan.schmitt@polytechnique.org>  (tiny change)
+
+	* nnimap.el (nnimap-process-expiry-targets): Reverse the list of
+	expired messages only when it was built in reverse order.
+
+2014-10-04  Peter Münster  <pmlists@free.fr>  (tiny change)
+
+	* gnus-delay.el (gnus-delay-send-queue): Remove `gnus-delay-header'
+	last so it can be used in `message-send-hook'.
+
+2014-10-02  Daiki Ueno  <ueno@gnu.org>
+
+	* mml.el (mml-parse-1): Error out if unknown mode is specified in
+	<#secure> tag (bug#18513).
+
+2014-09-29  Daiki Ueno  <ueno@gnu.org>
+
+	* mml.el (mml-parse-1): Error out if unknown mode is specified in
+	<#secure> tag (bug#18513).
+
+2014-09-11  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* gnus-cloud.el (gnus-cloud-parse-version-1): Fix misspelling
+	of ":delete".
+
+2014-08-26  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-article-browse-html-save-cid-content)
+	(gnus-article-browse-html-parts):
+	Revert last change that breaks links other than cid contents.
+
+2014-08-26  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-article-browse-html-save-cid-content)
+	(gnus-article-browse-html-parts): Make cid file names relative.
+
+2014-08-21  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* mm-view.el (mm-display-inline-fontify): Make the working buffer
+	temporarily displayed when running a mode function (at least org-mode
+	requires it).
+
+2014-08-14  Alan Schmitt  <alan.schmitt@polytechnique.org>
+
+	* gnus-sum.el (gnus-summary-expire-articles): Functions registered to
+	the gnus-summary-article-expire-hook should be told where the function
+	is going. In particular, the Gnus registry might want to know.
+
+2014-08-12  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* gnus-art.el (gnus-hidden-properties): Drop the evil `intangible'.
+
+2014-08-06  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-sum.el (gnus-summary-expire-articles): Revert.
+
+2014-08-05  Eric Abrahamsen  <eric@ericabrahamsen.net>
+
+	* gnus-sum.el (gnus-summary-expire-articles): Functions registered to
+	the gnus-summary-article-expire-hook should be told where the function
+	is going. In particular, the Gnus registry might want to know.
+
+2014-07-31  Tassilo Horn  <tsdh@gnu.org>
+
+	* gnus-msg.el (gnus-inews-insert-gcc): Allow `gcc-self' to be a list of
+	groups and t.
+
+2014-07-22  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-utils.el (gnus-recursive-directory-files):
+	Unify hard or symbolic links (bug#18063).
+
+2013-07-17  Albert Krewinkel  <albert@zeitkraut.de>
+
+	* gnus-msg.el (gnus-configure-posting-style):
+	Allow string replacements in values when matching against a header.
+
+2014-07-07  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-start.el (gnus-dribble-read-file): Don't stop the auto-saving of
+	the dribble buffer even when it is shrunk a lot.
+	<http://thread.gmane.org/gmane.emacs.gnus.user/16923>
+
+2014-06-26  Glenn Morris  <rgm@gnu.org>
+
+	* mm-util.el (help-function-arglist): Remove outdated declaration.
+
+2014-06-24  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* html2text.el (html2text-get-attr): Rewrite to handle spaces in quoted
+	attribute values.  (Bug#17834)
+
+2013-06-22  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* gnus-sum.el (gnus-summary-edit-article-done):
+	Prefer point-marker to copy-marker of point.
+
+2014-06-05  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-article-edit-part): Don't modifiy markers.
+	(gnus-article-read-summary-keys):
+	Don't bug out when there is no article in the summary buffer.
+	(gnus-mime-buttonize-attachments-in-header):
+	Improve criterion that finds parts to display.
+
+	* gnus-art.el (gnus-mm-display-part):
+	* mm-decode.el (mm-shr):
+	* mm-view.el (mm-inline-text-html-render-with-w3m, mm-inline-text)
+	(mm-insert-inline): Revert last changes.
+
+2014-06-05  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-mm-display-part):
+	* mm-decode.el (mm-shr):
+	* mm-view.el (mm-inline-text-html-render-with-w3m, mm-inline-text)
+	(mm-insert-inline): Set insertion type of end-marker, not only
+	start-marker, of undisplayer so as to stay after inserted text.
+
+2014-06-02  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* html2text.el (html2text-get-attr): Fix typo when splitting value from
+	attribute. (Bug#17613)
+
+2014-05-29  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* mm-view.el (mm-display-inline-fontify): Use font-lock-ensure.
+	* gnus-cite.el (gnus-message-citation-mode): Use font-lock-flush.
+
+2014-05-15  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-mime-inline-part, gnus-mm-display-part):
+	Don't delete next part button; keep spacing between buttons.
+
+2014-05-14  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-mime-inline-part, gnus-mm-display-part):
+	Work for the last MIME part in an article.
+	(gnus-mime-display-single): Suppress excessive newlines between parts.
+
+	* mm-uu.el (mm-uu-dissect): Assume that separators may be accompanied
+	by leading or trailing newline.
+
+2014-05-09  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus-art.el (gnus-mm-display-part): Don't put article out of sight
+	while prompting a user for a file name, etc.
+	(gnus-mime-display-single): Display part with a common appearance no
+	matter whether MIME button is omitted or not; don't add duplicate entry
+	to gnus-article-mime-handle-alist.
+	(gnus-mime-buttonize-attachments-in-header): Use copied buttons.
+
+2014-05-08  Adam Sjøgren  <asjo@koldfront.dk>
+
+	* mml2015.el (mml2015-display-key-image): New variable.
+
+2014-05-08  Glenn Morris  <rgm@gnu.org>
+
+	* gnus-fun.el (gnus-grab-cam-face):
+	Do not use predictable temp-file name.  (http://bugs.debian.org/747100)
+	This is CVE-2014-3421.
+
 2014-05-04  Glenn Morris  <rgm@gnu.org>
 
 	* gnus-registry.el (gnus-registry-install-p): Doc fix.
@@ -12,8 +384,8 @@
 	* mm-decode.el (mm-display-part): Don't insert a newline in the top.
 	(mm-shr): Make undisplayer unbreakable.
 
-	* mm-view.el (mm-inline-image-emacs, mm-inline-image-xemacs): Don't
-	insert excessive newline.
+	* mm-view.el (mm-inline-image-emacs, mm-inline-image-xemacs):
+	Don't insert excessive newline.
 	(mm-inline-text-html-render-with-w3m, mm-inline-text)
 	(mm-insert-inline): Make undisplayer unbreakable.
 
@@ -115,8 +487,8 @@
 
 2014-03-23  Katsumi Yamaoka  <yamaoka@jpl.org>
 
-	* gnus-art.el (gnus-mime-buttonize-attachments-in-header): Display
-	buttons that are hidden in unselected alternative part as well.
+	* gnus-art.el (gnus-mime-buttonize-attachments-in-header):
+	Display buttons that are hidden in unselected alternative part as well.
 	(gnus-mime-display-alternative): Redraw attachment buttons in header.
 
 	* gmm-utils.el (gmm-labels): Add edebug spec.
@@ -303,7 +675,7 @@
 	* gnus-setup.el (gnus-use-sendmail): We never use sendmail for mail
 	reading.
 
-2014-01-09  Ken Olum  <kdo@cosmos.phy.tufts.edu>  (tiny change)
+2014-01-09  Ken Olum  <kdo@cosmos.phy.tufts.edu>
 
 	* message.el (message-bury): Call bury-buffer with no argument
 	in the message-return-action case too.
@@ -427,7 +799,7 @@
 	* gnus-icalendar.el (gnus-icalendar-event:org-timestamp):
 	Fix org-timestamp for events ending at midnight.
 
-2013-11-21  Ivan Shmakov  <ivan@siamics.net>  (tiny change)
+2013-11-21  Ivan Shmakov  <ivan@siamics.net>
 
 	* nndoc.el (nndoc-type-alist, nndoc-debbugs-db-type-p):
 	Support debbugs .log files.
@@ -17937,7 +18309,7 @@
 2006-03-16  Reiner Steib  <Reiner.Steib@gmx.de>
 
 	* gmm-utils.el (gmm-image-load-path-for-library): Prefer user's
-	images in image-load-path.  [Sync with image.el, revision 1.60, in
+	images in image-load-path.  [Sync with image.el at 2006-03-16T16:55:26Z!wohler@newt.com, in
 	Emacs.]
 
 2006-03-15  Reiner Steib  <Reiner.Steib@gmx.de>
@@ -17945,7 +18317,7 @@
 	* gmm-utils.el (gmm-image-load-path-for-library): Pass value of
 	path rather than symbol.  Always return list of directories.
 	Guarantee that image directory comes first.  [Sync with image.el,
-	revision 1.59, in Emacs.]
+	, in Emacs2006-03-15T17:06:16Z!wohler@newt.com.]
 
 	* message.el (message-make-tool-bar): Adjust to new API of
 	`gmm-image-load-path-for-library'.
@@ -18053,7 +18425,7 @@
 	Simplify resetting gnus-article-browse-html-temp-list.
 
 	* gmm-utils.el (gmm-image-load-path-for-library): Sync with
-	mh-compat.el revision 1.9 in Emacs.  Rename `gmm-image-load-path'.
+	mh-compat.el at 2006-03-04T21:23:21Z!wohler@newt.com in Emacs.  Rename `gmm-image-load-path'.
 	Add example to docstring.  Rename local variables.  Move error
 	checks to default case in cond and simplify.
 
@@ -24101,10 +24473,10 @@
 
 	* gnus-group.el: Require gnus-sum and autoload functions to
 	resolve warnings when gnus-group.el compiled alone.
-	(gnus-group-line-format): Documented new %F.
+	(gnus-group-line-format): Document new %F.
 	(size of Fetched data) group line format; identifies disk space
 	used by agent and cache.
-	(gnus-group-line-format-alist): Defined new F format.
+	(gnus-group-line-format-alist): Define new F format.
 	(gnus-total-fetched-for): New function.
 	(gnus-group-delete-group): No longer update
 	gnus-cache-active-altered as gnus-request-delete-group now keeps
@@ -25665,7 +26037,7 @@
 
 See ChangeLog.2 for earlier changes.
 
-  Copyright (C) 2004-2014 Free Software Foundation, Inc.
+  Copyright (C) 2004-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

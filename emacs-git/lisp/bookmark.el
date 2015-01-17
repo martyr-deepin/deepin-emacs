@@ -1,6 +1,6 @@
 ;;; bookmark.el --- set bookmarks, maybe annotate them, jump to them later
 
-;; Copyright (C) 1993-1997, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1997, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Karl Fogel <kfogel@red-bean.com>
 ;; Maintainer: Karl Fogel <kfogel@red-bean.com>
@@ -1420,8 +1420,7 @@ explicitly.
 
 If you load a file containing bookmarks with the same names as
 bookmarks already present in your Emacs, the new bookmarks will get
-unique numeric suffixes \"<2>\", \"<3>\", ... following the same
-method buffers use to resolve name collisions."
+unique numeric suffixes \"<2>\", \"<3>\", etc."
   (interactive
    (list (read-file-name
           (format "Load bookmarks from: (%s) "

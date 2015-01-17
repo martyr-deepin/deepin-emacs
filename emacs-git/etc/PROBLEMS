@@ -1,6 +1,7 @@
 Known Problems with GNU Emacs
 
-Copyright (C) 1987-1989, 1993-1999, 2001-2014 Free Software Foundation, Inc.
+Copyright (C) 1987-1989, 1993-1999, 2001-2015 Free Software Foundation,
+Inc.
 See the end of the file for license conditions.
 
 
@@ -159,7 +160,6 @@ This is due to a bug introduced in ImageMagick 6.8.2-3.  The bug should
 be fixed in ImageMagick 6.8.3-10.  See <URL:http://debbugs.gnu.org/13867>.
 
 ** Crashes when displaying GIF images in Emacs built with version
-
 libungif-4.1.0 are resolved by using version libungif-4.1.0b1.
 Configure checks for the correct version, but this problem could occur
 if a binary built against a shared libungif is run on a system with an
@@ -365,8 +365,8 @@ For example, (system-name) returns some variation on
 "localhost.localdomain", rather the name you were expecting.
 
 You need to configure your machine with a fully qualified domain name,
-(i.e. a name with at least one ".") either in /etc/hosts,
-/etc/hostname, the NIS, or wherever your system calls for specifying this.
+(i.e., a name with at least one "."), either in /etc/hostname
+or wherever your system calls for specifying this.
 
 If you cannot fix the configuration, you can set the Lisp variable
 mail-host-address to the value you want.
@@ -457,17 +457,6 @@ problem by adding this to your .cshrc file:
             stty  -icrnl -onlcr -echo susp ^Z
         endif
     endif
-
-*** Emacs startup on GNU/Linux systems (and possibly other systems) is slow.
-
-This can happen if the system is misconfigured and Emacs can't get the
-full qualified domain name, FQDN.  You should have your FQDN in the
-/etc/hosts file, something like this:
-
-127.0.0.1	localhost
-129.187.137.82	nuc04.t30.physik.tu-muenchen.de	nuc04
-
-The way to set this up may vary on non-GNU systems.
 
 *** Attempting to visit remote files via ange-ftp fails.
 
@@ -835,6 +824,20 @@ The same problem happens on any other system if you are using fcitx
 you want to use fcitx with Emacs, you have two choices.  Toggle fcitx
 by another key (e.g. C-\) by modifying ~/.fcitx/config, or be
 accustomed to use C-@ for `set-mark-command'.
+
+*** Link-time optimization with clang doesn't work on Fedora 20.
+
+As of May 2014, Fedora 20 has broken LLVMgold.so plugin support in clang
+(tested with clang-3.4-6.fc20) - `clang --print-file-name=LLVMgold.so'
+prints `LLVMgold.so' instead of full path to plugin shared library, and
+`clang -flto' is unable to find the plugin with the following error:
+
+/bin/ld: error: /usr/bin/../lib/LLVMgold.so: could not load plugin library:
+/usr/bin/../lib/LLVMgold.so: cannot open shared object file: No such file
+or directory
+
+The only way to avoid this is to build your own clang from source code
+repositories, as described at http://clang.llvm.org/get_started.html.
 
 *** M-SPC seems to be ignored as input.
 
@@ -1918,6 +1921,16 @@ MSDN:
 includes a short description of MSLU and a link where it can be
 downloaded.
 
+** Emacs refuses to start on Windows 9X because ctime64 function is missing
+
+This is a sign that Emacs was compiled with MinGW runtime version
+4.0.x or later.  These versions of runtime call in their startup code
+the ctime64 function, which does not exist in MSVCRT.DLL, the C
+runtime shared library, distributed with Windows 9X.
+
+A workaround is to build Emacs with MinGW runtime 3.x (the latest
+version is 3.20).
+
 ** A few seconds delay is seen at startup and for many file operations
 
 This happens when the Net Logon service is enabled.  During Emacs
@@ -1939,11 +1952,11 @@ accessible by right-clicking "My Computer" or "Computer", selecting
 ** Emacs crashes when exiting the Emacs session
 
 This was reported to happen when some optional DLLs, such as those
-used for displaying images or the GnuTLS library, which are loaded
-on-demand, have a runtime dependency on the libgcc DLL,
-libgcc_s_dw2-1.dll.  The reason seems to be a bug in libgcc which
-rears its ugly head whenever the libgcc DLL is loaded after Emacs has
-started.
+used for displaying images or the GnuTLS library or zlib compression
+library, which are loaded on-demand, have a runtime dependency on the
+libgcc DLL, libgcc_s_dw2-1.dll.  The reason seems to be a bug in
+libgcc which rears its ugly head whenever the libgcc DLL is loaded
+after Emacs has started.
 
 One solution for this problem is to find an alternative build of the
 same optional library that does not depend on the libgcc DLL.
@@ -1951,6 +1964,26 @@ same optional library that does not depend on the libgcc DLL.
 Another possibility is to rebuild Emacs with the -shared-libgcc
 switch, which will force Emacs to load libgcc_s_dw2-1.dll on startup,
 ahead of any optional DLLs loaded on-demand later in the session.
+
+** File selection dialog opens in incorrect directories
+
+Invoking the file selection dialog on Windows 7 or later shows a
+directory that is different from what was passed to `read-file-name'
+or `x-file-dialog' via their arguments.
+
+This is due to a deliberate change in behavior of the file selection
+dialogs introduced in Windows 7.  It is explicitly described in the
+MSDN documentation of the GetOpenFileName API used by Emacs to pop up
+the file selection dialog.  For the details, see
+
+  http://msdn.microsoft.com/en-us/library/windows/desktop/ms646839%28v=vs.85%29.aspx
+
+The dialog shows the last directory in which the user selected a file
+in a previous invocation of the dialog with the same initial
+directory.
+
+You can reset this "memory" of that directory by invoking the file
+selection dialog with a different initial directory.
 
 ** PATH can contain unexpanded environment variables
 
@@ -2085,7 +2118,7 @@ The function set-time-zone-rule gives incorrect results for many
 non-US timezones.  This is due to over-simplistic handling of
 daylight savings switchovers by the Windows libraries.
 
-** Files larger than 4GB report wrong size
+** Files larger than 4GB report wrong size in a 32-bit Windows build
 
 Files larger than 4GB cause overflow in the size (represented as a
 32-bit integer) reported by `file-attributes'.  This affects Dired as
@@ -2222,17 +2255,6 @@ please call support for your X-server and see if you can get a fix.
 If you do, please send it to bug-gnu-emacs@gnu.org so we can list it here.
 
 * Build-time problems
-
-** Autoreconf
-
-*** autoreconf fails with "possibly undefined macro: PKG_CONFIG".
-This can happen if you installed your own automake in a non-standard
-location /prefix.  The simplest workaround is to run ./autogen.sh
-instead.  If you prefer to run autoreconf directly, then if pkg.m4 is
-in the directory /usr/share/aclocal you can append /usr/share/local to
-your ACLOCAL_PATH environment variable, or you can add a line
-"/usr/share/aclocal" to the file /prefix/share/aclocal/dirlist (create
-the file if necessary).
 
 ** Configuration
 
@@ -2817,19 +2839,6 @@ drive, e.g. `c:/dev'.
 This is an unfortunate side-effect of the support for Unix-style
 device names such as /dev/null in the DJGPP runtime library.  A
 work-around is to rename the problem directory to another name.
-
-*** MS-DOS+DJGPP: Problems on MS-DOS if DJGPP v2.0 is used to compile Emacs.
-
-There are two DJGPP library bugs which cause problems:
-
-  * Running `shell-command' (or `compile', or `grep') you get
-    `Searching for program: permission denied (EACCES), c:/command.com';
-  * After you shell to DOS, Ctrl-Break kills Emacs.
-
-To work around these bugs, you can use two files in the msdos
-subdirectory: `is_exec.c' and `sigaction.c'.  Compile them and link
-them into the Emacs executable `temacs'; then they will replace the
-incorrect library functions.
 
 *** MS-DOS: Emacs compiled for MSDOS cannot find some Lisp files, or other
 run-time support files, when long filename support is enabled.

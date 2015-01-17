@@ -1,6 +1,6 @@
 ;;; ob-core.el --- working with code blocks in org-mode
 
-;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	Dan Davison
@@ -38,6 +38,7 @@
 (defvar org-src-lang-modes)
 (defvar org-babel-library-of-babel)
 (declare-function show-all "outline" ())
+(declare-function org-every "org" (pred seq))
 (declare-function org-reduce "org" (CL-FUNC CL-SEQ &rest CL-KEYS))
 (declare-function org-mark-ring-push "org" (&optional pos buffer))
 (declare-function tramp-compat-make-temp-file "tramp-compat"
@@ -1348,7 +1349,7 @@ specified in the properties of the current outline entry."
 	  (org-entry-get org-babel-current-src-block-location
 			 (concat "header-args:" lang) 'inherit))))))
 
-(defvar org-src-preserve-indentation)
+(defvar org-src-preserve-indentation) ;; declare defcustom from org-src
 (defun org-babel-parse-src-block-match ()
   "Parse the results from a match of the `org-babel-src-block-regexp'."
   (let* ((block-indentation (length (match-string 1)))
@@ -2039,8 +2040,8 @@ code ---- the results are extracted in the syntax of the source
 				 t info hash indent)))
 	     (results-switches
 	      (cdr (assoc :results_switches (nth 2 info))))
-	     (visible-beg (copy-marker (point-min)))
-	     (visible-end (copy-marker (point-max)))
+	     (visible-beg (point-min-marker))
+	     (visible-end (point-max-marker))
 	     ;; When results exist outside of the current visible
 	     ;; region of the buffer, be sure to widen buffer to
 	     ;; update them.
@@ -2100,9 +2101,9 @@ code ---- the results are extracted in the syntax of the source
 		 ((funcall proper-list-p result)
 		  (goto-char beg)
 		  (insert (concat (orgtbl-to-orgtbl
-				   (if (or (eq 'hline (car result))
-					   (and (listp (car result))
-						(listp (cdr (car result)))))
+				   (if (org-every
+					(lambda (el) (or (listp el) (eq el 'hline)))
+					result)
 				       result (list result))
 				   '(:fmt (lambda (cell) (format "%s" cell)))) "\n"))
 		  (goto-char beg) (when (org-at-table-p) (org-table-align)))

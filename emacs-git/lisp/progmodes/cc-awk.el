@@ -1,6 +1,6 @@
 ;;; cc-awk.el --- AWK specific code within cc-mode.
 
-;; Copyright (C) 1988, 1994, 1996, 2000-2014 Free Software Foundation,
+;; Copyright (C) 1988, 1994, 1996, 2000-2015 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Alan Mackenzie <acm@muc.de> (originally based on awk-mode.el)
@@ -61,7 +61,6 @@
 (cc-bytecomp-defun c-backward-token-1)
 (cc-bytecomp-defun c-beginning-of-statement-1)
 (cc-bytecomp-defun c-backward-sws)
-(cc-bytecomp-defun c-forward-sws)
 
 (defvar awk-mode-syntax-table
   (let ((st (make-syntax-table)))
@@ -1147,4 +1146,8 @@ comment at the start of cc-engine.el for more info."
 
 (cc-provide 'cc-awk)			; Changed from 'awk-mode, ACM 2002/5/21
 
+;;; Local Variables:
+;;; indent-tabs-mode: t
+;;; tab-width: 8
+;;; End:
 ;;; awk-mode.el ends here

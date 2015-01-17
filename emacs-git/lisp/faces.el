@@ -1,6 +1,6 @@
 ;;; faces.el --- Lisp faces
 
-;; Copyright (C) 1992-1996, 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1996, 1998-2015 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -53,7 +53,7 @@ This means to treat a terminal of type TYPE as if it were of type ALIAS."
   :type '(alist :key-type (string :tag "Terminal")
 		:value-type (string :tag "Alias"))
   :group 'terminals
-  :version "24.5")
+  :version "25.1")
 
 (declare-function xw-defined-colors "term/common-win" (&optional frame))
 
@@ -1825,7 +1825,9 @@ If omitted or nil, that stands for the selected frame's display."
 (declare-function x-display-grayscale-p "xfns.c" (&optional terminal))
 
 (defun display-grayscale-p (&optional display)
-  "Return non-nil if frames on DISPLAY can display shades of gray."
+  "Return non-nil if frames on DISPLAY can display shades of gray.
+DISPLAY should be either a frame or a display name (a string).
+If omitted or nil, that stands for the selected frame's display."
   (let ((frame-type (framep-on-display display)))
     (cond
      ((memq frame-type '(x w32 ns))
@@ -2090,7 +2092,8 @@ frame parameters in PARAMETERS."
   	     (value (cdr (assq param-name parameters))))
   	(if value
   	    (set-face-attribute (nth 1 param) frame
-				(nth 2 param) value))))))
+				(nth 2 param) value))))
+    (frame-can-run-window-configuration-change-hook frame t)))
 
 (defun tty-handle-reverse-video (frame parameters)
   "Handle the reverse-video frame parameter for terminal frames."
@@ -2746,8 +2749,6 @@ If PATTERN is nil, return the name of the frame's base font, which never
 contains wildcards.
 Given optional arguments FACE and FRAME, return a font which is
 also the same size as FACE on FRAME, or fail."
-  (or (symbolp face)
-      (setq face (face-name face)))
   (and (eq frame t)
        (setq frame nil))
   (if pattern

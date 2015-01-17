@@ -1,6 +1,6 @@
 2013-03-11  Glenn Morris  <rgm@gnu.org>
 
-        * Version 24.3 released.
+	* Merge in all changes up to version 24.3 release.
 
 2013-03-11  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -2468,7 +2468,7 @@
 
 	* progmodes/ruby-mode.el (ruby-indent-beg-re): Only allow "class",
 	"module" and "def" to have indentation before them.
-	Regression from revno:109911 (see the new test).
+	Regression from 2012-09-07T04:15:56Z!dgutov@yandex.ru (see the new test).
 
 	* progmodes/ruby-mode.el: Bump the version to 1.2 (Bug#13200).
 
@@ -3340,7 +3340,7 @@
 	already registered with a different backend (Bug#10589).
 
 2012-11-29  Jambunathan K  <kjambunathan@gmail.com>
-            Stefan Monnier  <monnier@iro.umontreal.ca>
+	    Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* icomplete.el: Change separator; add ido-style commands.
 	(icomplete-show-key-bindings): Remove custom var.
@@ -4062,7 +4062,7 @@
 
 	* ansi-color.el (ansi-color-apply-sequence): Implement SGR codes
 	39 and 49 (bug#12792).  Also, treat unimplemented parameters as 0,
-	thereby restoring the behavior of revisions prior to 109621.
+	thereby restoring the behavior of revisions prior to 2012-08-15T03:33:55Z!monnier@iro.umontreal.ca.
 
 2012-11-13  Fabián Ezequiel Gallina  <fgallina@cuca>
 
@@ -4086,7 +4086,7 @@
 
 	* progmodes/ruby-mode.el (ruby-move-to-block): When moving
 	backward, always stop at indentation.  Reverts the change from
-	109576 (Bug#12851).
+	2012-08-12T22:06:56Z!monnier@iro.umontreal.ca (Bug#12851).
 
 2012-11-13  Glenn Morris  <rgm@gnu.org>
 
@@ -4571,7 +4571,7 @@
 	to `bookmark' (bug#11131).
 
 2012-10-26  Bastien Guerry  <bzg@altern.org>
-            Stefan Monnier  <monnier@iro.umontreal.ca>
+	    Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* face-remap.el: Use lexical-binding.
 	(text-scale-adjust): Improve docstring.  Use itself for the temporary
@@ -5052,7 +5052,7 @@
 	(w32-handle-dropped-file): Convert incoming dropped files from
 	Windows paths to Cygwin ones before passing them on to the rest of
 	Emacs.
-	(w32-drag-n-drop): New paramter new-frame.  Simplify logic.
+	(w32-drag-n-drop): New parameter new-frame.  Simplify logic.
 	(w32-initialize-window-system): Assert we're not initialized twice.
 
 	* term/x-win.el: Require cl-lib; add ourselves to display-format-alist.
@@ -5879,7 +5879,7 @@
 	* international/uni-numeric.el: Regenerate.
 
 2012-09-26  Tomohiro Matsuyama  <tomo@cx4a.org>
-            Stefan Monnier  <monnier@iro.umontreal.ca>
+	    Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* profiler.el: New file.
 
@@ -7534,7 +7534,7 @@
 	In doc-strings state whether the argument window has to denote a
 	live, valid or any window.
 
-2012-08-16  Phil Sainty  <psainty@orcon.net.nz>  (tiny change)
+2012-08-16  Phil Sainty  <psainty@orcon.net.nz>
 
 	* progmodes/subword.el (subword-forward-function)
 	(subword-backward-function, subword-forward-regexp)
@@ -8501,7 +8501,7 @@
 
 2012-07-25  Jay Belanger  <jay.p.belanger@gmail.com>
 
-	* calc-alg.el (math-simplify-divide): Don't cross multiply
+	* calc/calc-alg.el (math-simplify-divide): Don't cross multiply
 	in an equation when the lhs is a variable.
 
 2012-07-24  Julien Danjou  <julien@danjou.info>
@@ -8856,7 +8856,7 @@
 
 	* bindings.el (top): Use `mapc' instead of `mapcar'.
 
-	* loadup.el (top): Remove bogus `if' choice (brought by revno:88805).
+	* loadup.el (top): Remove bogus `if' choice (brought by 2008-06-21T01:38:39Z!monnier@iro.umontreal.ca).
 
 2012-07-13  Michael Albinus  <michael.albinus@gmx.de>
 
@@ -9434,7 +9434,7 @@
 
 2012-06-23  Juanma Barranquero  <lekktu@gmail.com>
 
-	* makefile.w32-in (COMPILE_FIRST): Synch with changes in revno:108688.
+	* makefile.w32-in (COMPILE_FIRST): Synch with changes in 2012-06-22T21:24:54Z!monnier@iro.umontreal.ca.
 
 2012-06-23  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -9737,7 +9737,7 @@
 2012-06-15  Juanma Barranquero  <lekktu@gmail.com>
 
 	* makefile.w32-in (COMPILE_FIRST): Synch with makefile.in changes
-	in revno:88864.
+	in 2008-06-22T13:57:28Z!monnier@iro.umontreal.ca.
 
 2012-06-15  Fabián Ezequiel Gallina  <fgallina@cuca>
 
@@ -10421,7 +10421,7 @@
 
 2012-06-08  Juanma Barranquero  <lekktu@gmail.com>
 
-	* textmodes/texinfmt.el: Fix bug#11640 (reverts part of revno:89810).
+	* textmodes/texinfmt.el: Fix bug#11640 (reverts part of 2008-07-31T05:33:56Z!dann@ics.uci.edu).
 	(texinfo-format-printindex): Use `texinfo-sort-region' in all platforms,
 	instead of calling external sort utility.
 	(texinfo-sort-region, texinfo-sort-startkeyfun): Restore functions.
@@ -13610,7 +13610,7 @@
 
 	* textmodes/artist.el (artist-menu-map): Bind Rectangle menu item
 	to draw rectangles, not squares.  (Regression introduced by revno
-	103471)
+	2011-03-02T03:48:01Z!cyd@stupidchicken.com)
 
 2012-03-18  Chong Yidong  <cyd@gnu.org>
 
@@ -14293,7 +14293,7 @@
 
 2012-02-22  Alan Mackenzie  <acm@muc.de>
 
-	* progmodes/cc-mode.el: Revert change #107149 from 2012-02-06.
+	* progmodes/cc-mode.el: Revert change #2012-02-06T22:08:41Z!larsi@gnus.org from 2012-02-06.
 
 2012-02-22  Glenn Morris  <rgm@gnu.org>
 
@@ -15615,8 +15615,8 @@
 
 2011-12-19  Vincent Belaïche  <vincentb1@users.sourceforge.net>
 
-	* ses.el: Ooops... undo changes of revision 106664, as trunk
-	branch is feature frozen, and revision 106664 was a feature
+	* ses.el: Ooops... undo changes of 2011-12-11T14:49:48Z!vincentb1@users.sourceforge.net, as trunk
+	branch is feature frozen, and 2011-12-11T14:49:48Z!vincentb1@users.sourceforge.net was a feature
 	addition.
 
 2011-12-18  Jan Djärv  <jan.h.d@swipnet.se>
@@ -16175,7 +16175,7 @@
 
 2011-11-24  Juri Linkov  <juri@jurta.org>
 
-	* view.el (view-buffer): Revert revno:105285 from 2011-07-19 (bug#8615).
+	* view.el (view-buffer): Revert 2011-07-19T15:01:49Z!larsi@gnus.org from 2011-07-19 (bug#8615).
 
 2011-11-24  Glenn Morris  <rgm@gnu.org>
 
@@ -17100,7 +17100,7 @@
 	* vc/ediff-init.el (ediff-toggle-read-only-function):
 	Use toggle-read-only.
 
-2011-10-22  Alan Mackenzie  <bug-cc-mode@gnu.org>
+2011-10-22  Alan Mackenzie  <acm@muc.de>
 
 	Fix bug #9560, sporadic wrong indentation; improve instrumentation
 	of c-parse-state.
@@ -19213,8 +19213,8 @@
 2011-08-10  Juri Linkov  <juri@jurta.org>
 
 	* progmodes/grep.el (rgrep): Don't bind `process-connection-type'.
-	This finishes incomplete reversion of revno:104787 (2011-06-30)
-	intended by revno:104988 (2011-07-06).
+	This finishes incomplete reversion of 2011-06-30T01:09:13Z!larsi@gnus.org
+	intended by 2011-07-06T15:49:19Z!larsi@gnus.org.
 
 2011-08-09  Chong Yidong  <cyd@stupidchicken.com>
 
@@ -24158,11 +24158,11 @@
 
 	* autorevert.el (auto-revert-handler):
 	Bind `remote-file-name-inhibit-cache', not `tramp-cache-inhibit-cache',
-	which was removed in revno:101730 (2010-10-02).
+	which was removed in 2010-10-02T13:21:43Z!michael.albinus@gmx.de.
 	Don't quote lambda.
 
 	* image-mode.el (image-transform-set-scale):
-	Fix change in revno:103877 (2011-04-09).
+	Fix change in 2011-04-09T20:28:01Z!cyd@stupidchicken.com.
 
 2011-04-12  Lars Magne Ingebrigtsen  <larsi@gnus.org>
 
@@ -24346,7 +24346,7 @@
 
 	* font-lock.el (font-lock-refresh-defaults):
 	Don't bind `hi-lock--inhibit-font-lock-hook', removed in
-	revno:99634.2.463 (2010-10-09) and revno:101913 (2010-10-12).
+	2010-10-09T04:09:19Z!cyd@stupidchicken.com and 2010-10-11T23:57:49Z!lekktu@gmail.com (2010-10-12).
 
 	* info.el (Info-directory-list, Info-read-node-name-2)
 	(Info-split-parameter-string): Doc fixes.
@@ -25224,7 +25224,7 @@ See ChangeLog.15 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2014 Free Software Foundation, Inc.
+  Copyright (C) 2011-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

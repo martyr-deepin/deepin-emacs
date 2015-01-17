@@ -1,6 +1,6 @@
 ;;; tabulated-list.el --- generic major mode for tabulated lists -*- lexical-binding: t -*-
 
-;; Copyright (C) 2011-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2015 Free Software Foundation, Inc.
 
 ;; Author: Chong Yidong <cyd@stupidchicken.com>
 ;; Keywords: extensions, lisp
@@ -323,7 +323,8 @@ to the entry with the same ID element as the current line."
     (if saved-pt
 	(progn (goto-char saved-pt)
 	       (move-to-column saved-col)
-	       (recenter))
+	       (when (eq (window-buffer) (current-buffer))
+		 (recenter)))
       (goto-char (point-min)))))
 
 (defun tabulated-list-print-entry (id cols)
@@ -518,7 +519,10 @@ as the ewoc pretty-printer."
   (setq-local buffer-read-only t)
   (setq-local buffer-undo-list t)
   (setq-local revert-buffer-function #'tabulated-list-revert)
-  (setq-local glyphless-char-display tabulated-list-glyphless-char-display))
+  (setq-local glyphless-char-display tabulated-list-glyphless-char-display)
+  ;; Avoid messing up the entries' display just because the first
+  ;; column of the first entry happens to begin with a R2L letter.
+  (setq bidi-paragraph-direction 'left-to-right))
 
 (put 'tabulated-list-mode 'mode-class 'special)
 

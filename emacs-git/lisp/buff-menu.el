@@ -1,6 +1,6 @@
 ;;; buff-menu.el --- Interface for viewing and manipulating buffers
 
-;; Copyright (C) 1985-1987, 1993-1995, 2000-2014 Free Software
+;; Copyright (C) 1985-1987, 1993-1995, 2000-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -539,7 +539,7 @@ The current window remains selected."
 
 (defun Buffer-menu-toggle-read-only ()
   "Toggle read-only status of buffer on this line.
-This behaves like invoking \\[toggle-read-only] in that buffer."
+This behaves like invoking \\[read-only-mode] in that buffer."
   (interactive)
   (let ((read-only
          (with-current-buffer (Buffer-menu-buffer t)

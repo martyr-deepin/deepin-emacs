@@ -1,6 +1,7 @@
 ;;; desktop.el --- save partial status of Emacs when killed -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1995, 1997, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 1997, 2000-2015 Free Software Foundation,
+;; Inc.
 
 ;; Author: Morten Welinder <terra@diku.dk>
 ;; Keywords: convenience
@@ -174,8 +175,8 @@ For further details, see info node `(emacs)Saving Emacs Sessions'."
   :global t
   :group 'desktop
   (if desktop-save-mode
-      (desktop-auto-save-set-timer)
-    (desktop-auto-save-cancel-timer)))
+      (desktop-auto-save-enable)
+    (desktop-auto-save-disable)))
 
 (defun desktop-save-mode-off ()
   "Disable `desktop-save-mode'.  Provided for use in hooks."
@@ -207,13 +208,17 @@ determine where the desktop is saved."
 
 (defcustom desktop-auto-save-timeout auto-save-timeout
   "Number of seconds idle time before auto-save of the desktop.
+The idle timer activates auto-saving only when window configuration changes.
 This applies to an existing desktop file when `desktop-save-mode' is enabled.
 Zero or nil means disable auto-saving due to idleness."
   :type '(choice (const :tag "Off" nil)
                  (integer :tag "Seconds"))
   :set (lambda (symbol value)
          (set-default symbol value)
-         (ignore-errors (desktop-auto-save-set-timer)))
+         (ignore-errors
+	   (if (and (integerp value) (> value 0))
+	       (desktop-auto-save-enable value)
+	     (desktop-auto-save-disable))))
   :group 'desktop
   :version "24.4")
 
@@ -524,6 +529,8 @@ Furthermore the major mode function must be autoloaded.")
 
 (defcustom desktop-minor-mode-table
   '((auto-fill-function auto-fill-mode)
+    (defining-kbd-macro nil)
+    (isearch-mode nil)
     (vc-mode nil)
     (vc-dired-mode nil)
     (erc-track-minor-mode nil)
@@ -934,16 +941,17 @@ Frames with a non-nil `desktop-dont-save' parameter are not saved."
 	(and desktop-restore-frames
 	     (frameset-save nil
 			    :app desktop--app-id
-			    :name (concat user-login-name "@" system-name)
+			    :name (concat user-login-name "@" (system-name))
 			    :predicate #'desktop--check-dont-save))))
 
 ;;;###autoload
-(defun desktop-save (dirname &optional release auto-save)
+(defun desktop-save (dirname &optional release only-if-changed)
   "Save the desktop in a desktop file.
 Parameter DIRNAME specifies where to save the desktop file.
 Optional parameter RELEASE says whether we're done with this desktop.
-If AUTO-SAVE is non-nil, compare the saved contents to the one last saved,
-and don't save the buffer if they are the same."
+If ONLY-IF-CHANGED is non-nil, compare the current desktop information
+to that in the desktop file, and if the desktop information has not
+changed since it was last saved then do not rewrite the file."
   (interactive (list
                 ;; Or should we just use (car desktop-path)?
                 (let ((default (if (member "." desktop-path)
@@ -1016,7 +1024,7 @@ and don't save the buffer if they are the same."
 
 	  (setq default-directory desktop-dirname)
 	  ;; When auto-saving, avoid writing if nothing has changed since the last write.
-	  (let* ((beg (and auto-save
+	  (let* ((beg (and only-if-changed
 			   (save-excursion
 			     (goto-char (point-min))
 			     ;; Don't check the header with changing timestamp
@@ -1124,6 +1132,10 @@ Using it may cause conflicts.  Use it anyway? " owner)))))
 		(unless desktop-dirname
 		  (message "Desktop file in use; not loaded.")))
 	    (desktop-lazy-abort)
+	    ;; Temporarily disable the autosave that will leave it
+	    ;; disabled when loading the desktop fails with errors,
+	    ;; thus not overwriting the desktop with broken contents.
+	    (desktop-auto-save-disable)
 	    ;; Evaluate desktop buffer and remember when it was modified.
 	    (load (desktop-full-file-name) t t t)
 	    (setq desktop-file-modtime (nth 5 (file-attributes (desktop-full-file-name))))
@@ -1176,6 +1188,7 @@ Using it may cause conflicts.  Use it anyway? " owner)))))
 				  (set-window-prev-buffers window nil)
 				  (set-window-next-buffers window nil))))
  	    (setq desktop-saved-frameset nil)
+	    (desktop-auto-save-enable)
 	    t))
       ;; No desktop file found.
       (desktop-clear)
@@ -1222,6 +1235,15 @@ directory DIRNAME."
 ;; Auto-Saving.
 (defvar desktop-auto-save-timer nil)
 
+(defun desktop-auto-save-enable (&optional timeout)
+  (when (and (integerp (or timeout desktop-auto-save-timeout))
+	     (> (or timeout desktop-auto-save-timeout) 0))
+    (add-hook 'window-configuration-change-hook 'desktop-auto-save-set-timer)))
+
+(defun desktop-auto-save-disable ()
+  (remove-hook 'window-configuration-change-hook 'desktop-auto-save-set-timer)
+  (desktop-auto-save-cancel-timer))
+
 (defun desktop-auto-save ()
   "Save the desktop periodically.
 Called by the timer created in `desktop-auto-save-set-timer'."
@@ -1244,7 +1266,7 @@ after that many seconds of idle time."
   (when (and (integerp desktop-auto-save-timeout)
 	     (> desktop-auto-save-timeout 0))
     (setq desktop-auto-save-timer
-	  (run-with-idle-timer desktop-auto-save-timeout t
+	  (run-with-idle-timer desktop-auto-save-timeout nil
 			       'desktop-auto-save))))
 
 (defun desktop-auto-save-cancel-timer ()
@@ -1354,7 +1376,9 @@ after that many seconds of idle time."
 	;; Restore buffer list order with new buffer at end. Don't change
 	;; the order for old desktop files (old desktop module behavior).
 	(unless (< desktop-file-version 206)
-	  (mapc 'bury-buffer buffer-list)
+	  (dolist (buf buffer-list)
+            (and (buffer-live-p buf)
+                 (bury-buffer buf)))
 	  (when result (bury-buffer result)))
 	(when result
 	  (unless (or desktop-first-buffer (< desktop-file-version 206))
@@ -1390,8 +1414,8 @@ after that many seconds of idle time."
             (if (consp desktop-buffer-mark)
                 (progn
                   (move-marker (mark-marker) (car desktop-buffer-mark))
-                  ;; FIXME: Should we call (de)activate-mark instead?
-                  (setq mark-active (car (cdr desktop-buffer-mark))))
+                  (if (car (cdr desktop-buffer-mark))
+                      (activate-mark 'dont-touch-tmm)))
               (move-marker (mark-marker) desktop-buffer-mark)))
 	  ;; Never override file system if the file really is read-only marked.
 	  (when desktop-buffer-read-only (setq buffer-read-only desktop-buffer-read-only))
@@ -1495,8 +1519,15 @@ If there are no buffers left to create, kill the timer."
         (setq command-line-args (delete key command-line-args))
         (desktop-save-mode 0)))
     (when desktop-save-mode
-      (desktop-read)
-      (setq inhibit-startup-screen t))))
+      ;; People don't expect emacs -nw, or --daemon,
+      ;; to create graphical frames (bug#17693).
+      ;; TODO perhaps there should be a separate value
+      ;; for desktop-restore-frames to control this startup behavior?
+      (let ((desktop-restore-frames (and desktop-restore-frames
+                                         initial-window-system
+                                         (not (daemonp)))))
+        (desktop-read)
+        (setq inhibit-startup-screen t)))))
 
 ;; So we can restore vc-dir buffers.
 (autoload 'vc-dir-mode "vc-dir" nil t)

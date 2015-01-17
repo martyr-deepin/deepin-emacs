@@ -1,6 +1,6 @@
 ;;; js.el --- Major mode for editing JavaScript  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
 
 ;; Author: Karl Landstrom <karl.landstrom@brgeight.se>
 ;;         Daniel Colascione <dan.colascione@gmail.com>
@@ -248,7 +248,7 @@ name as matched contains
 
 (defconst js--function-heading-1-re
   (concat
-   "^\\s-*function\\s-+\\(" js--name-re "\\)")
+   "^\\s-*function\\(?:\\s-\\|\\*\\)+\\(" js--name-re "\\)")
   "Regexp matching the start of a JavaScript function header.
 Match group 1 is the name of the function.")
 
@@ -796,6 +796,9 @@ determined.  Otherwise, return nil."
   (let ((name t))
     (forward-word)
     (forward-comment most-positive-fixnum)
+    (when (eq (char-after) ?*)
+      (forward-char)
+      (forward-comment most-positive-fixnum))
     (when (looking-at js--name-re)
       (setq name (match-string-no-properties 0))
       (goto-char (match-end 0)))
@@ -1637,12 +1640,29 @@ This performs fontification according to `js--class-styles'."
                                    js--font-lock-keywords-3)
   "Font lock keywords for `js-mode'.  See `font-lock-keywords'.")
 
+(defconst js--syntax-propertize-regexp-syntax-table
+  (let ((st (make-char-table 'syntax-table (string-to-syntax "."))))
+    (modify-syntax-entry ?\[ "(]" st)
+    (modify-syntax-entry ?\] ")[" st)
+    (modify-syntax-entry ?\\ "\\" st)
+    st))
+
 (defun js-syntax-propertize-regexp (end)
-  (when (eq (nth 3 (syntax-ppss)) ?/)
-    ;; A /.../ regexp.
-    (when (re-search-forward "\\(?:\\=\\|[^\\]\\)\\(?:\\\\\\\\\\)*/" end 'move)
-      (put-text-property (1- (point)) (point)
-                         'syntax-table (string-to-syntax "\"/")))))
+  (let ((ppss (syntax-ppss)))
+    (when (eq (nth 3 ppss) ?/)
+      ;; A /.../ regexp.
+      (while
+          (when (re-search-forward "\\(?:\\=\\|[^\\]\\)\\(?:\\\\\\\\\\)*/"
+                                   end 'move)
+            (if (nth 1 (with-syntax-table
+                           js--syntax-propertize-regexp-syntax-table
+                         (let ((parse-sexp-lookup-properties nil))
+                           (parse-partial-sexp (nth 8 ppss) (point)))))
+                ;; A / within a character class is not the end of a regexp.
+                t
+              (put-text-property (1- (point)) (point)
+                                 'syntax-table (string-to-syntax "\"/"))
+              nil))))))
 
 (defun js-syntax-propertize (start end)
   ;; Javascript allows immediate regular expression objects, written /.../.
@@ -1656,7 +1676,7 @@ This performs fontification according to `js--class-styles'."
     ;; We can probably just add +, -, !, <, >, %, ^, ~, |, &, ?, : at which
     ;; point I think only * and / would be missing which could also be added,
     ;; but need care to avoid affecting the // and */ comment markers.
-    ("\\(?:^\\|[=([{,:;]\\)\\(?:[ \t]\\)*\\(/\\)[^/*]"
+    ("\\(?:^\\|[=([{,:;]\\|\\_<return\\_>\\)\\(?:[ \t]\\)*\\(/\\)[^/*]"
      (1 (ignore
 	 (forward-char -1)
          (when (or (not (memq (char-after (match-beginning 0)) '(?\s ?\t)))
@@ -1685,7 +1705,7 @@ This performs fontification according to `js--class-styles'."
   "Regular expression matching variable declaration keywords.")
 
 (defconst js--indent-operator-re
-  (concat "[-+*/%<>=&^|?:.]\\([^-+*/]\\|$\\)\\|"
+  (concat "[-+*/%<>&^|?:.]\\([^-+*/]\\|$\\)\\|!?=\\|"
           (js--regexp-opt-symbol '("in" "instanceof")))
   "Regexp matching operators that affect indentation of continued expressions.")
 
@@ -1712,7 +1732,7 @@ This performs fontification according to `js--class-styles'."
                     (save-excursion (backward-char) (not (looking-at "[/*]/")))
                     (js--looking-at-operator-p)
 		    (and (progn (backward-char)
-				(not (looking-at "++\\|--\\|/[/*]"))))))))))
+				(not (looking-at "+\\+\\|--\\|/[/*]"))))))))))
 
 
 (defun js--end-of-do-while-loop-p ()
@@ -1907,7 +1927,7 @@ In particular, return the buffer position of the first `for' kwd."
   (interactive)
   (let* ((parse-status
           (save-excursion (syntax-ppss (point-at-bol))))
-         (offset (- (current-column) (current-indentation))))
+         (offset (- (point) (save-excursion (back-to-indentation) (point)))))
     (indent-line-to (js--proper-indentation parse-status))
     (when (> offset 0) (forward-char offset))))
 
@@ -3478,6 +3498,10 @@ If one hasn't been set, or if it's stale, prompt for a new one."
 (eval-after-load 'folding
   '(when (fboundp 'folding-add-to-marks-list)
      (folding-add-to-marks-list 'js-mode "// {{{" "// }}}" )))
+
+;;;###autoload
+(dolist (name (list "node" "nodejs" "gjs" "rhino"))
+  (add-to-list 'interpreter-mode-alist (cons (purecopy name) 'js-mode)))
 
 (provide 'js)
 

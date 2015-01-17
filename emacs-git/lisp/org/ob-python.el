@@ -1,6 +1,6 @@
 ;;; ob-python.el --- org-babel functions for python evaluation
 
-;; Copyright (C) 2009-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	 Dan Davison
@@ -55,8 +55,6 @@ This will typically be either 'python or 'python-mode."
   :version "24.4"
   :package-version '(Org . "8.0")
   :type 'symbol)
-
-(defvar org-src-preserve-indentation)
 
 (defcustom org-babel-python-hline-to "None"
   "Replace hlines in incoming tables with this when translating to python."

@@ -1,6 +1,6 @@
 ;;; asm-mode.el --- mode for editing assembler code
 
-;; Copyright (C) 1991, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1991, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
 ;; Maintainer: emacs-devel@gnu.org
@@ -172,7 +172,7 @@ Special commands:
    ;; Simple `;' comments go to the comment-column.
    (and (looking-at "\\s<\\(\\S<\\|\\'\\)") comment-column)
    ;; The rest goes at the first tab stop.
-   (or (car tab-stop-list) tab-width)))
+   (or (indent-next-tab-stop 0))))
 
 (defun asm-colon ()
   "Insert a colon; if it follows a label, delete the label's indentation."

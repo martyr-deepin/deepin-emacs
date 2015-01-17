@@ -1,6 +1,6 @@
 ;;; cus-start.el --- define customization properties of builtins
 
-;; Copyright (C) 1997, 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999-2015 Free Software Foundation, Inc.
 
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Keywords: internal
@@ -274,7 +274,13 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     (tool-bar-mode (frames mouse) boolean nil
 ;			    :initialize custom-initialize-default
 			    :set custom-set-minor-mode)
-	     (frame-resize-pixelwise windows boolean "24.4")
+	     (frame-resize-pixelwise frames boolean "24.4")
+	     (frame-inhibit-implied-resize frames
+					   (choice
+					    (const :tag "Never" nil)
+					    (const :tag "Always" t)
+					    (repeat (symbol :tag "Parameter")))
+					   "25.1")
 	     ;; fringe.c
 	     (overflow-newline-into-fringe fringe boolean)
 	     ;; image.c
@@ -366,7 +372,7 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 			     left)
 		      (const control) (const meta)
 		      (const alt) (const hyper)
-		      (const super)) "24.0")
+		      (const super)) "24.1")
 	     (ns-command-modifier
 	      ns
 	      (choice (const :tag "No modifier" nil)
@@ -380,7 +386,7 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 			     left)
 		      (const control) (const meta)
 		      (const alt) (const hyper)
-		      (const super)) "24.0")
+		      (const super)) "24.1")
 	     (ns-alternate-modifier
 	      ns
 	      (choice (const :tag "No modifier (work as alternate/option)" none)
@@ -402,9 +408,10 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 		      (const alt) (const hyper)
 		      (const super)) "23.1")
 	     (ns-antialias-text ns boolean "23.1")
-	     (ns-auto-hide-menu-bar ns boolean "24.0")
+	     (ns-auto-hide-menu-bar ns boolean "24.1")
 	     (ns-use-native-fullscreen ns boolean "24.4")
-	     (ns-use-srgb-colorspace ns boolean "24.4")
+             (ns-use-fullscreen-animation ns boolean "25.1")
+             (ns-use-srgb-colorspace ns boolean "24.4")
 	     ;; process.c
 	     (delete-exited-processes processes-basics boolean)
 	     ;; syntax.c
@@ -414,6 +421,12 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 						    "21.1")
              ;; term.c
              (visible-cursor cursor boolean "22.1")
+             ;; terminal.c
+             (ring-bell-function display
+              (choice
+               (const :tag "Default" nil)
+               (const :tag "Silent" ignore)
+               function))
 	     ;; undo.c
 	     (undo-limit undo integer)
 	     (undo-strong-limit undo integer)
@@ -453,6 +466,7 @@ since it could result in memory overflow and make Emacs crash."
 			      :value display-buffer)
 		       (other :tag "Always (t)" :value t))
 	      "24.3")
+	     (fast-but-imprecise-scrolling scrolling boolean "25.1")
 	     (window-resize-pixelwise windows boolean "24.4")
 	     ;; xdisp.c
 	     ;; The whitespace group is for whitespace.el.
@@ -512,7 +526,12 @@ since it could result in memory overflow and make Emacs crash."
 				      (const :tag "Hourglass" :value hourglass)))
 	     (display-hourglass cursor boolean)
 	     (hourglass-delay cursor number)
-
+	     (resize-mini-windows
+	      windows (choice
+		       (const :tag "Off (nil)" :value nil)
+		       (const :tag "Fit (t)" :value t)
+		       (const :tag "Grow only" :value grow-only))
+	      "25.1")
 	     ;; xfaces.c
 	     (scalable-fonts-allowed display boolean "22.1")
 	     ;; xfns.c
@@ -521,7 +540,6 @@ since it could result in memory overflow and make Emacs crash."
 	     (x-gtk-use-old-file-dialog menu boolean "22.1")
 	     (x-gtk-show-hidden-files menu boolean "22.1")
 	     (x-gtk-file-dialog-help-text menu boolean "22.1")
-	     (x-gtk-whole-detached-tool-bar x boolean "22.1")
 	     (x-gtk-use-system-tooltips tooltip boolean "23.3")
 	     ;; xterm.c
 	     (x-use-underline-position-properties display boolean "22.1")

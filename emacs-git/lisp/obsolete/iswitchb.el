@@ -1,6 +1,6 @@
 ;;; iswitchb.el --- switch between buffers using substrings
 
-;; Copyright (C) 1996-1997, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1997, 2000-2015 Free Software Foundation, Inc.
 
 ;; Author: Stephen Eglen <stephen@gnu.org>
 ;; Maintainer: Stephen Eglen <stephen@gnu.org>
@@ -1416,7 +1416,7 @@ See the variable `iswitchb-case' for details."
 	  (isearch-no-upper-case-p iswitchb-text)
 	(isearch-no-upper-case-p iswitchb-text t))))
 
-;;;###obsolete-autoload
+;;;###autoload
 (define-minor-mode iswitchb-mode
   "Toggle Iswitchb mode.
 With a prefix argument ARG, enable Iswitchb mode if ARG is
@@ -1429,10 +1429,6 @@ between buffers using substrings.  See `iswitchb' for details."
   (if iswitchb-mode
       (add-hook 'minibuffer-setup-hook 'iswitchb-minibuffer-setup)
     (remove-hook 'minibuffer-setup-hook 'iswitchb-minibuffer-setup)))
-
-;;;###obsolete-autoload
-(make-obsolete 'iswitchb-mode
-               "use `icomplete-mode' or `ido-mode' instead." "24.4")
 
 (provide 'iswitchb)
 

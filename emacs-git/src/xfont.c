@@ -1,5 +1,5 @@
 /* xfont.c -- X core font driver.
-   Copyright (C) 2006-2014 Free Software Foundation, Inc.
+   Copyright (C) 2006-2015 Free Software Foundation, Inc.
    Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
      Registration Number H13PRO009
@@ -121,11 +121,11 @@ static Lisp_Object xfont_match (struct frame *, Lisp_Object);
 static Lisp_Object xfont_list_family (struct frame *);
 static Lisp_Object xfont_open (struct frame *, Lisp_Object, int);
 static void xfont_close (struct font *);
-static int xfont_prepare_face (struct frame *, struct face *);
+static void xfont_prepare_face (struct frame *, struct face *);
 static int xfont_has_char (Lisp_Object, int);
 static unsigned xfont_encode_char (struct font *, int);
-static int xfont_text_extents (struct font *, unsigned *, int,
-                               struct font_metrics *);
+static void xfont_text_extents (struct font *, unsigned *, int,
+				struct font_metrics *);
 static int xfont_draw (struct glyph_string *, int, int, int, int, bool);
 static int xfont_check (struct frame *, struct font *);
 
@@ -146,7 +146,7 @@ struct font_driver xfont_driver =
     xfont_encode_char,
     xfont_text_extents,
     xfont_draw,
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     xfont_check,
     NULL, /* get_variation_glyphs */
     NULL, /* filter_properties */
@@ -386,7 +386,7 @@ xfont_list_pattern (Display *display, const char *pattern,
     {
       char **indices = alloca (sizeof (char *) * num_fonts);
       Lisp_Object *props = XVECTOR (xfont_scratch_props)->contents;
-      Lisp_Object scripts = Qnil;
+      Lisp_Object scripts = Qnil, entity = Qnil;
 
       for (i = 0; i < ASIZE (xfont_scratch_props); i++)
 	ASET (xfont_scratch_props, i, Qnil);
@@ -397,11 +397,11 @@ xfont_list_pattern (Display *display, const char *pattern,
       for (i = 0; i < num_fonts; i++)
 	{
 	  ptrdiff_t len;
-	  Lisp_Object entity;
 
 	  if (i > 0 && xstrcasecmp (indices[i - 1], indices[i]) == 0)
 	    continue;
-	  entity = font_make_entity ();
+	  if (NILP (entity))
+	    entity = font_make_entity ();
 	  len = xfont_decode_coding_xlfd (indices[i], -1, buf);
 	  if (font_parse_xlfd (buf, len, entity) < 0)
 	    continue;
@@ -459,7 +459,7 @@ xfont_list_pattern (Display *display, const char *pattern,
 	    {
 	      if (NILP (script)
 		  || xfont_chars_supported (chars, NULL, encoding, repertory))
-		list = Fcons (entity, list);
+		list = Fcons (entity, list), entity = Qnil;
 	      continue;
 	    }
 	  if (memcmp (props, aref_addr (entity, FONT_FOUNDRY_INDEX),
@@ -474,7 +474,7 @@ xfont_list_pattern (Display *display, const char *pattern,
 	    }
 	  if (NILP (script)
 	      || ! NILP (Fmemq (script, scripts)))
-	    list = Fcons (entity, list);
+	    list = Fcons (entity, list), entity = Qnil;
 	}
       XFreeFontNames (names);
     }
@@ -541,7 +541,7 @@ xfont_list (struct frame *f, Lisp_Object spec)
 	    if (STRINGP (XCAR (alter))
 		&& ((r - name) + SBYTES (XCAR (alter))) < 256)
 	      {
-		strcpy (r, SSDATA (XCAR (alter)));
+		lispstpcpy (r, XCAR (alter));
 		list = xfont_list_pattern (display, name, registry, script);
 		if (! NILP (list))
 		  break;
@@ -804,8 +804,6 @@ xfont_open (struct frame *f, Lisp_Object entity, int pixel_size)
       ASET (font_object, FONT_NAME_INDEX, make_string (buf, len));
     }
   ASET (font_object, FONT_FULLNAME_INDEX, fullname);
-  ASET (font_object, FONT_FILE_INDEX, Qnil);
-  ASET (font_object, FONT_FORMAT_INDEX, Qx);
   font = XFONT_OBJECT (font_object);
   ((struct xfont_info *) font)->xfont = xfont;
   ((struct xfont_info *) font)->display = FRAME_X_DISPLAY (f);
@@ -916,15 +914,13 @@ xfont_close (struct font *font)
     }
 }
 
-static int
+static void
 xfont_prepare_face (struct frame *f, struct face *face)
 {
   block_input ();
   XSetFont (FRAME_X_DISPLAY (f), face->gc,
 	    ((struct xfont_info *) face->font)->xfont->fid);
   unblock_input ();
-
-  return 0;
 }
 
 static int
@@ -979,15 +975,14 @@ xfont_encode_char (struct font *font, int c)
   return (xfont_get_pcm (xfont, &char2b) ? code : FONT_INVALID_CODE);
 }
 
-static int
-xfont_text_extents (struct font *font, unsigned int *code, int nglyphs, struct font_metrics *metrics)
+static void
+xfont_text_extents (struct font *font, unsigned int *code,
+		    int nglyphs, struct font_metrics *metrics)
 {
   XFontStruct *xfont = ((struct xfont_info *) font)->xfont;
-  int width = 0;
-  int i, first;
+  int i, width = 0;
+  bool first;
 
-  if (metrics)
-    memset (metrics, 0, sizeof (struct font_metrics));
   for (i = 0, first = 1; i < nglyphs; i++)
     {
       XChar2b char2b;
@@ -1001,34 +996,27 @@ xfont_text_extents (struct font *font, unsigned int *code, int nglyphs, struct f
 	continue;
       if (first)
 	{
-	  if (metrics)
-	    {
-	      metrics->lbearing = pcm->lbearing;
-	      metrics->rbearing = pcm->rbearing;
-	      metrics->ascent = pcm->ascent;
-	      metrics->descent = pcm->descent;
-	    }
+	  metrics->lbearing = pcm->lbearing;
+	  metrics->rbearing = pcm->rbearing;
+	  metrics->ascent = pcm->ascent;
+	  metrics->descent = pcm->descent;
 	  first = 0;
 	}
       else
 	{
-	  if (metrics)
-	    {
-	      if (metrics->lbearing > width + pcm->lbearing)
-		metrics->lbearing = width + pcm->lbearing;
-	      if (metrics->rbearing < width + pcm->rbearing)
-		metrics->rbearing = width + pcm->rbearing;
-	      if (metrics->ascent < pcm->ascent)
-		metrics->ascent = pcm->ascent;
-	      if (metrics->descent < pcm->descent)
-		metrics->descent = pcm->descent;
-	    }
+	  if (metrics->lbearing > width + pcm->lbearing)
+	    metrics->lbearing = width + pcm->lbearing;
+	  if (metrics->rbearing < width + pcm->rbearing)
+	    metrics->rbearing = width + pcm->rbearing;
+	  if (metrics->ascent < pcm->ascent)
+	    metrics->ascent = pcm->ascent;
+	  if (metrics->descent < pcm->descent)
+	    metrics->descent = pcm->descent;
 	}
       width += pcm->width;
     }
-  if (metrics)
-    metrics->width = width;
-  return width;
+
+  metrics->width = width;
 }
 
 static int

@@ -1,6 +1,6 @@
 ;;; ruby-mode.el --- Major mode for editing Ruby files
 
-;; Copyright (C) 1994-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2015 Free Software Foundation, Inc.
 
 ;; Authors: Yukihiro Matsumoto
 ;;	Nobuyoshi Nakada
@@ -152,6 +152,7 @@ This should only be called after matching against `ruby-here-doc-beg-re'."
     (define-key map (kbd "M-C-p") 'ruby-beginning-of-block)
     (define-key map (kbd "M-C-n") 'ruby-end-of-block)
     (define-key map (kbd "C-c {") 'ruby-toggle-block)
+    (define-key map (kbd "C-c '") 'ruby-toggle-string-quotes)
     map)
   "Keymap used in Ruby mode.")
 
@@ -163,6 +164,8 @@ This should only be called after matching against `ruby-here-doc-beg-re'."
     ["Beginning of Block" ruby-beginning-of-block t]
     ["End of Block" ruby-end-of-block t]
     ["Toggle Block" ruby-toggle-block t]
+    "--"
+    ["Toggle String Quotes" ruby-toggle-string-quotes t]
     "--"
     ["Backward Sexp" ruby-backward-sexp
      :visible (not ruby-use-smie)]
@@ -749,7 +752,6 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
                   :forward-token  #'ruby-smie--forward-token
                   :backward-token #'ruby-smie--backward-token)
     (setq-local indent-line-function 'ruby-indent-line))
-  (setq-local require-final-newline t)
   (setq-local comment-start "# ")
   (setq-local comment-end "")
   (setq-local comment-column ruby-comment-column)
@@ -1764,6 +1766,43 @@ If the result is do-end block, it will always be multiline."
               (ruby-do-end-to-brace beg end)))
       (goto-char start))))
 
+(defun ruby--string-region ()
+  "Return region for string at point."
+  (let ((state (syntax-ppss)))
+    (when (memq (nth 3 state) '(?' ?\"))
+      (save-excursion
+        (goto-char (nth 8 state))
+        (forward-sexp)
+        (list (nth 8 state) (point))))))
+
+(defun ruby-string-at-point-p ()
+  "Check if cursor is at a string or not."
+  (ruby--string-region))
+
+(defun ruby--inverse-string-quote (string-quote)
+  "Get the inverse string quoting for STRING-QUOTE."
+  (if (equal string-quote "\"") "'" "\""))
+
+(defun ruby-toggle-string-quotes ()
+  "Toggle string literal quoting between single and double."
+  (interactive)
+  (when (ruby-string-at-point-p)
+    (let* ((region (ruby--string-region))
+           (min (nth 0 region))
+           (max (nth 1 region))
+           (string-quote (ruby--inverse-string-quote (buffer-substring-no-properties min (1+ min))))
+           (content
+            (buffer-substring-no-properties (1+ min) (1- max))))
+      (setq content
+            (if (equal string-quote "\"")
+                (replace-regexp-in-string "\\\\\"" "\"" (replace-regexp-in-string "\\([^\\\\]\\)'" "\\1\\\\'" content))
+              (replace-regexp-in-string "\\\\\'" "'" (replace-regexp-in-string "\\([^\\\\]\\)\"" "\\1\\\\\"" content))))
+      (let ((orig-point (point)))
+        (delete-region min max)
+        (insert
+         (format "%s%s%s" string-quote content string-quote))
+        (goto-char orig-point)))))
+
 (eval-and-compile
   (defconst ruby-percent-literal-beg-re
     "\\(%\\)[qQrswWxIi]?\\([[:punct:]]\\)"
@@ -1804,9 +1843,10 @@ It will be properly highlighted even when the call omits parens.")
       ;; $' $" $` .... are variables.
       ;; ?' ?" ?` are character literals (one-char strings in 1.9+).
       ("\\([?$]\\)[#\"'`]"
-       (1 (unless (save-excursion
-                    ;; Not within a string.
-                    (nth 3 (syntax-ppss (match-beginning 0))))
+       (1 (if (save-excursion
+                (nth 3 (syntax-ppss (match-beginning 0))))
+              ;; Within a string, skip.
+              (goto-char (match-end 1))
             (string-to-syntax "\\"))))
       ;; Part of symbol when at the end of a method name.
       ("[!?]"
@@ -2151,7 +2191,7 @@ See `font-lock-syntax-table'.")
     (ruby-match-expression-expansion
      2 font-lock-variable-name-face t)
     ;; Negation char.
-    ("\\(?:^\\|[^[:alnum:]_]\\)\\(!+\\)[^=]"
+    ("\\(?:^\\|[^[:alnum:]_]\\)\\(!+\\)[^=~]"
      1 font-lock-negation-char-face)
     ;; Character literals.
     ;; FIXME: Support longer escape sequences.
@@ -2206,9 +2246,10 @@ See `font-lock-syntax-table'.")
 (add-to-list 'auto-mode-alist
              (cons (purecopy (concat "\\(?:\\."
                                      "rb\\|ru\\|rake\\|thor"
-                                     "\\|jbuilder\\|gemspec\\|podspec"
+                                     "\\|jbuilder\\|rabl\\|gemspec\\|podspec"
                                      "\\|/"
                                      "\\(?:Gem\\|Rake\\|Cap\\|Thor"
+                                     "\\|Puppet\\|Berks"
                                      "\\|Vagrant\\|Guard\\|Pod\\)file"
                                      "\\)\\'")) 'ruby-mode))
 

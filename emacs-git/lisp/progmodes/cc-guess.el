@@ -1,7 +1,7 @@
 ;;; cc-guess.el --- guess indentation values by scanning existing code
 
-;; Copyright (C) 1985, 1987, 1992-2006, 2011-2014
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2006, 2011-2015 Free Software
+;; Foundation, Inc.
 
 ;; Author:     1994-1995 Barry A. Warsaw
 ;;             2011-     Masatake YAMATO
@@ -504,8 +504,7 @@ is called with one argument, the guessed style."
 		      (cond
 		       ((or (and a-guessed? b-guessed?)
 			    (not (or a-guessed? b-guessed?)))
-			(string-lessp (symbol-name (car a))
-				      (symbol-name (car b))))
+			(string-lessp (car a) (car b)))
 		       (a-guessed? t)
 		       (b-guessed? nil)))))))
   style)
@@ -520,7 +519,8 @@ is called with one argument, the guessed style."
       (goto-char (point-min))
       (when (search-forward (concat "("
 				    (symbol-name (car needs-markers))
-				    " ") nil t)
+				    " ")
+                            nil t)
 	(move-end-of-line 1)
 	(comment-dwim nil)
 	(insert " Guessed value"))
@@ -572,4 +572,9 @@ WITH-NAME is asked to the user."
 
 
 (cc-provide 'cc-guess)
+
+;;; Local Variables:
+;;; indent-tabs-mode: t
+;;; tab-width: 8
+;;; End:
 ;;; cc-guess.el ends here

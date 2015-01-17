@@ -1,6 +1,6 @@
 ;;; picture.el --- "Picture mode" -- editing using quarter-plane screen model
 
-;; Copyright (C) 1985, 1994, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1994, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: K. Shane Hartman
 ;; Maintainer: emacs-devel@gnu.org
@@ -418,7 +418,8 @@ stops computed are displayed in the minibuffer with `:' at each stop."
   (save-excursion
     (let (tabs)
       (if arg
-	  (setq tabs (default-value 'tab-stop-list))
+	  (setq tabs (or (default-value 'tab-stop-list)
+			 (indent-accumulate-tab-stops (window-width))))
 	(let ((regexp (concat "[ \t]+[" (regexp-quote picture-tab-chars) "]")))
 	  (beginning-of-line)
 	  (let ((bol (point)))

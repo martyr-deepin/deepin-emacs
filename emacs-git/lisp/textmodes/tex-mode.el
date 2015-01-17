@@ -1,6 +1,6 @@
 ;;; tex-mode.el --- TeX, LaTeX, and SliTeX mode commands -*- coding: utf-8 -*-
 
-;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2014 Free
+;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2015 Free
 ;; Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -808,7 +808,7 @@ Not smaller than the value set by `tex-suscript-height-minimum'."
 (defvar tex-verbatim-face 'tex-verbatim)
 
 (defun tex-font-lock-verb (start delim)
-  "Place syntax table properties on the \verb construct.
+  "Place syntax table properties on the \\verb construct.
 START is the position of the \\ and DELIM is the delimiter char."
   ;; Do nothing if the \verb construct is itself inside a comment or
   ;; verbatim env.
@@ -1203,9 +1203,32 @@ Entering SliTeX mode runs the hook `text-mode-hook', then the hook
   (setq tex-command slitex-run-command)
   (setq tex-start-of-header "\\\\documentstyle{slides}\\|\\\\documentclass{slides}"))
 
+(defvar tildify-space-string)
+(defvar tildify-foreach-region-function)
+
 (defun tex-common-initialization ()
   ;; Regexp isearch should accept newline and formfeed as whitespace.
   (setq-local search-whitespace-regexp "[ \t\r\n\f]+")
+  ;; Use tilde as hard-space character in tildify package.
+  (setq-local tildify-space-string "~")
+  ;; FIXME: Use the fact that we're parsing the document already
+  ;; rather than using regex-based filtering.
+  (setq-local tildify-foreach-region-function
+              (apply-partially
+               'tildify-foreach-ignore-environments
+               `(("\\\\\\\\" . "") ; do not remove this
+                 (,(eval-when-compile
+                     (concat "\\\\begin{\\("
+                             (regexp-opt '("verbatim" "math" "displaymath"
+                                           "equation" "eqnarray" "eqnarray*"))
+                             "\\)}"))
+                  . ("\\\\end{" 1 "}"))
+                 ("\\\\verb\\*?\\(.\\)" . (1))
+                 ("\\$\\$?" . (0))
+                 ("\\\\(" . "\\\\)")
+                 ("\\\\[[]" . "\\\\[]]")
+                 ("\\\\[a-zA-Z]+\\( +\\|{}\\)[a-zA-Z]*" . "")
+                 ("%" . "$"))))
   ;; A line containing just $$ is treated as a paragraph separator.
   (setq-local paragraph-start "[ \t]*$\\|[\f\\\\%]\\|[ \t]*\\$\\$")
   ;; A line starting with $$ starts a paragraph,
@@ -1277,18 +1300,48 @@ Inserts the value of `tex-open-quote' (normally ``) or `tex-close-quote'
 \(normally '') depending on the context.  With prefix argument, always
 inserts \" characters."
   (interactive "*P")
+  ;; Discover if we'll be inserting normal double quotes.
+  ;;
   (if (or arg (memq (char-syntax (preceding-char)) '(?/ ?\\))
-	  (eq (get-text-property (point) 'face) 'tex-verbatim)
-	  (save-excursion
-	    (backward-char (length tex-open-quote))
-	    (when (or (looking-at (regexp-quote tex-open-quote))
-		      (looking-at (regexp-quote tex-close-quote)))
-	      (delete-char (length tex-open-quote))
-	      t)))
+          (eq (get-text-property (point) 'face) 'tex-verbatim)
+          ;; Discover if a preceding occurrence of `tex-open-quote'
+          ;; should be morphed to a normal double quote.
+          ;;
+          (and (>= (point) (+ (point-min) (length tex-open-quote)))
+               (save-excursion
+                 (backward-char (length tex-open-quote))
+                 (when (or (looking-at (regexp-quote tex-open-quote))
+                           (looking-at (regexp-quote tex-close-quote)))
+                   (delete-char (length tex-open-quote))
+                   (when (looking-at (regexp-quote tex-close-quote))
+                     (delete-char (length tex-close-quote)))
+                   t))))
+      ;; Insert the normal quote (eventually letting
+      ;; `electric-pair-mode' do its thing).
+      ;;
       (self-insert-command (prefix-numeric-value arg))
-    (insert (if (or (memq (char-syntax (preceding-char)) '(?\( ?> ?\s))
-                    (memq (preceding-char) '(?~)))
-		tex-open-quote tex-close-quote))))
+    ;; We'll be inserting fancy TeX quotes, but consider and imitate
+    ;; `electric-pair-mode''s two behaviors: pair-insertion and
+    ;; region wrapping.
+    ;;
+    (if (and electric-pair-mode (use-region-p))
+        (let* ((saved (point-marker)))
+          (goto-char (mark))
+          (insert (if (> saved (mark)) tex-open-quote tex-close-quote))
+          (goto-char saved)
+          (insert (if (> saved (mark)) tex-close-quote tex-open-quote)))
+      (if (or (memq (char-syntax (preceding-char)) '(?\( ?> ?\s))
+              (memq (preceding-char) '(?~)))
+          (if electric-pair-mode
+              (if (looking-at (regexp-quote tex-close-quote))
+                  (forward-char (length tex-close-quote))
+                (insert tex-open-quote)
+                (insert tex-close-quote)
+                (backward-char (length tex-close-quote)))
+            (insert tex-open-quote))
+        (if (looking-at (regexp-quote tex-close-quote))
+            (forward-char (length tex-close-quote))
+          (insert tex-close-quote))))))
 
 (defun tex-validate-buffer ()
   "Check current buffer for paragraphs containing mismatched braces or $s.
@@ -2573,18 +2626,28 @@ line LINE of the window, or centered if LINE is nil."
 		      (prefix-numeric-value linenum)
 		    (/ (window-height) 2)))))))
 
+(defcustom tex-print-file-extension ".dvi"
+  "The TeX-compiled file extension for viewing and printing.
+If you use pdflatex instead of latex, set this to \".pdf\" and modify
+ `tex-dvi-view-command' and `tex-dvi-print-command' appropriately."
+  :type 'string
+  :group 'tex-view
+  :version "25.1")
+
 (defun tex-print (&optional alt)
   "Print the .dvi file made by \\[tex-region], \\[tex-buffer] or \\[tex-file].
 Runs the shell command defined by `tex-dvi-print-command'.  If prefix argument
 is provided, use the alternative command, `tex-alt-dvi-print-command'."
   (interactive "P")
-  (let ((print-file-name-dvi (tex-append tex-print-file ".dvi"))
+  (let ((print-file-name-dvi (tex-append tex-print-file
+                                         tex-print-file-extension))
 	test-name)
     (if (and (not (equal (current-buffer) tex-last-buffer-texed))
 	     (buffer-file-name)
 	     ;; Check that this buffer's printed file is up to date.
 	     (file-newer-than-file-p
-	      (setq test-name (tex-append (buffer-file-name) ".dvi"))
+	      (setq test-name (tex-append (buffer-file-name)
+                                          tex-print-file-extension))
 	      (buffer-file-name)))
 	(setq print-file-name-dvi test-name))
     (if (not (file-exists-p print-file-name-dvi))

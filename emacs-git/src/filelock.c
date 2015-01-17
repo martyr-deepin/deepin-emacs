@@ -1,7 +1,7 @@
 /* Lock files for editing.
 
-Copyright (C) 1985-1987, 1993-1994, 1996, 1998-2014
-  Free Software Foundation, Inc.
+Copyright (C) 1985-1987, 1993-1994, 1996, 1998-2015 Free Software
+Foundation, Inc.
 
 Author: Richard King
   (according to authors.el)
@@ -592,9 +592,10 @@ current_lock_owner (lock_info_type *owner, char *lfname)
     return -1;
 
   /* On current host?  */
-  if (STRINGP (Vsystem_name)
-      && dot - (at + 1) == SBYTES (Vsystem_name)
-      && memcmp (at + 1, SSDATA (Vsystem_name), SBYTES (Vsystem_name)) == 0)
+  Lisp_Object system_name = Fsystem_name ();
+  if (STRINGP (system_name)
+      && dot - (at + 1) == SBYTES (system_name)
+      && memcmp (at + 1, SSDATA (system_name), SBYTES (system_name)) == 0)
     {
       if (pid == getpid ())
         ret = 2; /* We own it.  */

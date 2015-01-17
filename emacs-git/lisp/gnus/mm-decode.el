@@ -1,6 +1,6 @@
 ;;; mm-decode.el --- Functions for decoding MIME things
 
-;; Copyright (C) 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	MORIOKA Tomohiko <morioka@jaist.ac.jp>
@@ -647,7 +647,7 @@ MIME-Version header before proceeding."
 	  (unless from
 	    (setq from (mail-fetch-field "from")))
 	  ;; FIXME: In some circumstances, this code is running within
-	  ;; an unibyte macro.  mail-extract-address-components
+	  ;; a unibyte macro.  mail-extract-address-components
 	  ;; creates unibyte buffers. This `if', though not a perfect
 	  ;; solution, avoids most of them.
 	  (if from
@@ -1814,6 +1814,7 @@ If RECURSIVE, search recursively."
   ;; Require since we bind its variables.
   (require 'shr)
   (let ((article-buffer (current-buffer))
+	(shr-width fill-column)
 	(shr-content-function (lambda (id)
 				(let ((handle (mm-get-content-id id)))
 				  (when handle

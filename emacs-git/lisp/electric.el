@@ -1,6 +1,6 @@
 ;;; electric.el --- window maker and Command loop for `electric' modes
 
-;; Copyright (C) 1985-1986, 1995, 2001-2014 Free Software Foundation,
+;; Copyright (C) 1985-1986, 1995, 2001-2015 Free Software Foundation,
 ;; Inc.
 
 ;; Author: K. Shane Hartman
@@ -164,7 +164,10 @@
       ;; Don't shrink the window, but expand it if necessary.
       (goto-char (point-min))
       (unless (= (point-max) (window-end win t))
-	(fit-window-to-buffer win max-height))
+	;; This call is executed even if the window existed before, was
+	;; reused, ... contradicting a claim in the comment before this
+	;; function.
+	(fit-window-to-buffer win max-height nil nil nil t))
       win)))
 
 ;;; Electric keys.
@@ -221,7 +224,8 @@ Python does not lend itself to fully automatic indentation.")
 (defvar electric-indent-functions-without-reindent
   '(indent-relative indent-to-left-margin indent-relative-maybe
     py-indent-line coffee-indent-line org-indent-line yaml-indent-line
-    haskell-indentation-indent-line haskell-indent-cycle haskell-simple-indent)
+    haskell-indentation-indent-line haskell-indent-cycle haskell-simple-indent
+    yaml-indent-line)
   "List of indent functions that can't reindent.
 If `line-indent-function' is one of those, then `electric-indent-mode' will
 not try to reindent lines.  It is normally better to make the major
@@ -258,29 +262,30 @@ or comment."
                     (unless (eq act 'do-indent) (nth 8 (syntax-ppss))))))))
       ;; For newline, we want to reindent both lines and basically behave like
       ;; reindent-then-newline-and-indent (whose code we hence copied).
-      (when (<= pos (line-beginning-position))
-        (let ((before (copy-marker (1- pos) t)))
-          (save-excursion
-            (unless (or (memq indent-line-function
-                              electric-indent-functions-without-reindent)
-                        electric-indent-inhibit)
-              ;; Don't reindent the previous line if the indentation function
-              ;; is not a real one.
+      (let ((at-newline (<= pos (line-beginning-position))))
+        (when at-newline
+          (let ((before (copy-marker (1- pos) t)))
+            (save-excursion
+              (unless (or (memq indent-line-function
+                                electric-indent-functions-without-reindent)
+                          electric-indent-inhibit)
+                ;; Don't reindent the previous line if the indentation function
+                ;; is not a real one.
+                (goto-char before)
+                (indent-according-to-mode))
+              ;; We are at EOL before the call to indent-according-to-mode, and
+              ;; after it we usually are as well, but not always.  We tried to
+              ;; address it with `save-excursion' but that uses a normal marker
+              ;; whereas we need `move after insertion', so we do the
+              ;; save/restore by hand.
               (goto-char before)
-              (indent-according-to-mode))
-            ;; We are at EOL before the call to indent-according-to-mode, and
-            ;; after it we usually are as well, but not always.  We tried to
-            ;; address it with `save-excursion' but that uses a normal marker
-            ;; whereas we need `move after insertion', so we do the
-            ;; save/restore by hand.
-            (goto-char before)
-	    (when (eolp)
-	      ;; Remove the trailing whitespace after indentation because
-	      ;; indentation may (re)introduce the whitespace.
-	      (delete-horizontal-space t)))))
-      (unless (and electric-indent-inhibit
-                   (> pos (line-beginning-position)))
-        (indent-according-to-mode)))))
+              (when (eolp)
+                ;; Remove the trailing whitespace after indentation because
+                ;; indentation may (re)introduce the whitespace.
+                (delete-horizontal-space t)))))
+        (unless (and electric-indent-inhibit
+                     (not at-newline))
+          (indent-according-to-mode))))))
 
 (put 'electric-indent-post-self-insert-function 'priority  60)
 
@@ -366,7 +371,7 @@ newline after CHAR but stay in the same place.")
                (setq pos (electric--after-char-pos))
                ;; Not in a string or comment.
                (not (nth 8 (save-excursion (syntax-ppss pos)))))
-      (let ((end (copy-marker (point)))
+      (let ((end (point-marker))
             (sym (if (functionp rule) (funcall rule) rule)))
         (set-marker-insertion-type end (not (eq sym 'after-stay)))
         (goto-char pos)

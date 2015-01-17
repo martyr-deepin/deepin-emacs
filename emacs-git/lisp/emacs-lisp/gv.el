@@ -1,6 +1,6 @@
 ;;; gv.el --- generalized variables  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2012-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2015 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: extensions
@@ -89,10 +89,10 @@ DO must return an Elisp expression."
     (let* ((head (car place))
            (gf (function-get head 'gv-expander 'autoload)))
       (if gf (apply gf do (cdr place))
-        (let ((me (macroexpand place    ;FIXME: expand one step at a time!
-                               ;; (append macroexpand-all-environment
-                               ;;         gv--macro-environment)
-                               macroexpand-all-environment)))
+        (let ((me (macroexpand-1 place
+                                 ;; (append macroexpand-all-environment
+                                 ;;         gv--macro-environment)
+                                 macroexpand-all-environment)))
           (if (and (eq me place) (get head 'compiler-macro))
               ;; Expand compiler macros: this takes care of all the accessors
               ;; defined via cl-defsubst, such as cXXXr and defstruct slots.
@@ -340,17 +340,50 @@ The return value is the last VAL in the list.
 (gv-define-simple-setter process-filter set-process-filter)
 (gv-define-simple-setter process-sentinel set-process-sentinel)
 (gv-define-simple-setter process-get process-put)
-(gv-define-simple-setter window-buffer set-window-buffer)
-(gv-define-simple-setter window-display-table set-window-display-table 'fix)
-(gv-define-simple-setter window-dedicated-p set-window-dedicated-p)
-(gv-define-simple-setter window-hscroll set-window-hscroll)
 (gv-define-simple-setter window-parameter set-window-parameter)
-(gv-define-simple-setter window-point set-window-point)
-(gv-define-simple-setter window-start set-window-start)
+(gv-define-setter window-buffer (v &optional w)
+  (macroexp-let2 nil v v
+    `(progn (set-window-buffer ,w ,v) ,v)))
+(gv-define-setter window-display-table (v &optional w)
+  (macroexp-let2 nil v v
+    `(progn (set-window-display-table ,w ,v) ,v)))
+(gv-define-setter window-dedicated-p (v &optional w)
+  `(set-window-dedicated-p ,w ,v))
+(gv-define-setter window-hscroll (v &optional w) `(set-window-hscroll ,w ,v))
+(gv-define-setter window-point (v &optional w) `(set-window-point ,w ,v))
+(gv-define-setter window-start (v &optional w) `(set-window-start ,w ,v))
 
 (gv-define-setter buffer-local-value (val var buf)
   (macroexp-let2 nil v val
     `(with-current-buffer ,buf (set (make-local-variable ,var) ,v))))
+
+(gv-define-expander alist-get
+  (lambda (do key alist &optional default remove)
+    (macroexp-let2 macroexp-copyable-p k key
+      (gv-letplace (getter setter) alist
+        (macroexp-let2 nil p `(assq ,k ,getter)
+          (funcall do (if (null default) `(cdr ,p)
+                        `(if ,p (cdr ,p) ,default))
+                   (lambda (v)
+                     (macroexp-let2 nil v v
+                       (let ((set-exp
+                              `(if ,p (setcdr ,p ,v)
+                                 ,(funcall setter
+                                           `(cons (setq ,p (cons ,k ,v))
+                                                  ,getter)))))
+                         (cond
+                          ((null remove) set-exp)
+                          ((or (eql v default)
+                               (and (eq (car-safe v) 'quote)
+                                    (eq (car-safe default) 'quote)
+                                    (eql (cadr v) (cadr default))))
+                           `(if ,p ,(funcall setter `(delq ,p ,getter))))
+                          (t
+                           `(cond
+                             ((not (eql ,default ,v)) ,set-exp)
+                             (,p ,(funcall setter
+                                           `(delq ,p ,getter)))))))))))))))
+
 
 ;;; Some occasionally handy extensions.
 
@@ -474,22 +507,13 @@ REF must have been previously obtained with `gv-ref'."
 ;;  … => (load "gv.el") => (macroexpand-all (defsubst gv-deref …)) => (macroexpand (defun …)) => (load "gv.el")
 (gv-define-setter gv-deref (v ref) `(funcall (cdr ,ref) ,v))
 
-;;; Vaguely related definitions that should be moved elsewhere.
-
-;; (defun alist-get (key alist)
-;;   "Get the value associated to KEY in ALIST."
-;;   (declare
-;;    (gv-expander
-;;     (lambda (do)
-;;       (macroexp-let2 macroexp-copyable-p k key
-;;         (gv-letplace (getter setter) alist
-;;           (macroexp-let2 nil p `(assoc ,k ,getter)
-;;             (funcall do `(cdr ,p)
-;;                      (lambda (v)
-;;                        `(if ,p (setcdr ,p ,v)
-;;                           ,(funcall setter
-;;                                     `(cons (cons ,k ,v) ,getter)))))))))))
-;;   (cdr (assoc key alist)))
+;; (defmacro gv-letref (vars place &rest body)
+;;   (declare (indent 2) (debug (sexp form &rest body)))
+;;   (require 'cl-lib) ;Can't require cl-lib at top-level for bootstrap reasons!
+;;   (gv-letplace (getter setter) place
+;;     `(cl-macrolet ((,(nth 0 vars) () ',getter)
+;;                    (,(nth 1 vars) (v) (funcall ',setter v)))
+;;        ,@body)))
 
 (provide 'gv)
 ;;; gv.el ends here

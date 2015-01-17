@@ -1,6 +1,6 @@
 ;;; esh-io.el --- I/O management  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -118,8 +118,6 @@ from executing while Emacs is redisplaying."
   :type 'integer
   :group 'eshell-io)
 
-(defvar x-select-enable-clipboard)	; term/common-win
-
 (defcustom eshell-virtual-targets
   '(("/dev/eshell" eshell-interactive-print nil)
     ("/dev/kill" (lambda (mode)
@@ -128,7 +126,7 @@ from executing while Emacs is redisplaying."
 		   'eshell-kill-append) t)
     ("/dev/clip" (lambda (mode)
 		   (if (eq mode 'overwrite)
-		       (let ((x-select-enable-clipboard t))
+		       (let ((gui-select-enable-clipboard t))
 			 (kill-new "")))
 		   'eshell-clipboard-append) t))
   "Map virtual devices name to Emacs Lisp functions.
@@ -328,7 +326,7 @@ last execution result should not be changed."
 (defun eshell-clipboard-append (string)
   "Call `kill-append' with STRING, if it is indeed a string."
   (if (stringp string)
-      (let ((x-select-enable-clipboard t))
+      (let ((gui-select-enable-clipboard t))
 	(kill-append string nil))))
 
 (defun eshell-get-target (target &optional mode)

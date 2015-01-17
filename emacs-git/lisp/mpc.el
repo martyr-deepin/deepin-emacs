@@ -1,6 +1,6 @@
-;;; mpc.el --- A client for the Music Player Daemon   -*- coding: utf-8; lexical-binding: t -*-
+;;; mpc.el --- A client for the Music Player Daemon   -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: multimedia
@@ -891,9 +891,7 @@ If PLAYLIST is t or nil or missing, use the main playlist."
   :type '(choice (const nil) directory))
 
 (defcustom mpc-data-directory
-  (if (and (not (file-directory-p "~/.mpc"))
-           (file-directory-p "~/.emacs.d"))
-      "~/.emacs.d/mpc" "~/.mpc")
+  (locate-user-emacs-file "mpc" ".mpc")
   "Directory where MPC.el stores auxiliary data."
   :type 'directory)
 
@@ -1024,7 +1022,12 @@ If PLAYLIST is t or nil or missing, use the main playlist."
                          (when (and (null val) (eq tag 'Title))
                            (setq val (cdr (assq 'file info))))
                          (push `(equal ',val (cdr (assq ',tag info))) pred)
-                         val)))))
+                         (cond
+                          ((not (and (eq tag 'Date) (stringp val))) val)
+                          ;; For "date", only keep the year!
+                          ((string-match "[0-9]\\{4\\}" val)
+                           (match-string 0 val))
+                          (t val)))))))
                (space (when size
                         (setq size (string-to-number size))
                         (propertize " " 'display
@@ -1619,7 +1622,7 @@ Return non-nil if a selection was deactivated."
           (setq active
                 (if (listp active) (mpc-intersection active vals) vals))))
 
-      (when (and (listp active))
+      (when (listp active)
         ;; Remove the selections if they are all in conflict with
         ;; other constraints.
         (let ((deactivate t))
@@ -1633,8 +1636,14 @@ Return non-nil if a selection was deactivated."
               (setq selection nil)
               (mapc 'delete-overlay mpc-select)
               (setq mpc-select nil)
-              (mpc-tagbrowser-all-select)))))
+              (mpc-tagbrowser-all-select))))
 
+        ;; Don't bother splitting the "active" elements to the first part if
+        ;; they're the same as the selection.
+        (when (equal (sort (copy-sequence active) #'string-lessp)
+                     (sort (copy-sequence selection) #'string-lessp))
+          (setq active 'all)))
+      
       ;; FIXME: This `mpc-sort' takes a lot of time.  Maybe we should
       ;; be more clever and presume the buffer is mostly sorted already.
       (mpc-sort (if (listp active) active))
@@ -1796,7 +1805,9 @@ A value of t means the main playlist.")
   ;; Maintain the volume.
   (setq mpc-volume
         (mpc-volume-widget
-         (string-to-number (cdr (assq 'volume mpc-status))))))
+         (string-to-number (cdr (assq 'volume mpc-status)))))
+  (let ((status-buf (mpc-proc-buffer (mpc-proc) 'status)))
+    (when status-buf (with-current-buffer status-buf (force-mode-line-update)))))
 
 (defvar mpc-volume-step 5)
 
@@ -1866,7 +1877,7 @@ This is used so that they can be compared with `eq', which is needed for
 `text-property-any'.")
 (defun mpc-songs-hashcons (name)
   (or (gethash name mpc-songs-hashcons) (puthash name name mpc-songs-hashcons)))
-(defcustom mpc-songs-format "%2{Disc--}%3{Track} %-5{Time} %25{Title} %20{Album} %20{Artist} %10{Date}"
+(defcustom mpc-songs-format "%2{Disc--}%3{Track} %-5{Time} %25{Title} %20{Album} %20{Artist} %5{Date}"
   "Format used to display each song in the list of songs."
   :type 'string)
 
@@ -2025,7 +2036,7 @@ This is used so that they can be compared with `eq', which is needed for
                  (match-string 1)))))
     (cond
      ((null re) (posn-set-point posn))
-     ((null sn) (error "This song is not in the playlist"))
+     ((null sn) (user-error "This song is not in the playlist"))
      ((null (with-current-buffer plbuf (re-search-forward re nil t)))
       ;; song-file only appears once in the playlist: no ambiguity,
       ;; we're good to go!
@@ -2335,7 +2346,7 @@ This is used so that they can be compared with `eq', which is needed for
     (if (mpc-playlist-add)
         (if (member (cdr (assq 'state (mpc-cmd-status))) '("stop"))
             (mpc-cmd-play))
-      (error "Don't know what to play"))))
+      (user-error "Don't know what to play"))))
 
 (defun mpc-next ()
   "Jump to the next song in the queue."
@@ -2599,7 +2610,8 @@ This is used so that they can be compared with `eq', which is needed for
             (mpc-cmd-move (let ((poss '()))
                             (dotimes (i (length songs))
                                      (push (+ i (length pl)) poss))
-                            (nreverse poss)) dest-pos mpc-songs-playlist)
+                            (nreverse poss))
+                            dest-pos mpc-songs-playlist)
             (message "Added %d songs" (length songs)))))
         (mpc-songs-refresh))
       (t

@@ -1,5 +1,5 @@
 /* Primitive operations on Lisp data types for GNU Emacs Lisp interpreter.
-   Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2014 Free Software
+   Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2015 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -37,59 +37,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "font.h"
 #include "keymap.h"
 
-Lisp_Object Qnil, Qt, Qquote, Qlambda, Qunbound;
-static Lisp_Object Qsubr;
-Lisp_Object Qerror_conditions, Qerror_message, Qtop_level;
-Lisp_Object Qerror, Quser_error, Qquit, Qargs_out_of_range;
-static Lisp_Object Qwrong_length_argument;
-static Lisp_Object Qwrong_type_argument;
-Lisp_Object Qvoid_variable, Qvoid_function;
-static Lisp_Object Qcyclic_function_indirection;
-static Lisp_Object Qcyclic_variable_indirection;
-Lisp_Object Qcircular_list;
-static Lisp_Object Qsetting_constant;
-Lisp_Object Qinvalid_read_syntax;
-Lisp_Object Qinvalid_function, Qwrong_number_of_arguments, Qno_catch;
-Lisp_Object Qend_of_file, Qarith_error, Qmark_inactive;
-Lisp_Object Qbeginning_of_buffer, Qend_of_buffer, Qbuffer_read_only;
-Lisp_Object Qtext_read_only;
-
-Lisp_Object Qintegerp, Qwholenump, Qsymbolp, Qlistp, Qconsp;
-static Lisp_Object Qnatnump;
-Lisp_Object Qstringp, Qarrayp, Qsequencep, Qbufferp;
-Lisp_Object Qchar_or_string_p, Qmarkerp, Qinteger_or_marker_p, Qvectorp;
-Lisp_Object Qbool_vector_p;
-Lisp_Object Qbuffer_or_string_p;
-static Lisp_Object Qkeywordp, Qboundp;
-Lisp_Object Qfboundp;
-Lisp_Object Qchar_table_p, Qvector_or_char_table_p;
-
-Lisp_Object Qcdr;
-static Lisp_Object Qad_advice_info, Qad_activate_internal;
-
-static Lisp_Object Qdomain_error, Qsingularity_error, Qunderflow_error;
-Lisp_Object Qrange_error, Qoverflow_error;
-
-Lisp_Object Qfloatp;
-Lisp_Object Qnumberp, Qnumber_or_marker_p;
-
-Lisp_Object Qinteger, Qsymbol;
-static Lisp_Object Qcons, Qfloat, Qmisc, Qstring, Qvector;
-Lisp_Object Qwindow;
-static Lisp_Object Qoverlay, Qwindow_configuration;
-static Lisp_Object Qprocess, Qmarker;
-static Lisp_Object Qcompiled_function, Qframe;
-Lisp_Object Qbuffer;
-static Lisp_Object Qchar_table, Qbool_vector, Qhash_table;
-static Lisp_Object Qsubrp;
-static Lisp_Object Qmany, Qunevalled;
-Lisp_Object Qfont_spec, Qfont_entity, Qfont_object;
-static Lisp_Object Qdefun;
-
-Lisp_Object Qinteractive_form;
-static Lisp_Object Qdefalias_fset_function;
-
-static void swap_in_symval_forwarding (struct Lisp_Symbol *, struct Lisp_Buffer_Local_Value *);
+static void swap_in_symval_forwarding (struct Lisp_Symbol *,
+				       struct Lisp_Buffer_Local_Value *);
 
 static bool
 BOOLFWDP (union Lisp_Fwd *a)
@@ -227,7 +176,8 @@ args_out_of_range_3 (Lisp_Object a1, Lisp_Object a2, Lisp_Object a3)
 /* Data type predicates.  */
 
 DEFUN ("eq", Feq, Seq, 2, 2, 0,
-       doc: /* Return t if the two args are the same Lisp object.  */)
+       doc: /* Return t if the two args are the same Lisp object.  */
+       attributes: const)
   (Lisp_Object obj1, Lisp_Object obj2)
 {
   if (EQ (obj1, obj2))
@@ -236,7 +186,8 @@ DEFUN ("eq", Feq, Seq, 2, 2, 0,
 }
 
 DEFUN ("null", Fnull, Snull, 1, 1, 0,
-       doc: /* Return t if OBJECT is nil.  */)
+       doc: /* Return t if OBJECT is nil.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (NILP (object))
@@ -314,7 +265,8 @@ for example, (type-of 1) returns `integer'.  */)
 }
 
 DEFUN ("consp", Fconsp, Sconsp, 1, 1, 0,
-       doc: /* Return t if OBJECT is a cons cell.  */)
+       doc: /* Return t if OBJECT is a cons cell.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (CONSP (object))
@@ -323,7 +275,8 @@ DEFUN ("consp", Fconsp, Sconsp, 1, 1, 0,
 }
 
 DEFUN ("atom", Fatom, Satom, 1, 1, 0,
-       doc: /* Return t if OBJECT is not a cons cell.  This includes nil.  */)
+       doc: /* Return t if OBJECT is not a cons cell.  This includes nil.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (CONSP (object))
@@ -333,7 +286,8 @@ DEFUN ("atom", Fatom, Satom, 1, 1, 0,
 
 DEFUN ("listp", Flistp, Slistp, 1, 1, 0,
        doc: /* Return t if OBJECT is a list, that is, a cons cell or nil.
-Otherwise, return nil.  */)
+Otherwise, return nil.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (CONSP (object) || NILP (object))
@@ -342,7 +296,8 @@ Otherwise, return nil.  */)
 }
 
 DEFUN ("nlistp", Fnlistp, Snlistp, 1, 1, 0,
-       doc: /* Return t if OBJECT is not a list.  Lists include nil.  */)
+       doc: /* Return t if OBJECT is not a list.  Lists include nil.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (CONSP (object) || NILP (object))
@@ -351,7 +306,8 @@ DEFUN ("nlistp", Fnlistp, Snlistp, 1, 1, 0,
 }
 
 DEFUN ("symbolp", Fsymbolp, Ssymbolp, 1, 1, 0,
-       doc: /* Return t if OBJECT is a symbol.  */)
+       doc: /* Return t if OBJECT is a symbol.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (SYMBOLP (object))
@@ -384,7 +340,8 @@ DEFUN ("vectorp", Fvectorp, Svectorp, 1, 1, 0,
 }
 
 DEFUN ("stringp", Fstringp, Sstringp, 1, 1, 0,
-       doc: /* Return t if OBJECT is a string.  */)
+       doc: /* Return t if OBJECT is a string.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (STRINGP (object))
@@ -487,7 +444,8 @@ DEFUN ("byte-code-function-p", Fbyte_code_function_p, Sbyte_code_function_p,
 }
 
 DEFUN ("char-or-string-p", Fchar_or_string_p, Schar_or_string_p, 1, 1, 0,
-       doc: /* Return t if OBJECT is a character or a string.  */)
+       doc: /* Return t if OBJECT is a character or a string.  */
+       attributes: const)
   (register Lisp_Object object)
 {
   if (CHARACTERP (object) || STRINGP (object))
@@ -496,7 +454,8 @@ DEFUN ("char-or-string-p", Fchar_or_string_p, Schar_or_string_p, 1, 1, 0,
 }
 
 DEFUN ("integerp", Fintegerp, Sintegerp, 1, 1, 0,
-       doc: /* Return t if OBJECT is an integer.  */)
+       doc: /* Return t if OBJECT is an integer.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (INTEGERP (object))
@@ -514,7 +473,8 @@ DEFUN ("integer-or-marker-p", Finteger_or_marker_p, Sinteger_or_marker_p, 1, 1, 
 }
 
 DEFUN ("natnump", Fnatnump, Snatnump, 1, 1, 0,
-       doc: /* Return t if OBJECT is a nonnegative integer.  */)
+       doc: /* Return t if OBJECT is a nonnegative integer.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (NATNUMP (object))
@@ -523,7 +483,8 @@ DEFUN ("natnump", Fnatnump, Snatnump, 1, 1, 0,
 }
 
 DEFUN ("numberp", Fnumberp, Snumberp, 1, 1, 0,
-       doc: /* Return t if OBJECT is a number (floating point or integer).  */)
+       doc: /* Return t if OBJECT is a number (floating point or integer).  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (NUMBERP (object))
@@ -543,7 +504,8 @@ DEFUN ("number-or-marker-p", Fnumber_or_marker_p,
 }
 
 DEFUN ("floatp", Ffloatp, Sfloatp, 1, 1, 0,
-       doc: /* Return t if OBJECT is a floating point number.  */)
+       doc: /* Return t if OBJECT is a floating point number.  */
+       attributes: const)
   (Lisp_Object object)
 {
   if (FLOATP (object))
@@ -729,7 +691,7 @@ DEFUN ("fset", Ffset, Sfset, 2, 2, 0,
 
   /* Convert to eassert or remove after GC bug is found.  In the
      meantime, check unconditionally, at a slight perf hit.  */
-  if (valid_lisp_object_p (definition) < 1)
+  if (! valid_lisp_object_p (definition))
     emacs_abort ();
 
   set_symbol_function (symbol, definition);
@@ -971,6 +933,51 @@ do_symval_forwarding (register union Lisp_Fwd *valcontents)
     }
 }
 
+/* Used to signal a user-friendly error when symbol WRONG is
+   not a member of CHOICE, which should be a list of symbols.  */
+
+void
+wrong_choice (Lisp_Object choice, Lisp_Object wrong)
+{
+  ptrdiff_t i = 0, len = XINT (Flength (choice));
+  Lisp_Object obj, *args;
+  AUTO_STRING (one_of, "One of ");
+  AUTO_STRING (comma, ", ");
+  AUTO_STRING (or, " or ");
+  AUTO_STRING (should_be_specified, " should be specified");
+
+  USE_SAFE_ALLOCA;
+  SAFE_ALLOCA_LISP (args, len * 2 + 1);
+
+  args[i++] = one_of;
+
+  for (obj = choice; !NILP (obj); obj = XCDR (obj))
+    {
+      args[i++] = SYMBOL_NAME (XCAR (obj));
+      args[i++] = (NILP (XCDR (obj)) ? should_be_specified
+		   : NILP (XCDR (XCDR (obj))) ? or : comma);
+    }
+
+  obj = Fconcat (i, args);
+  SAFE_FREE ();
+  xsignal2 (Qerror, obj, wrong);
+}
+
+/* Used to signal a user-friendly error if WRONG is not a number or
+   integer/floating-point number outsize of inclusive MIN..MAX range.  */
+
+static void
+wrong_range (Lisp_Object min, Lisp_Object max, Lisp_Object wrong)
+{
+  AUTO_STRING (value_should_be_from, "Value should be from ");
+  AUTO_STRING (to, " to ");
+  xsignal2 (Qerror,
+	    Fconcat (4, ((Lisp_Object [])
+			 {value_should_be_from, Fnumber_to_string (min),
+			  to, Fnumber_to_string (max)})),
+	    wrong);
+}
+
 /* Store NEWVAL into SYMBOL, where VALCONTENTS is found in the value cell
    of SYMBOL.  If SYMBOL is buffer-local, VALCONTENTS should be the
    buffer-independent contents of the value cell: forwarded just one
@@ -1027,10 +1034,33 @@ store_symval_forwarding (union Lisp_Fwd *valcontents, register Lisp_Object newva
 	int offset = XBUFFER_OBJFWD (valcontents)->offset;
 	Lisp_Object predicate = XBUFFER_OBJFWD (valcontents)->predicate;
 
-	if (!NILP (predicate) && !NILP (newval)
-	    && NILP (call1 (predicate, newval)))
-	  wrong_type_argument (predicate, newval);
+	if (!NILP (newval))
+	  {
+	    if (SYMBOLP (predicate))
+	      {
+		Lisp_Object prop;
 
+		if ((prop = Fget (predicate, Qchoice), !NILP (prop)))
+		  {
+		    if (NILP (Fmemq (newval, prop)))
+		      wrong_choice (prop, newval);
+		  }
+		else if ((prop = Fget (predicate, Qrange), !NILP (prop)))
+		  {
+		    Lisp_Object min = XCAR (prop), max = XCDR (prop);
+
+		    if (!NUMBERP (newval)
+			|| !NILP (arithcompare (newval, min, ARITH_LESS))
+			|| !NILP (arithcompare (newval, max, ARITH_GRTR)))
+		      wrong_range (min, max, newval);
+		  }
+		else if (FUNCTIONP (predicate))
+		  {
+		    if (NILP (call1 (predicate, newval)))
+		      wrong_type_argument (predicate, newval);
+		  }
+	      }
+	  }
 	if (buf == NULL)
 	  buf = current_buffer;
 	set_per_buffer_value (buf, offset, newval);
@@ -1246,10 +1276,10 @@ set_internal (Lisp_Object symbol, Lisp_Object newval, Lisp_Object where,
 
 	    /* Find the new binding.  */
 	    XSETSYMBOL (symbol, sym); /* May have changed via aliasing.  */
-	    tem1 = Fassq (symbol,
-			  (blv->frame_local
-			   ? XFRAME (where)->param_alist
-			   : BVAR (XBUFFER (where), local_var_alist)));
+	    tem1 = assq_no_quit (symbol,
+				 (blv->frame_local
+				  ? XFRAME (where)->param_alist
+				  : BVAR (XBUFFER (where), local_var_alist)));
 	    set_blv_where (blv, where);
 	    blv->found = 1;
 
@@ -1887,18 +1917,10 @@ DEFUN ("local-variable-p", Flocal_variable_p, Slocal_variable_p,
        1, 2, 0,
        doc: /* Non-nil if VARIABLE has a local binding in buffer BUFFER.
 BUFFER defaults to the current buffer.  */)
-  (register Lisp_Object variable, Lisp_Object buffer)
+  (Lisp_Object variable, Lisp_Object buffer)
 {
-  register struct buffer *buf;
+  struct buffer *buf = decode_buffer (buffer);
   struct Lisp_Symbol *sym;
-
-  if (NILP (buffer))
-    buf = current_buffer;
-  else
-    {
-      CHECK_BUFFER (buffer);
-      buf = XBUFFER (buffer);
-    }
 
   CHECK_SYMBOL (variable);
   sym = XSYMBOL (variable);
@@ -2253,7 +2275,7 @@ bool-vector.  IDX starts at 0.  */)
 	{
 	  if (! SINGLE_BYTE_CHAR_P (c))
 	    {
-	      int i;
+	      ptrdiff_t i;
 
 	      for (i = SBYTES (array) - 1; i >= 0; i--)
 		if (SREF (array, i) >= 0x80)
@@ -2332,7 +2354,7 @@ arithcompare_driver (ptrdiff_t nargs, Lisp_Object *args,
   ptrdiff_t argnum;
   for (argnum = 1; argnum < nargs; ++argnum)
     {
-      if (EQ (Qnil, arithcompare (args[argnum-1], args[argnum], comparison)))
+      if (EQ (Qnil, arithcompare (args[argnum - 1], args[argnum], comparison)))
         return Qnil;
     }
   return Qt;
@@ -2347,7 +2369,7 @@ usage: (= NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
 }
 
 DEFUN ("<", Flss, Slss, 1, MANY, 0,
-       doc: /* Return t if each arg is less than the next arg.  All must be numbers or markers.
+       doc: /* Return t if each arg (a number or marker), is less than the next arg.
 usage: (< NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
@@ -2355,7 +2377,7 @@ usage: (< NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
 }
 
 DEFUN (">", Fgtr, Sgtr, 1, MANY, 0,
-       doc: /* Return t if each arg is greater than the next arg.  All must be numbers or markers.
+       doc: /* Return t if each arg (a number or marker) is greater than the next arg.
 usage: (> NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
@@ -2363,8 +2385,7 @@ usage: (> NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
 }
 
 DEFUN ("<=", Fleq, Sleq, 1, MANY, 0,
-       doc: /* Return t if each arg is less than or equal to the next arg.
-All must be numbers or markers.
+       doc: /* Return t if each arg (a number or marker) is less than or equal to the next.
 usage: (<= NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
@@ -2372,8 +2393,7 @@ usage: (<= NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
 }
 
 DEFUN (">=", Fgeq, Sgeq, 1, MANY, 0,
-       doc: /* Return t if each arg is greater than or equal to the next arg.
-All must be numbers or markers.
+       doc: /* Return t if each arg (a number or marker) is greater than or equal to the next.
 usage: (>= NUMBER-OR-MARKER &rest NUMBERS-OR-MARKERS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
@@ -2385,24 +2405,6 @@ DEFUN ("/=", Fneq, Sneq, 2, 2, 0,
   (register Lisp_Object num1, Lisp_Object num2)
 {
   return arithcompare (num1, num2, ARITH_NOTEQUAL);
-}
-
-DEFUN ("zerop", Fzerop, Szerop, 1, 1, 0,
-       doc: /* Return t if NUMBER is zero.  */)
-  (register Lisp_Object number)
-{
-  CHECK_NUMBER_OR_FLOAT (number);
-
-  if (FLOATP (number))
-    {
-      if (XFLOAT_DATA (number) == 0.0)
-	return Qt;
-      return Qnil;
-    }
-
-  if (!XINT (number))
-    return Qt;
-  return Qnil;
 }
 
 /* Convert the cons-of-integers, integer, or float value C to an
@@ -2965,7 +2967,8 @@ DEFUN ("lognot", Flognot, Slognot, 1, 1, 0,
 DEFUN ("byteorder", Fbyteorder, Sbyteorder, 0, 0, 0,
        doc: /* Return the byteorder for the machine.
 Returns 66 (ASCII uppercase B) for big endian machines or 108 (ASCII
-lowercase l) for small endian machines.  */)
+lowercase l) for small endian machines.  */
+       attributes: const)
   (void)
 {
   unsigned i = 0x04030201;
@@ -3543,10 +3546,6 @@ syms_of_data (void)
   PUT_ERROR (Qunderflow_error, Fcons (Qdomain_error, arith_tail),
 	     "Arithmetic underflow error");
 
-  staticpro (&Qnil);
-  staticpro (&Qt);
-  staticpro (&Qunbound);
-
   /* Types that type-of returns.  */
   DEFSYM (Qinteger, "integer");
   DEFSYM (Qsymbol, "symbol");
@@ -3650,7 +3649,6 @@ syms_of_data (void)
   defsubr (&Sleq);
   defsubr (&Sgeq);
   defsubr (&Sneq);
-  defsubr (&Szerop);
   defsubr (&Splus);
   defsubr (&Sminus);
   defsubr (&Stimes);

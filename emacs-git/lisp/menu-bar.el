@@ -1,6 +1,6 @@
 ;;; menu-bar.el --- define a default menu bar
 
-;; Copyright (C) 1993-1995, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 2000-2015 Free Software Foundation, Inc.
 
 ;; Author: Richard M. Stallman
 ;; Maintainer: emacs-devel@gnu.org
@@ -373,35 +373,31 @@
 
     (bindings--define-key menu [set-tags-name]
       '(menu-item "Set Tags File Name..." visit-tags-table
-                  :help "Tell Tags commands which tag table file to use"))
+                  :visible (menu-bar-goto-uses-etags-p)
+                  :help "Tell navigation commands which tag table file to use"))
 
     (bindings--define-key menu [separator-tag-file]
-      menu-bar-separator)
+      '(menu-item "--" nil :visible (menu-bar-goto-uses-etags-p)))
 
-    (bindings--define-key menu [apropos-tags]
-      '(menu-item "Tags Apropos..." tags-apropos
+    (bindings--define-key menu [xref-pop]
+      '(menu-item "Back" xref-pop-marker-stack
+                  :visible (and (featurep 'xref)
+                                (not (xref-marker-stack-empty-p)))
+                  :help "Back to the position of the last search"))
+
+    (bindings--define-key menu [xref-apropos]
+      '(menu-item "Find Apropos..." xref-find-apropos
                   :help "Find function/variables whose names match regexp"))
-    (bindings--define-key menu [next-tag-otherw]
-      '(menu-item "Next Tag in Other Window"
-                  menu-bar-next-tag-other-window
-                  :enable (and (boundp 'tags-location-ring)
-                               (not (ring-empty-p tags-location-ring)))
-                  :help "Find next function/variable matching last tag name in another window"))
 
-    (bindings--define-key menu [next-tag]
-      '(menu-item "Find Next Tag"
-                  menu-bar-next-tag
-                  :enable (and (boundp 'tags-location-ring)
-                               (not (ring-empty-p tags-location-ring)))
-                  :help "Find next function/variable matching last tag name"))
-    (bindings--define-key menu [find-tag-otherw]
-      '(menu-item "Find Tag in Other Window..." find-tag-other-window
+    (bindings--define-key menu [xref-find-otherw]
+      '(menu-item "Find Definition in Other Window..."
+                  xref-find-definitions-other-window
                   :help "Find function/variable definition in another window"))
-    (bindings--define-key menu [find-tag]
-      '(menu-item "Find Tag..." find-tag
+    (bindings--define-key menu [xref-find-def]
+      '(menu-item "Find Definition..." xref-find-definitions
                   :help "Find definition of function or variable"))
 
-    (bindings--define-key menu [separator-tags]
+    (bindings--define-key menu [separator-xref]
       menu-bar-separator)
 
     (bindings--define-key menu [end-of-buf]
@@ -416,6 +412,9 @@
                   :help "Read a line number and go to that line"))
     menu))
 
+(defun menu-bar-goto-uses-etags-p ()
+  (or (not (boundp 'xref-find-function))
+      (eq xref-find-function 'etags-xref-find)))
 
 (defvar yank-menu (cons (purecopy "Select Yank") nil))
 (fset 'yank-menu (cons 'keymap yank-menu))
@@ -470,17 +469,14 @@
                        [paste-from-menu])
       ;; ns-win.el said: Change text to be more consistent with
       ;; surrounding menu items `paste', etc."
-      `(menu-item ,(if (featurep 'ns) "Select and Paste"
-                     "Paste from Kill Menu") yank-menu
+      `(menu-item ,(if (featurep 'ns) "Select and Paste" "Paste from Kill Menu")
+                  yank-menu
                   :enable (and (cdr yank-menu) (not buffer-read-only))
                   :help "Choose a string from the kill ring and paste it"))
     (bindings--define-key menu [paste]
       '(menu-item "Paste" yank
                   :enable (and (or
-                                ;; Emacs compiled --without-x (or --with-ns)
-                                ;; doesn't have x-selection-exists-p.
-                                (and (fboundp 'x-selection-exists-p)
-                                     (x-selection-exists-p 'CLIPBOARD))
+                                (gui-call gui-selection-exists-p 'CLIPBOARD)
                                 (if (featurep 'ns) ; like paste-from-menu
                                     (cdr yank-menu)
                                   kill-ring))
@@ -517,16 +513,6 @@
 
     menu))
 
-(defun menu-bar-next-tag-other-window ()
-  "Find the next definition of the tag already specified."
-  (interactive)
-  (find-tag-other-window nil t))
-
-(defun menu-bar-next-tag ()
-  "Find the next definition of the tag already specified."
-  (interactive)
-  (find-tag nil t))
-
 (define-obsolete-function-alias
   'menu-bar-kill-ring-save 'kill-ring-save "24.1")
 
@@ -537,27 +523,26 @@
      '(and mark-active (not buffer-read-only)))
 (put 'clipboard-kill-ring-save 'menu-enable 'mark-active)
 (put 'clipboard-yank 'menu-enable
-     '(and (or (not (fboundp 'x-selection-exists-p))
-	       (x-selection-exists-p)
-	       (x-selection-exists-p 'CLIPBOARD))
+     '(and (or (gui-call gui-selection-exists-p 'PRIMARY)
+	       (gui-call gui-selection-exists-p 'CLIPBOARD))
  	   (not buffer-read-only)))
 
 (defun clipboard-yank ()
   "Insert the clipboard contents, or the last stretch of killed text."
   (interactive "*")
-  (let ((x-select-enable-clipboard t))
+  (let ((gui-select-enable-clipboard t))
     (yank)))
 
 (defun clipboard-kill-ring-save (beg end &optional region)
-  "Copy region to kill ring, and save in the X clipboard."
+  "Copy region to kill ring, and save in the GUI's clipboard."
   (interactive "r\np")
-  (let ((x-select-enable-clipboard t))
+  (let ((gui-select-enable-clipboard t))
     (kill-ring-save beg end region)))
 
 (defun clipboard-kill-region (beg end &optional region)
-  "Kill the region, and save it in the X clipboard."
+  "Kill the region, and save it in the GUI's clipboard."
   (interactive "r\np")
-  (let ((x-select-enable-clipboard t))
+  (let ((gui-select-enable-clipboard t))
     (kill-region beg end region)))
 
 (defun menu-bar-enable-clipboard ()
@@ -662,7 +647,7 @@ by \"Save Options\" in Custom buffers.")
 ;; Function for setting/saving default font.
 
 (defun menu-set-font ()
-  "Interactively select a font and make it the default."
+  "Interactively select a font and make it the default on all existing frames."
   (interactive)
   (set-frame-font (if (fboundp 'x-select-font)
 		      (x-select-font)
@@ -887,8 +872,33 @@ by \"Save Options\" in Custom buffers.")
   (interactive)
   (customize-set-variable 'scroll-bar-mode nil))
 
+(defun menu-bar-horizontal-scroll-bar ()
+  "Display horizontal scroll bars on each window."
+  (interactive)
+  (customize-set-variable 'horizontal-scroll-bar-mode t))
+
+(defun menu-bar-no-horizontal-scroll-bar ()
+  "Turn off horizontal scroll bars."
+  (interactive)
+  (customize-set-variable 'horizontal-scroll-bar-mode nil))
+
 (defvar menu-bar-showhide-scroll-bar-menu
   (let ((menu (make-sparse-keymap "Scroll-bar")))
+    (bindings--define-key menu [horizontal]
+      '(menu-item "Horizontal"
+                  menu-bar-horizontal-scroll-bar
+                  :help "Horizontal scroll bar"
+                  :visible (horizontal-scroll-bars-available-p)
+                  :button (:radio . (cdr (assq 'horizontal-scroll-bars
+					       (frame-parameters))))))
+
+    (bindings--define-key menu [none-horizontal]
+      '(menu-item "None-horizontal"
+                  menu-bar-no-horizontal-scroll-bar
+                  :help "Turn off horizontal scroll bars"
+                  :visible (horizontal-scroll-bars-available-p)
+                  :button (:radio . (not (cdr (assq 'horizontal-scroll-bars
+                                                   (frame-parameters)))))))
 
     (bindings--define-key menu [right]
       '(menu-item "On the Right"
@@ -896,7 +906,8 @@ by \"Save Options\" in Custom buffers.")
                   :help "Scroll-bar on the right side"
                   :visible (display-graphic-p)
                   :button (:radio . (eq (cdr (assq 'vertical-scroll-bars
-                                                   (frame-parameters))) 'right))))
+                                                   (frame-parameters)))
+					'right))))
 
     (bindings--define-key menu [left]
       '(menu-item "On the Left"
@@ -904,7 +915,8 @@ by \"Save Options\" in Custom buffers.")
                   :help "Scroll-bar on the left side"
                   :visible (display-graphic-p)
                   :button (:radio . (eq (cdr (assq 'vertical-scroll-bars
-                                                   (frame-parameters))) 'left))))
+                                                   (frame-parameters)))
+					'left))))
 
     (bindings--define-key menu [none]
       '(menu-item "None"
@@ -912,7 +924,8 @@ by \"Save Options\" in Custom buffers.")
                   :help "Turn off scroll-bar"
                   :visible (display-graphic-p)
                   :button (:radio . (eq (cdr (assq 'vertical-scroll-bars
-                                                   (frame-parameters))) nil))))
+                                                   (frame-parameters)))
+					nil))))
     menu))
 
 (defun menu-bar-frame-for-menubar ()
@@ -1302,9 +1315,6 @@ mail status in mode line"))
     (bindings--define-key menu [life]
       '(menu-item "Life"  life
                   :help "Watch how John Conway's cellular automaton evolves"))
-    (bindings--define-key menu [land]
-      '(menu-item "Landmark" landmark
-                  :help "Watch a neural-network robot learn landmarks"))
     (bindings--define-key menu [hanoi]
       '(menu-item "Towers of Hanoi" hanoi
                   :help "Watch Towers-of-Hanoi puzzle solved by Emacs"))
@@ -1917,6 +1927,19 @@ Buffers menu is regenerated."
   "Function to select the buffer chosen from the `Buffers' menu-bar menu.
 It must accept a buffer as its only required argument.")
 
+(defun menu-bar-buffer-vector (alist)
+  ;; turn ((name . buffer) ...) into a menu
+  (let ((buffers-vec (make-vector (length alist) nil))
+        (i (length alist)))
+    (dolist (pair alist)
+      (setq i (1- i))
+      (aset buffers-vec i
+            (cons (car pair)
+                  `(lambda ()
+                     (interactive)
+                     (funcall menu-bar-select-buffer-function ,(cdr pair))))))
+    buffers-vec))
+
 (defun menu-bar-update-buffers (&optional force)
   ;; If user discards the Buffers item, play along.
   (and (lookup-key (current-global-map) [menu-bar buffer])
@@ -1952,18 +1975,7 @@ It must accept a buffer as its only required argument.")
 				      name)
                                     ))
                              alist))))
-		 ;; Now make the actual list of items.
-                 (let ((buffers-vec (make-vector (length alist) nil))
-                       (i (length alist)))
-                   (dolist (pair alist)
-                     (setq i (1- i))
-                     (aset buffers-vec i
-			   (nconc (list (car pair)
-					(cons nil nil))
-				  `(lambda ()
-                                     (interactive)
-                                     (funcall menu-bar-select-buffer-function ,(cdr pair))))))
-                   (list buffers-vec))))
+		 (list (menu-bar-buffer-vector alist))))
 
 	 ;; Make a Frames menu if we have more than one frame.
 	 (when (cdr frames)
@@ -1974,10 +1986,8 @@ It must accept a buffer as its only required argument.")
                   (i 0))
              (dolist (frame frames)
                (aset frames-vec i
-                     (nconc
-                      (list
-                       (frame-parameter frame 'name)
-                       (cons nil nil))
+                     (cons
+                      (frame-parameter frame 'name)
                       `(lambda ()
                          (interactive) (menu-bar-select-frame ,frame))))
                (setq i (1+ i)))
@@ -2140,6 +2150,13 @@ See `menu-bar-mode' for more information."
 (declare-function x-menu-bar-open "term/x-win" (&optional frame))
 (declare-function w32-menu-bar-open "term/w32-win" (&optional frame))
 
+(defun lookup-key-ignore-too-long (map key)
+  "Call `lookup-key' and convert numeric values to nil."
+  (let ((binding (lookup-key map key)))
+    (if (numberp binding)       ; `too long'
+        nil
+      binding)))
+
 (defun popup-menu (menu &optional position prefix from-menu-bar)
   "Popup the given menu and call the selected option.
 MENU can be a keymap, an easymenu-style menu or a list of keymaps as for
@@ -2192,11 +2209,9 @@ FROM-MENU-BAR, if non-nil, means we are dropping one of menu-bar's menus."
 	      (let ((mouse-click (apply 'vector event))
 		    binding)
 		(while (and map (null binding))
-		  (setq binding (lookup-key (car map) mouse-click))
-		  (if (numberp binding)	; `too long'
-		      (setq binding nil))
+		  (setq binding (lookup-key-ignore-too-long (car map) mouse-click))
 		  (setq map (cdr map)))
-		  binding))
+                binding))
 	     (t
 	      ;; We were given a single keymap.
 	      (lookup-key map (apply 'vector event)))))
@@ -2267,17 +2282,45 @@ If FRAME is nil or not given, use the selected frame."
      ((eq type 'w32) (w32-menu-bar-open frame))
      ((and (null tty-menu-open-use-tmm)
 	   (not (zerop (or (frame-parameter nil 'menu-bar-lines) 0))))
+      ;; Make sure the menu bar is up to date.  One situation where
+      ;; this is important is when this function is invoked by name
+      ;; via M-x, in which case the menu bar includes the "Minibuf"
+      ;; menu item that should be removed when we exit the minibuffer.
+      (force-mode-line-update)
+      (redisplay)
       (let* ((x tty-menu--initial-menu-x)
 	     (menu (menu-bar-menu-at-x-y x 0 frame)))
 	(popup-menu (or
-		     (lookup-key global-map (vector 'menu-bar menu))
-		     (lookup-key (current-local-map) (vector 'menu-bar menu))
-		     (cdar (minor-mode-key-binding (vector 'menu-bar menu))))
+		     (lookup-key-ignore-too-long
+                      global-map (vector 'menu-bar menu))
+		     (lookup-key-ignore-too-long
+                      (current-local-map) (vector 'menu-bar menu))
+		     (cdar (minor-mode-key-binding (vector 'menu-bar menu)))
+                     (mouse-menu-bar-map))
 		    (posn-at-x-y x 0 nil t) nil t)))
      (t (with-selected-frame (or frame (selected-frame))
           (tmm-menubar))))))
 
 (global-set-key [f10] 'menu-bar-open)
+
+(defun buffer-menu-open ()
+  "Start key navigation of the buffer menu.
+This is the keyboard interface to \\[mouse-buffer-menu]."
+  (interactive)
+  (popup-menu (mouse-buffer-menu-keymap)
+              (posn-at-x-y 0 0 nil t)))
+
+(global-set-key [C-f10] 'buffer-menu-open)
+
+(defun mouse-buffer-menu-keymap ()
+  (let* ((menu (mouse-buffer-menu-map))
+         (km (make-sparse-keymap (pop menu))))
+    (dolist (item (nreverse menu))
+      (let* ((name (pop item)))
+        (define-key km (vector (intern name))
+          (list name 'keymap name
+                (menu-bar-buffer-vector item)))))
+    km))
 
 (defvar tty-menu-navigation-map
   (let ((map (make-sparse-keymap)))

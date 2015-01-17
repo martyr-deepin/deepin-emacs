@@ -1,4 +1,4 @@
-Copyright (C) 1999, 2001-2014 Free Software Foundation, Inc.
+Copyright (C) 1999, 2001-2015 Free Software Foundation, Inc.
 See the end of the file for copying permissions.
 
 This file describes what you must or might want to do to termcap entries
@@ -72,7 +72,7 @@ is `cS', which I invented.
 	correct parameter conventions from what would make the VT-100's
 	`cs' string work properly.  From an incorrect assumption about
 	%i, I reached an incorrect conclusion about `cs', but the result
-	worked correctly on the VT100 and ANSII terminals.  In Emacs
+	worked correctly on the VT100 and ANSI terminals.  In Emacs
 	version 17, both `cs' and %i work correctly.
 
 	The version 16 convention was to pass, for the second parameter,

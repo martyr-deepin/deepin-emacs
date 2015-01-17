@@ -1,6 +1,6 @@
 ;;; shell.el --- specialized comint.el for running the shell -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1993-1997, 2000-2014 Free Software Foundation,
+;; Copyright (C) 1988, 1993-1997, 2000-2015 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Olin Shivers <shivers@cs.cmu.edu>
@@ -584,6 +584,8 @@ buffer."
       (setq shell-dirstack-query
 	    (cond ((string-equal shell "sh") "pwd")
 		  ((string-equal shell "ksh") "echo $PWD ~-")
+		  ;; Bypass any aliases.  TODO all shells could use this.
+		  ((string-equal shell "bash") "command dirs")
 		  (t "dirs")))
       ;; Bypass a bug in certain versions of bash.
       (when (string-equal shell "bash")
@@ -717,7 +719,7 @@ Otherwise, one argument `-i' is passed to the shell.
 
   ;; The buffer's window must be correctly set when we call comint (so
   ;; that comint sets the COLUMNS env var properly).
-  (pop-to-buffer-same-window buffer)
+  (pop-to-buffer buffer)
   (unless (comint-check-proc buffer)
     (let* ((prog (or explicit-shell-file-name
 		     (getenv "ESHELL") shell-file-name))
