@@ -78,6 +78,7 @@
 ;;; Code:
 
 (dolist (hook (list
+               'c-mode-common-hook
                'c-mode-hook
                'emacs-lisp-mode-hook
                'lisp-interaction-mode-hook

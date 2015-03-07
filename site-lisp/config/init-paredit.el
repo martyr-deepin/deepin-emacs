@@ -77,6 +77,7 @@
 ;;; Code:
 
 (dolist (hook (list
+               'c-mode-common-hook
                'c-mode-hook
                'c++-mode-hook
                'java-mode-hook
