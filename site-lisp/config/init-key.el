@@ -274,6 +274,10 @@
    ))
 (lazy-set-autoload-key
  '(
+   ("C-S-s" . swiper))
+ "swiper")                              ;super regex search
+(lazy-set-autoload-key
+ '(
    ("<f11>" . fullscreen-toggle)        ;全屏切换
    )
  "fullscreen")
