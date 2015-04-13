@@ -80,13 +80,15 @@
 ;;
 
 ;;; Require
-
 (require 'info)
+(require 'ace-link)
 
 ;;; Code:
 
 ;;; ### Info ###
 ;;; --- Info 模式
+(ace-link-setup-default)
+
 (lazy-set-key
  '(
    ("f" . Info-follow-nearest-node)     ;进入当前节点
@@ -111,7 +113,6 @@
    ("m" . Info-menu)                    ;菜单补全
    ("d" . Info-directory)               ;总目录
    ("I" . Info-index)                   ;索引
-   ("o" . Info-follow-reference)        ;随后的引用补全
    ("H" . Info-history)                 ;历史
    ("F" . Info-history-forward)         ;历史向前
    ("B" . Info-history-back)            ;历史向后

@@ -49,6 +49,7 @@
        (require 'init-cursor-chg)
        (require 'init-winpoint)
        (require 'init-benchmark)
+       (require 'init-info)
 
        (require 'init-idle)
        ))
