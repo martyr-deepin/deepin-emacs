@@ -222,10 +222,13 @@
    ("C-s-7" . select-next-window)                 ;选择下一个窗口
    ("C-s-8" . select-prev-window)                 ;选择上一个窗口
    ("M-s-o" . toggle-one-window)                  ;切换一个窗口
-   ("C-x o" . other-window)
    ("C-x O" . toggle-window-split)
    )
  "window-extension")
+(lazy-set-autoload-key
+ '(
+   ("C-x o" . ace-window))
+ "ace-window")
 ;;; ### Tabbar ###
 ;;; --- 多标签浏览
 (lazy-set-key
