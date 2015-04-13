@@ -342,6 +342,7 @@
  '(xref-keyword-face ((t (:foreground "grey"))) t)
  '(xref-list-pilot-face ((t (:foreground "gold"))) t)
  '(xref-list-symbol-face ((t (:foreground "green"))) t)
+ '(aw-leading-char-face ((t (:inherit ace-jump-face-foreground :height 1.5))))
  '(yas/field-highlight-face ((t (:background "grey20" :foreground "gold"))))
  '(yas/mirror-highlight-face ((t (:background "brown" :foreground "white")))))
 
