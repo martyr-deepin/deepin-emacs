@@ -28,10 +28,6 @@
 
 (defvar add-log-time-format)		; in add-log
 
-;; Does this information need to be in every ChangeLog, as opposed to
-;; just the top-level one?  Only if you allow changes the same
-;; day as the release.
-;; http://lists.gnu.org/archive/html/emacs-devel/2013-03/msg00161.html
 (defun add-release-logs (root version &optional date)
   "Add \"Version VERSION released.\" change log entries in ROOT.
 Root must be the root of an Emacs source tree.
@@ -248,7 +244,7 @@ Optional argument TYPE is type of output (nil means all)."
 
 (defconst manual-meta-string
   "<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">
-<link rev=\"made\" href=\"mailto:webmasters@gnu.org\">
+<link rev=\"made\" href=\"mailto:bug-gnu-emacs@gnu.org\">
 <link rel=\"icon\" type=\"image/png\" href=\"/graphics/gnu-head-mini.png\">
 <meta name=\"ICBM\" content=\"42.256233,-71.006581\">
 <meta name=\"DC.title\" content=\"gnu.org\">\n\n")
@@ -601,7 +597,7 @@ style=\"text-align:left\">")
     (copy-file "../doc/misc/texinfo.tex" stem)
     (or (equal type "emacs") (copy-file "../doc/emacs/emacsver.texi" stem))
     (dolist (file (directory-files (format "../doc/%s" type) t))
-      (if (or (string-match-p "\\(\\.texi\\'\\|/ChangeLog\\|/README\\'\\)" file)
+      (if (or (string-match-p "\\(\\.texi\\'\\|/README\\'\\)" file)
 	      (and (equal type "lispintro")
 		   (string-match-p "\\.\\(eps\\|pdf\\)\\'" file)))
 	  (copy-file file stem)))

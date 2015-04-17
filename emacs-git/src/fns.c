@@ -440,21 +440,14 @@ static Lisp_Object concat (ptrdiff_t nargs, Lisp_Object *args,
 Lisp_Object
 concat2 (Lisp_Object s1, Lisp_Object s2)
 {
-  Lisp_Object args[2];
-  args[0] = s1;
-  args[1] = s2;
-  return concat (2, args, Lisp_String, 0);
+  return concat (2, ((Lisp_Object []) {s1, s2}), Lisp_String, 0);
 }
 
 /* ARGSUSED */
 Lisp_Object
 concat3 (Lisp_Object s1, Lisp_Object s2, Lisp_Object s3)
 {
-  Lisp_Object args[3];
-  args[0] = s1;
-  args[1] = s2;
-  args[2] = s3;
-  return concat (3, args, Lisp_String, 0);
+  return concat (3, ((Lisp_Object []) {s1, s2, s3}), Lisp_String, 0);
 }
 
 DEFUN ("append", Fappend, Sappend, 0, MANY, 0,
@@ -2255,12 +2248,7 @@ internal_equal (Lisp_Object o1, Lisp_Object o2, int depth, bool props,
       if (depth > 200)
 	error ("Stack overflow in equal");
       if (NILP (ht))
-	{
-	  Lisp_Object args[2];
-	  args[0] = QCtest;
-	  args[1] = Qeq;
-	  ht = Fmake_hash_table (2, args);
-	}
+	ht = CALLN (Fmake_hash_table, QCtest, Qeq);
       switch (XTYPE (o1))
 	{
 	case Lisp_Cons: case Lisp_Misc: case Lisp_Vectorlike:
@@ -2464,10 +2452,7 @@ This makes STRING unibyte and may change its length.  */)
 Lisp_Object
 nconc2 (Lisp_Object s1, Lisp_Object s2)
 {
-  Lisp_Object args[2];
-  args[0] = s1;
-  args[1] = s2;
-  return Fnconc (2, args);
+  return CALLN (Fnconc, s1, s2);
 }
 
 DEFUN ("nconc", Fnconc, Snconc, 0, MANY, 0,
@@ -2517,16 +2502,14 @@ usage: (nconc &rest LISTS)  */)
 static void
 mapcar1 (EMACS_INT leni, Lisp_Object *vals, Lisp_Object fn, Lisp_Object seq)
 {
-  register Lisp_Object tail;
-  Lisp_Object dummy;
-  register EMACS_INT i;
+  Lisp_Object tail, dummy;
+  EMACS_INT i;
   struct gcpro gcpro1, gcpro2, gcpro3;
 
   if (vals)
     {
       /* Don't let vals contain any garbage when GC happens.  */
-      for (i = 0; i < leni; i++)
-	vals[i] = Qnil;
+      memclear (vals, leni * word_size);
 
       GCPRO3 (dummy, fn, seq);
       gcpro1.var = vals;
@@ -2717,7 +2700,7 @@ if `last-nonmenu-event' is nil, and `use-dialog-box' is non-nil.  */)
     }
 
   AUTO_STRING (yes_or_no, "(yes or no) ");
-  prompt = Fconcat (2, (Lisp_Object []) {prompt, yes_or_no});
+  prompt = CALLN (Fconcat, prompt, yes_or_no);
   GCPRO1 (prompt);
 
   while (1)
@@ -2997,15 +2980,13 @@ usage: (widget-apply WIDGET PROPERTY &rest ARGS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
   /* This function can GC.  */
-  Lisp_Object newargs[3];
   struct gcpro gcpro1, gcpro2;
-  Lisp_Object result;
-
-  newargs[0] = Fwidget_get (args[0], args[1]);
-  newargs[1] = args[0];
-  newargs[2] = Flist (nargs - 2, args + 2);
-  GCPRO2 (newargs[0], newargs[2]);
-  result = Fapply (3, newargs);
+  Lisp_Object widget = args[0];
+  Lisp_Object property = args[1];
+  Lisp_Object propval = Fwidget_get (widget, property);
+  Lisp_Object trailing_args = Flist (nargs - 2, args + 2);
+  GCPRO2 (propval, trailing_args);
+  Lisp_Object result = CALLN (Fapply, propval, widget, trailing_args);
   UNGCPRO;
   return result;
 }
@@ -3688,7 +3669,7 @@ Lisp_Object
 larger_vector (Lisp_Object vec, ptrdiff_t incr_min, ptrdiff_t nitems_max)
 {
   struct Lisp_Vector *v;
-  ptrdiff_t i, incr, incr_max, old_size, new_size;
+  ptrdiff_t incr, incr_max, old_size, new_size;
   ptrdiff_t C_language_max = min (PTRDIFF_MAX, SIZE_MAX) / sizeof *v->contents;
   ptrdiff_t n_max = (0 <= nitems_max && nitems_max < C_language_max
 		     ? nitems_max : C_language_max);
@@ -3702,8 +3683,7 @@ larger_vector (Lisp_Object vec, ptrdiff_t incr_min, ptrdiff_t nitems_max)
   new_size = old_size + incr;
   v = allocate_vector (new_size);
   memcpy (v->contents, XVECTOR (vec)->contents, old_size * sizeof *v->contents);
-  for (i = old_size; i < new_size; ++i)
-    v->contents[i] = Qnil;
+  memclear (v->contents + old_size, incr * word_size);
   XSETVECTOR (vec, v);
   return vec;
 }
@@ -3753,12 +3733,7 @@ cmpfn_user_defined (struct hash_table_test *ht,
 		    Lisp_Object key1,
 		    Lisp_Object key2)
 {
-  Lisp_Object args[3];
-
-  args[0] = ht->user_cmp_function;
-  args[1] = key1;
-  args[2] = key2;
-  return !NILP (Ffuncall (3, args));
+  return !NILP (call2 (ht->user_cmp_function, key1, key2));
 }
 
 
@@ -3806,11 +3781,7 @@ hashfn_equal (struct hash_table_test *ht, Lisp_Object key)
 static EMACS_UINT
 hashfn_user_defined (struct hash_table_test *ht, Lisp_Object key)
 {
-  Lisp_Object args[2], hash;
-
-  args[0] = ht->user_hash_function;
-  args[1] = key;
-  hash = Ffuncall (2, args);
+  Lisp_Object hash = call1 (ht->user_hash_function, key);
   return hashfn_eq (ht, hash);
 }
 
@@ -3983,9 +3954,8 @@ maybe_resize_hash_table (struct Lisp_Hash_Table *h)
 #ifdef ENABLE_CHECKING
       if (HASH_TABLE_P (Vpurify_flag)
 	  && XHASH_TABLE (Vpurify_flag) == h)
-	Fmessage (2, ((Lisp_Object [])
-	  { build_string ("Growing hash table to: %d"),
-	    make_number (new_size) }));
+	CALLN (Fmessage, build_string ("Growing hash table to: %d"),
+	       make_number (new_size));
 #endif
 
       set_hash_key_and_value (h, larger_vector (h->key_and_value,
@@ -4762,17 +4732,10 @@ FUNCTION is called with two arguments, KEY and VALUE.
   (Lisp_Object function, Lisp_Object table)
 {
   struct Lisp_Hash_Table *h = check_hash_table (table);
-  Lisp_Object args[3];
-  ptrdiff_t i;
 
-  for (i = 0; i < HASH_TABLE_SIZE (h); ++i)
+  for (ptrdiff_t i = 0; i < HASH_TABLE_SIZE (h); ++i)
     if (!NILP (HASH_HASH (h, i)))
-      {
-	args[0] = function;
-	args[1] = HASH_KEY (h, i);
-	args[2] = HASH_VALUE (h, i);
-	Ffuncall (3, args);
-      }
+      call2 (function, HASH_KEY (h, i), HASH_VALUE (h, i));
 
   return Qnil;
 }
@@ -4914,11 +4877,9 @@ secure_hash (Lisp_Object algorithm, Lisp_Object object, Lisp_Object start,
 	      if (NILP (coding_system) && !NILP (Fbuffer_file_name (object)))
 		{
 		  /* Check file-coding-system-alist.  */
-		  Lisp_Object args[4], val;
-
-		  args[0] = Qwrite_region; args[1] = start; args[2] = end;
-		  args[3] = Fbuffer_file_name (object);
-		  val = Ffind_operation_coding_system (4, args);
+		  Lisp_Object val = CALLN (Ffind_operation_coding_system,
+					   Qwrite_region, start, end,
+					   Fbuffer_file_name (object));
 		  if (CONSP (val) && !NILP (XCDR (val)))
 		    coding_system = XCDR (val);
 		}
@@ -5132,7 +5093,7 @@ syms_of_fns (void)
   DEFVAR_LISP ("features", Vfeatures,
     doc: /* A list of symbols which are the features of the executing Emacs.
 Used by `featurep' and `require', and altered by `provide'.  */);
-  Vfeatures = list1 (intern_c_string ("emacs"));
+  Vfeatures = list1 (Qemacs);
   DEFSYM (Qsubfeatures, "subfeatures");
   DEFSYM (Qfuncall, "funcall");
 

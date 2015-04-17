@@ -244,8 +244,9 @@ options were specified.
 
 @item
 If the option @code{--daemon} was specified, it calls
-@code{server-start} and detaches from the controlling terminal.
-@xref{Emacs Server,,, emacs, The GNU Emacs Manual}.
+@code{server-start}, and on Posix systems also detaches from the
+controlling terminal.  @xref{Emacs Server,,, emacs, The GNU Emacs
+Manual}.
 
 @item
 If started by the X session manager, it calls
@@ -973,7 +974,7 @@ to access the value of @var{variable}.  If @var{value} is omitted or
 removes @var{variable} from the environment.  Otherwise, @var{value}
 should be a string.
 
-@c FIXME: Document `substitute-env-vars'?  --xfq
+@c FIXME: Document 'substitute-env-vars'?  --xfq
 If the optional argument @var{substitute} is non-@code{nil}, Emacs
 calls the function @code{substitute-env-vars} to expand any
 environment variables in @var{value}.
@@ -2383,7 +2384,7 @@ The path to a sound file to play when the notification pops up.
 @item :sound-name @var{name}
 A themable named sound from the freedesktop.org sound naming
 specification from @samp{$XDG_DATA_DIRS/sounds}, to play when the
-notification pops up.  Similar to the icon name, only for sounds. An
+notification pops up.  Similar to the icon name, only for sounds.  An
 example would be @samp{"message-new-instant"}.
 
 @item :suppress-sound
@@ -2392,9 +2393,9 @@ ability.
 
 @item :resident
 When set the server will not automatically remove the notification
-when an action has been invoked. The notification will remain resident
+when an action has been invoked.  The notification will remain resident
 in the server until it is explicitly removed by the user or by the
-sender. This hint is likely only useful when the server has the
+sender.  This hint is likely only useful when the server has the
 @code{:persistence} capability.
 
 @item :transient

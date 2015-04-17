@@ -56,6 +56,7 @@ AC_DEFUN([gl_EARLY],
   # Code from module crypto/sha256:
   # Code from module crypto/sha512:
   # Code from module dirent:
+  # Code from module dirfd:
   # Code from module dosname:
   # Code from module dtoastr:
   # Code from module dtotimespec:
@@ -84,6 +85,7 @@ AC_DEFUN([gl_EARLY],
   # Code from module gettext-h:
   # Code from module gettime:
   # Code from module gettimeofday:
+  # Code from module gitlog-to-changelog:
   # Code from module group-member:
   # Code from module include_next:
   # Code from module intprops:
@@ -394,6 +396,7 @@ AC_DEFUN([gl_INIT],
   gl_UTIMENS
   AC_C_VARARRAYS
   gl_gnulib_enabled_260941c0e5dc67ec9e87d1fb321c300b=false
+  gl_gnulib_enabled_dirfd=false
   gl_gnulib_enabled_dosname=false
   gl_gnulib_enabled_euidaccess=false
   gl_gnulib_enabled_getdtablesize=false
@@ -414,6 +417,18 @@ AC_DEFUN([gl_INIT],
     if ! $gl_gnulib_enabled_260941c0e5dc67ec9e87d1fb321c300b; then
       AC_LIBOBJ([openat-proc])
       gl_gnulib_enabled_260941c0e5dc67ec9e87d1fb321c300b=true
+    fi
+  }
+  func_gl_gnulib_m4code_dirfd ()
+  {
+    if ! $gl_gnulib_enabled_dirfd; then
+      gl_FUNC_DIRFD
+      if test $ac_cv_func_dirfd = no && test $gl_cv_func_dirfd_macro = no; then
+        AC_LIBOBJ([dirfd])
+        gl_PREREQ_DIRFD
+      fi
+      gl_DIRENT_MODULE_INDICATOR([dirfd])
+      gl_gnulib_enabled_dirfd=true
     fi
   }
   func_gl_gnulib_m4code_dosname ()
@@ -595,6 +610,9 @@ AC_DEFUN([gl_INIT],
   if test $HAVE_FDOPENDIR = 0; then
     func_gl_gnulib_m4code_260941c0e5dc67ec9e87d1fb321c300b
   fi
+  if test $HAVE_FDOPENDIR = 0; then
+    func_gl_gnulib_m4code_dirfd
+  fi
   if test $HAVE_FSTATAT = 0 || test $REPLACE_FSTATAT = 1; then
     func_gl_gnulib_m4code_260941c0e5dc67ec9e87d1fb321c300b
   fi
@@ -636,6 +654,7 @@ AC_DEFUN([gl_INIT],
   fi
   m4_pattern_allow([^gl_GNULIB_ENABLED_])
   AM_CONDITIONAL([gl_GNULIB_ENABLED_260941c0e5dc67ec9e87d1fb321c300b], [$gl_gnulib_enabled_260941c0e5dc67ec9e87d1fb321c300b])
+  AM_CONDITIONAL([gl_GNULIB_ENABLED_dirfd], [$gl_gnulib_enabled_dirfd])
   AM_CONDITIONAL([gl_GNULIB_ENABLED_dosname], [$gl_gnulib_enabled_dosname])
   AM_CONDITIONAL([gl_GNULIB_ENABLED_euidaccess], [$gl_gnulib_enabled_euidaccess])
   AM_CONDITIONAL([gl_GNULIB_ENABLED_getdtablesize], [$gl_gnulib_enabled_getdtablesize])
@@ -792,6 +811,7 @@ AC_DEFUN([gltests_LIBSOURCES], [
 # This macro records the list of files which have been installed by
 # gnulib-tool and may be removed by future gnulib-tool invocations.
 AC_DEFUN([gl_FILE_LIST], [
+  build-aux/gitlog-to-changelog
   build-aux/snippet/_Noreturn.h
   build-aux/snippet/arg-nonnull.h
   build-aux/snippet/c++defs.h
@@ -822,6 +842,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/count-trailing-zeros.c
   lib/count-trailing-zeros.h
   lib/dirent.in.h
+  lib/dirfd.c
   lib/dosname.h
   lib/dtoastr.c
   lib/dtotimespec.c
@@ -940,6 +961,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/count-one-bits.m4
   m4/count-trailing-zeros.m4
   m4/dirent_h.m4
+  m4/dirfd.m4
   m4/dup2.m4
   m4/environ.m4
   m4/errno_h.m4

@@ -230,14 +230,35 @@ Blank lines separate paragraphs.  Semicolons start comments.
   (defvar xref-find-function)
   (defvar xref-identifier-completion-table-function)
   (lisp-mode-variables nil nil 'elisp)
+  (add-hook 'after-load-functions #'elisp--font-lock-flush-elisp-buffers)
+  (setq-local electric-pair-text-pairs
+              (cons '(?\` . ?\') electric-pair-text-pairs))
   (setq imenu-case-fold-search nil)
-  (setq-local eldoc-documentation-function
-              #'elisp-eldoc-documentation-function)
+  (add-function :before-until (local 'eldoc-documentation-function)
+                #'elisp-eldoc-documentation-function)
   (setq-local xref-find-function #'elisp-xref-find)
   (setq-local xref-identifier-completion-table-function
               #'elisp--xref-identifier-completion-table)
   (add-hook 'completion-at-point-functions
             #'elisp-completion-at-point nil 'local))
+
+;; Font-locking support.
+
+(defun elisp--font-lock-flush-elisp-buffers (&optional file)
+  ;; FIXME: Aren't we only ever called from after-load-functions?
+  ;; Don't flush during load unless called from after-load-functions.
+  ;; In that case, FILE is non-nil.  It's somehow strange that
+  ;; load-in-progress is t when an after-load-function is called since
+  ;; that should run *after* the load...
+  (when (or (not load-in-progress) file)
+    ;; FIXME: If the loaded file did not define any macros, there shouldn't
+    ;; be any need to font-lock-flush all the Elisp buffers.
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+	(when (derived-mode-p 'emacs-lisp-mode)
+          ;; So as to take into account new macros that may have been defined
+          ;; by the just-loaded file.
+	  (font-lock-flush))))))
 
 ;;; Completion at point for Elisp
 
@@ -883,10 +904,11 @@ If CHAR is not a character, return nil."
 
 (defun elisp--eval-last-sexp (eval-last-sexp-arg-internal)
   "Evaluate sexp before point; print value in the echo area.
-With argument, print output into current buffer.
-With a zero prefix arg, print output with no limit on the length
-and level of lists, and include additional formats for integers
-\(octal, hexadecimal, and character)."
+If EVAL-LAST-SEXP-ARG-INTERNAL is non-nil, print output into
+current buffer.  If EVAL-LAST-SEXP-ARG-INTERNAL is `0', print
+output with no limit on the length and level of lists, and
+include additional formats for integers \(octal, hexadecimal, and
+character)."
   (let ((standard-output (if eval-last-sexp-arg-internal (current-buffer) t)))
     ;; Setup the lexical environment if lexical-binding is enabled.
     (elisp--eval-last-sexp-print-value

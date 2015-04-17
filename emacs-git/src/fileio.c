@@ -186,37 +186,17 @@ void
 report_file_errno (char const *string, Lisp_Object name, int errorno)
 {
   Lisp_Object data = CONSP (name) || NILP (name) ? name : list1 (name);
-  Lisp_Object errstring;
-  char *str;
-
   synchronize_system_messages_locale ();
-  str = strerror (errorno);
-  errstring = code_convert_string_norecord (build_unibyte_string (str),
-					    Vlocale_coding_system, 0);
+  char *str = strerror (errorno);
+  Lisp_Object errstring
+    = code_convert_string_norecord (build_unibyte_string (str),
+				    Vlocale_coding_system, 0);
+  Lisp_Object errdata = Fcons (errstring, data);
 
-  while (1)
-    switch (errorno)
-      {
-      case EEXIST:
-	xsignal (Qfile_already_exists, Fcons (errstring, data));
-	break;
-      default:
-	/* System error messages are capitalized.  Downcase the initial
-	   unless it is followed by a slash.  (The slash case caters to
-	   error messages that begin with "I/O" or, in German, "E/A".)  */
-	if (STRING_MULTIBYTE (errstring)
-	    && ! EQ (Faref (errstring, make_number (1)), make_number ('/')))
-	  {
-	    int c;
-
-	    str = SSDATA (errstring);
-	    c = STRING_CHAR ((unsigned char *) str);
-	    Faset (errstring, make_number (0), make_number (downcase (c)));
-	  }
-
-	xsignal (Qfile_error,
-		 Fcons (build_string (string), Fcons (errstring, data)));
-      }
+  if (errorno == EEXIST)
+    xsignal (Qfile_already_exists, errdata);
+  else
+    xsignal (Qfile_error, Fcons (build_string (string), errdata));
 }
 
 /* Signal a file-access failure that set errno.  STRING describes the
@@ -744,20 +724,16 @@ make_temp_name (Lisp_Object prefix, bool base64_p)
 
 DEFUN ("make-temp-name", Fmake_temp_name, Smake_temp_name, 1, 1, 0,
        doc: /* Generate temporary file name (string) starting with PREFIX (a string).
-The Emacs process number forms part of the result,
-so there is no danger of generating a name being used by another process.
+The Emacs process number forms part of the result, so there is no
+danger of generating a name being used by another Emacs process
+\(so long as only a single host can access the containing directory...).
 
-In addition, this function makes an attempt to choose a name
-which has no existing file.  To make this work,
-PREFIX should be an absolute file name.
+This function tries to choose a name that has no existing file.
+For this to work, PREFIX should be an absolute file name.
 
 There is a race condition between calling `make-temp-name' and creating the
-file which opens all kinds of security holes.  For that reason, you should
-probably use `make-temp-file' instead, except in three circumstances:
-
-* If you are creating the file in the user's home directory.
-* If you are creating a directory rather than an ordinary file.
-* If you are taking special precautions as `make-temp-file' does.  */)
+file, which opens all kinds of security holes.  For that reason, you should
+normally use `make-temp-file' instead.  */)
   (Lisp_Object prefix)
 {
   return make_temp_name (prefix, 0);
@@ -2368,62 +2344,62 @@ This is what happens in interactive use with M-x.  */)
 
 DEFUN ("make-symbolic-link", Fmake_symbolic_link, Smake_symbolic_link, 2, 3,
        "FMake symbolic link to file: \nGMake symbolic link to file %s: \np",
-       doc: /* Make a symbolic link to FILENAME, named LINKNAME.
+       doc: /* Make a symbolic link to TARGET, named LINKNAME.
 Both args must be strings.
 Signals a `file-already-exists' error if a file LINKNAME already exists
 unless optional third argument OK-IF-ALREADY-EXISTS is non-nil.
 A number as third arg means request confirmation if LINKNAME already exists.
 This happens for interactive use with M-x.  */)
-  (Lisp_Object filename, Lisp_Object linkname, Lisp_Object ok_if_already_exists)
+  (Lisp_Object target, Lisp_Object linkname, Lisp_Object ok_if_already_exists)
 {
   Lisp_Object handler;
-  Lisp_Object encoded_filename, encoded_linkname;
+  Lisp_Object encoded_target, encoded_linkname;
   struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
 
-  GCPRO4 (filename, linkname, encoded_filename, encoded_linkname);
-  encoded_filename = encoded_linkname = Qnil;
-  CHECK_STRING (filename);
+  GCPRO4 (target, linkname, encoded_target, encoded_linkname);
+  encoded_target = encoded_linkname = Qnil;
+  CHECK_STRING (target);
   CHECK_STRING (linkname);
   /* If the link target has a ~, we must expand it to get
      a truly valid file name.  Otherwise, do not expand;
      we want to permit links to relative file names.  */
-  if (SREF (filename, 0) == '~')
-    filename = Fexpand_file_name (filename, Qnil);
+  if (SREF (target, 0) == '~')
+    target = Fexpand_file_name (target, Qnil);
 
   if (!NILP (Ffile_directory_p (linkname)))
-    linkname = Fexpand_file_name (Ffile_name_nondirectory (filename), linkname);
+    linkname = Fexpand_file_name (Ffile_name_nondirectory (target), linkname);
   else
     linkname = Fexpand_file_name (linkname, Qnil);
 
   /* If the file name has special constructs in it,
      call the corresponding file handler.  */
-  handler = Ffind_file_name_handler (filename, Qmake_symbolic_link);
+  handler = Ffind_file_name_handler (target, Qmake_symbolic_link);
   if (!NILP (handler))
-    RETURN_UNGCPRO (call4 (handler, Qmake_symbolic_link, filename,
+    RETURN_UNGCPRO (call4 (handler, Qmake_symbolic_link, target,
 			   linkname, ok_if_already_exists));
 
   /* If the new link name has special constructs in it,
      call the corresponding file handler.  */
   handler = Ffind_file_name_handler (linkname, Qmake_symbolic_link);
   if (!NILP (handler))
-    RETURN_UNGCPRO (call4 (handler, Qmake_symbolic_link, filename,
+    RETURN_UNGCPRO (call4 (handler, Qmake_symbolic_link, target,
 			   linkname, ok_if_already_exists));
 
-  encoded_filename = ENCODE_FILE (filename);
+  encoded_target = ENCODE_FILE (target);
   encoded_linkname = ENCODE_FILE (linkname);
 
   if (NILP (ok_if_already_exists)
       || INTEGERP (ok_if_already_exists))
     barf_or_query_if_file_exists (linkname, false, "make it a link",
 				  INTEGERP (ok_if_already_exists), false);
-  if (symlink (SSDATA (encoded_filename), SSDATA (encoded_linkname)) < 0)
+  if (symlink (SSDATA (encoded_target), SSDATA (encoded_linkname)) < 0)
     {
       /* If we didn't complain already, silently delete existing file.  */
       int symlink_errno;
       if (errno == EEXIST)
 	{
 	  unlink (SSDATA (encoded_linkname));
-	  if (symlink (SSDATA (encoded_filename), SSDATA (encoded_linkname))
+	  if (symlink (SSDATA (encoded_target), SSDATA (encoded_linkname))
 	      >= 0)
 	    {
 	      UNGCPRO;
@@ -2438,7 +2414,7 @@ This happens for interactive use with M-x.  */)
 	}
 
       symlink_errno = errno;
-      report_file_errno ("Making symbolic link", list2 (filename, linkname),
+      report_file_errno ("Making symbolic link", list2 (target, linkname),
 			 symlink_errno);
     }
   UNGCPRO;
@@ -2812,7 +2788,8 @@ or if SELinux is disabled, or if Emacs lacks SELinux support.  */)
   (Lisp_Object filename)
 {
   Lisp_Object absname;
-  Lisp_Object values[4];
+  Lisp_Object user = Qnil, role = Qnil, type = Qnil, range = Qnil;
+
   Lisp_Object handler;
 #if HAVE_LIBSELINUX
   security_context_t con;
@@ -2830,10 +2807,6 @@ or if SELinux is disabled, or if Emacs lacks SELinux support.  */)
 
   absname = ENCODE_FILE (absname);
 
-  values[0] = Qnil;
-  values[1] = Qnil;
-  values[2] = Qnil;
-  values[3] = Qnil;
 #if HAVE_LIBSELINUX
   if (is_selinux_enabled ())
     {
@@ -2842,20 +2815,20 @@ or if SELinux is disabled, or if Emacs lacks SELinux support.  */)
 	{
 	  context = context_new (con);
 	  if (context_user_get (context))
-	    values[0] = build_string (context_user_get (context));
+	    user = build_string (context_user_get (context));
 	  if (context_role_get (context))
-	    values[1] = build_string (context_role_get (context));
+	    role = build_string (context_role_get (context));
 	  if (context_type_get (context))
-	    values[2] = build_string (context_type_get (context));
+	    type = build_string (context_type_get (context));
 	  if (context_range_get (context))
-	    values[3] = build_string (context_range_get (context));
+	    range = build_string (context_range_get (context));
 	  context_free (context);
 	  freecon (con);
 	}
     }
 #endif
 
-  return Flist (ARRAYELTS (values), values);
+  return list4 (user, role, type, range);
 }
 
 DEFUN ("set-file-selinux-context", Fset_file_selinux_context,
@@ -3673,11 +3646,9 @@ by calling `format-decode', which see.  */)
 	    {
 	      /* If we have not yet decided a coding system, check
                  file-coding-system-alist.  */
-	      Lisp_Object args[6];
-
-	      args[0] = Qinsert_file_contents, args[1] = orig_filename;
-	      args[2] = visit, args[3] = beg, args[4] = end, args[5] = replace;
-	      coding_system = Ffind_operation_coding_system (6, args);
+	      coding_system = CALLN (Ffind_operation_coding_system,
+				     Qinsert_file_contents, orig_filename,
+				     visit, beg, end, replace);
 	      if (CONSP (coding_system))
 		coding_system = XCAR (coding_system);
 	    }
@@ -4194,7 +4165,7 @@ by calling `format-decode', which see.  */)
       Vdeactivate_mark = old_Vdeactivate_mark;
     }
   else
-    Vdeactivate_mark = Qt;
+    Fset (Qdeactivate_mark, Qt);
 
   emacs_close (fd);
   clear_unwind_protect (fd_index);
@@ -4254,11 +4225,9 @@ by calling `format-decode', which see.  */)
 	    {
 	      /* If the coding system is not yet decided, check
 		 file-coding-system-alist.  */
-	      Lisp_Object args[6];
-
-	      args[0] = Qinsert_file_contents, args[1] = orig_filename;
-	      args[2] = visit, args[3] = beg, args[4] = end, args[5] = Qnil;
-	      coding_system = Ffind_operation_coding_system (6, args);
+	      coding_system = CALLN (Ffind_operation_coding_system,
+				     Qinsert_file_contents, orig_filename,
+				     visit, beg, end, Qnil);
 	      if (CONSP (coding_system))
 		coding_system = XCAR (coding_system);
 	    }
@@ -4586,12 +4555,9 @@ choose_write_coding_system (Lisp_Object start, Lisp_Object end, Lisp_Object file
       if (NILP (val))
 	{
 	  /* Check file-coding-system-alist.  */
-	  Lisp_Object args[7], coding_systems;
-
-	  args[0] = Qwrite_region; args[1] = start; args[2] = end;
-	  args[3] = filename; args[4] = append; args[5] = visit;
-	  args[6] = lockname;
-	  coding_systems = Ffind_operation_coding_system (7, args);
+	  Lisp_Object coding_systems
+	    = CALLN (Ffind_operation_coding_system, Qwrite_region, start, end,
+		     filename, append, visit, lockname);
 	  if (CONSP (coding_systems) && !NILP (XCDR (coding_systems)))
 	    val = XCDR (coding_systems);
 	}
@@ -5044,10 +5010,7 @@ DEFUN ("car-less-than-car", Fcar_less_than_car, Scar_less_than_car, 2, 2, 0,
        doc: /* Return t if (car A) is numerically less than (car B).  */)
   (Lisp_Object a, Lisp_Object b)
 {
-  Lisp_Object args[2];
-  args[0] = Fcar (a);
-  args[1] = Fcar (b);
-  return Flss (2, args);
+  return CALLN (Flss, Fcar (a), Fcar (b));
 }
 
 /* Build the complete list of annotations appropriate for writing out
@@ -5066,7 +5029,7 @@ build_annotations (Lisp_Object start, Lisp_Object end)
   struct gcpro gcpro1, gcpro2;
   Lisp_Object original_buffer;
   int i;
-  bool used_global = 0;
+  bool used_global = false;
 
   XSETBUFFER (original_buffer, current_buffer);
 
@@ -5078,11 +5041,10 @@ build_annotations (Lisp_Object start, Lisp_Object end)
       struct buffer *given_buffer = current_buffer;
       if (EQ (Qt, XCAR (p)) && !used_global)
 	{ /* Use the global value of the hook.  */
-	  Lisp_Object arg[2];
-	  used_global = 1;
-	  arg[0] = Fdefault_value (Qwrite_region_annotate_functions);
-	  arg[1] = XCDR (p);
-	  p = Fappend (2, arg);
+	  used_global = true;
+	  p = CALLN (Fappend,
+		     Fdefault_value (Qwrite_region_annotate_functions),
+		     XCDR (p));
 	  continue;
 	}
       Vwrite_region_annotations_so_far = annotations;
@@ -5411,9 +5373,8 @@ auto_save_error (Lisp_Object error_val)
   ring_bell (XFRAME (selected_frame));
 
   AUTO_STRING (format, "Auto-saving %s: %s");
-  msg = Fformat (3, ((Lisp_Object [])
-		     {format, BVAR (current_buffer, name),
-		      Ferror_message_string (error_val)}));
+  msg = CALLN (Fformat, format, BVAR (current_buffer, name),
+	       Ferror_message_string (error_val));
   GCPRO1 (msg);
 
   for (i = 0; i < 3; ++i)

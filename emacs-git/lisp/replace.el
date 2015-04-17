@@ -68,14 +68,12 @@ to the minibuffer that reads the string to replace, or invoke replacements
 from Isearch by using a key sequence like `C-s C-s M-%'." "24.3")
 
 (defcustom query-replace-from-to-separator
-  (propertize
-   (or (ignore-errors
-	 ;; Ignore errors when attempt to autoload char-displayable-p
-	 ;; fails while preparing to dump.
-	 (if (char-displayable-p ?\u2192) " \u2192 " " -> "))
-       " -> ")
-   'face 'minibuffer-prompt)
+  (propertize (if (char-displayable-p ?\u2192) " \u2192 " " -> ")
+              'face 'minibuffer-prompt)
   "String that separates FROM and TO in the history of replacement pairs."
+  ;; Avoids error when attempt to autoload char-displayable-p fails
+  ;; while preparing to dump, also stops customize-rogue listing this.
+  :initialize 'custom-initialize-delay
   :group 'matching
   :type 'sexp
   :version "25.1")
@@ -1369,7 +1367,7 @@ See also `multi-occur-in-matching-buffers'."
 	   (ido-ignore-item-temp-list bufs))
       (while (not (string-equal
 		   (setq buf (read-buffer
-			      (if (eq read-buffer-function 'ido-read-buffer)
+			      (if (eq read-buffer-function #'ido-read-buffer)
 				  "Next buffer to search (C-j to end): "
 				"Next buffer to search (RET to end): ")
 			      nil t))

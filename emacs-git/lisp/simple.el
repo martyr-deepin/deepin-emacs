@@ -1407,8 +1407,8 @@ display the result of expression evaluation."
     (minibuffer-with-setup-hook
         (lambda ()
           ;; FIXME: call emacs-lisp-mode?
-          (setq-local eldoc-documentation-function
-                      #'elisp-eldoc-documentation-function)
+          (add-function :before-until (local 'eldoc-documentation-function)
+                        #'elisp-eldoc-documentation-function)
           (add-hook 'completion-at-point-functions
                     #'elisp-completion-at-point nil t)
           (run-hooks 'eval-expression-minibuffer-setup-hook))
@@ -1776,6 +1776,7 @@ in this use of the minibuffer.")
 
 (defun minibuffer-avoid-prompt (_new _old)
   "A point-motion hook for the minibuffer, that moves point out of the prompt."
+  (declare (obsolete cursor-intangible-mode "25.1"))
   (constrain-to-field nil (point-max)))
 
 (defcustom minibuffer-history-case-insensitive-variables nil
@@ -1940,7 +1941,9 @@ The argument NABS specifies the absolute history position."
 	(user-error (if minibuffer-default
                         "End of defaults; no next item"
                       "End of history; no default available")))
-    (if (> nabs (length (symbol-value minibuffer-history-variable)))
+    (if (> nabs (if (listp (symbol-value minibuffer-history-variable))
+                    (length (symbol-value minibuffer-history-variable))
+                  0))
 	(user-error "Beginning of history; no preceding item"))
     (unless (memq last-command '(next-history-element
 				 previous-history-element))
@@ -1990,7 +1993,14 @@ When point moves over the bottom line of multi-line minibuffer, puts ARGth
 next element of the minibuffer history in the minibuffer."
   (interactive "^p")
   (or arg (setq arg 1))
-  (let ((old-point (point)))
+  (let* ((old-point (point))
+	 ;; Remember the original goal column of possibly multi-line input
+	 ;; excluding the length of the prompt on the first line.
+	 (prompt-end (minibuffer-prompt-end))
+	 (old-column (unless (and (eolp) (> (point) prompt-end))
+		       (if (= (line-number-at-pos) 1)
+			   (max (- (current-column) (1- prompt-end)) 0)
+			 (current-column)))))
     (condition-case nil
 	(with-no-warnings
 	  (next-line arg))
@@ -1998,7 +2008,14 @@ next element of the minibuffer history in the minibuffer."
        ;; Restore old position since `line-move-visual' moves point to
        ;; the end of the line when it fails to go to the next line.
        (goto-char old-point)
-       (next-history-element arg)))))
+       (next-history-element arg)
+       ;; Restore the original goal column on the last line
+       ;; of possibly multi-line input.
+       (goto-char (point-max))
+       (when old-column
+	 (if (= (line-number-at-pos) 1)
+	     (move-to-column (+ old-column (1- (minibuffer-prompt-end))))
+	   (move-to-column old-column)))))))
 
 (defun previous-line-or-history-element (&optional arg)
   "Move cursor vertically up ARG lines, or to the previous history element.
@@ -2006,7 +2023,14 @@ When point moves over the top line of multi-line minibuffer, puts ARGth
 previous element of the minibuffer history in the minibuffer."
   (interactive "^p")
   (or arg (setq arg 1))
-  (let ((old-point (point)))
+  (let* ((old-point (point))
+	 ;; Remember the original goal column of possibly multi-line input
+	 ;; excluding the length of the prompt on the first line.
+	 (prompt-end (minibuffer-prompt-end))
+	 (old-column (unless (and (eolp) (> (point) prompt-end))
+		       (if (= (line-number-at-pos) 1)
+			   (max (- (current-column) (1- prompt-end)) 0)
+			 (current-column)))))
     (condition-case nil
 	(with-no-warnings
 	  (previous-line arg))
@@ -2014,7 +2038,15 @@ previous element of the minibuffer history in the minibuffer."
        ;; Restore old position since `line-move-visual' moves point to
        ;; the beginning of the line when it fails to go to the previous line.
        (goto-char old-point)
-       (previous-history-element arg)))))
+       (previous-history-element arg)
+       ;; Restore the original goal column on the first line
+       ;; of possibly multi-line input.
+       (goto-char (minibuffer-prompt-end))
+       (if old-column
+	   (if (= (line-number-at-pos) 1)
+	       (move-to-column (+ old-column (1- (minibuffer-prompt-end))))
+	     (move-to-column old-column))
+	 (goto-char (line-end-position)))))))
 
 (defun next-complete-history-element (n)
   "Get next history element which completes the minibuffer before the point.
@@ -4326,7 +4358,7 @@ When this command inserts killed text into the buffer, it honors
 doc string for `insert-for-yank-1', which see."
   (interactive "*p")
   (if (not (eq last-command 'yank))
-      (error "Previous command was not a yank"))
+      (user-error "Previous command was not a yank"))
   (setq this-command 'yank)
   (unless arg (setq arg 1))
   (let ((inhibit-read-only t)
@@ -4776,7 +4808,8 @@ run `deactivate-mark-hook'."
       ;; the region prior to the last command modifying the buffer.
       ;; Set the selection to that, or to the current region.
       (cond (saved-region-selection
-	     (gui-set-selection 'PRIMARY saved-region-selection)
+	     (if (gui-call gui-selection-owner-p 'PRIMARY)
+		 (gui-set-selection 'PRIMARY saved-region-selection))
 	     (setq saved-region-selection nil))
 	    ;; If another program has acquired the selection, region
 	    ;; deactivation should not clobber it (Bug#11772).
@@ -4865,7 +4898,7 @@ For some commands, it may be appropriate to ignore the value of
        (or use-empty-active-region (> (region-end) (region-beginning)))))
 
 (defun region-active-p ()
-  "Return t if Transient Mark mode is enabled and the mark is active.
+  "Return non-nil if Transient Mark mode is enabled and the mark is active.
 
 Some commands act specially on the region when Transient Mark
 mode is enabled.  Usually, such commands should use
@@ -4876,7 +4909,7 @@ also checks the value of `use-empty-active-region'."
        ;; without the mark being set (e.g. bug#17324).  We really should fix
        ;; that problem, but in the mean time, let's make sure we don't say the
        ;; region is active when there's no mark.
-       (mark)))
+       (progn (cl-assert (mark)) t)))
 
 
 (defvar redisplay-unhighlight-region-function
@@ -4902,37 +4935,41 @@ also checks the value of `use-empty-active-region'."
       rol)))
 
 (defun redisplay--update-region-highlight (window)
-  (with-current-buffer (window-buffer window)
-    (let ((rol (window-parameter window 'internal-region-overlay)))
-      (if (not (region-active-p))
-          (funcall redisplay-unhighlight-region-function rol)
-        (let* ((pt (window-point window))
-               (mark (mark))
-               (start (min pt mark))
-               (end   (max pt mark))
-               (new
-                (funcall redisplay-highlight-region-function
-                         start end window rol)))
-          (unless (equal new rol)
-            (set-window-parameter window 'internal-region-overlay
-                                  new)))))))
+  (let ((rol (window-parameter window 'internal-region-overlay)))
+    (if (not (and (region-active-p)
+                  (or highlight-nonselected-windows
+                      (eq window (selected-window))
+                      (and (window-minibuffer-p)
+                           (eq window (minibuffer-selected-window))))))
+        (funcall redisplay-unhighlight-region-function rol)
+      (let* ((pt (window-point window))
+             (mark (mark))
+             (start (min pt mark))
+             (end   (max pt mark))
+             (new
+              (funcall redisplay-highlight-region-function
+                       start end window rol)))
+        (unless (equal new rol)
+          (set-window-parameter window 'internal-region-overlay
+                                new))))))
 
-(defun redisplay--update-region-highlights (windows)
-  (with-demoted-errors "redisplay--update-region-highlights: %S"
+(defvar pre-redisplay-functions (list #'redisplay--update-region-highlight)
+  "Hook run just before redisplay.
+It is called in each window that is to be redisplayed.  It takes one argument,
+which is the window that will be redisplayed.  When run, the `current-buffer'
+is set to the buffer displayed in that window.")
+
+(defun redisplay--pre-redisplay-functions (windows)
+  (with-demoted-errors "redisplay--pre-redisplay-functions: %S"
     (if (null windows)
-        (redisplay--update-region-highlight (selected-window))
-      (unless (listp windows) (setq windows (window-list-1 nil nil t)))
-      (if highlight-nonselected-windows
-          (mapc #'redisplay--update-region-highlight windows)
-        (let ((msw (and (window-minibuffer-p) (minibuffer-selected-window))))
-          (dolist (w windows)
-            (if (or (eq w (selected-window)) (eq w msw))
-                (redisplay--update-region-highlight w)
-              (funcall redisplay-unhighlight-region-function
-                       (window-parameter w 'internal-region-overlay)))))))))
+        (with-current-buffer (window-buffer (selected-window))
+          (run-hook-with-args 'pre-redisplay-functions (selected-window)))
+      (dolist (win (if (listp windows) windows (window-list-1 nil nil t)))
+        (with-current-buffer (window-buffer win)
+          (run-hook-with-args 'pre-redisplay-functions win))))))
 
 (add-function :before pre-redisplay-function
-              #'redisplay--update-region-highlights)
+              #'redisplay--pre-redisplay-functions)
 
 
 (defvar-local mark-ring nil
@@ -4958,7 +4995,7 @@ Start discarding off end if gets this big."
 \(Does not affect global mark ring)."
   (interactive)
   (if (null (mark t))
-      (error "No mark set in this buffer")
+      (user-error "No mark set in this buffer")
     (if (= (point) (mark t))
 	(message "Mark popped"))
     (goto-char (mark t))
@@ -5107,7 +5144,7 @@ mode temporarily."
   (let ((omark (mark t))
 	(temp-highlight (eq (car-safe transient-mark-mode) 'only)))
     (if (null omark)
-        (error "No mark set in this buffer"))
+        (user-error "No mark set in this buffer"))
     (set-mark (point))
     (goto-char omark)
     (cond (temp-highlight
@@ -5168,10 +5205,11 @@ positive, and disable it otherwise.  If called from Lisp, enable
 Transient Mark mode if ARG is omitted or nil.
 
 Transient Mark mode is a global minor mode.  When enabled, the
-region is highlighted whenever the mark is active.  The mark is
-\"deactivated\" by changing the buffer, and after certain other
-operations that set the mark but whose main purpose is something
-else--for example, incremental search, \\[beginning-of-buffer], and \\[end-of-buffer].
+region is highlighted with the `region' face whenever the mark
+is active.  The mark is \"deactivated\" by changing the buffer,
+and after certain other operations that set the mark but whose
+main purpose is something else--for example, incremental search,
+\\[beginning-of-buffer], and \\[end-of-buffer].
 
 You can also deactivate the mark by typing \\[keyboard-quit] or
 \\[keyboard-escape-quit].
@@ -5377,7 +5415,10 @@ lines."
 (declare-function font-info "font.c" (name &optional frame))
 
 (defun default-font-height ()
-  "Return the height in pixels of the current buffer's default face font."
+  "Return the height in pixels of the current buffer's default face font.
+
+If the default font is remapped (see `face-remapping-alist'), the
+function returns the height of the remapped face."
   (let ((default-font (face-font 'default)))
     (cond
      ((and (display-multi-font-p)
@@ -5387,6 +5428,25 @@ lines."
 	   (not (string= (frame-parameter nil 'font) default-font)))
       (aref (font-info default-font) 3))
      (t (frame-char-height)))))
+
+(defun default-font-width ()
+  "Return the width in pixels of the current buffer's default face font.
+
+If the default font is remapped (see `face-remapping-alist'), the
+function returns the width of the remapped face."
+  (let ((default-font (face-font 'default)))
+    (cond
+     ((and (display-multi-font-p)
+	   ;; Avoid calling font-info if the frame's default font was
+	   ;; not changed since the frame was created.  That's because
+	   ;; font-info is expensive for some fonts, see bug #14838.
+	   (not (string= (frame-parameter nil 'font) default-font)))
+      (let* ((info (font-info (face-font 'default)))
+	     (width (aref info 11)))
+	(if (> width 0)
+	    width
+	  (aref info 10))))
+     (t (frame-char-width)))))
 
 (defun default-line-height ()
   "Return the pixel height of current buffer's default-face text line.
@@ -6946,6 +7006,8 @@ More precisely, a char with closeparen syntax is self-inserted.")
              (not executing-kbd-macro)
              (not noninteractive)
 	     ;; Verify an even number of quoting characters precede the close.
+             ;; FIXME: Also check if this parenthesis closes a comment as
+             ;; can happen in Pascal and SML.
 	     (= 1 (logand 1 (- (point)
 			       (save-excursion
 				 (forward-char -1)

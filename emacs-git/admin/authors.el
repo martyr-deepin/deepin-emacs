@@ -27,6 +27,9 @@
 ;; Use M-x authors RET to create an *Authors* buffer that can used as
 ;; or merged with Emacs's AUTHORS file.
 
+;; FIXME: This needs to modernized in the light of current practice,
+;; which generates a single top-level ChangeLog file from commit logs.
+
 ;;; Code:
 
 (defvar authors-coding-system 'utf-8
@@ -76,7 +79,7 @@ files.")
     ("Gerd Möllmann" "Gerd Moellmann")
     ("Hallvard B. Furuseth" "Hallvard B Furuseth" "Hallvard Furuseth")
     ("Hrvoje Nikšić" "Hrvoje Niksic")
-    ;; lisp/org/ChangeLog 2010-11-11.
+    ;; lisp/org/ChangeLog.1 2010-11-11.
     (nil "aaa bbb")
     (nil "Code Extracted") ; lisp/newcomment.el's "Author:" header
     ("Jaeyoun Chung" "Jae-youn Chung" "Jae-you Chung" "Chung Jae-youn")
@@ -86,6 +89,7 @@ files.")
     ("Jens-Ulrik Holger Petersen" "Jens-Ulrik Petersen")
     ("Jeremy Bertram Maitin-Shepard" "Jeremy Maitin-Shepard")
     ("Johan Bockgård" "Johan Bockgard")
+    ("John F. Carr" "John F Carr")
     ("John J Foerch" "John Foerch")
     ("John W. Eaton" "John Eaton")
     ("Jonathan I. Kamens" "Jonathan Kamens")
@@ -243,6 +247,7 @@ If REALNAME is nil, ignore that author.")
   '(".*loaddefs.el$"			; not obsolete, but auto-generated
     "\\.\\(bzr\\|cvs\\|git\\)ignore$"		; obsolete or uninteresting
     "\\.arch-inventory$"
+    "ChangeLog\\(\\.[0-9]+\\)?\\'"
     "automated/data/"		   ; not interesting
     ;; TODO lib/? Matches other things?
     "build-aux/" "m4/" "Emacs.xcodeproj" "mapfiles" "\\.map\\'"
@@ -357,6 +362,7 @@ Changes to files matching one of the regexps in this list are not listed.")
     "All" "Version" "Everywhere" "Many" "Various" "files"
     ;; Directories.
     "vms" "mac" "url" "tree-widget"
+    "info/dir"
     )
   "List of files and directories to ignore.
 Changes to files in this list are not listed.")
@@ -796,6 +802,7 @@ in the repository.")
     ("play/bruce.el" . "bruce.el")
     ("play/yow.el" . "yow.el")
     ("patcomp.el" . "patcomp.el")
+    ("emulation/ws-mode.el" . "ws-mode.el")
     ;; From lisp to etc/forms.
     ("forms-d2.el" . "forms-d2.el")
     ("forms-pass.el" . "forms-pass.el")
@@ -967,10 +974,8 @@ Elements with LAX non-nil are only used in `authors-lax-changelogs'.")
 ;; Eg the progmodes/ (etc) directories did not exist before 1997.
 ;; Also, lib-src/ did not exist, the files were in etc/.
 ;; And various other things.
-;; Maybe this should just be any ChangeLog with a . extension,
-;; assuming we always fix logs fully before rotating them?
 (defconst authors-lax-changelogs
-  '("erc/ChangeLog\\.0[1-8]\\'"
+  '("erc/ChangeLog\\.1\\'"
     "gnus/ChangeLog\\.[1-2]\\'"
     "lisp/ChangeLog\\.\\([1-9]\\|1[0-5]\\)\\'"
     "mh-e/ChangeLog\\.1\\'"

@@ -136,8 +136,8 @@ ARGS is a list of the first N arguments to pass to FUN.
 The result is a new function which does the same as FUN, except that
 the first N arguments are fixed at the values with which this function
 was called."
-  `(closure (t) (&rest args)
-            (apply ',fun ,@(mapcar (lambda (arg) `',arg) args) args)))
+  (lambda (&rest args2)
+    (apply fun (append args args2))))
 
 (defmacro push (newelt place)
   "Add NEWELT to the list stored in the generalized variable PLACE.
@@ -316,7 +316,7 @@ Defaults to `error'."
   (unless parent (setq parent 'error))
   (let ((conditions
          (if (consp parent)
-             (apply #'nconc
+             (apply #'append
                     (mapcar (lambda (parent)
                               (cons parent
                                     (or (get parent 'error-conditions)
@@ -339,20 +339,41 @@ configuration."
 
 ;;;; List functions.
 
-(defsubst caar (x)
+;; Note: `internal--compiler-macro-cXXr' was copied from
+;; `cl--compiler-macro-cXXr' in cl-macs.el.  If you amend either one,
+;; you may want to amend the other, too.
+(defun internal--compiler-macro-cXXr (form x)
+  (let* ((head (car form))
+         (n (symbol-name (car form)))
+         (i (- (length n) 2)))
+    (if (not (string-match "c[ad]+r\\'" n))
+        (if (and (fboundp head) (symbolp (symbol-function head)))
+            (internal--compiler-macro-cXXr (cons (symbol-function head) (cdr form))
+                                     x)
+          (error "Compiler macro for cXXr applied to non-cXXr form"))
+      (while (> i (match-beginning 0))
+        (setq x (list (if (eq (aref n i) ?a) 'car 'cdr) x))
+        (setq i (1- i)))
+      x)))
+
+(defun caar (x)
   "Return the car of the car of X."
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (car x)))
 
-(defsubst cadr (x)
+(defun cadr (x)
   "Return the car of the cdr of X."
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (cdr x)))
 
-(defsubst cdar (x)
+(defun cdar (x)
   "Return the cdr of the car of X."
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (car x)))
 
-(defsubst cddr (x)
+(defun cddr (x)
   "Return the cdr of the cdr of X."
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (cdr x)))
 
 (defun last (list &optional n)
@@ -910,7 +931,7 @@ in a cleaner way with command remapping, like this:
 	    (nconc (nreverse skipped) newdef)))
       ;; Look past a symbol that names a keymap.
       (setq inner-def
-	    (or (indirect-function defn t) defn))
+	    (or (indirect-function defn) defn))
       ;; For nested keymaps, we use `inner-def' rather than `defn' so as to
       ;; avoid autoloading a keymap.  This is mostly done to preserve the
       ;; original non-autoloading behavior of pre-map-keymap times.
@@ -1082,7 +1103,12 @@ The return value is a positive integer."
 ;;;; Extracting fields of the positions in an event.
 
 (defun posnp (obj)
-  "Return non-nil if OBJ appears to be a valid `posn' object."
+  "Return non-nil if OBJ appears to be a valid `posn' object specifying a window.
+If OBJ is a valid `posn' object, but specifies a frame rather
+than a window, return nil."
+  ;; FIXME: Correct the behavior of this function so that all valid
+  ;; `posn' objects are recognized, after updating other code that
+  ;; depends on its present behavior.
   (and (windowp (car-safe obj))
        (atom (car-safe (setq obj (cdr obj))))                ;AREA-OR-POS.
        (integerp (car-safe (car-safe (setq obj (cdr obj))))) ;XOFFSET.
@@ -1142,24 +1168,28 @@ For a scroll-bar event, the result column is 0, and the row
 corresponds to the vertical position of the click in the scroll bar.
 POSITION should be a list of the form returned by the `event-start'
 and `event-end' functions."
-  (let* ((pair   (posn-x-y position))
-	 (window (posn-window position))
-	 (area   (posn-area position)))
+  (let* ((pair            (posn-x-y position))
+         (frame-or-window (posn-window position))
+         (frame           (if (framep frame-or-window)
+                              frame-or-window
+                            (window-frame frame-or-window)))
+         (window          (when (windowp frame-or-window) frame-or-window))
+         (area            (posn-area position)))
     (cond
-     ((null window)
+     ((null frame-or-window)
       '(0 . 0))
      ((eq area 'vertical-scroll-bar)
       (cons 0 (scroll-bar-scale pair (1- (window-height window)))))
      ((eq area 'horizontal-scroll-bar)
       (cons (scroll-bar-scale pair (window-width window)) 0))
      (t
-      (let* ((frame (if (framep window) window (window-frame window)))
-	     ;; FIXME: This should take line-spacing properties on
-	     ;; newlines into account.
-	     (spacing (when (display-graphic-p frame)
-			(or (with-current-buffer (window-buffer window)
-			      line-spacing)
-			    (frame-parameter frame 'line-spacing)))))
+      ;; FIXME: This should take line-spacing properties on
+      ;; newlines into account.
+      (let* ((spacing (when (display-graphic-p frame)
+                        (or (with-current-buffer
+                                (window-buffer (frame-selected-window frame))
+                              line-spacing)
+                            (frame-parameter frame 'line-spacing)))))
 	(cond ((floatp spacing)
 	       (setq spacing (truncate (* spacing
 					  (frame-char-height frame)))))
@@ -1265,6 +1295,7 @@ is converted into a string by expressing it in decimal."
 (set-advertised-calling-convention
  'all-completions '(string collection &optional predicate) "23.1")
 (set-advertised-calling-convention 'unintern '(name obarray) "23.3")
+(set-advertised-calling-convention 'indirect-function '(object) "25.1")
 (set-advertised-calling-convention 'redirect-frame-focus '(frame focus-frame) "24.3")
 (set-advertised-calling-convention 'decode-char '(ch charset) "21.4")
 (set-advertised-calling-convention 'encode-char '(ch charset) "21.4")
@@ -1891,6 +1922,30 @@ and the file name is displayed in the echo area."
 
 ;;;; Process stuff.
 
+(defun start-process (name buffer program &rest program-args)
+  "Start a program in a subprocess.  Return the process object for it.
+NAME is name for process.  It is modified if necessary to make it unique.
+BUFFER is the buffer (or buffer name) to associate with the process.
+
+Process output (both standard output and standard error streams) goes
+at end of BUFFER, unless you specify an output stream or filter
+function to handle the output.  BUFFER may also be nil, meaning that
+this process is not associated with any buffer.
+
+PROGRAM is the program file name.  It is searched for in `exec-path'
+\(which see).  If nil, just associate a pty with the buffer.  Remaining
+arguments are strings to give program as arguments.
+
+If you want to separate standard output from standard error, use
+`make-process' or invoke the command through a shell and redirect
+one of them using the shell syntax."
+  (unless (fboundp 'make-process)
+    (error "Emacs was compiled without subprocess support"))
+  (apply #'make-process
+	 (append (list :name name :buffer buffer)
+		 (if program
+		     (list :command (cons program program-args))))))
+
 (defun process-lines (program &rest args)
   "Execute PROGRAM with ARGS, returning its output as a list of lines.
 Signal an error if the program returns with a non-zero exit status."
@@ -1919,14 +1974,13 @@ process."
 
 ;; compatibility
 
-(make-obsolete
- 'process-kill-without-query
- "use `process-query-on-exit-flag' or `set-process-query-on-exit-flag'."
- "22.1")
 (defun process-kill-without-query (process &optional _flag)
   "Say no query needed if PROCESS is running when Emacs is exited.
 Optional second argument if non-nil says to require a query.
 Value is t if a query was formerly required."
+  (declare (obsolete
+            "use `process-query-on-exit-flag' or `set-process-query-on-exit-flag'."
+            "22.1"))
   (let ((old (process-query-on-exit-flag process)))
     (set-process-query-on-exit-flag process nil)
     old))
@@ -2703,12 +2757,12 @@ Otherwise, return nil."
 (defun special-form-p (object)
   "Non-nil if and only if OBJECT is a special form."
   (if (and (symbolp object) (fboundp object))
-      (setq object (indirect-function object t)))
+      (setq object (indirect-function object)))
   (and (subrp object) (eq (cdr (subr-arity object)) 'unevalled)))
 
 (defun macrop (object)
   "Non-nil if and only if OBJECT is a macro."
-  (let ((def (indirect-function object t)))
+  (let ((def (indirect-function object)))
     (when (consp def)
       (or (eq 'macro (car def))
           (and (autoloadp def) (memq (nth 4 def) '(macro t)))))))
@@ -3451,6 +3505,8 @@ LIMIT.
 
 As a general recommendation, try to avoid using `looking-back'
 wherever possible, since it is slow."
+  (declare
+   (advertised-calling-convention (regexp limit &optional greedy) "25.1"))
   (let ((start (point))
 	(pos
 	 (save-excursion
@@ -3888,9 +3944,7 @@ This function is called directly from the C code."
       ;; discard the file name regexp
       (mapc #'funcall (cdr a-l-element))))
   ;; Complain when the user uses obsolete files.
-  (when (save-match-data
-          (and (string-match "/obsolete/\\([^/]*\\)\\'" abs-file)
-               (not (equal "loaddefs.el" (match-string 1 abs-file)))))
+  (when (string-match-p "/obsolete/\\([^/]*\\)\\'" abs-file)
     ;; Maybe we should just use display-warning?  This seems yucky...
     (let* ((file (file-name-nondirectory abs-file))
 	   (msg (format "Package %s is obsolete!"

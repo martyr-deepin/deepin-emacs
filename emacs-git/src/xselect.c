@@ -531,6 +531,16 @@ static struct prop_location *property_change_reply_object;
 
 static struct prop_location *property_change_wait_list;
 
+static void
+set_property_change_object (struct prop_location *location)
+{
+  /* Input must be blocked so we don't get the event before we set these.  */
+  if (! input_blocked_p ())
+    emacs_abort ();
+  XSETCAR (property_change_reply, Qnil);
+  property_change_reply_object = location;
+}
+
 
 /* Send the reply to a selection request event EVENT.  */
 
@@ -633,6 +643,11 @@ x_reply_selection_request (struct input_event *event,
       {
 	int format_bytes = cs->format / 8;
 	bool had_errors_p = x_had_errors_p (display);
+
+        /* Must set this inside block_input ().  unblock_input may read
+           events and setting property_change_reply in
+           wait_for_property_change is then too late.  */
+        set_property_change_object (cs->wait_object);
 	unblock_input ();
 
 	bytes_remaining = cs->size;
@@ -673,6 +688,8 @@ x_reply_selection_request (struct input_event *event,
 			     : format_bytes);
 	    XFlush (display);
 	    had_errors_p = x_had_errors_p (display);
+            // See comment above about property_change_reply.
+            set_property_change_object (cs->wait_object);
 	    unblock_input ();
 
 	    if (had_errors_p) break;
@@ -817,14 +834,8 @@ x_handle_selection_request (struct input_event *event)
   /* Run the `x-sent-selection-functions' abnormal hook.  */
   if (!NILP (Vx_sent_selection_functions)
       && !EQ (Vx_sent_selection_functions, Qunbound))
-    {
-      Lisp_Object args[4];
-      args[0] = Qx_sent_selection_functions;
-      args[1] = selection_symbol;
-      args[2] = target_symbol;
-      args[3] = success ? Qt : Qnil;
-      Frun_hook_with_args (4, args);
-    }
+    CALLN (Frun_hook_with_args, Qx_sent_selection_functions,
+	   selection_symbol, target_symbol, success ? Qt : Qnil);
 
   unbind_to (count, Qnil);
   UNGCPRO;
@@ -937,12 +948,7 @@ x_handle_selection_clear (struct input_event *event)
   tset_selection_alist (dpyinfo->terminal, Vselection_alist);
 
   /* Run the `x-lost-selection-functions' abnormal hook.  */
-  {
-    Lisp_Object args[2];
-    args[0] = Qx_lost_selection_functions;
-    args[1] = selection_symbol;
-    Frun_hook_with_args (2, args);
-  }
+  CALLN (Frun_hook_with_args, Qx_lost_selection_functions, selection_symbol);
 
   redisplay_preserve_echo_area (20);
 }
@@ -978,10 +984,8 @@ x_clear_frame_selections (struct frame *f)
 	 && EQ (frame, XCAR (XCDR (XCDR (XCDR (XCAR (t->Vselection_alist)))))))
     {
       /* Run the `x-lost-selection-functions' abnormal hook.  */
-      Lisp_Object args[2];
-      args[0] = Qx_lost_selection_functions;
-      args[1] = Fcar (Fcar (t->Vselection_alist));
-      Frun_hook_with_args (2, args);
+      CALLN (Frun_hook_with_args, Qx_lost_selection_functions,
+	     Fcar (Fcar (t->Vselection_alist)));
 
       tset_selection_alist (t, XCDR (t->Vselection_alist));
     }
@@ -991,10 +995,8 @@ x_clear_frame_selections (struct frame *f)
     if (CONSP (XCDR (rest))
 	&& EQ (frame, XCAR (XCDR (XCDR (XCDR (XCAR (XCDR (rest))))))))
       {
-	Lisp_Object args[2];
-	args[0] = Qx_lost_selection_functions;
-	args[1] = XCAR (XCAR (XCDR (rest)));
-	Frun_hook_with_args (2, args);
+	CALLN (Frun_hook_with_args, Qx_lost_selection_functions,
+	       XCAR (XCAR (XCDR (rest))));
 	XSETCDR (rest, XCDR (XCDR (rest)));
 	break;
       }
@@ -1074,14 +1076,11 @@ wait_for_property_change (struct prop_location *location)
 {
   ptrdiff_t count = SPECPDL_INDEX ();
 
-  if (property_change_reply_object)
-    emacs_abort ();
-
   /* Make sure to do unexpect_property_change if we quit or err.  */
   record_unwind_protect_ptr (wait_for_property_change_unwind, location);
 
-  XSETCAR (property_change_reply, Qnil);
-  property_change_reply_object = location;
+  /* See comment in x_reply_selection_request about setting
+     property_change_reply.  Do not do it here.  */
 
   /* If the event we are waiting for arrives beyond here, it will set
      property_change_reply, because property_change_reply_object says so.  */
@@ -1396,6 +1395,8 @@ receive_incremental_selection (struct x_display_info *dpyinfo,
   wait_object = expect_property_change (display, window, property,
 					PropertyNewValue);
   XFlush (display);
+  // See comment in x_reply_selection_request about property_change_reply.
+  set_property_change_object (wait_object);
   unblock_input ();
 
   while (true)
@@ -1434,6 +1435,8 @@ receive_incremental_selection (struct x_display_info *dpyinfo,
       XDeleteProperty (display, window, property);
       wait_object = expect_property_change (display, window, property,
 					    PropertyNewValue);
+      // See comment in x_reply_selection_request about property_change_reply.
+      set_property_change_object (wait_object);
       XFlush (display);
       unblock_input ();
 
@@ -2138,7 +2141,7 @@ x_clipboard_manager_error_1 (Lisp_Object err)
 {
   AUTO_STRING (format, "X clipboard manager error: %s\n\
 If the problem persists, set `x-select-enable-clipboard-manager' to nil.");
-  Fmessage (2, (Lisp_Object []) {format, CAR (CDR (err))});
+  CALLN (Fmessage, format, CAR (CDR (err)));
   return Qnil;
 }
 

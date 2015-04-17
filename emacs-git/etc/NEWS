@@ -36,14 +36,31 @@ should be able to work around the problem either by porting the Emacs
 undumping code to GCC under IRIX, or by configuring --with-wide-int,
 or by sticking with Emacs 24.4.
 
+** 'configure' now prefers gnustep-config when configuring GNUstep.
+If gnustep-config is not available, the old heuristics are used.
+
 ---
-** The configure option `--with-pkg-config-prog' has been removed.
+** The configure option '--with-pkg-config-prog' has been removed.
 Use './configure PKG_CONFIG=/full/name/of/pkg-config' if you need to.
+
+---
+** The configure option '--with-mmdf' has been removed.
+It was no longer useful, as it relied on libraries that are no longer
+supported, and its presence led to confusion during configuration.
+This affects only the 'movemail' utility; Emacs itself can still
+process MMDF-format files as before.
 
 ** The configure option '--enable-silent-rules' is now the default,
 and silent rules are now quieter.  To get the old behavior where
 'make' chatters a lot, configure with '--disable-silent-rules' or
 build with 'make V=1'.
+
+---
+** The configure option '--with-gameuser' now allows to specify a
+group instead of a user if its argument is prefixed by ':' (a colon).
+This will cause the game score files in ${localstatedir}/games/emacs
+to be owned by that group, and the helper program for updating them to
+be installed setgid.  The option now defaults to the 'games' group.
 
 ---
 ** The `grep-changelog' script (and its manual page) are no longer included.
@@ -56,9 +73,7 @@ so if you want to use it, you can always take a copy from an older Emacs.
 
 * Changes in Emacs 25.1
 
-** `package-install-from-buffer' and `package-install-file' work on directories.
-This follows the same rules as installing from a .tar file, except the
--pkg file is optional.
+** New command `comment-line' bound to `C-x C-;'.
 
 ** New function `custom-prompt-customize-unsaved-options' checks for
 unsaved customizations and prompts user to customize (if found).
@@ -165,8 +180,31 @@ possible inaccuracies in the end position.
 In particular, it now returns the average width of the font's
 characters, which can be used for geometry-related calculations.
 
+** A new function `default-font-width' returns the average width of a
+character in the current buffer's default font.  If the default face
+is remapped (see `face-remapping-alist'), the value for the remapped
+face is returned.  This function complements the existing function
+`default-font-height'.
+
+** New functions `window-font-height' and `window-font-width' return
+the height and average width of characters in a specified face and
+window.  If FACE is remapped (see `face-remapping-alist'), the
+function returns the information for the remapped face.
+
+** A new function `window-max-chars-per-line' returns the maximal
+number of characters that can be displayed on one line.  If a face
+and/or window are provided, these values are used for the
+calculation.  This function is different from `window-body-width' in
+that it accounts for (i) continuation glyphs, (ii) the size of the
+font, and (iii) the specified window.
+
+** New possible value for `system-type': nacl.
+
 
 * Editing Changes in Emacs 25.1
+
+** Successive single-char deletions are collapsed in the undo-log just like
+successive char insertions.
 
 ** Unicode names entered via C-x 8 RET now use substring completion by default.
 
@@ -189,8 +227,41 @@ Unicode standards.
 
 ** You can access `mouse-buffer-menu' (C-down-mouse-1) using C-f10.
 
++++
+** New buffer-local `electric-pair-local-mode'.
+
 
 * Changes in Specialized Modes and Packages in Emacs 25.1
+** In xterms, killing text now also sets the CLIPBOARD/PRIMARY selection
+in the surrounding GUI (using the OSC-52 escape sequence).
+
+** xterm-mouse-mode now supports mouse-tracking (if your xterm supports it).
+
+** package.el
+*** Most functions which involve downloading information now take an
+ASYNC argument.  If it is non-nil, package.el performs the download(s)
+asynchronously.
+
+*** New variable `package-menu-async' controls whether the
+package-menu uses asynchronous downloads.
+
+*** `package-install-from-buffer' and `package-install-file' work on directories.
+This follows the same rules as installing from a .tar file, except the
+-pkg file is optional.
+
+*** Packages which are dependencies of other packages cannot be deleted.
+The FORCE argument to `package-delete' overrides this.
+
+*** New custom variable `package-selected-packages' tracks packages
+which were installed by the user (as opposed to installed as
+dependencies). This variable can also be manually customized.
+
+*** New command `package-install-user-selected-packages' installs all
+packages from `package-selected-packages' which are currently missing.
+
+*** New command `package-autoremove' removes all packages which were
+installed strictly as dependencies but are no longer needed.
+
 ** Shell
 
 When you invoke `shell' interactively, the *shell* buffer will now
@@ -202,10 +273,21 @@ the old behavior -- *shell* buffer displays in current window -- use
 
 
 ** EIEIO
++++
 *** The `:protection' slot option is not obeyed any more.
++++
+*** The `newname' argument to constructors is optional&deprecated.
+If you need your objects to be named, do it by inheriting from `eieio-named'.
++++
 *** The <class>-list-p and <class>-child-p functions are declared obsolete.
++++
 *** The <class> variables are declared obsolete.
++++
 *** The <initarg> variables are declared obsolete.
+*** defgeneric and defmethod are declared obsolete.
++++
+*** `constructor' is now an obsolete alias for `make-instance'.
+
 ** ido
 *** New command `ido-bury-buffer-at-head' bound to C-S-b
 Bury the buffer at the head of `ido-matches', analogous to how C-k
@@ -236,10 +318,22 @@ typing RET.
 result of the calculation into the current buffer.
 
 ** ElDoc
-*** New minor mode global-eldoc-mode
-*** eldoc-documentation-function now defaults to nil
+*** New minor mode `global-eldoc-mode'
+*** `eldoc-documentation-function' now defaults to `ignore'
+*** `describe-char-eldoc' displays information about character at point,
+and can be used as a default value of `eldoc-documentation-function'.  It is
+useful when, for example, one needs to distinguish various spaces (e.g. ] [,
+] [, ] [, etc.) while using mono-spaced font.
 
 ** eww
+
+---
+*** HTML can now be rendered using variable-width fonts.
+
++++
+*** A new command `F' (`eww-toggle-fonts') can be used to toggle
+whether to use variable-pitch fonts or not.  The user can also
+customize the `shr-use-fonts' variable.
 
 +++
 *** A new command `R' (`eww-readable') will try do identify the main
@@ -285,7 +379,7 @@ invalid certificates are marked in red.
 transformed into multipart/related messages before sending.
 
 ** pcase
-*** New UPatterns `quote' and `app'.
+*** New UPatterns `quote', `app', `cl-struct', and `eieio'.
 *** New UPatterns can be defined with `pcase-defmacro'.
 +++
 *** New vector QPattern.
@@ -345,6 +439,8 @@ The remainder were:
 **** The nil and list forms of `diary-display-function'.
 
 ** New ERT function `ert-summarize-tests-batch-and-exit'.
+
+** New js.el option `js-indent-first-init'.
 
 ---
 ** `Info-fontify-maximum-menu-size' can be t for no limit.
@@ -424,6 +520,8 @@ allows to customize this.
 *** Two new faces `compare-windows-removed' and `compare-windows-added'
 replace the obsolete face `compare-windows'.
 
+** VHDL mode supports VHDL'08.
+
 ** Calculator: decimal display mode uses "," groups, so it's more
 fitting for use in money calculations; factorial works with
 non-integer inputs.
@@ -477,10 +575,68 @@ As a result of the above, these commands are now obsolete:
 `find-tag-other-window', `find-tag-other-frame', `find-tag-regexp',
 `tags-apropos' and `tags-loop-continue'.
 
+** EUDC
+EUDC's LDAP backend has been improved.
+
+*** EUDC supports LDAP-over-SSL URLs (ldaps://).
+
+*** EUDC passes LDAP passwords through a pipe to the ldapsearch
+subprocess instead of on the command line.
+
+*** EUDC handles LDAP wildcards automatically so the user shouldn't
+need to configure this manually anymore.
+
+*** The LDAP configuration section of EUDC's manual has been
+rewritten.
+
+There have also been customization changes.
+
+*** New custom variable `eudc-server-hotlist' to allow specifying
+multiple EUDC servers in init file.
+
+*** Custom variable `eudc-inline-query-format' defaults to completing
+on email and firstname instead of surname.
+
+*** Custom variable `eudc-expansion-overwrites-query' defaults to nil
+to avoid interfering with the kill ring.
+
+*** Custom variable `eudc-inline-expansion-format' defaults to
+"Firstname Surname <mail-address>".
+
+*** New custom variable `ldap-ldapsearch-password-prompt-regexp' to
+allow overriding the regular expression that recognizes the ldapsearch
+command line's password prompt.
+
+** Eshell
+
+*** The new built-in command `clear' can scroll window contents out of sight.
+
+** Browse-url
+
+*** Support for the Conkeror web browser.
+
+---
+*** Support for several ancient browsers is now officially obsolete.
+
++++
+** tar-mode: new `tar-new-entry' command, allowing for new members to
+be added to the archive.
+
+** Autorevert: dired buffers are also auto-reverted via file
+notifications, if Emacs is compiled with file notification support.
+
 ** Obsolete packages
 
 ---
 *** gulp.el
+
++++
+** The character classes [:graph:] and [:print:] in regular expressions
+no longer match every multibyte character.  Instead, Emacs now
+consults the Unicode character properties to determine which
+characters are graphic or printable.  In particular, surrogates and
+unassigned codepoints are now rejected.  If you want the old behavior,
+use [:multibyte:] instead.
 
 
 * New Modes and Packages in Emacs 25.1
@@ -492,8 +648,20 @@ As a result of the above, these commands are now obsolete:
 ** let-alist is a new macro (and a package) that allows one to easily
 let-bind the values stored in an alist.
 
+** `tildify-mode' allows to automatically insert hard spaces as one
+types the text.  Breaking line after a single-character words is
+forbidden by Czech and Polish typography (and may be discouraged in
+other languages), so `auto-tildify-mode' makes it easier to create
+a typographically-correct documents.
 
 * Incompatible Lisp Changes in Emacs 25.1
+
+** Comint, term, and compile do not set the EMACS env var any more.
+Use the INSIDE_EMACS environment variable instead.
+
+** `save-excursion' does not save&restore the mark any more.
+
+** read-buffer-function can now be called with a 4th argument (`predicate').
 
 ** completion-table-dynamic stays in the minibuffer.
 If you want the old behavior of calling the function in the buffer
@@ -509,6 +677,9 @@ active region handling.
 
 ** `cl-the' now asserts that its argument is of the given type.
 
+** `process-running-child-p` may now return a numeric process
+group ID instead of `t'.
+
 +++
 ** Mouse click events on mode line or header line no longer include
 any reference to a buffer position.  The 6th member of the mouse
@@ -518,8 +689,52 @@ position list returned for such events is now nil.
 These slots used to hold key-shortcut data, but have been obsolete since
 Emacs-21.
 
+** Emacs no longer downcases the first letter of a system diagnostic
+when signaling a file error.  For example, it now reports "Permission
+denied" instead of "permission denied".  The old behavior was problematic
+in languages like German where downcasing rules depend on grammar.
+
++++
+** The character classes [:alpha:] and [:alnum:] in regular expressions
+now match multibyte characters using Unicode character properties.
+If you want the old behavior where they matched any character with
+word syntax, use `\sw' instead.
+
++++
+** The `diff' command uses the unified format now.  To restore the old
+behavior, set `diff-switches' to `-c'.
+
 
 * Lisp Changes in Emacs 25.1
+
+** New hook `pre-redisplay-functions', a bit easier to use than pre-redisplay-function.
+
+** The second arg of `looking-back' should always be provided explicitly.
+
+** Obsolete text properties `intangible', `point-entered', and `point-left'.
+Replaced by properties `cursor-intangible' and `cursor-sensor-functions',
+implemented by the new `cursor-intangible-mode' and
+`cursor-sensor-mode' minor modes.
+
+** New process type `pipe', which can be used in combination with the
+`:stderr' keyword of make-process to handle standard error output
+of subprocess.
+
+** New function `make-process' provides an alternative interface to
+`start-process'.  It allows programs to set process parameters such as
+process filter, sentinel, etc., through keyword arguments (similar to
+`make-network-process').
+
+** `read-buffer' takes a new `predicate' argument.
+
+** Emacs Lisp now supports generators.
+
+** New finalizer facility for running code when objects
+   become unreachable.
+
+** lexical closures can use (:documentation <form>) to build their docstring.
+It should be placed right where the docstring would be, and <form> is then
+evaluated (and should return a string) when the closure is built.
 
 ** define-inline provides a new way to define inlinable functions.
 
@@ -597,6 +812,12 @@ integers.
 ** New function `set-binary-mode' allows to switch a standard stream
 of the Emacs process to binary I/O mode.
 
+** Miscellaneous name change
+
+For consistency with the usual Emacs spelling, the Lisp variable
+`hfy-optimisations' has been renamed to `hfy-optimizations'.
+The old name should still work, as an obsolescent alias.
+
 
 * Changes in Frames and Windows Code in Emacs 25.1
 
@@ -657,6 +878,9 @@ Those features have been deprecated in Gtk+ for a long time.
 ** Building Emacs for MS-Windows requires at least Windows XP
 or Windows Server 2003.  The built binaries still run on all versions
 of Windows starting with Windows 9X.
+
++++
+** Emacs running on MS-Windows now supports the daemon mode.
 
 ** OS X 10.5 or older is no longer supported.
 

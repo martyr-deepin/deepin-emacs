@@ -387,7 +387,6 @@ followed by the rest of the buffers.  */)
   if (FRAMEP (frame))
     {
       Lisp_Object framelist, prevlist, tail;
-      Lisp_Object args[3];
 
       framelist = Fcopy_sequence (XFRAME (frame)->buffer_list);
       prevlist = Fnreverse (Fcopy_sequence
@@ -408,10 +407,7 @@ followed by the rest of the buffers.  */)
 	  tail = XCDR (tail);
 	}
 
-      args[0] = framelist;
-      args[1] = general;
-      args[2] = prevlist;
-      return Fnconc (3, args);
+      return CALLN (Fnconc, framelist, general, prevlist);
     }
   else
     return general;
@@ -1654,15 +1650,14 @@ cleaning up all windows currently displaying the buffer to be killed. */)
   /* Run hooks with the buffer to be killed the current buffer.  */
   {
     ptrdiff_t count = SPECPDL_INDEX ();
-    Lisp_Object arglist[1];
 
     record_unwind_protect (save_excursion_restore, save_excursion_save ());
     set_buffer_internal (b);
 
     /* First run the query functions; if any query is answered no,
        don't kill the buffer.  */
-    arglist[0] = Qkill_buffer_query_functions;
-    tem = Frun_hook_with_args_until_failure (1, arglist);
+    tem = CALLN (Frun_hook_with_args_until_failure,
+		 Qkill_buffer_query_functions);
     if (NILP (tem))
       return unbind_to (count, Qnil);
 
@@ -5413,7 +5408,7 @@ syms_of_buffer (void)
   DEFSYM (Qoverwrite_mode, "overwrite-mode");
   Fput (Qoverwrite_mode, Qchoice,
 	list3 (Qnil, intern ("overwrite-mode-textual"),
-	       intern ("overwrite-mode-binary")));
+	       Qoverwrite_mode_binary));
 
   Fput (Qprotected_field, Qerror_conditions,
 	listn (CONSTYPE_PURE, 2, Qprotected_field, Qerror));
@@ -6201,6 +6196,7 @@ If the buffer has never been shown in a window, the value is nil.  */);
 See the command `transient-mark-mode' for a description of this minor mode.
 
 Non-nil also enables highlighting of the region whenever the mark is active.
+The region is highlighted with the `region' face.
 The variable `highlight-nonselected-windows' controls whether to highlight
 all windows or just the selected window.
 
@@ -6331,6 +6327,8 @@ Functions running this hook are, `get-buffer-create',
   defsubr (&Soverlay_get);
   defsubr (&Soverlay_put);
   defsubr (&Srestore_buffer_modified_p);
+
+  Fput (intern_c_string ("erase-buffer"), Qdisabled, Qt);
 }
 
 void
@@ -6338,8 +6336,4 @@ keys_of_buffer (void)
 {
   initial_define_key (control_x_map, 'b', "switch-to-buffer");
   initial_define_key (control_x_map, 'k', "kill-buffer");
-
-  /* This must not be in syms_of_buffer, because Qdisabled is not
-     initialized when that function gets called.  */
-  Fput (intern_c_string ("erase-buffer"), Qdisabled, Qt);
 }

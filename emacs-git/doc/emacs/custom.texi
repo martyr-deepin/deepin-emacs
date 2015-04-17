@@ -82,14 +82,12 @@ top-level @code{Emacs} group.  It looks like this, in part:
 @c @page
 @smallexample
 @group
-To apply changes, use the Save or Set buttons.
-For details, see [Saving Customizations] in the [Emacs manual].
+For help, see [Easy Customization] in the [Emacs manual].
 
 ________________________________________ [ Search ]
 
  Operate on all settings in this buffer:
- [ Set for current session ] [ Save for future sessions ]
- [ Undo edits ] [ Reset to saved ] [ Erase customizations ] [ Exit ]
+ [ Revert... ] [ Apply ] [ Apply and Save ]
 
 
 Emacs group: Customization of the One True Editor.
@@ -97,7 +95,6 @@ Emacs group: Customization of the One True Editor.
       See also [Manual].
 
 [Editing] : Basic text editing facilities.
-
 [Convenience] : Convenience features for faster editing.
 
 @var{more second-level groups}
@@ -781,7 +778,7 @@ fill-column's value is 70
 
 Automatically becomes buffer-local when set.
 This variable is safe as a file local variable if its value
-satisfies the predicate `integerp'.
+satisfies the predicate @code{integerp}.
 
 Documentation:
 Column beyond which automatic line-wrapping should happen.
@@ -2216,10 +2213,10 @@ require one and some contexts require the other.
 keys which send non-@acronym{ASCII} characters.
 
 @item True:
-@code{t} stands for `true'.
+@code{t} stands for ``true''.
 
 @item False:
-@code{nil} stands for `false'.
+@code{nil} stands for ``false''.
 
 @item Other Lisp objects:
 @cindex Lisp object syntax
@@ -2250,8 +2247,8 @@ line.
 (setq c-tab-always-indent nil)
 @end example
 
-Here we have a variable whose value is normally @code{t} for `true'
-and the alternative is @code{nil} for `false'.
+Here we have a variable whose value is normally @code{t} for ``true''
+and the alternative is @code{nil} for ``false''.
 
 @item
 Make searches case sensitive by default (in all buffers that do not
@@ -2443,9 +2440,7 @@ You can also simply disregard the errors that occur if the
 function is not defined.
 
 @example
-(condition case ()
-    (set-face-background 'region "grey75")
-  (error nil))
+(ignore-errors (set-face-background 'region "grey75"))
 @end example
 
 A @code{setq} on a variable which does not exist is generally

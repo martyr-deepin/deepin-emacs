@@ -21,7 +21,7 @@
 SHELL = @SHELL@
 
 # Following ../lisp/Makefile.in.
-EMACS = ../src/emacs
+EMACS = ../src/emacs${EXEEXT}
 EMACSOPT = -batch --no-site-file --no-site-lisp
 
 # ==================== Things `configure' will edit ====================
@@ -58,10 +58,20 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 =
 
+AM_V_GEN = $(am__v_GEN_@AM_V@)
+am__v_GEN_ = $(am__v_GEN_@AM_DEFAULT_V@)
+am__v_GEN_0 = @echo "  GEN     " $@;
+am__v_GEN_1 =
+
 AM_V_RC = $(am__v_RC_@AM_V@)
 am__v_RC_ = $(am__v_RC_@AM_DEFAULT_V@)
 am__v_RC_0 = @echo "  RC      " $@;
 am__v_RC_1 =
+
+AM_V_at = $(am__v_at_@AM_V@)
+am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
+am__v_at_0 = @
+am__v_at_1 =
 
 # ==================== Where To Install Things ====================
 
@@ -122,6 +132,7 @@ archlibdir=@archlibdir@
 
 gamedir=@gamedir@
 gameuser=@gameuser@
+gamegroup=@gamegroup@
 
 # ==================== Utility Programs for the Build =================
 
@@ -253,24 +264,41 @@ maybe-blessmail: $(BLESSMAIL_TARGET)
 $(DESTDIR)${archlibdir}: all
 	@echo
 	@echo "Installing utilities run internally by Emacs."
-	umask 022; ${MKDIR_P} "$(DESTDIR)${archlibdir}"
-	exp_archlibdir=`cd "$(DESTDIR)${archlibdir}" && /bin/pwd`; \
+	umask 022 && ${MKDIR_P} "$(DESTDIR)${archlibdir}"
+	exp_archlibdir=`cd "$(DESTDIR)${archlibdir}" && /bin/pwd` && \
 	if [ "$$exp_archlibdir" != "`/bin/pwd`" ]; then \
 	  for file in ${UTILITIES}; do \
-	    $(INSTALL_PROGRAM) $(INSTALL_STRIP) $$file "$(DESTDIR)${archlibdir}/$$file" ; \
+	    $(INSTALL_PROGRAM) $(INSTALL_STRIP) $$file \
+	      "$(DESTDIR)${archlibdir}/$$file" || exit; \
 	  done ; \
         fi
-	umask 022; ${MKDIR_P} "$(DESTDIR)${gamedir}"; \
-	touch "$(DESTDIR)${gamedir}/snake-scores"; \
-	touch "$(DESTDIR)${gamedir}/tetris-scores"
-	-if chown ${gameuser} "$(DESTDIR)${archlibdir}/update-game-score${EXEEXT}" && chmod u+s "$(DESTDIR)${archlibdir}/update-game-score${EXEEXT}"; then \
-	  chown ${gameuser} "$(DESTDIR)${gamedir}"; \
+	umask 022 && ${MKDIR_P} "$(DESTDIR)${gamedir}" && \
+	touch "$(DESTDIR)${gamedir}/snake-scores" \
+	      "$(DESTDIR)${gamedir}/tetris-scores"
+ifneq ($(gameuser),)
+	if chown ${gameuser} \
+	     "$(DESTDIR)${archlibdir}/update-game-score${EXEEXT}" && \
+	   chmod u+s,go-r \
+	     "$(DESTDIR)${archlibdir}/update-game-score${EXEEXT}"; \
+	then \
+	  chown ${gameuser} "$(DESTDIR)${gamedir}" && \
+	  chmod u=rwx,g=rx,o=rx "$(DESTDIR)${gamedir}"; \
+	fi
+else ifneq ($(gamegroup),)
+	if chgrp ${gamegroup} \
+	     "$(DESTDIR)${archlibdir}/update-game-score${EXEEXT}" && \
+	   chmod g+s,o-r \
+	     "$(DESTDIR)${archlibdir}/update-game-score${EXEEXT}"; \
+	then \
+	  chgrp ${gamegroup} "$(DESTDIR)${gamedir}" && \
 	  chmod u=rwx,g=rwx,o=rx "$(DESTDIR)${gamedir}"; \
 	fi
-	exp_archlibdir=`cd "$(DESTDIR)${archlibdir}" && /bin/pwd`; \
+endif
+	exp_archlibdir=`cd "$(DESTDIR)${archlibdir}" && /bin/pwd` && \
 	if [ "$$exp_archlibdir" != "`cd ${srcdir} && /bin/pwd`" ]; then \
 	  for file in ${SCRIPTS}; do \
-	    $(INSTALL_SCRIPT) ${srcdir}/$$file "$(DESTDIR)${archlibdir}/$$file"; \
+	    $(INSTALL_SCRIPT) ${srcdir}/$$file \
+	      "$(DESTDIR)${archlibdir}/$$file" || exit; \
 	  done ; \
 	fi
 
@@ -280,34 +308,38 @@ $(DESTDIR)${archlibdir}: all
 install: $(DESTDIR)${archlibdir}
 	@echo
 	@echo "Installing utilities for users to run."
-	umask 022; ${MKDIR_P} "$(DESTDIR)${bindir}"
+	umask 022 && ${MKDIR_P} "$(DESTDIR)${bindir}"
 	for file in ${INSTALLABLES} ; do \
-	  $(INSTALL_PROGRAM) $(INSTALL_STRIP) $${file} "$(DESTDIR)${bindir}"/`echo $${file} | sed -e 's/${EXEEXT}$$//' -e '$(TRANSFORM)'`${EXEEXT} ; \
+	  $(INSTALL_PROGRAM) $(INSTALL_STRIP) $${file} \
+	    "$(DESTDIR)${bindir}"/` \
+	      echo $${file} | sed -e 's/${EXEEXT}$$//' -e '$(TRANSFORM)' \
+	    `${EXEEXT} || exit; \
 	done
 
 uninstall:
 	for file in ${INSTALLABLES}; do \
-	  rm -f "$(DESTDIR)${bindir}"/`echo $${file} | sed -e 's/${EXEEXT}$$//' -e '$(TRANSFORM)'`${EXEEXT} ; \
+	  rm -f "$(DESTDIR)${bindir}"/` \
+	    echo $${file} | sed -e 's/${EXEEXT}$$//' -e '$(TRANSFORM)' \
+	  `${EXEEXT}; \
 	done
 	if [ -d "$(DESTDIR)${archlibdir}" ]; then \
-	  (cd "$(DESTDIR)${archlibdir}" && rm -f ${UTILITIES} ${SCRIPTS}) \
+	  cd "$(DESTDIR)${archlibdir}" && \
+	  rm -f ${UTILITIES} ${SCRIPTS}; \
 	fi
 
 mostlyclean:
-	-rm -f core *.o *.res
+	rm -f core *.o *.res
 
 clean: mostlyclean
-	-rm -f ${EXE_FILES}
+	rm -f ${EXE_FILES}
 
 distclean: clean
-	-rm -f TAGS
-	-rm -f Makefile blessmail
+	rm -f TAGS Makefile blessmail
 
 bootstrap-clean maintainer-clean: distclean
-	true
 
 extraclean: maintainer-clean
-	-rm -f *~ \#*
+	rm -f *~ \#*
 
 ## Test the contents of the directory.
 check:
