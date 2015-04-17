@@ -206,14 +206,14 @@ preserves position within the line, like @kbd{C-n}.
 @item C-a
 @itemx @key{Home}
 @kindex C-a
-@kindex HOME key
+@kindex HOME
 @findex move-beginning-of-line
 Move to the beginning of the line (@code{move-beginning-of-line}).
 
 @item C-e
 @itemx @key{End}
 @kindex C-e
-@kindex END key
+@kindex END
 @findex move-end-of-line
 Move to the end of the line (@code{move-end-of-line}).
 

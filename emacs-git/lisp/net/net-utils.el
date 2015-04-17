@@ -328,15 +328,7 @@ This variable is only used if the variable
 
 (defun net-utils-run-program (name header program args)
   "Run a network information program."
-  (let ((buf (get-buffer-create (concat "*" name "*")))
-	(coding-system-for-read
-	 ;; MS-Windows versions of network utilities output text
-	 ;; encoded in the console (a.k.a. "OEM") codepage, which is
-	 ;; different from the default system (a.k.a. "ANSI")
-	 ;; codepage.
-	 (if (eq system-type 'windows-nt)
-	     (intern (format "cp%d" (w32-get-console-output-codepage)))
-	   coding-system-for-read)))
+  (let ((buf (get-buffer-create (concat "*" name "*"))))
     (set-buffer buf)
     (erase-buffer)
     (insert header "\n")
@@ -360,15 +352,7 @@ This variable is only used if the variable
       (when proc
         (set-process-filter proc nil)
         (delete-process proc)))
-    (let ((inhibit-read-only t)
-	(coding-system-for-read
-	 ;; MS-Windows versions of network utilities output text
-	 ;; encoded in the console (a.k.a. "OEM") codepage, which is
-	 ;; different from the default system (a.k.a. "ANSI")
-	 ;; codepage.
-	 (if (eq system-type 'windows-nt)
-	     (intern (format "cp%d" (w32-get-console-output-codepage)))
-	   coding-system-for-read)))
+    (let ((inhibit-read-only t))
       (erase-buffer))
     (net-utils-mode)
     (setq-local net-utils--revert-cmd

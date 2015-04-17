@@ -11,5 +11,4 @@
 		     (fill-column . 74)
 		     (bug-reference-url-format . "http://debbugs.gnu.org/%s")
 		     (mode . bug-reference)))
- (diff-mode . ((mode . whitespace)))
- (emacs-lisp-mode . ((indent-tabs-mode . nil))))
+ (diff-mode . ((mode . whitespace))))

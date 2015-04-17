@@ -141,25 +141,25 @@ All directories need at least one target.")
   "EDE Emacs Project target for Misc files.
 All directories need at least one target.")
 
-(cl-defmethod initialize-instance ((this ede-emacs-project)
+(defmethod initialize-instance ((this ede-emacs-project)
 				&rest fields)
   "Make sure the targets slot is bound."
-  (cl-call-next-method)
+  (call-next-method)
   (unless (slot-boundp this 'targets)
     (oset this :targets nil)))
 
 ;;; File Stuff
 ;;
-(cl-defmethod ede-project-root-directory ((this ede-emacs-project)
+(defmethod ede-project-root-directory ((this ede-emacs-project)
 				       &optional file)
   "Return the root for THIS Emacs project with file."
   (ede-up-directory (file-name-directory (oref this file))))
 
-(cl-defmethod ede-project-root ((this ede-emacs-project))
+(defmethod ede-project-root ((this ede-emacs-project))
   "Return my root."
   this)
 
-(cl-defmethod ede-find-subproject-for-directory ((proj ede-emacs-project)
+(defmethod ede-find-subproject-for-directory ((proj ede-emacs-project)
 					      dir)
   "Return PROJ, for handling all subdirs below DIR."
   proj)
@@ -176,7 +176,7 @@ All directories need at least one target.")
       ))
     match))
 
-(cl-defmethod ede-find-target ((proj ede-emacs-project) buffer)
+(defmethod ede-find-target ((proj ede-emacs-project) buffer)
   "Find an EDE target in PROJ for BUFFER.
 If one doesn't exist, create a new one for this directory."
   (let* ((ext (file-name-extension (buffer-file-name buffer)))
@@ -204,7 +204,7 @@ If one doesn't exist, create a new one for this directory."
 
 ;;; UTILITIES SUPPORT.
 ;;
-(cl-defmethod ede-preprocessor-map ((this ede-emacs-target-c))
+(defmethod ede-preprocessor-map ((this ede-emacs-target-c))
   "Get the pre-processor map for Emacs C code.
 All files need the macros from lisp.h!"
   (require 'semantic/db)
@@ -253,7 +253,7 @@ All files need the macros from lisp.h!"
 	(setq dirs (cdr dirs))))
     ans))
 
-(cl-defmethod ede-expand-filename-impl ((proj ede-emacs-project) name)
+(defmethod ede-expand-filename-impl ((proj ede-emacs-project) name)
   "Within this project PROJ, find the file NAME.
 Knows about how the Emacs source tree is organized."
   (let* ((ext (file-name-extension name))
@@ -269,13 +269,13 @@ Knows about how the Emacs source tree is organized."
 		 '("doc"))
 		(t nil)))
 	 )
-    (if (not dirs) (cl-call-next-method)
+    (if (not dirs) (call-next-method)
       (ede-emacs-find-in-directories name dir dirs))
     ))
 
 ;;; Command Support
 ;;
-(cl-defmethod project-rescan ((this ede-emacs-project))
+(defmethod project-rescan ((this ede-emacs-project))
   "Rescan this Emacs project from the sources."
   (let ((ver (ede-emacs-version (ede-project-root-directory this))))
     (oset this name (car ver))

@@ -1,6 +1,7 @@
 ;;; sh-script.el --- shell-script editing commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1997, 1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1997, 1999, 2001-2015 Free Software Foundation,
+;; Inc.
 
 ;; Author: Daniel Pfeiffer <occitan@esperanto.org>
 ;; Version: 2.0f
@@ -1598,6 +1599,7 @@ buffer indents as it currently is indented.
 
 
 \\[backward-delete-char-untabify]	 Delete backward one position, even if it was a tab.
+\\[newline-and-indent]	 Delete unquoted space and indent new line same as this one.
 \\[sh-end-of-command]	 Go to end of successive commands.
 \\[sh-beginning-of-command]	 Go to beginning of successive commands.
 \\[sh-set-shell]	 Set this buffer's shell, and maybe its magic number.
@@ -2499,8 +2501,7 @@ Lines containing only comments are considered empty."
 		    (current-column)))
 	current)
     (save-excursion
-      (indent-to (if (or (eq this-command 'newline-and-indent)
-                         (and electric-indent-mode (eq this-command 'newline)))
+      (indent-to (if (eq this-command 'newline-and-indent)
 		     previous
 		   (if (< (current-column)
 			  (setq current (progn (back-to-indentation)

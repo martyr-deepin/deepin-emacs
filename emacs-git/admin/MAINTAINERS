@@ -78,11 +78,6 @@ Bastien Guerry
 2.
 ==============================================================================
 
-Kelvin White
-       ERC
-           lisp/erc/*
-           doc/misc/erc.texi
-
 Eli Zaretskii
     	doc/*
 	lispref/*

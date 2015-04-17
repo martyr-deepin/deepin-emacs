@@ -1,6 +1,7 @@
 ;;; rmailsum.el --- make summary buffers for the mail reader
 
-;; Copyright (C) 1985, 1993-1996, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1993-1996, 2000-2015 Free Software Foundation,
+;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: mail
@@ -790,7 +791,7 @@ the message being processed."
 		 (forward-line 1)
 		 (setq str (buffer-substring pos (1- (point))))
 		 (while (looking-at "[ \t]")
-		   (setq str (concat str " "
+		   (setq str (concat str " " 
 				     (buffer-substring (match-end 0)
 						       (line-end-position))))
 		   (forward-line 1))
@@ -803,8 +804,7 @@ the message being processed."
 
 (defun rmail-summary-next-all (&optional number)
   (interactive "p")
-  (or number (setq number 1))
-  (forward-line number)
+  (forward-line (if number number 1))
   ;; It doesn't look nice to move forward past the last message line.
   (and (eobp) (> number 0)
        (forward-line -1))
@@ -812,14 +812,17 @@ the message being processed."
 
 (defun rmail-summary-previous-all (&optional number)
   (interactive "p")
-  (rmail-summary-next-all (- (or number 1))))
+  (forward-line (- (if number number 1)))
+  ;; It doesn't look nice to move forward past the last message line.
+  (and (eobp) (< number 0)
+       (forward-line -1))
+  (display-buffer rmail-buffer))
 
 (defun rmail-summary-next-msg (&optional number)
   "Display next non-deleted msg from rmail file.
 With optional prefix argument NUMBER, moves forward this number of non-deleted
 messages, or backward if NUMBER is negative."
   (interactive "p")
-  (or number (setq number 1))
   (forward-line 0)
   (and (> number 0) (end-of-line))
   (let ((count (if (< number 0) (- number) number))
@@ -837,7 +840,7 @@ messages, or backward if NUMBER is negative."
 With optional prefix argument NUMBER, moves backward this number of
 non-deleted messages."
   (interactive "p")
-  (rmail-summary-next-msg (- (or number 1))))
+  (rmail-summary-next-msg (- (if number number 1))))
 
 (defun rmail-summary-next-labeled-message (n labels)
   "Show next message with LABELS.  Defaults to last labels used.

@@ -849,11 +849,14 @@ save_excursion_save (void)
 {
   return make_save_obj_obj_obj_obj
     (Fpoint_marker (),
-     Qnil,
+     /* Do not copy the mark if it points to nowhere.  */
+     (XMARKER (BVAR (current_buffer, mark))->buffer
+      ? Fcopy_marker (BVAR (current_buffer, mark), Qnil)
+      : Qnil),
      /* Selected window if current buffer is shown in it, nil otherwise.  */
      (EQ (XWINDOW (selected_window)->contents, Fcurrent_buffer ())
       ? selected_window : Qnil),
-     Qnil);
+     BVAR (current_buffer, mark_active));
 }
 
 /* Restore saved buffer before leaving `save-excursion' special form.  */
@@ -861,8 +864,8 @@ save_excursion_save (void)
 void
 save_excursion_restore (Lisp_Object info)
 {
-  Lisp_Object tem, tem1;
-  struct gcpro gcpro1;
+  Lisp_Object tem, tem1, omark, nmark;
+  struct gcpro gcpro1, gcpro2, gcpro3;
 
   tem = Fmarker_buffer (XSAVE_OBJECT (info, 0));
   /* If we're unwinding to top level, saved buffer may be deleted.  This
@@ -870,7 +873,8 @@ save_excursion_restore (Lisp_Object info)
   if (NILP (tem))
     goto out;
 
-  GCPRO1 (info);
+  omark = nmark = Qnil;
+  GCPRO3 (info, omark, nmark);
 
   Fset_buffer (tem);
 
@@ -878,6 +882,34 @@ save_excursion_restore (Lisp_Object info)
   tem = XSAVE_OBJECT (info, 0);
   Fgoto_char (tem);
   unchain_marker (XMARKER (tem));
+
+  /* Mark marker.  */
+  tem = XSAVE_OBJECT (info, 1);
+  omark = Fmarker_position (BVAR (current_buffer, mark));
+  if (NILP (tem))
+    unchain_marker (XMARKER (BVAR (current_buffer, mark)));
+  else
+    {
+      Fset_marker (BVAR (current_buffer, mark), tem, Fcurrent_buffer ());
+      nmark = Fmarker_position (tem);
+      unchain_marker (XMARKER (tem));
+    }
+
+  /* Mark active.  */
+  tem = XSAVE_OBJECT (info, 3);
+  tem1 = BVAR (current_buffer, mark_active);
+  bset_mark_active (current_buffer, tem);
+
+  /* If mark is active now, and either was not active
+     or was at a different place, run the activate hook.  */
+  if (! NILP (tem))
+    {
+      if (! EQ (omark, nmark))
+	run_hook (intern ("activate-mark-hook"));
+    }
+  /* If mark has ceased to be active, run deactivate hook.  */
+  else if (! NILP (tem1))
+    run_hook (intern ("deactivate-mark-hook"));
 
   /* If buffer was visible in a window, and a different window was
      selected, and the old selected window is still showing this
@@ -900,12 +932,18 @@ save_excursion_restore (Lisp_Object info)
 }
 
 DEFUN ("save-excursion", Fsave_excursion, Ssave_excursion, 0, UNEVALLED, 0,
-       doc: /* Save point, and current buffer; execute BODY; restore those things.
+       doc: /* Save point, mark, and current buffer; execute BODY; restore those things.
 Executes BODY just like `progn'.
-The values of point and the current buffer are restored
+The values of point, mark and the current buffer are restored
 even in case of abnormal exit (throw or error).
+The state of activation of the mark is also restored.
 
-If you only want to save the current buffer but not point,
+This construct does not save `deactivate-mark', and therefore
+functions that change the buffer will still cause deactivation
+of the mark at the end of the command.  To prevent that, bind
+`deactivate-mark' with `let'.
+
+If you only want to save the current buffer but not point nor mark,
 then just use `save-current-buffer', or even `with-current-buffer'.
 
 usage: (save-excursion &rest BODY)  */)
@@ -1191,7 +1229,7 @@ of the user with that uid, or nil if there is no such user.  */)
   /* Set up the user name info if we didn't do it before.
      (That can happen if Emacs is dumpable
      but you decide to run `temacs -l loadup' and not dump.  */
-  if (NILP (Vuser_login_name))
+  if (INTEGERP (Vuser_login_name))
     init_editfns ();
 
   if (NILP (uid))
@@ -1214,7 +1252,7 @@ This ignores the environment variables LOGNAME and USER, so it differs from
   /* Set up the user name info if we didn't do it before.
      (That can happen if Emacs is dumpable
      but you decide to run `temacs -l loadup' and not dump.  */
-  if (NILP (Vuser_login_name))
+  if (INTEGERP (Vuser_login_name))
     init_editfns ();
   return Vuser_real_login_name;
 }
@@ -1357,23 +1395,10 @@ invalid_time (void)
   error ("Invalid time specification");
 }
 
-/* Check a return value compatible with that of decode_time_components.  */
-static void
-check_time_validity (int validity)
-{
-  if (validity <= 0)
-    {
-      if (validity < 0)
-	time_overflow ();
-      else
-	invalid_time ();
-    }
-}
-
 /* A substitute for mktime_z on platforms that lack it.  It's not
    thread-safe, but should be good enough for Emacs in typical use.  */
 #ifndef HAVE_TZALLOC
-static time_t
+time_t
 mktime_z (timezone_t tz, struct tm *tm)
 {
   char *oldtz = getenv ("TZ");
@@ -1673,9 +1698,9 @@ decode_float_time (double t, struct lisp_time *result)
    If *DRESULT is not null, store into *DRESULT the number of
    seconds since the start of the POSIX Epoch.
 
-   Return 1 if successful, 0 if the components are of the
-   wrong type, and -1 if the time is out of range.  */
-int
+   Return true if successful, false if the components are of the
+   wrong type or represent a time out of range.  */
+bool
 decode_time_components (Lisp_Object high, Lisp_Object low, Lisp_Object usec,
 			Lisp_Object psec,
 			struct lisp_time *result, double *dresult)
@@ -1683,17 +1708,17 @@ decode_time_components (Lisp_Object high, Lisp_Object low, Lisp_Object usec,
   EMACS_INT hi, lo, us, ps;
   if (! (INTEGERP (high)
 	 && INTEGERP (usec) && INTEGERP (psec)))
-    return 0;
+    return false;
   if (! INTEGERP (low))
     {
       if (FLOATP (low))
 	{
 	  double t = XFLOAT_DATA (low);
 	  if (result && ! decode_float_time (t, result))
-	    return -1;
+	    return false;
 	  if (dresult)
 	    *dresult = t;
-	  return 1;
+	  return true;
 	}
       else if (NILP (low))
 	{
@@ -1707,10 +1732,10 @@ decode_time_components (Lisp_Object high, Lisp_Object low, Lisp_Object usec,
 	    }
 	  if (dresult)
 	    *dresult = now.tv_sec + now.tv_nsec / 1e9;
-	  return 1;
+	  return true;
 	}
       else
-	return 0;
+	return false;
     }
 
   hi = XINT (high);
@@ -1730,7 +1755,7 @@ decode_time_components (Lisp_Object high, Lisp_Object low, Lisp_Object usec,
   if (result)
     {
       if (! (MOST_NEGATIVE_FIXNUM <= hi && hi <= MOST_POSITIVE_FIXNUM))
-	return -1;
+	return false;
       result->hi = hi;
       result->lo = lo;
       result->us = us;
@@ -1743,7 +1768,7 @@ decode_time_components (Lisp_Object high, Lisp_Object low, Lisp_Object usec,
       *dresult = (us * 1e6 + ps) / 1e12 + lo + dhi * (1 << LO_TIME_BITS);
     }
 
-  return 1;
+  return true;
 }
 
 struct timespec
@@ -1767,8 +1792,8 @@ lisp_time_struct (Lisp_Object specified_time, int *plen)
   Lisp_Object high, low, usec, psec;
   struct lisp_time t;
   int len = disassemble_lisp_time (specified_time, &high, &low, &usec, &psec);
-  int val = len ? decode_time_components (high, low, usec, psec, &t, 0) : 0;
-  check_time_validity (val);
+  if (! (len && decode_time_components (high, low, usec, psec, &t, 0)))
+    invalid_time ();
   *plen = len;
   return t;
 }
@@ -1793,20 +1818,13 @@ lisp_seconds_argument (Lisp_Object specified_time)
 {
   Lisp_Object high, low, usec, psec;
   struct lisp_time t;
-
-  int val = disassemble_lisp_time (specified_time, &high, &low, &usec, &psec);
-  if (val != 0)
-    {
-      val = decode_time_components (high, low, make_number (0),
-				    make_number (0), &t, 0);
-      if (0 < val
-	  && ! ((TYPE_SIGNED (time_t)
-		 ? TIME_T_MIN >> LO_TIME_BITS <= t.hi
-		 : 0 <= t.hi)
-		&& t.hi <= TIME_T_MAX >> LO_TIME_BITS))
-	val = -1;
-    }
-  check_time_validity (val);
+  if (! (disassemble_lisp_time (specified_time, &high, &low, &usec, &psec)
+	 && decode_time_components (high, low, make_number (0),
+				    make_number (0), &t, 0)))
+    invalid_time ();
+  if (! ((TYPE_SIGNED (time_t) ? TIME_T_MIN >> LO_TIME_BITS <= t.hi : 0 <= t.hi)
+	 && t.hi <= TIME_T_MAX >> LO_TIME_BITS))
+    time_overflow ();
   return (t.hi << LO_TIME_BITS) + t.lo;
 }
 
@@ -2015,20 +2033,20 @@ DOW and ZONE.)  */)
   /* Avoid overflow when INT_MAX < EMACS_INT_MAX.  */
   EMACS_INT tm_year_base = TM_YEAR_BASE;
 
-  return CALLN (Flist,
-		make_number (local_tm.tm_sec),
-		make_number (local_tm.tm_min),
-		make_number (local_tm.tm_hour),
-		make_number (local_tm.tm_mday),
-		make_number (local_tm.tm_mon + 1),
-		make_number (local_tm.tm_year + tm_year_base),
-		make_number (local_tm.tm_wday),
-		local_tm.tm_isdst ? Qt : Qnil,
-		(HAVE_TM_GMTOFF
-		 ? make_number (tm_gmtoff (&local_tm))
-		 : gmtime_r (&time_spec, &gmt_tm)
-		 ? make_number (tm_diff (&local_tm, &gmt_tm))
-		 : Qnil));
+  return Flist (9, ((Lisp_Object [])
+		    {make_number (local_tm.tm_sec),
+		     make_number (local_tm.tm_min),
+		     make_number (local_tm.tm_hour),
+		     make_number (local_tm.tm_mday),
+		     make_number (local_tm.tm_mon + 1),
+		     make_number (local_tm.tm_year + tm_year_base),
+		     make_number (local_tm.tm_wday),
+		     local_tm.tm_isdst ? Qt : Qnil,
+		     (HAVE_TM_GMTOFF
+		      ? make_number (tm_gmtoff (&local_tm))
+		      : gmtime_r (&time_spec, &gmt_tm)
+		      ? make_number (tm_diff (&local_tm, &gmt_tm))
+		      : Qnil)}));
 }
 
 /* Return OBJ - OFFSET, checking that OBJ is a valid fixnum and that
@@ -2661,20 +2679,25 @@ update_buffer_properties (ptrdiff_t start, ptrdiff_t end)
      call them, specifying the range of the buffer being accessed.  */
   if (!NILP (Vbuffer_access_fontify_functions))
     {
+      Lisp_Object args[3];
+      Lisp_Object tem;
+
+      args[0] = Qbuffer_access_fontify_functions;
+      XSETINT (args[1], start);
+      XSETINT (args[2], end);
+
       /* But don't call them if we can tell that the work
 	 has already been done.  */
       if (!NILP (Vbuffer_access_fontified_property))
 	{
-	  Lisp_Object tem
-	    = Ftext_property_any (make_number (start), make_number (end),
-				  Vbuffer_access_fontified_property,
-				  Qnil, Qnil);
-	  if (NILP (tem))
-	    return;
+	  tem = Ftext_property_any (args[1], args[2],
+				    Vbuffer_access_fontified_property,
+				    Qnil, Qnil);
+	  if (! NILP (tem))
+	    Frun_hook_with_args (3, args);
 	}
-
-      CALLN (Frun_hook_with_args, Qbuffer_access_fontify_functions,
-	     make_number (start), make_number (end));
+      else
+	Frun_hook_with_args (3, args);
     }
 }
 
@@ -4493,7 +4516,7 @@ Lisp_Object
 format2 (const char *string1, Lisp_Object arg0, Lisp_Object arg1)
 {
   AUTO_STRING (format, string1);
-  return CALLN (Fformat, format, arg0, arg1);
+  return Fformat (3, (Lisp_Object []) {format, arg0, arg1});
 }
 
 DEFUN ("char-equal", Fchar_equal, Schar_equal, 2, 2, 0,
@@ -4935,7 +4958,8 @@ of the buffer being accessed.  */);
     /* Do this here, because init_buffer_once is too early--it won't work.  */
     Fset_buffer (Vprin1_to_string_buffer);
     /* Make sure buffer-access-fontify-functions is nil in this buffer.  */
-    Fset (Fmake_local_variable (Qbuffer_access_fontify_functions), Qnil);
+    Fset (Fmake_local_variable (intern_c_string ("buffer-access-fontify-functions")),
+	  Qnil);
     Fset_buffer (obuf);
   }
 
@@ -4955,7 +4979,6 @@ functions if all the text being accessed has this property.  */);
 
   DEFVAR_LISP ("user-login-name", Vuser_login_name,
 	       doc: /* The user's name, taken from environment variables if possible.  */);
-  Vuser_login_name = Qnil;
 
   DEFVAR_LISP ("user-real-login-name", Vuser_real_login_name,
 	       doc: /* The user's name, based upon the real uid only.  */);

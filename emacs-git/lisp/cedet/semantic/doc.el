@@ -56,12 +56,13 @@ If nosnarf if 'lex, then only return the lex token."
 	  doctmp
 	  ;; Check just before the definition.
 	  (when (semantic-tag-with-position-p tag)
-	    (semantic-documentation-comment-preceding-tag tag nosnarf))
+	    (semantic-documentation-comment-preceeding-tag tag nosnarf))
 	  ;;  Let's look for comments either after the definition, but before code:
 	  ;; Not sure yet.  Fill in something clever later....
 	  nil))))))
 
-(defun semantic-documentation-comment-preceding-tag (&optional tag nosnarf)
+;; FIXME this is not how you spell "preceding".
+(defun semantic-documentation-comment-preceeding-tag (&optional tag nosnarf)
   "Find a comment preceding TAG.
 If TAG is nil.  use the tag under point.
 Searches the space between TAG and the preceding tag for a comment,
@@ -83,10 +84,6 @@ just the lexical token and not the string."
 	;; of a function.
 	(semantic-doc-snarf-comment-for-tag nosnarf)))
     ))
-(define-obsolete-function-alias
-  'semantic-documentation-comment-preceeding-tag
-  'semantic-documentation-comment-preceding-tag
-  "25.1")
 
 (defun semantic-doc-snarf-comment-for-tag (nosnarf)
   "Snarf up the comment at POINT for `semantic-documentation-for-tag'.

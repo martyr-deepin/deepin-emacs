@@ -104,10 +104,9 @@ telling Microsoft that."
       (insert ";; Emacs-W3 HTTP cookies file\n"
 	      ";; Automatically generated file!!! DO NOT EDIT!!!\n\n"
 	      "(setq url-cookie-storage\n '")
-      (let ((print-length nil) (print-level nil))
-	(pp url-cookie-storage (current-buffer))
-	(insert ")\n(setq url-cookie-secure-storage\n '")
-	(pp url-cookie-secure-storage (current-buffer)))
+      (pp url-cookie-storage (current-buffer))
+      (insert ")\n(setq url-cookie-secure-storage\n '")
+      (pp url-cookie-secure-storage (current-buffer))
       (insert ")\n")
       (insert "\n;; Local Variables:\n"
               ";; version-control: never\n"

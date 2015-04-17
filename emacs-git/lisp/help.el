@@ -95,7 +95,6 @@
     (define-key map "k" 'describe-key)
     (define-key map "l" 'view-lossage)
     (define-key map "m" 'describe-mode)
-    (define-key map "o" 'describe-function-or-variable)
     (define-key map "n" 'view-emacs-news)
     (define-key map "p" 'finder-by-keyword)
     (define-key map "P" 'describe-package)
@@ -219,7 +218,6 @@ L LANG-ENV  Describes a specific language environment, or RET for current.
 m           Display documentation of current minor modes and current major mode,
               including their special commands.
 n           Display news of recent Emacs changes.
-o SYMBOL    Display the given function or variable's documentation and value.
 p TOPIC     Find packages matching a given topic keyword.
 P PACKAGE   Describe the given Emacs Lisp package.
 r           Display the Emacs manual in Info mode.
@@ -1447,7 +1445,7 @@ the same names as used in the original source code, when possible."
 		    (let ((name (symbol-name arg)))
 		      (cond
                        ((string-match "\\`&" name) arg)
-                       ((string-match "\\`_." name)
+                       ((string-match "\\`_" name)
                         (intern (upcase (substring name 1))))
                        (t (intern (upcase name)))))))
 		arglist)))

@@ -157,7 +157,7 @@ documentation), this function returns nil."
         (while (re-search-forward (concat "^ *" host-re) nil t)
           (add-to-list 'ssh-hosts-list (concat (match-string 1)
                                                (match-string 2)))
-          (while (and (eq (char-before) ?,)
+          (while (and (looking-back ",")
                       (re-search-forward host-re (line-end-position) t))
             (add-to-list 'ssh-hosts-list (concat (match-string 1)
                                                  (match-string 2)))))

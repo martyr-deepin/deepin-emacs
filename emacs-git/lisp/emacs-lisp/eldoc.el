@@ -336,12 +336,7 @@ the variables `eldoc-argument-case' and `eldoc-echo-area-use-multiline-p',
 and the face `eldoc-highlight-function-argument', if they are to have any
 effect.
 
-Major modes should modify this variable using `add-function', for example:
-  (add-function :before-until (local 'eldoc-documentation-function)
-                #'foo-mode-eldoc-function)
-so that the global documentation function (i.e. the default value of the
-variable) is taken into account if the major mode specific function does not
-return any documentation.")
+This variable is expected to be set buffer-locally by modes that support ElDoc.")
 
 (defun eldoc-print-current-symbol-info ()
   ;; This is run from post-command-hook or some idle timer thing,

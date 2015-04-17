@@ -1725,17 +1725,6 @@ expressions; a `progn' form will be returned enclosing these forms."
 	   (t
 	    (error "Bad spec: %s" specs)))))
 
-       ((eq 'vector spec)
-	(if (vectorp form)
-	    ;; Special case: match a vector with the specs.
-	    (let ((result (edebug-match-sublist
-			   (edebug-new-cursor
-			    form (cdr (edebug-top-offset cursor)))
-			   (cdr specs))))
-	      (edebug-move-cursor cursor)
-	      (list (apply 'vector result)))
-	  (edebug-no-match cursor "Expected" specs)))
-
        ((listp form)
 	(prog1
 	    (list (edebug-match-sublist
@@ -1744,6 +1733,15 @@ expressions; a `progn' form will be returned enclosing these forms."
 		   (edebug-new-cursor form (cdr (edebug-top-offset cursor)))
 		   specs))
 	  (edebug-move-cursor cursor)))
+
+       ((and (eq 'vector spec) (vectorp form))
+	;; Special case: match a vector with the specs.
+	(let ((result (edebug-match-sublist
+		       (edebug-new-cursor
+			form (cdr (edebug-top-offset cursor)))
+		       (cdr specs))))
+	  (edebug-move-cursor cursor)
+	  (list (apply 'vector result))))
 
        (t (edebug-no-match cursor "Expected" specs)))
       )))
@@ -1871,13 +1869,8 @@ expressions; a `progn' form will be returned enclosing these forms."
   ;; Like body but body is wrapped in edebug-enter form.
   ;; The body is assumed to be executing inside of the function context.
   ;; Not to be used otherwise.
-  (let* ((edebug-inside-func t)
-         (forms (edebug-forms cursor)))
-    ;; If there's no form, there's nothing to wrap!
-    ;; This happens to handle bug#20281, tho maybe a better fix would be to
-    ;; improve the `defun' spec.
-    (when forms
-      (list (edebug-wrap-def-body forms)))))
+  (let ((edebug-inside-func t))
+    (list (edebug-wrap-def-body (edebug-forms cursor)))))
 
 
 ;;;; Edebug Form Specs
@@ -2365,12 +2358,6 @@ MSG is printed after `::::} '."
 (defalias 'edebug-mark-marker 'mark-marker)
 
 (defun edebug--display (value offset-index arg-mode)
-  ;; edebug--display-1 is too big, we should split it.  This function
-  ;; here was just introduced to avoid making edebug--display-1
-  ;; yet a bit deeper.
-  (save-excursion (edebug--display-1 value offset-index arg-mode)))
-
-(defun edebug--display-1 (value offset-index arg-mode)
   (unless (marker-position edebug-def-mark)
     ;; The buffer holding the source has been killed.
     ;; Let's at least show a backtrace so the user can figure out
@@ -2453,6 +2440,18 @@ MSG is printed after `::::} '."
                               edebug-function)
                 ))
 
+	  (setcdr edebug-window-data
+		  (edebug-adjust-window (cdr edebug-window-data)))
+
+	  ;; Test if there is input, not including keyboard macros.
+	  (if (input-pending-p)
+	      (progn
+		(setq edebug-execution-mode 'step
+		      edebug-stop t)
+		(edebug-stop)
+		;;	    (discard-input)		; is this unfriendly??
+		))
+
           ;; Make sure we bind those in the right buffer (bug#16410).
           (let ((overlay-arrow-position overlay-arrow-position)
                 (overlay-arrow-string overlay-arrow-string))
@@ -2505,18 +2504,14 @@ MSG is printed after `::::} '."
              ((eq edebug-execution-mode 'Trace-fast)
               (sit-for 0)))		; Force update and continue.
 
-            (when (input-pending-p)
-	      (setq edebug-stop t)
-	      (setq edebug-execution-mode 'step) ; for `edebug-overlay-arrow'
-	      (edebug-stop))
-
-	    (edebug-overlay-arrow)
-
             (unwind-protect
                 (if (or edebug-stop
                         (memq edebug-execution-mode '(step next))
                         (eq arg-mode 'error))
-		    (edebug--recursive-edit arg-mode)) ; <--- Recursive edit
+                    (progn
+                      ;; (setq edebug-execution-mode 'step)
+                      ;; (edebug-overlay-arrow)	; This doesn't always show up.
+                      (edebug--recursive-edit arg-mode))) ; <--- Recursive edit
 
               ;; Reset the edebug-window-data to whatever it is now.
               (let ((window (if (eq (window-buffer) edebug-buffer)
@@ -2676,6 +2671,12 @@ MSG is printed after `::::} '."
 	      (defining-kbd-macro
 		(if edebug-continue-kbd-macro defining-kbd-macro))
 
+	      ;; Disable command hooks.  This is essential when
+	      ;; a hook function is instrumented - to avoid infinite loop.
+	      ;; This may be more than we need, however.
+	      (pre-command-hook nil)
+	      (post-command-hook nil)
+
 	      ;; others??
 	      )
 
@@ -2704,9 +2705,8 @@ MSG is printed after `::::} '."
 	    (if (buffer-name edebug-buffer) ; if it still exists
 		(progn
 		  (set-buffer edebug-buffer)
-		  (when (memq edebug-execution-mode '(go Go-nonstop))
-		    (edebug-overlay-arrow)
-		    (sit-for 0))
+		  (if (memq edebug-execution-mode '(go Go-nonstop))
+		      (edebug-overlay-arrow))
                   (edebug-mode -1))
 	      ;; gotta have a buffer to let its buffer local variables be set
 	      (get-buffer-create " bogus edebug buffer"))
@@ -2716,6 +2716,31 @@ MSG is printed after `::::} '."
 
 ;;; Display related functions
 
+(defun edebug-adjust-window (old-start)
+  ;; If pos is not visible, adjust current window to fit following context.
+  ;; (message "window: %s old-start: %s window-start: %s pos: %s"
+  ;;          (selected-window) old-start (window-start) (point)) (sit-for 5)
+  (if (not (pos-visible-in-window-p))
+      (progn
+	;; First try old-start
+	(if old-start
+	    (set-window-start (selected-window) old-start))
+	(if (not (pos-visible-in-window-p))
+	    (progn
+	;; (message "resetting window start") (sit-for 2)
+	(set-window-start
+	 (selected-window)
+	 (save-excursion
+	   (forward-line
+	    (if (< (point) (window-start)) -1	; one line before if in back
+	      (- (/ (window-height) 2)) ; center the line moving forward
+	      ))
+	   (beginning-of-line)
+	   (point)))))))
+  (window-start))
+
+
+
 (defconst edebug-arrow-alist
   '((Continue-fast . "=")
     (Trace-fast . "-")
@@ -2724,7 +2749,7 @@ MSG is printed after `::::} '."
     (step . "=>")
     (next . "=>")
     (go . "<>")
-    (Go-nonstop . "..")
+    (Go-nonstop . "..")  ; not used
     )
   "Association list of arrows for each edebug mode.")
 
@@ -3292,9 +3317,6 @@ Return the result of the last expression."
      ;; Restore outside context.
      (setq-default cursor-in-non-selected-windows edebug-outside-d-c-i-n-s-w)
      (unwind-protect
-         ;; FIXME: This restoring of edebug-outside-buffer and
-         ;; edebug-outside-point is redundant now that backtrace-eval does it
-         ;; for us.
          (with-current-buffer edebug-outside-buffer ; of edebug-buffer
            (goto-char edebug-outside-point)
            (if (marker-buffer (edebug-mark-marker))

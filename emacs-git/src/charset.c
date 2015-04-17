@@ -1268,7 +1268,7 @@ define_charset_internal (Lisp_Object name,
 
   args[charset_arg_plist] =
     listn (CONSTYPE_HEAP, 14,
-	   QCname,
+	   intern_c_string (":name"),
 	   args[charset_arg_name],
 	   intern_c_string (":dimension"),
 	   args[charset_arg_dimension],
@@ -1278,7 +1278,7 @@ define_charset_internal (Lisp_Object name,
 	   args[charset_arg_iso_final],
 	   intern_c_string (":emacs-mule-id"),
 	   args[charset_arg_emacs_mule_id],
-	   QCascii_compatible_p,
+	   intern_c_string (":ascii-compatible-p"),
 	   args[charset_arg_ascii_compatible_p],
 	   intern_c_string (":code-offset"),
 	   args[charset_arg_code_offset]);
@@ -2146,7 +2146,7 @@ DEFUN ("set-charset-priority", Fset_charset_priority, Sset_charset_priority,
 usage: (set-charset-priority &rest charsets)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
-  Lisp_Object new_head, old_list;
+  Lisp_Object new_head, old_list, arglist[2];
   Lisp_Object list_2022, list_emacs_mule;
   ptrdiff_t i;
   int id;
@@ -2162,9 +2162,9 @@ usage: (set-charset-priority &rest charsets)  */)
 	  new_head = Fcons (make_number (id), new_head);
 	}
     }
-  Vcharset_non_preferred_head = old_list;
-  Vcharset_ordered_list = CALLN (Fnconc, Fnreverse (new_head), old_list);
-
+  arglist[0] = Fnreverse (new_head);
+  arglist[1] = Vcharset_non_preferred_head = old_list;
+  Vcharset_ordered_list = Fnconc (2, arglist);
   charset_ordered_list_tick++;
 
   charset_unibyte = -1;
@@ -2353,7 +2353,12 @@ syms_of_charset (void)
   Vemacs_mule_charset_list = Qnil;
 
   staticpro (&Vcharset_hash_table);
-  Vcharset_hash_table = CALLN (Fmake_hash_table, QCtest, Qeq);
+  {
+    Lisp_Object args[2];
+    args[0] = QCtest;
+    args[1] = Qeq;
+    Vcharset_hash_table = Fmake_hash_table (2, args);
+  }
 
   charset_table = charset_table_init;
   charset_table_size = ARRAYELTS (charset_table_init);

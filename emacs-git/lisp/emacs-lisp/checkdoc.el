@@ -1663,15 +1663,14 @@ function,command,variable,option or symbol." ms1))))))
 
 	     ;;   Addendum:  Make sure they appear in the doc in the same
 	     ;;              order that they are found in the arg list.
-	     (let ((args (nthcdr 4 fp))
+	     (let ((args (cdr (cdr (cdr (cdr fp)))))
 		   (last-pos 0)
 		   (found 1)
 		   (order (and (nth 3 fp) (car (nth 3 fp))))
 		   (nocheck (append '("&optional" "&rest") (nth 3 fp)))
 		   (inopts nil))
 	       (while (and args found (> found last-pos))
-                 (if (or (member (car args) nocheck)
-                         (string-match "\\`_" (car args)))
+		 (if (member (car args) nocheck)
 		     (setq args (cdr args)
 			   inopts t)
 		   (setq last-pos found
@@ -2620,15 +2619,14 @@ function called to create the messages."
 (defun checkdoc-show-diagnostics ()
   "Display the checkdoc diagnostic buffer in a temporary window."
   (if checkdoc-pending-errors
-      (let* ((b (get-buffer checkdoc-diagnostic-buffer))
-             (win (if b (display-buffer b))))
-	(when win
-          (with-selected-window win
-            (goto-char (point-max))
-            (re-search-backward "\C-l" nil t)
-            (beginning-of-line)
-            (forward-line 1)
-            (recenter 0)))
+      (let ((b (get-buffer checkdoc-diagnostic-buffer)))
+	(if b (progn (pop-to-buffer b)
+		     (goto-char (point-max))
+		     (re-search-backward "\C-l" nil t)
+		     (beginning-of-line)
+		     (forward-line 1)
+		     (recenter 0)))
+	(other-window -1)
 	(setq checkdoc-pending-errors nil)
 	nil)))
 

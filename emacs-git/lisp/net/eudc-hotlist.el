@@ -3,8 +3,7 @@
 ;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Oscar Figueiredo <oscar@cpe.fr>
-;;         Pavel Janík <Pavel@Janik.cz>
-;; Maintainer: Thomas Fitzsimmons <fitzsim@fitzsim.org>
+;; Maintainer: Pavel Janík <Pavel@Janik.cz>
 ;; Keywords: comm
 ;; Package: eudc
 

@@ -76,11 +76,11 @@ OBJ is the target object to customize."
       (error "No logical target to customize"))
   (ede-customize obj))
 
-(cl-defmethod ede-customize ((proj ede-project))
+(defmethod ede-customize ((proj ede-project))
   "Customize the EDE project PROJ."
   (eieio-customize-object proj 'default))
 
-(cl-defmethod ede-customize ((target ede-target))
+(defmethod ede-customize ((target ede-target))
   "Customize the EDE TARGET."
   (eieio-customize-object target 'default))
 
@@ -177,7 +177,7 @@ OBJ is the target object to customize."
 ;;; Customization hooks
 ;;
 ;; These hooks are used when finishing up a customization.
-(cl-defmethod eieio-done-customizing ((proj ede-project))
+(defmethod eieio-done-customizing ((proj ede-project))
   "Call this when a user finishes customizing PROJ."
   (let ((ov eieio-ede-old-variables)
 	(nv (oref proj local-variables)))
@@ -196,11 +196,11 @@ OBJ is the target object to customize."
 ;; These two methods should be implemented by subclasses of
 ;; project and targets in order to account for user specified
 ;; changes.
-(cl-defmethod eieio-done-customizing ((target ede-target))
+(defmethod eieio-done-customizing ((target ede-target))
   "Call this when a user finishes customizing TARGET."
   nil)
 
-(cl-defmethod ede-commit-project ((proj ede-project))
+(defmethod ede-commit-project ((proj ede-project))
   "Commit any change to PROJ to its file."
   nil
   )

@@ -252,22 +252,19 @@ Interactively, reads the register using `register-read-with-preview'."
       (goto-char (cadr val)))
      ((markerp val)
       (or (marker-buffer val)
-	  (user-error "That register's buffer no longer exists"))
+	  (error "That register's buffer no longer exists"))
       (switch-to-buffer (marker-buffer val))
-      (unless (or (= (point) (marker-position val))
-                  (eq last-command 'jump-to-register))
-        (push-mark))
       (goto-char val))
      ((and (consp val) (eq (car val) 'file))
       (find-file (cdr val)))
      ((and (consp val) (eq (car val) 'file-query))
       (or (find-buffer-visiting (nth 1 val))
 	  (y-or-n-p (format "Visit file %s again? " (nth 1 val)))
-	  (user-error "Register access aborted"))
+	  (error "Register access aborted"))
       (find-file (nth 1 val))
       (goto-char (nth 2 val)))
      (t
-      (user-error "Register doesn't contain a buffer position or configuration")))))
+      (error "Register doesn't contain a buffer position or configuration")))))
 
 (defun register-swap-out ()
   "Turn markers into file-query references when a buffer is killed."
@@ -319,7 +316,7 @@ Interactively, reads the register using `register-read-with-preview'."
 	(set-register register (+ number register-val))))
      ((or (not register-val) (stringp register-val))
       (append-to-register register (region-beginning) (region-end) prefix))
-     (t (user-error "Register does not contain a number or text")))))
+     (t (error "Register does not contain a number or text")))))
 
 (defun view-register (register)
   "Display what is contained in register named REGISTER.
@@ -452,7 +449,7 @@ Interactively, reads the register using `register-read-with-preview'."
      ((and (markerp val) (marker-position val))
       (princ (marker-position val) (current-buffer)))
      (t
-      (user-error "Register does not contain text"))))
+      (error "Register does not contain text"))))
   (if (not arg) (exchange-point-and-mark)))
 
 (defun copy-to-register (register start end &optional delete-flag region)
@@ -495,7 +492,7 @@ Interactively, reads the register using `register-read-with-preview'."
     (set-register
      register (cond ((not reg) text)
                     ((stringp reg) (concat reg separator text))
-                    (t (user-error "Register does not contain text")))))
+                    (t (error "Register does not contain text")))))
   (setq deactivate-mark t)
   (cond (delete-flag
 	 (delete-region start end))
@@ -519,7 +516,7 @@ Interactively, reads the register using `register-read-with-preview'."
     (set-register
      register (cond ((not reg) text)
                     ((stringp reg) (concat text separator reg))
-                    (t (user-error "Register does not contain text")))))
+                    (t (error "Register does not contain text")))))
   (setq deactivate-mark t)
   (cond (delete-flag
 	 (delete-region start end))

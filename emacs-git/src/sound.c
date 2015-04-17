@@ -1351,6 +1351,8 @@ Internal use only, use `play-sound' instead.  */)
 {
   Lisp_Object attrs[SOUND_ATTR_SENTINEL];
   ptrdiff_t count = SPECPDL_INDEX ();
+  Lisp_Object file;
+  Lisp_Object args[2];
   struct gcpro gcpro1, gcpro2;
 
 #ifdef WINDOWSNT
@@ -1362,10 +1364,9 @@ Internal use only, use `play-sound' instead.  */)
   if (!parse_sound (sound, attrs))
     error ("Invalid sound specification");
 
-  Lisp_Object file = Qnil;
-  GCPRO2 (sound, file);
-
 #ifndef WINDOWSNT
+  file = Qnil;
+  GCPRO2 (sound, file);
   current_sound_device = xzalloc (sizeof *current_sound_device);
   current_sound = xzalloc (sizeof *current_sound);
   record_unwind_protect_void (sound_cleanup);
@@ -1406,7 +1407,9 @@ Internal use only, use `play-sound' instead.  */)
   else if (FLOATP (attrs[SOUND_VOLUME]))
     current_sound_device->volume = XFLOAT_DATA (attrs[SOUND_VOLUME]) * 100;
 
-  CALLN (Frun_hook_with_args, Qplay_sound_functions, sound);
+  args[0] = Qplay_sound_functions;
+  args[1] = sound;
+  Frun_hook_with_args (2, args);
 
 #ifdef HAVE_ALSA
   if (!alsa_init (current_sound_device))
@@ -1419,6 +1422,9 @@ Internal use only, use `play-sound' instead.  */)
 
   /* Play the sound.  */
   current_sound->play (current_sound, current_sound_device);
+
+  /* Clean up.  */
+  UNGCPRO;
 
 #else /* WINDOWSNT */
 
@@ -1433,7 +1439,11 @@ Internal use only, use `play-sound' instead.  */)
       ui_volume_tmp = XFLOAT_DATA (attrs[SOUND_VOLUME]) * 100;
     }
 
-  CALLN (Frun_hook_with_args, Qplay_sound_functions, sound);
+  GCPRO2 (sound, file);
+
+  args[0] = Qplay_sound_functions;
+  args[1] = sound;
+  Frun_hook_with_args (2, args);
 
   /*
     Based on some experiments I have conducted, a value of 100 or less
@@ -1450,10 +1460,12 @@ Internal use only, use `play-sound' instead.  */)
     }
   (void)do_play_sound (SSDATA (file), ui_volume);
 
+  UNGCPRO;
+
 #endif /* WINDOWSNT */
 
-  UNGCPRO;
-  return unbind_to (count, Qnil);
+  unbind_to (count, Qnil);
+  return Qnil;
 }
 
 /***********************************************************************

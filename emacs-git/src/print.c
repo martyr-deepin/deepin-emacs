@@ -1171,7 +1171,12 @@ print_preprocess (Lisp_Object obj)
   if (PRINT_CIRCLE_CANDIDATE_P (obj))
     {
       if (!HASH_TABLE_P (Vprint_number_table))
-	Vprint_number_table = CALLN (Fmake_hash_table, QCtest, Qeq);
+	{
+	  Lisp_Object args[2];
+	  args[0] = QCtest;
+	  args[1] = Qeq;
+	  Vprint_number_table = Fmake_hash_table (2, args);
+	}
 
       /* In case print-circle is nil and print-gensym is t,
 	 add OBJ to Vprint_number_table only when OBJ is a symbol.  */
@@ -1774,8 +1779,9 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 	}
       else if (WINDOWP (obj))
 	{
-	  int len = sprintf (buf, "#<window %"pI"d",
-			     XWINDOW (obj)->sequence_number);
+	  int len;
+	  strout ("#<window ", -1, -1, printcharfun);
+	  len = sprintf (buf, "%d", XWINDOW (obj)->sequence_number);
 	  strout (buf, len, len, printcharfun);
 	  if (BUFFERP (XWINDOW (obj)->contents))
 	    {
@@ -2042,14 +2048,7 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 			    printcharfun);
 	    }
 	  PRINTCHAR ('>');
-          break;
-
-        case Lisp_Misc_Finalizer:
-          strout ("#<finalizer", -1, -1, printcharfun);
-          if (NILP (XFINALIZER (obj)->function))
-            strout (" used", -1, -1, printcharfun);
-          strout (">", -1, -1, printcharfun);
-          break;
+	  break;
 
 	  /* Remaining cases shouldn't happen in normal usage, but let's
 	     print them anyway for the benefit of the debugger.  */

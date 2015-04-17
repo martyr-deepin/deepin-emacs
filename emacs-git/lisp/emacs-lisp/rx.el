@@ -965,20 +965,20 @@ CHAR
      matches space and tab only.
 
 `graphic', `graph'
-     matches graphic characters--everything except whitespace, ASCII
-     and non-ASCII control characters, surrogates, and codepoints
-     unassigned by Unicode.
+     matches graphic characters--everything except ASCII control chars,
+     space, and DEL.
 
 `printing', `print'
-     matches whitespace and graphic characters.
+     matches printing characters--everything except ASCII control chars
+     and DEL.
 
 `alphanumeric', `alnum'
-     matches alphabetic characters and digits.  (For multibyte characters,
-     it matches according to Unicode character properties.)
+     matches letters and digits.  (But at present, for multibyte characters,
+     it matches anything that has word syntax.)
 
 `letter', `alphabetic', `alpha'
-     matches alphabetic characters.  (For multibyte characters,
-     it matches according to Unicode character properties.)
+     matches letters.  (But at present, for multibyte characters,
+     it matches anything that has word syntax.)
 
 `ascii'
      matches ASCII (unibyte) characters.

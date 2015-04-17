@@ -509,48 +509,6 @@ getting timeout messages."
   :type 'integer
   :group 'js)
 
-(defcustom js-indent-first-init nil
-  "Non-nil means specially indent the first variable declaration's initializer.
-Normally, the first declaration's initializer is unindented, and
-subsequent declarations have their identifiers aligned with it:
-
-  var o = {
-      foo: 3
-  };
-
-  var o = {
-      foo: 3
-  },
-      bar = 2;
-
-If this option has the value t, indent the first declaration's
-initializer by an additional level:
-
-  var o = {
-          foo: 3
-      };
-
-  var o = {
-          foo: 3
-      },
-      bar = 2;
-
-If this option has the value `dynamic', if there is only one declaration,
-don't indent the first one's initializer; otherwise, indent it.
-
-  var o = {
-      foo: 3
-  };
-
-  var o = {
-          foo: 3
-      },
-      bar = 2;"
-  :version "25.1"
-  :type '(choice (const nil) (const t) (const dynamic))
-  :safe 'symbolp
-  :group 'js)
-
 ;;; KeyMap
 
 (defvar js-mode-map
@@ -576,7 +534,6 @@ don't indent the first one's initializer; otherwise, indent it.
   (let ((table (make-syntax-table)))
     (c-populate-syntax-table table)
     (modify-syntax-entry ?$ "_" table)
-    (modify-syntax-entry ?` "\"" table)
     table)
   "Syntax table for `js-mode'.")
 
@@ -1900,36 +1857,6 @@ In particular, return the buffer position of the first `for' kwd."
       (goto-char for-kwd)
       (current-column))))
 
-(defun js--maybe-goto-declaration-keyword-end (parse-status)
-  "Helper function for `js--proper-indentation'.
-Depending on the value of `js-indent-first-init', move
-point to the end of a variable declaration keyword so that
-indentation is aligned to that column."
-  (cond
-   ((eq js-indent-first-init t)
-    (when (looking-at js--declaration-keyword-re)
-      (goto-char (1+ (match-end 0)))))
-   ((eq js-indent-first-init 'dynamic)
-    (let ((bracket (nth 1 parse-status))
-          declaration-keyword-end
-          at-closing-bracket-p
-          comma-p)
-      (when (looking-at js--declaration-keyword-re)
-        (setq declaration-keyword-end (match-end 0))
-        (save-excursion
-          (goto-char bracket)
-          (setq at-closing-bracket-p
-                (condition-case nil
-                    (progn
-                      (forward-sexp)
-                      t)
-                  (error nil)))
-          (when at-closing-bracket-p
-            (while (forward-comment 1))
-            (setq comma-p (looking-at-p ","))))
-        (when comma-p
-          (goto-char (1+ declaration-keyword-end))))))))
-
 (defun js--proper-indentation (parse-status)
   "Return the proper indentation for the current line."
   (save-excursion
@@ -1963,7 +1890,6 @@ indentation is aligned to that column."
                    (skip-syntax-backward " ")
                    (when (eq (char-before) ?\)) (backward-list))
                    (back-to-indentation)
-                   (js--maybe-goto-declaration-keyword-end parse-status)
                    (let* ((in-switch-p (unless same-indent-p
                                          (looking-at "\\_<switch\\_>")))
                           (same-indent-p (or same-indent-p
@@ -2002,9 +1928,8 @@ indentation is aligned to that column."
   (let* ((parse-status
           (save-excursion (syntax-ppss (point-at-bol))))
          (offset (- (point) (save-excursion (back-to-indentation) (point)))))
-    (unless (nth 3 parse-status)
-      (indent-line-to (js--proper-indentation parse-status))
-      (when (> offset 0) (forward-char offset)))))
+    (indent-line-to (js--proper-indentation parse-status))
+    (when (> offset 0) (forward-char offset))))
 
 ;;; Filling
 

@@ -265,101 +265,123 @@ the list of supported language environments, and use the command
 for more information about the language environment @var{lang-env}.
 Supported language environments include:
 
-@c @cindex entries below are split between portions of the list to
-@c make them more accurate, i.e., land on the line that mentions the
-@c language.  However, makeinfo 4.x doesn't fill inside @quotation
-@c lines that follow a @cindex entry and whose text has no whitespace.
-@c To work around, we group the language environments together, so
-@c that the blank that separates them triggers refill.
 @quotation
 @cindex ASCII
+ASCII,
 @cindex Arabic
-ASCII, Arabic,
+Arabic,
 @cindex Belarusian
+Belarusian,
 @cindex Bengali
-Belarusian, Bengali,
+Bengali,
 @cindex Brazilian Portuguese
+Brazilian Portuguese,
 @cindex Bulgarian
-Brazilian Portuguese, Bulgarian,
+Bulgarian,
 @cindex Burmese
+Burmese,
 @cindex Cham
-Burmese, Cham,
+Cham,
 @cindex Chinese
 Chinese-BIG5, Chinese-CNS, Chinese-EUC-TW, Chinese-GB,
 Chinese-GB18030, Chinese-GBK,
 @cindex Croatian
+Croatian,
 @cindex Cyrillic
-Croatian, Cyrillic-ALT, Cyrillic-ISO, Cyrillic-KOI8,
+Cyrillic-ALT, Cyrillic-ISO, Cyrillic-KOI8,
 @cindex Czech
+Czech,
 @cindex Devanagari
-Czech, Devanagari,
+Devanagari,
 @cindex Dutch
+Dutch,
 @cindex English
-Dutch, English,
+English,
 @cindex Esperanto
+Esperanto,
 @cindex Ethiopic
-Esperanto, Ethiopic,
+Ethiopic,
 @cindex French
+French,
 @cindex Georgian
-French, Georgian,
+Georgian,
 @cindex German
+German,
 @cindex Greek
+Greek,
 @cindex Gujarati
-German, Greek, Gujarati,
+Gujarati,
 @cindex Hebrew
+Hebrew,
 @cindex IPA
-Hebrew, IPA,
+IPA,
 @cindex Italian
 Italian,
 @cindex Japanese
+Japanese,
 @cindex Kannada
-Japanese, Kannada,
+Kannada,
 @cindex Khmer
+Khmer,
 @cindex Korean
+Korean,
 @cindex Lao
-Khmer, Korean, Lao,
+Lao,
 @cindex Latin
 Latin-1, Latin-2, Latin-3, Latin-4, Latin-5, Latin-6, Latin-7,
 Latin-8, Latin-9,
 @cindex Latvian
+Latvian,
 @cindex Lithuanian
-Latvian, Lithuanian,
+Lithuanian,
 @cindex Malayalam
+Malayalam,
 @cindex Oriya
-Malayalam, Oriya,
+Oriya,
 @cindex Persian
+Persian,
 @cindex Polish
-Persian, Polish,
+Polish,
 @cindex Punjabi
+Punjabi,
 @cindex Romanian
-Punjabi, Romanian,
+Romanian,
 @cindex Russian
+Russian,
 @cindex Sinhala
-Russian, Sinhala,
+Sinhala,
 @cindex Slovak
+Slovak,
 @cindex Slovenian
+Slovenian,
 @cindex Spanish
-Slovak, Slovenian, Spanish,
+Spanish,
 @cindex Swedish
+Swedish,
 @cindex TaiViet
-Swedish, TaiViet,
+TaiViet,
 @cindex Tajik
+Tajik,
 @cindex Tamil
-Tajik, Tamil,
+Tamil,
 @cindex Telugu
+Telugu,
 @cindex Thai
-Telugu, Thai,
+Thai,
 @cindex Tibetan
+Tibetan,
 @cindex Turkish
-Tibetan, Turkish,
+Turkish,
 @cindex UTF-8
+UTF-8,
 @cindex Ukrainian
-UTF-8, Ukrainian,
+Ukrainian,
 @cindex Vietnamese
+Vietnamese,
 @cindex Welsh
-Vietnamese, Welsh,
+Welsh, and
 @cindex Windows-1255
-and Windows-1255.
+Windows-1255.
 @end quotation
 
   To display the script(s) used by your language environment on a

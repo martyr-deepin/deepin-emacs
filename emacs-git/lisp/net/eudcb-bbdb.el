@@ -3,8 +3,7 @@
 ;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Oscar Figueiredo <oscar@cpe.fr>
-;;         Pavel Janík <Pavel@Janik.cz>
-;; Maintainer: Thomas Fitzsimmons <fitzsim@fitzsim.org>
+;; Maintainer: Pavel Janík <Pavel@Janik.cz>
 ;; Keywords: comm
 ;; Package: eudc
 
@@ -41,24 +40,6 @@
 ;; I don't want to use mapcar*
 (defvar eudc-bbdb-current-query nil)
 (defvar eudc-bbdb-current-return-attributes nil)
-
-(defvar bbdb-version)
-
-(defun eudc-bbdb-field (field-symbol)
-  "Convert FIELD-SYMBOL so that it is recognized by the current BBDB version.
-BBDB < 3 used `net'; BBDB >= 3 uses `mail'."
-  ;; This just-in-time translation permits upgrading from BBDB 2 to
-  ;; BBDB 3 without restarting Emacs.
-  (if (and (eq field-symbol 'net)
-	   (or
-	    ;; MELPA versions of BBDB may have a bad package version,
-	    ;; but they're all version 3 or later.
-	    (equal bbdb-version "@PACKAGE_VERSION@")
-	    ;; Development versions of BBDB can have the format "X.YZ
-	    ;; devo".  Split the string just in case.
-	    (version<= "3" (car (split-string bbdb-version)))))
-      'mail
-    field-symbol))
 
 (defvar eudc-bbdb-attributes-translation-alist
   '((name . lastname)
@@ -103,9 +84,7 @@ BBDB < 3 used `net'; BBDB >= 3 uses `mail'."
                    (progn
                      (setq bbdb-val
                            (eval (list (intern (concat "bbdb-record-"
-                                                       (symbol-name
-                                                        (eudc-bbdb-field
-                                                         attr))))
+                                                       (symbol-name attr)))
                                        'record)))
                      (if (listp bbdb-val)
                          (if eudc-bbdb-enable-substring-matches
@@ -188,7 +167,7 @@ The record is filtered according to `eudc-bbdb-current-return-attributes'"
 	(setq val (eval
 		   (list (intern
 			  (concat "bbdb-record-"
-				  (symbol-name (eudc-bbdb-field attr))))
+				  (symbol-name attr)))
 			 'record))))
        (t
 	(error "Unknown BBDB attribute")))

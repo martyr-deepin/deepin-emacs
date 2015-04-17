@@ -989,8 +989,7 @@ are replaced:
   %n   The mail address, e.g. \"john.doe@example.invalid\".
   %N   The real name if present, e.g.: \"John Doe\", else fall
        back to the mail address.
-  %F   The first name if present, e.g.: \"John\", else fall
-       back to the mail address.
+  %F   The first name if present, e.g.: \"John\".
   %L   The last name if present, e.g.: \"Doe\".
   %Z, %z   The time zone in the numeric form, e.g.:\"+0000\".
 
@@ -1763,10 +1762,7 @@ no, only reply back to the author."
 	       (let (mucs-ignore-version-incompatibilities)
 		 (require 'un-define))
 	     (error)))
-       (condition-case nil
-	   (require 'idna)
-	 (file-error)
-	 (invalid-operation))
+       (condition-case nil (require 'idna) (file-error))
        idna-program
        (executable-find idna-program)
        (string= (idna-to-ascii "räksmörgås") "xn--rksmrgs-5wao1o")
@@ -1972,7 +1968,7 @@ You must have the \"hashcash\" binary installed, see `hashcash-path'."
   ;; "dead" nato bitnet uucp
   "Regular expression that matches a valid FQDN."
   ;; see also: gnus-button-valid-fqdn-regexp
-  :version "25.1"
+  :version "22.1"
   :group 'message-headers
   :type 'regexp)
 
@@ -2964,30 +2960,6 @@ See also `message-forbidden-properties'."
 
 (autoload 'ecomplete-setup "ecomplete") ;; for Emacs <23.
 
-(defvar message-smileys '(":-)" ":)"
-                          ":-(" ":("
-                          ";-)" ";)")
-  "A list of recognized smiley faces in `message-mode'.")
-
-(defun message--syntax-propertize (beg end)
-  "Syntax-propertize certain message text specially."
-  (let ((citation-regexp (concat "^" message-cite-prefix-regexp ".*$"))
-        (smiley-regexp (regexp-opt message-smileys)))
-    (goto-char beg)
-    (while (search-forward-regexp citation-regexp
-                                  end 'noerror)
-      (let ((start (match-beginning 0))
-            (end (match-end 0)))
-        (add-text-properties start (1+ start)
-                             `(syntax-table ,(string-to-syntax "<")))
-        (add-text-properties end (min (1+ end) (point-max))
-                             `(syntax-table ,(string-to-syntax ">")))))
-    (goto-char beg)
-    (while (search-forward-regexp smiley-regexp
-            end 'noerror)
-      (add-text-properties (match-beginning 0) (match-end 0)
-                           `(syntax-table ,(string-to-syntax "."))))))
-
 ;;;###autoload
 (define-derived-mode message-mode text-mode "Message"
   "Major mode for editing mail and news to be sent.
@@ -3090,13 +3062,7 @@ M-RET    `message-newline-and-reformat' (break the line and reformat)."
     ;; multibyte is not necessary at all. -- zsh
     (mm-enable-multibyte))
   (set (make-local-variable 'indent-tabs-mode) nil) ;No tabs for indentation.
-  (mml-mode)
-  ;; Syntactic fontification. Helps `show-paren-mode',
-  ;; `electric-pair-mode', and C-M-* navigation by syntactically
-  ;; excluding citations and other artifacts.
-  ;;
-  (set (make-local-variable 'syntax-propertize-function) 'message--syntax-propertize)
-  (set (make-local-variable 'parse-sexp-ignore-comments) t))
+  (mml-mode))
 
 (defun message-setup-fill-variables ()
   "Setup message fill variables."
@@ -4073,7 +4039,7 @@ See `message-citation-line-format'."
                       (setq fname lname lname newlname)))))
 	      ;; The following letters are not used in `format-time-string':
 	      (push ?E lst) (push "<E>" lst)
-	      (push ?F lst) (push (or fname name-or-net) lst)
+	      (push ?F lst) (push fname lst)
 	      ;; We might want to use "" instead of "<X>" later.
 	      (push ?J lst) (push "<J>" lst)
 	      (push ?K lst) (push "<K>" lst)
@@ -4940,11 +4906,6 @@ evaluates `message-send-mail-hook' just before sending a message.
 It is useful if your ISP requires the POP-before-SMTP
 authentication.  See the Gnus manual for details."
   (run-hooks 'message-send-mail-hook)
-  ;; Change header-delimiter to be what smtpmail expects.
-  (goto-char (point-min))
-  (when (re-search-forward
-	 (concat "^" (regexp-quote mail-header-separator) "\n"))
-    (replace-match "\n"))
   (smtpmail-send-it))
 
 (defun message-send-mail-with-mailclient ()

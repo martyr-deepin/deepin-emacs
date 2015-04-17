@@ -1,4 +1,4 @@
-;;; sgml-mode.el --- SGML- and HTML-editing modes -*- lexical-binding:t -*-
+;;; sgml-mode.el --- SGML- and HTML-editing modes -*- coding: utf-8 -*-
 
 ;; Copyright (C) 1992, 1995-1996, 1998, 2001-2015 Free Software
 ;; Foundation, Inc.
@@ -44,25 +44,6 @@
 (defcustom sgml-basic-offset 2
   "Specifies the basic indentation level for `sgml-indent-line'."
   :type 'integer
-  :group 'sgml)
-
-(defcustom sgml-attribute-offset 0
-  "Specifies a delta for attribute indentation in `sgml-indent-line'.
-
-When 0, attribute indentation looks like this:
-
-  <element
-    attribute=\"value\">
-  </element>
-
-When 2, attribute indentation looks like this:
-
-  <element
-      attribute=\"value\">
-  </element>"
-  :version "25.1"
-  :type 'integer
-  :safe 'integerp
   :group 'sgml)
 
 (defcustom sgml-xml-mode nil
@@ -442,7 +423,7 @@ an optional alist of possible values."
 	(comment-style 'plain))
     (comment-indent-new-line soft)))
 
-(defun sgml-mode-facemenu-add-face-function (face _end)
+(defun sgml-mode-facemenu-add-face-function (face end)
   (let ((tag-face (cdr (assq face sgml-face-tag-alist))))
     (cond (tag-face
 	   (setq tag-face (funcall skeleton-transformation-function tag-face))
@@ -844,7 +825,7 @@ Return non-nil if we skipped over matched tags."
 (defvar sgml-electric-tag-pair-overlays nil)
 (defvar sgml-electric-tag-pair-timer nil)
 
-(defun sgml-electric-tag-pair-before-change-function (_beg end)
+(defun sgml-electric-tag-pair-before-change-function (beg end)
   (condition-case err
   (save-excursion
     (goto-char end)
@@ -1012,7 +993,7 @@ With prefix argument ARG, repeat this ARG times."
 (or (get 'sgml-tag 'invisible)
     (setplist 'sgml-tag
 	      (append '(invisible t
-                        cursor-sensor-functions (sgml-cursor-sensor)
+			point-entered sgml-point-entered
 			rear-nonsticky t
 			read-only t)
 		      (symbol-plist 'sgml-tag))))
@@ -1020,59 +1001,63 @@ With prefix argument ARG, repeat this ARG times."
 (defun sgml-tags-invisible (arg)
   "Toggle visibility of existing tags."
   (interactive "P")
-  (let ((inhibit-read-only t)
+  (let ((modified (buffer-modified-p))
+	(inhibit-read-only t)
+	(inhibit-modification-hooks t)
+	;; Avoid spurious the `file-locked' checks.
+	(buffer-file-name nil)
+	;; This is needed in case font lock gets called,
+	;; since it moves point and might call sgml-point-entered.
+	;; How could it get called?  -stef
+	(inhibit-point-motion-hooks t)
 	string)
-    (with-silent-modifications
-      (save-excursion
-        (goto-char (point-min))
-        (if (setq-local sgml-tags-invisible
-                        (if arg
-                            (>= (prefix-numeric-value arg) 0)
-                          (not sgml-tags-invisible)))
-            (while (re-search-forward sgml-tag-name-re nil t)
-              (setq string
-                    (cdr (assq (intern-soft (downcase (match-string 1)))
-                               sgml-display-text)))
-              (goto-char (match-beginning 0))
-              (and (stringp string)
-                   (not (overlays-at (point)))
-                   (let ((ol (make-overlay (point) (match-beginning 1))))
-                     (overlay-put ol 'before-string string)
-                     (overlay-put ol 'sgml-tag t)))
-              (put-text-property (point)
-                                 (progn (forward-list) (point))
-                                 'category 'sgml-tag))
-          (let ((pos (point-min)))
-            (while (< (setq pos (next-overlay-change pos)) (point-max))
-              (dolist (ol (overlays-at pos))
-                (if (overlay-get ol 'sgml-tag)
-                    (delete-overlay ol)))))
-          (remove-text-properties (point-min) (point-max) '(category nil)))))
-    (cursor-sensor-mode (if sgml-tags-invisible 1 -1))
+    (unwind-protect
+	(save-excursion
+	  (goto-char (point-min))
+	  (if (setq-local sgml-tags-invisible
+			  (if arg
+			      (>= (prefix-numeric-value arg) 0)
+			    (not sgml-tags-invisible)))
+	      (while (re-search-forward sgml-tag-name-re nil t)
+		(setq string
+		      (cdr (assq (intern-soft (downcase (match-string 1)))
+				 sgml-display-text)))
+		(goto-char (match-beginning 0))
+		(and (stringp string)
+		     (not (overlays-at (point)))
+		     (let ((ol (make-overlay (point) (match-beginning 1))))
+		       (overlay-put ol 'before-string string)
+		       (overlay-put ol 'sgml-tag t)))
+		(put-text-property (point)
+				   (progn (forward-list) (point))
+				   'category 'sgml-tag))
+	    (let ((pos (point-min)))
+	      (while (< (setq pos (next-overlay-change pos)) (point-max))
+		(dolist (ol (overlays-at pos))
+		  (if (overlay-get ol 'sgml-tag)
+		      (delete-overlay ol)))))
+	    (remove-text-properties (point-min) (point-max) '(category nil))))
+      (restore-buffer-modified-p modified))
     (run-hooks 'sgml-tags-invisible-hook)
     (message "")))
 
-(defun sgml-cursor-sensor (window x dir)
-  ;; Show preceding or following hidden tag, depending of cursor direction (and
-  ;; `dir' is not the direction in this sense).
-  (when (eq dir 'entered)
-    (ignore-errors
-      (let* ((y (window-point window))
-             (otherend
-              (save-excursion
-                (goto-char y)
-                (cond
-                 ((and (eq (char-before) ?>)
-                       (or (not (eq (char-after) ?<))
-                           (> x y)))
-                  (backward-sexp))
-                 ((eq (char-after y) ?<)
-                  (forward-sexp)))
-                (point))))
-        (message "Invisible tag: %s"
-                 ;; Strip properties, otherwise, the text is invisible.
-                 (buffer-substring-no-properties
-                  y otherend))))))
+(defun sgml-point-entered (x y)
+  ;; Show preceding or following hidden tag, depending of cursor direction.
+  (let ((inhibit-point-motion-hooks t))
+    (save-excursion
+      (condition-case nil
+	  (message "Invisible tag: %s"
+		   ;; Strip properties, otherwise, the text is invisible.
+		   (buffer-substring-no-properties
+		    (point)
+		    (if (or (and (> x y)
+				 (not (eq (following-char) ?<)))
+			    (and (< x y)
+				 (eq (preceding-char) ?>)))
+			(backward-list)
+		      (forward-list))))
+	(error nil)))))
+
 
 
 (defun sgml-validate (command)
@@ -1154,7 +1139,7 @@ If nil, start from a preceding tag at indentation."
        ((and state (> (nth 0 state) 0)) (cons 'tag (nth 1 state)))
        (t (cons 'text text-start))))))
 
-(defun sgml-beginning-of-tag (&optional only-immediate)
+(defun sgml-beginning-of-tag (&optional top-level)
   "Skip to beginning of tag and return its name.
 If this can't be done, return nil."
   (let ((context (sgml-lexical-context)))
@@ -1163,7 +1148,7 @@ If this can't be done, return nil."
 	  (goto-char (cdr context))
 	  (when (looking-at sgml-tag-name-re)
 	    (match-string-no-properties 1)))
-      (if only-immediate nil
+      (if top-level nil
 	(when (not (eq (car context) 'text))
 	  (goto-char (cdr context))
 	  (sgml-beginning-of-tag t))))))
@@ -1525,13 +1510,13 @@ LCON is the lexical context, if any."
     (`pi nil)
 
     (`tag
-     (goto-char (+ (cdr lcon) sgml-attribute-offset))
+     (goto-char (1+ (cdr lcon)))
      (skip-chars-forward "^ \t\n")	;Skip tag name.
      (skip-chars-forward " \t")
      (if (not (eolp))
 	 (current-column)
        ;; This is the first attribute: indent.
-       (goto-char (+ (cdr lcon) sgml-attribute-offset))
+       (goto-char (1+ (cdr lcon)))
        (+ (current-column) sgml-basic-offset)))
 
     (`text
@@ -1577,19 +1562,6 @@ LCON is the lexical context, if any."
 	      (skip-chars-forward " \t\n")
 	      (< (point) here) (sgml-at-indentation-p))
 	 (current-column))
-	;; ;; If the parsing failed, try to recover.
-	;; ((and (null context) (bobp)
-	;; 	(not (eq (char-after here) ?<)))
-	;;  (goto-char here)
-	;;  (if (and (looking-at "--[ \t\n]*>")
-	;; 	    (re-search-backward "<!--" nil t))
-	;;      ;; No wonder parsing failed: we're in a comment.
-	;;      (sgml-calculate-indent (prog2 (goto-char (match-end 0))
-	;; 				  (sgml-lexical-context)
-	;; 				(goto-char here)))
-	;;    ;; We have no clue what's going on, let's be honest about it.
-	;;    nil))
-	;; Otherwise, just follow the rules.
 	(t
 	 (goto-char there)
 	 (+ (current-column)

@@ -157,8 +157,8 @@ typedef BOOL (WINAPI * TrackMouseEvent_Proc)
 typedef LONG (WINAPI * ImmGetCompositionString_Proc)
   (IN HIMC context, IN DWORD index, OUT LPVOID buffer, IN DWORD bufLen);
 typedef HIMC (WINAPI * ImmGetContext_Proc) (IN HWND window);
-typedef BOOL (WINAPI * ImmReleaseContext_Proc) (IN HWND wnd, IN HIMC context);
-typedef BOOL (WINAPI * ImmSetCompositionWindow_Proc) (IN HIMC context,
+typedef HWND (WINAPI * ImmReleaseContext_Proc) (IN HWND wnd, IN HIMC context);
+typedef HWND (WINAPI * ImmSetCompositionWindow_Proc) (IN HIMC context,
 						      IN COMPOSITIONFORM *form);
 typedef HMONITOR (WINAPI * MonitorFromPoint_Proc) (IN POINT pt, IN DWORD flags);
 typedef BOOL (WINAPI * GetMonitorInfo_Proc)
@@ -345,6 +345,10 @@ x_real_positions (struct frame *f, int *xptr, int *yptr)
 
   /* Convert (0, 0) in the client area to screen co-ordinates.  */
   ClientToScreen (FRAME_W32_WINDOW (f), &pt);
+
+  /* Remember x_pixels_diff and y_pixels_diff.  */
+  f->x_pixels_diff = pt.x - rect.left;
+  f->y_pixels_diff = pt.y - rect.top;
 
   *xptr = rect.left;
   *yptr = rect.top;
@@ -1129,8 +1133,7 @@ gamma_correct (struct frame *f, COLORREF *color)
    If ALLOC is nonzero, allocate a new colormap cell.  */
 
 int
-w32_defined_color (struct frame *f, const char *color, XColor *color_def,
-		   bool alloc_p)
+w32_defined_color (struct frame *f, const char *color, XColor *color_def, int alloc)
 {
   register Lisp_Object tem;
   COLORREF w32_color_ref;
@@ -1164,7 +1167,7 @@ w32_defined_color (struct frame *f, const char *color, XColor *color_def,
 	      entry = entry->next;
 	    }
 
-	  if (entry == NULL && alloc_p)
+	  if (entry == NULL && alloc)
 	    {
 	      /* not already mapped, so add to list */
 	      entry = xmalloc (sizeof (struct w32_palette_entry));
@@ -1217,7 +1220,7 @@ x_decode_color (struct frame *f, Lisp_Object arg, int def)
 
   /* w32_defined_color is responsible for coping with failures
      by looking for a near-miss.  */
-  if (w32_defined_color (f, SDATA (arg), &cdef, true))
+  if (w32_defined_color (f, SDATA (arg), &cdef, 1))
     return cdef.pixel;
 
   /* defined_color failed; return an ultimate default.  */
@@ -1521,7 +1524,7 @@ x_set_cursor_type (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 void
 x_set_icon_type (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
-  bool result;
+  int result;
 
   if (NILP (arg) && NILP (oldval))
     return;
@@ -1629,7 +1632,7 @@ x_set_internal_border_width (struct frame *f, Lisp_Object arg, Lisp_Object oldva
 
       if (FRAME_X_WINDOW (f) != 0)
 	{
-	  adjust_frame_size (f, -1, -1, 3, false, Qinternal_border_width);
+	  adjust_frame_size (f, -1, -1, 3, 0, Qinternal_border_width);
 
 	  if (FRAME_VISIBLE_P (f))
 	    x_clear_under_internal_border (f);
@@ -1675,7 +1678,7 @@ x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 	 of the outer rectangle (including decorations) unchanged, and a
 	 second time because we want to keep the height of the inner
 	 rectangle (without the decorations unchanged).  */
-      adjust_frame_size (f, -1, -1, 2, true, Qmenu_bar_lines);
+      adjust_frame_size (f, -1, -1, 2, 1, Qmenu_bar_lines);
 
       /* Not sure whether this is needed.  */
       x_clear_under_internal_border (f);
@@ -1718,7 +1721,6 @@ x_change_tool_bar_height (struct frame *f, int height)
   int old_height = FRAME_TOOL_BAR_HEIGHT (f);
   int lines = (height + unit - 1) / unit;
   int old_text_height = FRAME_TEXT_HEIGHT (f);
-  Lisp_Object fullscreen;
 
   /* Make sure we redisplay all windows in this frame.  */
   windows_or_buffers_changed = 23;
@@ -1743,13 +1745,10 @@ x_change_tool_bar_height (struct frame *f, int height)
   f->n_tool_bar_rows = 0;
 
   adjust_frame_size (f, -1, -1,
-		     ((!f->tool_bar_redisplayed_once
-		       && (NILP (fullscreen =
-				 get_frame_param (f, Qfullscreen))
-			   || EQ (fullscreen, Qfullwidth))) ? 1
+		     (!f->tool_bar_redisplayed_once ? 1
 		      : (old_height == 0 || height == 0) ? 2
 		      : 4),
-		     false, Qtool_bar_lines);
+		     0, Qtool_bar_lines);
 
   /* adjust_frame_size might not have done anything, garbage frame
      here.  */
@@ -1759,50 +1758,6 @@ x_change_tool_bar_height (struct frame *f, int height)
     x_clear_under_internal_border (f);
 }
 
-static void
-w32_set_title_bar_text (struct frame *f, Lisp_Object name)
-{
-  if (FRAME_W32_WINDOW (f))
-    {
-      block_input ();
-#ifdef __CYGWIN__
-      GUI_FN (SetWindowText) (FRAME_W32_WINDOW (f),
-                              GUI_SDATA (GUI_ENCODE_SYSTEM (name)));
-#else
-      /* The frame's title many times shows the name of the file
-	 visited in the selected window's buffer, so it makes sense to
-	 support non-ASCII characters outside of the current system
-	 codepage in the title.  */
-      if (w32_unicode_filenames)
-	{
-	  Lisp_Object encoded_title = ENCODE_UTF_8 (name);
-	  wchar_t *title_w;
-	  int tlen = pMultiByteToWideChar (CP_UTF8, 0, SSDATA (encoded_title),
-					   -1, NULL, 0);
-
-	  if (tlen > 0)
-	    {
-	      /* Windows truncates the title text beyond what fits on
-		 a single line, so we can limit the length to some
-		 reasonably large value, and use alloca.  */
-	      if (tlen > 10000)
-		tlen = 10000;
-	      title_w = alloca ((tlen + 1) * sizeof (wchar_t));
-	      pMultiByteToWideChar (CP_UTF8, 0, SSDATA (encoded_title), -1,
-				    title_w, tlen);
-	      title_w[tlen] = L'\0';
-	      SetWindowTextW (FRAME_W32_WINDOW (f), title_w);
-	    }
-	  else	/* Conversion to UTF-16 failed, so we punt.  */
-	    SetWindowTextA (FRAME_W32_WINDOW (f),
-			    SSDATA (ENCODE_SYSTEM (name)));
-	}
-      else
-	SetWindowTextA (FRAME_W32_WINDOW (f), SSDATA (ENCODE_SYSTEM (name)));
-#endif
-      unblock_input ();
-    }
-}
 
 /* Change the name of frame F to NAME.  If NAME is nil, set F's name to
        w32_id_name.
@@ -1816,7 +1771,7 @@ w32_set_title_bar_text (struct frame *f, Lisp_Object name)
        F->explicit_name is set, ignore the new name; otherwise, set it.  */
 
 void
-x_set_name (struct frame *f, Lisp_Object name, bool explicit)
+x_set_name (struct frame *f, Lisp_Object name, int explicit)
 {
   /* Make sure that requests from lisp code override requests from
      Emacs redisplay code.  */
@@ -1856,7 +1811,13 @@ x_set_name (struct frame *f, Lisp_Object name, bool explicit)
   if (! NILP (f->title))
     name = f->title;
 
-  w32_set_title_bar_text (f, name);
+  if (FRAME_W32_WINDOW (f))
+    {
+      block_input ();
+      GUI_FN (SetWindowText) (FRAME_W32_WINDOW (f),
+                              GUI_SDATA (GUI_ENCODE_SYSTEM (name)));
+      unblock_input ();
+    }
 }
 
 /* This function should be called when the user's lisp code has
@@ -1865,7 +1826,7 @@ x_set_name (struct frame *f, Lisp_Object name, bool explicit)
 void
 x_explicitly_set_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
-  x_set_name (f, arg, true);
+  x_set_name (f, arg, 1);
 }
 
 /* This function should be called by Emacs redisplay code to set the
@@ -1874,7 +1835,7 @@ x_explicitly_set_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 void
 x_implicitly_set_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
-  x_set_name (f, arg, false);
+  x_set_name (f, arg, 0);
 }
 
 /* Change the title of frame F to NAME.
@@ -1894,7 +1855,13 @@ x_set_title (struct frame *f, Lisp_Object name, Lisp_Object old_name)
   if (NILP (name))
     name = f->name;
 
-  w32_set_title_bar_text (f, name);
+  if (FRAME_W32_WINDOW (f))
+    {
+      block_input ();
+      GUI_FN (SetWindowText) (FRAME_W32_WINDOW (f),
+                              GUI_SDATA (GUI_ENCODE_SYSTEM (name)));
+      unblock_input ();
+    }
 }
 
 void
@@ -3291,12 +3258,12 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	     field being reset to nil.  */
 	  f = x_window_to_frame (dpyinfo, hwnd);
 	  if (!(f && FRAME_LIVE_P (f)))
-	    goto dflt;
+	    break;
 	  w = XWINDOW (FRAME_SELECTED_WINDOW (f));
 	  /* Punt if someone changed the frame's selected window
 	     behind our back. */
 	  if (w != w32_system_caret_window)
-	    goto dflt;
+	    break;
 
 	  form.dwStyle = CFS_RECT;
 	  form.ptCurrentPos.x = w32_system_caret_x;
@@ -3314,22 +3281,16 @@ w32_wnd_proc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	  /* Punt if the window was deleted behind our back.  */
 	  if (!BUFFERP (w->contents))
-	    goto dflt;
+	    break;
 
 	  context = get_ime_context_fn (hwnd);
 
 	  if (!context)
-	    goto dflt;
+	    break;
 
 	  set_ime_composition_window_fn (context, &form);
 	  release_ime_context_fn (hwnd, context);
 	}
-      /* We should "goto dflt" here to pass WM_IME_STARTCOMPOSITION to
-	 DefWindowProc, so that the composition window will actually
-	 be displayed.  But doing so causes trouble with displaying
-	 dialog boxes, such as the file selection dialog or font
-	 selection dialog.  So something else is needed to fix the
-	 former without breaking the latter.  See bug#11732.  */
       break;
 
     case WM_IME_ENDCOMPOSITION:
@@ -4238,7 +4199,7 @@ my_create_tip_window (struct frame *f)
 /* Create and set up the w32 window for frame F.  */
 
 static void
-w32_window (struct frame *f, long window_prompting, bool minibuffer_only)
+w32_window (struct frame *f, long window_prompting, int minibuffer_only)
 {
   block_input ();
 
@@ -4247,7 +4208,7 @@ w32_window (struct frame *f, long window_prompting, bool minibuffer_only)
      for the window manager, so GC relocation won't bother it.
 
      Elsewhere we specify the window name for the window manager.  */
-  f->namebuf = xlispstrdup (Vx_resource_name);
+  f->namebuf = xstrdup (SSDATA (Vx_resource_name));
 
   my_create_window (f);
 
@@ -4457,7 +4418,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
   struct frame *f;
   Lisp_Object frame, tem;
   Lisp_Object name;
-  bool minibuffer_only = false;
+  int minibuffer_only = 0;
   long window_prompting = 0;
   ptrdiff_t count = SPECPDL_INDEX ();
   struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
@@ -4517,12 +4478,12 @@ This function is an internal primitive--use `make-frame' instead.  */)
   else if (EQ (tem, Qonly))
     {
       f = make_minibuffer_frame ();
-      minibuffer_only = true;
+      minibuffer_only = 1;
     }
   else if (WINDOWP (tem))
     f = make_frame_without_minibuffer (tem, kb, display);
   else
-    f = make_frame (true);
+    f = make_frame (1);
 
   XSETFRAME (frame, f);
 
@@ -4559,12 +4520,12 @@ This function is an internal primitive--use `make-frame' instead.  */)
       /* Cast to UINT_PTR shuts up compiler warnings about cast to
 	 pointer from integer of different size.  */
       f->output_data.w32->parent_desc = (Window) (UINT_PTR) XFASTINT (parent);
-      f->output_data.w32->explicit_parent = true;
+      f->output_data.w32->explicit_parent = 1;
     }
   else
     {
       f->output_data.w32->parent_desc = FRAME_DISPLAY_INFO (f)->root_window;
-      f->output_data.w32->explicit_parent = false;
+      f->output_data.w32->explicit_parent = 0;
     }
 
   /* Set the name; the functions to which we pass f expect the name to
@@ -4572,12 +4533,12 @@ This function is an internal primitive--use `make-frame' instead.  */)
   if (EQ (name, Qunbound) || NILP (name))
     {
       fset_name (f, build_string (dpyinfo->w32_id_name));
-      f->explicit_name = false;
+      f->explicit_name = 0;
     }
   else
     {
       fset_name (f, name);
-      f->explicit_name = true;
+      f->explicit_name = 1;
       /* Use the frame's title when getting resources for this frame.  */
       specbind (Qx_resource_name, name);
     }
@@ -4655,7 +4616,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
      had one frame line vs one toolbar line which left us with a zero
      root window height which was obviously wrong as well ...  */
   adjust_frame_size (f, FRAME_COLS (f) * FRAME_COLUMN_WIDTH (f),
-		     FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), 5, true,
+		     FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), 5, 1,
 		     Qx_create_frame_1);
 
   /* The X resources controlling the menu-bar and tool-bar are
@@ -4674,6 +4635,8 @@ This function is an internal primitive--use `make-frame' instead.  */)
 		       "bufferPredicate", "BufferPredicate", RES_TYPE_SYMBOL);
   x_default_parameter (f, parameters, Qtitle, Qnil,
 		       "title", "Title", RES_TYPE_STRING);
+  x_default_parameter (f, parameters, Qfullscreen, Qnil,
+		       "fullscreen", "Fullscreen", RES_TYPE_SYMBOL);
 
   f->output_data.w32->dwStyle = WS_OVERLAPPEDWINDOW;
   f->output_data.w32->parent_desc = FRAME_DISPLAY_INFO (f)->root_window;
@@ -4688,7 +4651,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
 
   f->output_data.w32->current_cursor = f->output_data.w32->nontext_cursor;
 
-  window_prompting = x_figure_window_size (f, parameters, true);
+  window_prompting = x_figure_window_size (f, parameters, 1);
 
   tem = x_get_arg (dpyinfo, parameters, Qunsplittable, 0, 0, RES_TYPE_BOOLEAN);
   f->no_split = minibuffer_only || EQ (tem, Qt);
@@ -4722,21 +4685,15 @@ This function is an internal primitive--use `make-frame' instead.  */)
   /* Allow x_set_window_size, now.  */
   f->can_x_set_window_size = true;
 
-  adjust_frame_size (f, FRAME_TEXT_WIDTH (f), FRAME_TEXT_HEIGHT (f), 0, true,
+  adjust_frame_size (f, FRAME_TEXT_WIDTH (f), FRAME_TEXT_HEIGHT (f), 0, 1,
 		     Qx_create_frame_2);
 
   /* Tell the server what size and position, etc, we want, and how
      badly we want them.  This should be done after we have the menu
      bar so that its size can be taken into account.  */
   block_input ();
-  x_wm_set_size_hint (f, window_prompting, false);
+  x_wm_set_size_hint (f, window_prompting, 0);
   unblock_input ();
-
-  /* Process fullscreen parameter here in the hope that normalizing a
-     fullheight/fullwidth frame will produce the size set by the last
-     adjust_frame_size call.  */
-  x_default_parameter (f, parameters, Qfullscreen, Qnil,
-		       "fullscreen", "Fullscreen", RES_TYPE_SYMBOL);
 
   /* Make the window appear on the frame and enable display, unless
      the caller says not to.  However, with explicit parent, Emacs
@@ -4805,7 +4762,7 @@ DEFUN ("xw-color-defined-p", Fxw_color_defined_p, Sxw_color_defined_p, 1, 2, 0,
 
   CHECK_STRING (color);
 
-  if (w32_defined_color (f, SDATA (color), &foo, false))
+  if (w32_defined_color (f, SDATA (color), &foo, 0))
     return Qt;
   else
     return Qnil;
@@ -4820,7 +4777,7 @@ DEFUN ("xw-color-values", Fxw_color_values, Sxw_color_values, 1, 2, 0,
 
   CHECK_STRING (color);
 
-  if (w32_defined_color (f, SDATA (color), &foo, false))
+  if (w32_defined_color (f, SDATA (color), &foo, 0))
     return list3i ((GetRValue (foo.pixel) << 8) | GetRValue (foo.pixel),
 		   (GetGValue (foo.pixel) << 8) | GetGValue (foo.pixel),
 		   (GetBValue (foo.pixel) << 8) | GetBValue (foo.pixel));
@@ -4937,38 +4894,25 @@ If omitted or nil, that stands for the selected frame's display.  */)
 }
 
 DEFUN ("x-server-vendor", Fx_server_vendor, Sx_server_vendor, 0, 1, 0,
-       doc: /* Return the "vendor ID" string of the GUI software on TERMINAL.
-
-\(Labeling every distributor as a "vendor" embodies the false assumption
-that operating systems cannot be developed and distributed noncommercially.)
-
-For GNU and Unix systems, this queries the X server software; for
-MS-Windows, this queries the OS.
-
-The optional argument TERMINAL specifies which display to ask about.
-TERMINAL should be a terminal object, a frame or a display name (a string).
+       doc: /* Return the "vendor ID" string of the W32 system (Microsoft).
+The optional argument DISPLAY specifies which display to ask about.
+DISPLAY should be either a frame or a display name (a string).
 If omitted or nil, that stands for the selected frame's display.  */)
-  (Lisp_Object terminal)
+  (Lisp_Object display)
 {
   return build_string ("Microsoft Corp.");
 }
 
 DEFUN ("x-server-version", Fx_server_version, Sx_server_version, 0, 1, 0,
-       doc: /* Return the version numbers of the GUI software on TERMINAL.
-The value is a list of three integers specifying the version of the GUI
-software in use.
+       doc: /* Return the version numbers of the server of DISPLAY.
+The value is a list of three integers: the major and minor
+version numbers of the X Protocol in use, and the distributor-specific
+release number.  See also the function `x-server-vendor'.
 
-For GNU and Unix system, the first 2 numbers are the version of the X
-Protocol used on TERMINAL and the 3rd number is the distributor-specific
-release number.  For MS-Windows, the 3 numbers report the version and
-the build number of the OS.
-
-See also the function `x-server-vendor'.
-
-The optional argument TERMINAL specifies which display to ask about.
-TERMINAL should be a terminal object, a frame or a display name (a string).
+The optional argument DISPLAY specifies which display to ask about.
+DISPLAY should be either a frame or a display name (a string).
 If omitted or nil, that stands for the selected frame's display.  */)
-  (Lisp_Object terminal)
+  (Lisp_Object display)
 {
   return list3i (w32_major_version, w32_minor_version, w32_build_number);
 }
@@ -5678,7 +5622,7 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
   ptrdiff_t count = SPECPDL_INDEX ();
   struct gcpro gcpro1, gcpro2, gcpro3;
   struct kboard *kb;
-  bool face_change_before = face_change;
+  int face_change_count_before = face_change_count;
   Lisp_Object buffer;
   struct buffer *old_buffer;
 
@@ -5703,7 +5647,7 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
   frame = Qnil;
   GCPRO3 (parms, name, frame);
   /* Make a frame without minibuffer nor mode-line.  */
-  f = make_frame (false);
+  f = make_frame (0);
   f->wants_modeline = 0;
   XSETFRAME (frame, f);
 
@@ -5711,7 +5655,7 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
   buffer = Fget_buffer_create (tip);
   /* Use set_window_buffer instead of Fset_window_buffer (see
      discussion of bug#11984, bug#12025, bug#12026).  */
-  set_window_buffer (FRAME_ROOT_WINDOW (f), buffer, false, false);
+  set_window_buffer (FRAME_ROOT_WINDOW (f), buffer, 0, 0);
   old_buffer = current_buffer;
   set_buffer_internal_1 (XBUFFER (buffer));
   bset_truncate_lines (current_buffer, Qnil);
@@ -5741,19 +5685,19 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
 #endif /* GLYPH_DEBUG */
   FRAME_KBOARD (f) = kb;
   f->output_data.w32->parent_desc = FRAME_DISPLAY_INFO (f)->root_window;
-  f->output_data.w32->explicit_parent = false;
+  f->output_data.w32->explicit_parent = 0;
 
   /* Set the name; the functions to which we pass f expect the name to
      be set.  */
   if (EQ (name, Qunbound) || NILP (name))
     {
       fset_name (f, build_string (dpyinfo->w32_id_name));
-      f->explicit_name = false;
+      f->explicit_name = 0;
     }
   else
     {
       fset_name (f, name);
-      f->explicit_name = true;
+      f->explicit_name = 1;
       /* use the frame's title when getting resources for this frame.  */
       specbind (Qx_resource_name, name);
     }
@@ -5814,7 +5758,7 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
   f->output_data.w32->dwStyle = WS_BORDER | WS_POPUP | WS_DISABLED;
   f->output_data.w32->parent_desc = FRAME_DISPLAY_INFO (f)->root_window;
 
-  window_prompting = x_figure_window_size (f, parms, false);
+  window_prompting = x_figure_window_size (f, parms, 0);
 
   /* No fringes on tip frame.  */
   f->fringe_cols = 0;
@@ -5842,7 +5786,7 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
   SET_FRAME_COLS (f, 0);
   SET_FRAME_LINES (f, 0);
   adjust_frame_size (f, width * FRAME_COLUMN_WIDTH (f),
-		     height * FRAME_LINE_HEIGHT (f), 0, true, Qtip_frame);
+		     height * FRAME_LINE_HEIGHT (f), 0, 1, Qnil);
 
   /* Add `tooltip' frame parameter's default value. */
   if (NILP (Fframe_parameter (frame, Qtooltip)))
@@ -5874,7 +5818,7 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
       Fmodify_frame_parameters (frame, colors);
   }
 
-  f->no_split = true;
+  f->no_split = 1;
 
   UNGCPRO;
 
@@ -5890,11 +5834,11 @@ x_create_tip_frame (struct w32_display_info *dpyinfo,
   f->can_x_set_window_size = true;
 
   /* Setting attributes of faces of the tooltip frame from resources
-     and similar will set face_change, which leads to the
+     and similar will increment face_change_count, which leads to the
      clearing of all current matrices.  Since this isn't necessary
-     here, avoid it by resetting face_change to the value it
+     here, avoid it by resetting face_change_count to the value it
      had before we created the tip frame.  */
-  face_change = face_change_before;
+  face_change_count = face_change_count_before;
 
   /* Discard the unwind_protect.  */
   return unbind_to (count, frame);
@@ -6021,8 +5965,7 @@ Text larger than the specified size is clipped.  */)
   int root_x, root_y;
   struct buffer *old_buffer;
   struct text_pos pos;
-  int i, width, height;
-  bool seen_reversed_p;
+  int i, width, height, seen_reversed_p;
   struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
   int old_windows_or_buffers_changed = windows_or_buffers_changed;
   ptrdiff_t count = SPECPDL_INDEX ();
@@ -6151,7 +6094,7 @@ Text larger than the specified size is clipped.  */)
 
   FRAME_TOTAL_COLS (f) = WINDOW_TOTAL_COLS (w);
   adjust_frame_glyphs (f);
-  w->pseudo_window_p = true;
+  w->pseudo_window_p = 1;
 
   /* Display the tooltip text in a temporary buffer.  */
   old_buffer = current_buffer;
@@ -6163,8 +6106,7 @@ Text larger than the specified size is clipped.  */)
   try_window (FRAME_ROOT_WINDOW (f), pos, TRY_WINDOW_IGNORE_FONTS_CHANGE);
 
   /* Compute width and height of the tooltip.  */
-  width = height = 0;
-  seen_reversed_p = false;
+  width = height = seen_reversed_p = 0;
   for (i = 0; i < w->desired_matrix->nrows; ++i)
     {
       struct glyph_row *row = &w->desired_matrix->rows[i];
@@ -6176,7 +6118,7 @@ Text larger than the specified size is clipped.  */)
 	break;
 
       /* Let the row go over the full width of the frame.  */
-      row->full_width_p = true;
+      row->full_width_p = 1;
 
       row_width = row->pixel_width;
       if (row->used[TEXT_AREA])
@@ -6200,7 +6142,7 @@ Text larger than the specified size is clipped.  */)
 	      if (g->type == STRETCH_GLYPH && NILP (g->object))
 		{
 		  row_width -= g->pixel_width;
-		  seen_reversed_p = true;
+		  seen_reversed_p = 1;
 		}
 	    }
 	}
@@ -6241,7 +6183,7 @@ Text larger than the specified size is clipped.  */)
 
 	  if (!row->enabled_p || !MATRIX_ROW_DISPLAYS_TEXT_P (row))
 	    break;
-	  row->full_width_p = true;
+	  row->full_width_p = 1;
 	  row_width = row->pixel_width;
 	  if (row->used[TEXT_AREA] && !row->reversed_p)
 	    {
@@ -7568,7 +7510,7 @@ elements (all size values are in pixels).
     menu_bar_height = single_bar_height;
 
   return
-    listn (CONSTYPE_HEAP, 10,
+    listn (CONSTYPE_PURE, 10,
 	   Fcons (Qframe_position,
 		  Fcons (make_number (frame_outer_edges.left),
 			 make_number (frame_outer_edges.top))),
@@ -8242,15 +8184,6 @@ w32_sys_ring_bell (struct frame *f)
     MessageBeep (sound_type);
 }
 
-DEFUN ("w32--menu-bar-in-use", Fw32__menu_bar_in_use, Sw32__menu_bar_in_use,
-       0, 0, 0,
-       doc: /* Return non-nil when a menu-bar menu is being used.
-Internal use only.  */)
-  (void)
-{
-  return menubar_in_use ? Qt : Qnil;
-}
-
 
 /***********************************************************************
 			    Initialization
@@ -8628,7 +8561,6 @@ only be necessary if the default setting causes problems.  */);
   defsubr (&Sw32_frame_rect);
   defsubr (&Sw32_frame_menu_bar_size);
   defsubr (&Sw32_battery_status);
-  defsubr (&Sw32__menu_bar_in_use);
 
 #ifdef WINDOWSNT
   defsubr (&Sfile_system_info);

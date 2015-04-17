@@ -217,7 +217,6 @@ lisp/international/uni-*.el
 *.ps
 *.sc
 *.scs
-*.t2d/
 *.tg
 *.tgs
 *.toc
@@ -230,8 +229,7 @@ doc/man/emacs.1
 doc/misc/cc-mode.ss
 etc/DOC
 etc/refcards/emacsver.tex
-gnustmp*
-/info/
+info/dir
 
 # Version control and locks.
 *.orig
@@ -239,7 +237,6 @@ gnustmp*
 *~
 .#*
 \#*\#
-ChangeLog
 [0-9]*.patch
 
 # Built by 'make install'.

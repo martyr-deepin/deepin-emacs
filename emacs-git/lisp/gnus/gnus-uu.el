@@ -873,9 +873,10 @@ When called interactively, prompt for REGEXP."
 	  (setq state (list 'middle))))
       (with-current-buffer "*gnus-uu-body*"
 	(goto-char (setq beg (point-max)))
-	(with-current-buffer buffer
+	(save-excursion
 	  (save-restriction
-	    (let ((inhibit-read-only t))
+	    (set-buffer buffer)
+	    (let (buffer-read-only)
 	      (set-text-properties (point-min) (point-max) nil)
 	      ;; These two are necessary for XEmacs 19.12 fascism.
 	      (put-text-property (point-min) (point-max) 'invisible nil)
@@ -909,7 +910,8 @@ When called interactively, prompt for REGEXP."
 				 (match-beginning 0)
 				 (or (and (re-search-forward "^[^ \t]" nil t)
 					  (1- (point)))
-				     (progn (forward-line 1) (point)))))))))))
+				     (progn (forward-line 1) (point)))))))))
+	    (widen)))
 	(if (and message-forward-as-mime gnus-uu-digest-buffer)
 	  (if message-forward-show-mml
 	      (progn

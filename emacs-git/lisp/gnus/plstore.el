@@ -270,16 +270,9 @@ symmetric encryption will be used.")
 	 context
 	 (cons #'plstore-progress-callback-function
 	       (format "Decrypting %s" (plstore-get-file plstore))))
-	(condition-case error
-	    (setq plain
-		  (epg-decrypt-string context
-				      (plstore--get-encrypted-data plstore)))
-	  (error
-	   (let ((entry (assoc (plstore-get-file plstore)
-			       plstore-passphrase-alist)))
-	     (if entry
-		 (setcdr entry nil)))
-	   (signal (car error) (cdr error))))
+	(setq plain
+	      (epg-decrypt-string context
+				  (plstore--get-encrypted-data plstore)))
 	(plstore--set-secret-alist plstore (car (read-from-string plain)))
 	(plstore--merge-secret plstore)
 	(plstore--set-encrypted-data plstore nil))))

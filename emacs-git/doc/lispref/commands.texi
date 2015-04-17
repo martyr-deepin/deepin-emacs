@@ -132,7 +132,7 @@ byte compiler to warn if the command is called from Lisp.  The output
 of @code{describe-function} will include similar information.
 The value of the property can be: a string, which the byte-compiler
 will use directly in its warning (it should end with a period, and not
-start with a capital, e.g., ``use @dots{} instead.''); @code{t}; any
+start with a capital, e.g. ``use @dots{} instead.''); @code{t}; any
 other symbol, which should be an alternative function to use in Lisp
 code.
 
@@ -1043,8 +1043,8 @@ the current Emacs session.  If a symbol has not yet been so used,
 @end defun
 
 @menu
-* Keyboard Events::             Ordinary characters -- keys with symbols on them.
-* Function Keys::               Function keys -- keys with names, not symbols.
+* Keyboard Events::             Ordinary characters--keys with symbols on them.
+* Function Keys::               Function keys--keys with names, not symbols.
 * Mouse Events::                Overview of mouse events.
 * Click Events::                Pushing and releasing a mouse button.
 * Drag Events::                 Moving the mouse before releasing the button.
@@ -1462,7 +1462,7 @@ the symbols @code{handle} (the scroll bar handle), @code{above-handle}
 (the area above the handle), @code{below-handle} (the area below the
 handle), @code{up} (the up arrow at one end of the scroll bar), or
 @code{down} (the down arrow at one end of the scroll bar).
-@c The 'top', 'bottom', and 'end-scroll' codes don't seem to be used.
+@c The `top', `bottom', and `end-scroll' codes don't seem to be used.
 @end table
 
 
@@ -1489,10 +1489,8 @@ prefix @samp{drag-}.  For example, dragging the mouse with button 2
 held down generates a @code{drag-mouse-2} event.  The second and third
 elements of the event give the starting and ending position of the
 drag, as mouse position lists (@pxref{Click Events}).  You can access
-the second element of any mouse event in the same way.  However, the
-drag event may end outside the boundaries of the frame that was
-initially selected.  In that case, the third element's position list
-contains that frame in place of a window.
+the second element of any mouse event in the same way, with no need to
+distinguish drag events from others.
 
 The @samp{drag-} prefix follows the modifier key prefixes such as
 @samp{C-} and @samp{M-}.
@@ -1637,10 +1635,7 @@ represented by lists that look like this:
 
 @noindent
 @var{position} is a mouse position list (@pxref{Click Events}),
-specifying the current position of the mouse cursor.  As with the
-end-position of a drag event, this position list may represent a
-location outside the boundaries of the initially selected frame, in
-which case the list contains that frame in place of a window.
+specifying the current position of the mouse cursor.
 
 The special form @code{track-mouse} enables generation of motion
 events within its body.  Outside of @code{track-mouse} forms, Emacs
@@ -1720,7 +1715,7 @@ occurred.
 
 @vindex mouse-wheel-up-event
 @vindex mouse-wheel-down-event
-This kind of event is generated only on some kinds of systems.  On some
+This kind of event is generated only on some kinds of systems. On some
 systems, @code{mouse-4} and @code{mouse-5} are used instead.  For
 portable code, use the variables @code{mouse-wheel-up-event} and
 @code{mouse-wheel-down-event} defined in @file{mwheel.el} to determine
@@ -1853,14 +1848,6 @@ into another window.  That produces a pair of events like these:
 (M-S-drag-mouse-2 (#<window 18 on NEWS> mode-line (33 . 31) -457844)
                   (#<window 20 on carlton-sanskrit.tex> 161 (33 . 3)
                    -453816))
-@end smallexample
-
-The frame with input focus might not take up the entire screen, and
-the user might move the mouse outside the scope of the frame.  Inside
-the @code{track-mouse} special form, that produces an event like this:
-
-@smallexample
-(mouse-movement (#<frame *ielm* 0x102849a30> nil (563 . 205) 532301936))
 @end smallexample
 
 To handle a SIGUSR1 signal, define an interactive function, and
@@ -2027,9 +2014,7 @@ Events}); and @code{nil} otherwise.
 various parts of it:
 
 @defun posn-window position
-Return the window that @var{position} is in.  If @var{position}
-represents a location outside the frame where the event was initiated,
-return that frame instead.
+Return the window that @var{position} is in.
 @end defun
 
 @defun posn-area position
@@ -2085,13 +2070,7 @@ Return the actual row and column in @var{position}, as a cons cell
 @code{(@var{col} . @var{row})}.  The values are the actual row and
 column numbers in the window given by @var{position}.  @xref{Click
 Events}, for details.  The function returns @code{nil} if
-@var{position} does not include actual position values; in that case
-@code{posn-col-row} can be used to get approximate values.
-
-Note that this function doesn't account for the visual width of
-characters on display, like the number of visual columns taken by a
-tab character or an image.  If you need the coordinates in canonical
-character units, use @code{posn-col-row} instead.
+@var{position} does not include actual position values.
 @end defun
 
 @defun posn-string position
@@ -2113,9 +2092,8 @@ Return the image or string object in @var{position}, either
 @defun posn-object-x-y position
 Return the pixel-based x and y coordinates relative to the upper left
 corner of the object in @var{position} as a cons cell @code{(@var{dx}
-. @var{dy})}.  If the @var{position} is on buffer text, return the
-relative position of the buffer-text character closest to that
-position.
+. @var{dy})}.  If the @var{position} is a buffer position, return the
+relative position in the character at that position.
 @end defun
 
 @defun posn-object-width-height position
@@ -2818,7 +2796,7 @@ most recently unread will be reread first.
 Events read from this list are not normally added to the current
 command's key sequence (as returned by, e.g., @code{this-command-keys}),
 as the events will already have been added once as they were read for
-the first time.  An element of the form @w{@code{(t . @var{event})}}
+the first time.  An element of the form @code{(@code{t} . @var{event})}
 forces @var{event} to be added to the current command's key sequence.
 @end defvar
 

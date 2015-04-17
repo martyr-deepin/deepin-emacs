@@ -168,7 +168,7 @@ of the parent function.")
 ;;
 ;; Simple methods against the context classes.
 ;;
-(cl-defmethod semantic-analyze-type-constraint
+(defmethod semantic-analyze-type-constraint
   ((context semantic-analyze-context) &optional desired-type)
   "Return a type constraint for completing :prefix in CONTEXT.
 Optional argument DESIRED-TYPE may be a non-type tag to analyze."
@@ -189,17 +189,17 @@ Optional argument DESIRED-TYPE may be a non-type tag to analyze."
 	  )
     desired-type))
 
-(cl-defmethod semantic-analyze-type-constraint
+(defmethod semantic-analyze-type-constraint
   ((context semantic-analyze-context-functionarg))
   "Return a type constraint for completing :prefix in CONTEXT."
-  (cl-call-next-method context (car (oref context argument))))
+  (call-next-method context (car (oref context argument))))
 
-(cl-defmethod semantic-analyze-type-constraint
+(defmethod semantic-analyze-type-constraint
   ((context semantic-analyze-context-assignment))
   "Return a type constraint for completing :prefix in CONTEXT."
-  (cl-call-next-method context (car (reverse (oref context assignee)))))
+  (call-next-method context (car (reverse (oref context assignee)))))
 
-(cl-defmethod semantic-analyze-interesting-tag
+(defmethod semantic-analyze-interesting-tag
   ((context semantic-analyze-context))
   "Return a tag from CONTEXT that would be most interesting to a user."
   (let ((prefix (reverse (oref context :prefix))))
@@ -209,15 +209,15 @@ Optional argument DESIRED-TYPE may be a non-type tag to analyze."
     ;; Return the found tag, or nil.
     (car prefix)))
 
-(cl-defmethod semantic-analyze-interesting-tag
+(defmethod semantic-analyze-interesting-tag
   ((context semantic-analyze-context-functionarg))
   "Try the base, and if that fails, return what we are assigning into."
-  (or (cl-call-next-method) (car-safe (oref context :function))))
+  (or (call-next-method) (car-safe (oref context :function))))
 
-(cl-defmethod semantic-analyze-interesting-tag
+(defmethod semantic-analyze-interesting-tag
   ((context semantic-analyze-context-assignment))
   "Try the base, and if that fails, return what we are assigning into."
-  (or (cl-call-next-method) (car-safe (oref context :assignee))))
+  (or (call-next-method) (car-safe (oref context :assignee))))
 
 ;;; ANALYSIS
 ;;
@@ -743,7 +743,7 @@ Optional argument CTXT is the context to show."
 ;;
 (declare-function pulse-momentary-highlight-region "pulse")
 
-(cl-defmethod semantic-analyze-pulse ((context semantic-analyze-context))
+(defmethod semantic-analyze-pulse ((context semantic-analyze-context))
   "Pulse the region that CONTEXT affects."
   (require 'pulse)
   (with-current-buffer (oref context :buffer)
@@ -782,7 +782,7 @@ Use BUFF as a source of override methods."
     (setq prefix (make-string (length prefix) ? ))
     ))
 
-(cl-defmethod semantic-analyze-show ((context semantic-analyze-context))
+(defmethod semantic-analyze-show ((context semantic-analyze-context))
   "Insert CONTEXT into the current buffer in a nice way."
   (semantic-analyze-princ-sequence (oref context prefix) "Prefix: " )
   (semantic-analyze-princ-sequence (oref context prefixclass) "Prefix Classes: ")
@@ -796,19 +796,19 @@ Use BUFF as a source of override methods."
     (semantic-analyze-show (oref context scope)))
   )
 
-(cl-defmethod semantic-analyze-show ((context semantic-analyze-context-assignment))
+(defmethod semantic-analyze-show ((context semantic-analyze-context-assignment))
   "Insert CONTEXT into the current buffer in a nice way."
   (semantic-analyze-princ-sequence (oref context assignee) "Assignee: ")
-  (cl-call-next-method))
+  (call-next-method))
 
-(cl-defmethod semantic-analyze-show ((context semantic-analyze-context-functionarg))
+(defmethod semantic-analyze-show ((context semantic-analyze-context-functionarg))
   "Insert CONTEXT into the current buffer in a nice way."
   (semantic-analyze-princ-sequence (oref context function) "Function: ")
   (princ "Argument Index: ")
   (princ (oref context index))
   (princ "\n")
   (semantic-analyze-princ-sequence (oref context argument) "Argument: ")
-  (cl-call-next-method))
+  (call-next-method))
 
 (defun semantic-analyze-pop-to-context (context)
   "Display CONTEXT in a temporary buffer.

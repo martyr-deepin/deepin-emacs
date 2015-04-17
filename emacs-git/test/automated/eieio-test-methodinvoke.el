@@ -179,14 +179,14 @@
   (if (next-method-p) (call-next-method))
   )
 
-(defmethod make-instance :STATIC ((p C-base2) &rest args)
+(defmethod eieio-constructor :STATIC ((p C-base2) &rest args)
   (eieio-test-method-store :STATIC 'C-base2)
   (if (next-method-p) (call-next-method))
   )
 
-(cl-defmethod make-instance ((p (subclass C)) &rest args)
+(defmethod eieio-constructor :STATIC ((p C) &rest args)
   (eieio-test-method-store :STATIC 'C)
-  (cl-call-next-method)
+  (call-next-method)
   )
 
 (ert-deftest eieio-test-method-order-list-6 ()
@@ -292,7 +292,6 @@
 
 (defmethod initialize-instance :after ((this eitest-Ja) &rest slots)
   ;(message "+Ja")
-  ;; FIXME: Using next-method-p in an after-method is invalid!
   (when (next-method-p)
     (call-next-method))
   ;(message "-Ja")
@@ -303,7 +302,6 @@
 
 (defmethod initialize-instance :after ((this eitest-Jb) &rest slots)
   ;(message "+Jb")
-  ;; FIXME: Using next-method-p in an after-method is invalid!
   (when (next-method-p)
     (call-next-method))
   ;(message "-Jb")
@@ -390,13 +388,10 @@
     (cons "CNM-0" (cl-call-next-method 7 y)))
   (cl-defmethod eieio-test--1 ((_x CNM-1-1) _y)
     (cons "CNM-1-1" (cl-call-next-method)))
-  (cl-defmethod eieio-test--1 ((_x CNM-1-2) _y)
+  (cl-defmethod eieio-test--1 ((_x CNM-1-2) y)
     (cons "CNM-1-2" (cl-call-next-method)))
-  (cl-defmethod eieio-test--1 ((_x (subclass CNM-1-2)) _y)
-    (cons "subclass CNM-1-2" (cl-call-next-method)))
   (should (equal (eieio-test--1 4 5) '(4 5)))
   (should (equal (eieio-test--1 (make-instance 'CNM-0) 5)
                  '("CNM-0" 7 5)))
   (should (equal (eieio-test--1 (make-instance 'CNM-2) 5)
-                 '("CNM-1-1" "CNM-1-2" "CNM-0" 7 5)))
-  (should (equal (eieio-test--1 'CNM-2 6) '("subclass CNM-1-2" CNM-2 6))))
+                 '("CNM-1-1" "CNM-1-2" "CNM-0" 7 5))))

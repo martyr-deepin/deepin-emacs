@@ -12,8 +12,8 @@
 @c %**end of header
 
 @copying
-This file documents WoMan: A program to browse Unix manual pages ``W.O.
-(without) man''.
+This file documents WoMan: A program to browse Unix manual pages `W.O.
+(without) man'.
 
 Copyright @copyright{} 2001--2015 Free Software Foundation, Inc.
 
@@ -172,7 +172,7 @@ is important I will refer to them both ambiguously as @code{roff}.
 
 @code{roff} markup consists of @dfn{requests} and @dfn{escape
 sequences}.  A request occupies a complete line and begins with either a
-period or an apostrophe.  An escape sequence is embedded
+period or a single forward quote.  An escape sequences is embedded
 within the input text and begins (by default) with a backslash.  The
 original man macro package defines 20 new @code{roff} requests
 implemented as macros, which were considered to be sufficient for
@@ -1141,7 +1141,7 @@ headings.  Default is @code{t}.  [Heading emboldening is @emph{not} standard
 @code{man} behavior.]
 
 @item woman-ignore
-A boolean value.  If non-@code{nil} then unrecognized requests etc.@: are
+A boolean value.  If non-@code{nil} then unrecognized requests etc. are
 ignored.  Default is @code{t}.  This gives the standard @code{roff} behavior.
 If @code{nil} then they are left in the buffer, which may aid debugging.
 

@@ -280,15 +280,7 @@ SPC=view TAB=goto RET=goto+hide [q]uit [r]escan [l]abels [f]ollow [x]r [?]Help
 
       (if (reftex-use-fonts)
           (put-text-property (point-min) (point) 'font-lock-face reftex-toc-header-face))
-      (if (fboundp 'cursor-intangible-mode)
-          (cursor-intangible-mode 1)
-        ;; If `cursor-intangible' is not available, fallback on the old
-        ;; intrusive `intangible' property.
-        (put-text-property (point-min) (point) 'intangible t))
-      (add-text-properties (point-min) (point)
-                           '(cursor-intangible t
-                             front-sticky (cursor-intangible)
-                             rear-nonsticky (cursor-intangible)))
+      (put-text-property (point-min) (point) 'intangible t)
       (put-text-property (point-min) (1+ (point-min)) 'xr-alist xr-alist)
 
       (setq offset
@@ -339,8 +331,8 @@ SPC=view TAB=goto RET=goto+hide [q]uit [r]escan [l]abels [f]ollow [x]r [?]Help
         (let ((current-prefix-arg nil))
           (select-window (get-buffer-window buf frame))
           (reftex-toc nil t)))
-    (and (> (point) 1) ;FIXME: Is this point-min or do we care about narrowing?
-         (not (get-text-property (point) 'cursor-intangible))
+    (and (> (point) 1)
+         (not (get-text-property (point) 'intangible))
          (memq reftex-highlight-selection '(cursor both))
          (reftex-highlight 2
                            (or (previous-single-property-change
@@ -357,11 +349,10 @@ SPC=view TAB=goto RET=goto+hide [q]uit [r]escan [l]abels [f]ollow [x]r [?]Help
 
 (defun reftex-toc-post-command-hook ()
   ;; used in the post-command-hook for the *toc* buffer
-  ;; FIXME: Lots of redundancy with reftex-index-post-command-hook!
   (when (get-text-property (point) :data)
     (put 'reftex-toc :reftex-data (get-text-property (point) :data))
-    (and (> (point) 1) ;FIXME: Is this point-min or do we care about narrowing?
-         (not (get-text-property (point) 'cursor-intangible))
+    (and (> (point) 1)
+         (not (get-text-property (point) 'intangible))
          (memq reftex-highlight-selection '(cursor both))
          (reftex-highlight 2
            (or (previous-single-property-change (1+ (point)) :data)

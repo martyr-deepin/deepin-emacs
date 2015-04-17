@@ -2228,9 +2228,12 @@ TYPE is the type of the wrapper to be added.  Can be :before or :under."
 (defun completion-lisp-mode-hook ()
   (setq completion-syntax-table completion-lisp-syntax-table)
   ;; Lisp Mode diffs
-  (setq-local completion-separator-chars
-              (cl-set-difference completion-separator-chars
-                                 (append "!&%?=^" nil))))
+  (local-set-key "!" 'self-insert-command)
+  (local-set-key "&" 'self-insert-command)
+  (local-set-key "%" 'self-insert-command)
+  (local-set-key "?" 'self-insert-command)
+  (local-set-key "=" 'self-insert-command)
+  (local-set-key "^" 'self-insert-command))
 
 ;; C mode diffs.
 

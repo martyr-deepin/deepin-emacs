@@ -601,8 +601,7 @@ Key bindings:
   (add-hook 'before-save-hook 'octave-sync-function-file-names nil t)
   (setq-local beginning-of-defun-function 'octave-beginning-of-defun)
   (and octave-font-lock-texinfo-comment (octave-font-lock-texinfo-comment))
-  (add-function :before-until (local 'eldoc-documentation-function)
-                'octave-eldoc-function)
+  (setq-local eldoc-documentation-function 'octave-eldoc-function)
 
   (easy-menu-add octave-mode-menu))
 

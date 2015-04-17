@@ -148,19 +148,19 @@ The class allocated value is replace by different sub classes.")
   "The baseclass for all generic EDE project types."
   :abstract t)
 
-(cl-defmethod initialize-instance ((this ede-generic-project)
+(defmethod initialize-instance ((this ede-generic-project)
 				&rest fields)
   "Make sure the targets slot is bound."
-  (cl-call-next-method)
+  (call-next-method)
   (unless (slot-boundp this 'targets)
     (oset this :targets nil))
   )
 
-(cl-defmethod ede-project-root ((this ede-generic-project))
+(defmethod ede-project-root ((this ede-generic-project))
   "Return my root."
   this)
 
-(cl-defmethod ede-find-subproject-for-directory ((proj ede-generic-project)
+(defmethod ede-find-subproject-for-directory ((proj ede-generic-project)
 					      dir)
   "Return PROJ, for handling all subdirs below DIR."
   proj)
@@ -216,7 +216,7 @@ All directories need at least one target.")
       ))
     match))
 
-(cl-defmethod ede-find-target ((proj ede-generic-project) buffer)
+(defmethod ede-find-target ((proj ede-generic-project) buffer)
   "Find an EDE target in PROJ for BUFFER.
 If one doesn't exist, create a new one for this directory."
   (let* ((ext (file-name-extension (buffer-file-name buffer)))
@@ -322,7 +322,7 @@ the class `ede-generic-project' project."
    )
   "Generic Project for makefiles.")
 
-(cl-defmethod ede-generic-setup-configuration ((proj ede-generic-makefile-project) config)
+(defmethod ede-generic-setup-configuration ((proj ede-generic-makefile-project) config)
   "Setup a configuration for Make."
   (oset config build-command "make -k")
   (oset config debug-command "gdb ")
@@ -335,7 +335,7 @@ the class `ede-generic-project' project."
    )
   "Generic Project for scons.")
 
-(cl-defmethod ede-generic-setup-configuration ((proj ede-generic-scons-project) config)
+(defmethod ede-generic-setup-configuration ((proj ede-generic-scons-project) config)
   "Setup a configuration for SCONS."
   (oset config build-command "scons")
   (oset config debug-command "gdb ")
@@ -348,7 +348,7 @@ the class `ede-generic-project' project."
    )
   "Generic Project for cmake.")
 
-(cl-defmethod ede-generic-setup-configuration ((proj ede-generic-cmake-project) config)
+(defmethod ede-generic-setup-configuration ((proj ede-generic-cmake-project) config)
   "Setup a configuration for CMake."
   (oset config build-command "cmake")
   (oset config debug-command "gdb ")
@@ -359,7 +359,7 @@ the class `ede-generic-project' project."
   ()
   "Generic project found via Version Control files.")
 
-(cl-defmethod ede-generic-setup-configuration ((proj ede-generic-vc-project) config)
+(defmethod ede-generic-setup-configuration ((proj ede-generic-vc-project) config)
   "Setup a configuration for projects identified by revision control."
   )
 

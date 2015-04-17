@@ -544,28 +544,18 @@ With prefix 3, restrict index to region."
 
       (setq buffer-read-only nil)
       (insert (format
-               "INDEX <%s> on %s
+"INDEX <%s> on %s
 Restriction: <%s>
 SPC=view TAB=goto RET=goto+hide [e]dit [q]uit [r]escan [f]ollow [?]Help
 ------------------------------------------------------------------------------
-"
-               index-tag (abbreviate-file-name master)
-               (if (eq (car (car reftex-index-restriction-data)) 'toc)
-                   (nth 2 (car reftex-index-restriction-data))
-                 reftex-index-restriction-indicator)))
+" index-tag (abbreviate-file-name master)
+(if (eq (car (car reftex-index-restriction-data)) 'toc)
+    (nth 2 (car reftex-index-restriction-data))
+  reftex-index-restriction-indicator)))
 
       (if (reftex-use-fonts)
-          (put-text-property (point-min) (point)
-                             'face reftex-index-header-face))
-      (if (fboundp 'cursor-intangible-mode)
-          (cursor-intangible-mode 1)
-        ;; If `cursor-intangible' is not available, fallback on the old
-        ;; intrusive `intangible' property.
-        (put-text-property (point-min) (point) 'intangible t))
-      (add-text-properties (point-min) (point)
-                           '(cursor-intangible t
-                             front-sticky (cursor-intangible)
-                             rear-nonsticky (cursor-intangible)))
+          (put-text-property 1 (point) 'face reftex-index-header-face))
+      (put-text-property 1 (point) 'intangible t)
 
       (reftex-insert-index docstruct index-tag)
       (goto-char (point-min))
@@ -707,10 +697,9 @@ SPC=view TAB=goto RET=goto+hide [e]dit [q]uit [r]escan [f]ollow [?]Help
 
 (defun reftex-index-post-command-hook ()
   ;; Used in the post-command-hook for the *Index* buffer
-  ;; FIXME: Lots of redundancy with reftex-toc-post-command-hook!
   (when (get-text-property (point) :data)
-    (and (> (point) 1) ;FIXME: Is this point-min or do we care about narrowing?
-         (not (get-text-property (point) 'cursor-intangible))
+    (and (> (point) 1)
+         (not (get-text-property (point) 'intangible))
          (memq reftex-highlight-selection '(cursor both))
          (reftex-highlight 1
            (or (previous-single-property-change (1+ (point)) :data)

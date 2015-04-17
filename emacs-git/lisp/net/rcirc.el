@@ -2167,7 +2167,6 @@ activity.  Only run if the buffer is not visible and
        ,interactive-form
        (let ((process (or process (rcirc-buffer-process)))
 	     (target (or target rcirc-target)))
-         (ignore target)        ; mark `target' variable as ignorable
 	 ,@body))))
 
 (defun-rcirc-command msg (message)
@@ -2694,7 +2693,7 @@ the only argument."
 (defun rcirc-handler-KICK (process sender args _text)
   (let* ((channel (car args))
 	 (nick (cadr args))
-	 (reason (nth 2 args))
+	 (reason (cl-caddr args))
 	 (message (concat nick " " channel " " reason)))
     (rcirc-print process sender "KICK" channel message t)
     ;; print in private chat buffer if it exists
@@ -2778,7 +2777,7 @@ the only argument."
   "RPL_AWAY"
   (let* ((nick (cadr args))
 	 (rec (assoc-string nick rcirc-nick-away-alist))
-	 (away-message (nth 2 args)))
+	 (away-message (cl-caddr args)))
     (when (or (not rec)
 	      (not (string= (cdr rec) away-message)))
       ;; away message has changed
@@ -2807,7 +2806,7 @@ the only argument."
   (let ((buffer (or (rcirc-get-buffer process (cadr args))
 		    (rcirc-get-temp-buffer-create process (cadr args)))))
     (with-current-buffer buffer
-      (setq rcirc-topic (nth 2 args)))))
+      (setq rcirc-topic (cl-caddr args)))))
 
 (defun rcirc-handler-333 (process sender args _text)
   "333 says who set the topic and when.
@@ -2815,7 +2814,7 @@ Not in rfc1459.txt"
   (let ((buffer (or (rcirc-get-buffer process (cadr args))
 		    (rcirc-get-temp-buffer-create process (cadr args)))))
     (with-current-buffer buffer
-      (let ((setter (nth 2 args))
+      (let ((setter (cl-caddr args))
 	    (time (current-time-string
 		   (seconds-to-time
 		    (string-to-number (cl-cadddr args))))))
@@ -2824,7 +2823,7 @@ Not in rfc1459.txt"
 
 (defun rcirc-handler-477 (process sender args _text)
   "ERR_NOCHANMODES"
-  (rcirc-print process sender "477" (cadr args) (nth 2 args)))
+  (rcirc-print process sender "477" (cadr args) (cl-caddr args)))
 
 (defun rcirc-handler-MODE (process sender args _text)
   (let ((target (car args))
@@ -2884,7 +2883,7 @@ Passwords are stored in `rcirc-authinfo' (which see)."
     (dolist (i rcirc-authinfo)
       (let ((process (rcirc-buffer-process))
 	    (server (car i))
-	    (nick (nth 2 i))
+	    (nick (cl-caddr i))
 	    (method (cadr i))
 	    (args (cl-cdddr i)))
 	(when (and (string-match server rcirc-server))

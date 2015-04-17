@@ -684,11 +684,15 @@ when it lands in the sticky line."
 (defconst semantic-stickyfunc-header-line-format
   (cond ((featurep 'xemacs)
 	 nil)
-	(t
+	((>= emacs-major-version 22)
 	 '(:eval (list
 		  ;; Magic bit I found on emacswiki.
 		  (propertize " " 'display '((space :align-to 0)))
-		  (semantic-stickyfunc-fetch-stickyline)))))
+		  (semantic-stickyfunc-fetch-stickyline))))
+	((= emacs-major-version 21)
+	 '(:eval (list semantic-stickyfunc-indent-string
+		       (semantic-stickyfunc-fetch-stickyline))))
+	(t nil))
   "The header line format used by stickyfunc mode.")
 
 ;;;###autoload
@@ -715,7 +719,7 @@ minor mode is enabled."
 	(unless (boundp 'default-header-line-format)
 	  ;; Disable if there are no header lines to use.
 	  (setq semantic-stickyfunc-mode nil)
-	  (error "Sticky Function mode requires Emacs"))
+	  (error "Sticky Function mode requires Emacs 21"))
 	;; Enable the mode
 	;; Save previous buffer local value of header line format.
 	(when (and (local-variable-p 'header-line-format (current-buffer))

@@ -313,23 +313,23 @@ enum syntaxcode { Swhitespace = 0, Sword = 1, Ssymbol = 2 };
 /* The rest must handle multibyte characters.  */
 
 # define ISGRAPH(c) (SINGLE_BYTE_CHAR_P (c)				\
-		     ? (c) > ' ' && !((c) >= 0177 && (c) <= 0240)	\
-		     : graphicp (c))
+		    ? (c) > ' ' && !((c) >= 0177 && (c) <= 0237)	\
+		    : 1)
 
 # define ISPRINT(c) (SINGLE_BYTE_CHAR_P (c)				\
 		    ? (c) >= ' ' && !((c) >= 0177 && (c) <= 0237)	\
-		     : printablep (c))
+		    : 1)
 
 # define ISALNUM(c) (IS_REAL_ASCII (c)			\
 		    ? (((c) >= 'a' && (c) <= 'z')	\
 		       || ((c) >= 'A' && (c) <= 'Z')	\
 		       || ((c) >= '0' && (c) <= '9'))	\
-		    : (alphabeticp (c) || decimalnump (c)))
+		    : SYNTAX (c) == Sword)
 
 # define ISALPHA(c) (IS_REAL_ASCII (c)			\
 		    ? (((c) >= 'a' && (c) <= 'z')	\
 		       || ((c) >= 'A' && (c) <= 'Z'))	\
-		    : alphabeticp (c))
+		    : SYNTAX (c) == Sword)
 
 # define ISLOWER(c) lowercasep (c)
 
@@ -1865,18 +1865,13 @@ struct range_table_work_area
 #define RANGE_TABLE_WORK_ELT(work_area, i) ((work_area).table[i])
 
 /* Bits used to implement the multibyte-part of the various character classes
-   such as [:alnum:] in a charset's range table.  The code currently assumes
-   that only the low 16 bits are used.  */
+   such as [:alnum:] in a charset's range table.  */
 #define BIT_WORD	0x1
 #define BIT_LOWER	0x2
 #define BIT_PUNCT	0x4
 #define BIT_SPACE	0x8
 #define BIT_UPPER	0x10
 #define BIT_MULTIBYTE	0x20
-#define BIT_ALPHA	0x40
-#define BIT_ALNUM	0x80
-#define BIT_GRAPH	0x100
-#define BIT_PRINT	0x200
 
 
 /* Set the bit for character C in a list.  */
@@ -2075,17 +2070,13 @@ re_wctype_to_bit (re_wctype_t cc)
 {
   switch (cc)
     {
-    case RECC_NONASCII:
+    case RECC_NONASCII: case RECC_PRINT: case RECC_GRAPH:
     case RECC_MULTIBYTE: return BIT_MULTIBYTE;
-    case RECC_ALPHA: return BIT_ALPHA;
-    case RECC_ALNUM: return BIT_ALNUM;
-    case RECC_WORD: return BIT_WORD;
+    case RECC_ALPHA: case RECC_ALNUM: case RECC_WORD: return BIT_WORD;
     case RECC_LOWER: return BIT_LOWER;
     case RECC_UPPER: return BIT_UPPER;
     case RECC_PUNCT: return BIT_PUNCT;
     case RECC_SPACE: return BIT_SPACE;
-    case RECC_GRAPH: return BIT_GRAPH;
-    case RECC_PRINT: return BIT_PRINT;
     case RECC_ASCII: case RECC_DIGIT: case RECC_XDIGIT: case RECC_CNTRL:
     case RECC_BLANK: case RECC_UNIBYTE: case RECC_ERROR: return 0;
     default:
@@ -2939,7 +2930,7 @@ regex_compile (const_re_char *pattern, size_t size, reg_syntax_t syntax,
 #endif	/* emacs */
 			/* In most cases the matching rule for char classes
 			   only uses the syntax table for multibyte chars,
-			   so that the content of the syntax-table is not
+			   so that the content of the syntax-table it is not
 			   hardcoded in the range_table.  SPACE and WORD are
 			   the two exceptions.  */
 			if ((1 << cc) & ((1 << RECC_SPACE) | (1 << RECC_WORD)))
@@ -2954,7 +2945,7 @@ regex_compile (const_re_char *pattern, size_t size, reg_syntax_t syntax,
 			p = class_beg;
 			SET_LIST_BIT ('[');
 
-			/* Because the `:' may start the range, we
+			/* Because the `:' may starts the range, we
 			   can't simply set bit and repeat the loop.
 			   Instead, just set it to C and handle below.  */
 			c = ':';
@@ -5522,11 +5513,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 		    | (class_bits & BIT_PUNCT && ISPUNCT (c))
 		    | (class_bits & BIT_SPACE && ISSPACE (c))
 		    | (class_bits & BIT_UPPER && ISUPPER (c))
-		    | (class_bits & BIT_WORD  && ISWORD  (c))
-		    | (class_bits & BIT_ALPHA && ISALPHA (c))
-		    | (class_bits & BIT_ALNUM && ISALNUM (c))
-		    | (class_bits & BIT_GRAPH && ISGRAPH (c))
-		    | (class_bits & BIT_PRINT && ISPRINT (c)))
+		    | (class_bits & BIT_WORD  && ISWORD (c)))
 		  not = !not;
 		else
 		  CHARSET_LOOKUP_RANGE_TABLE_RAW (not, c, range_table, count);

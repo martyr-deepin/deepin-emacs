@@ -1844,7 +1844,7 @@ safe_run_hooks_error (Lisp_Object error, ptrdiff_t nargs, Lisp_Object *args)
   AUTO_STRING (format, "Error in %s (%S): %S");
   Lisp_Object hook = args[0];
   Lisp_Object fun = args[1];
-  CALLN (Fmessage, format, hook, fun, error);
+  Fmessage (4, (Lisp_Object []) {format, hook, fun, error});
 
   if (SYMBOLP (hook))
     {
@@ -1877,10 +1877,13 @@ safe_run_hooks_error (Lisp_Object error, ptrdiff_t nargs, Lisp_Object *args)
 static Lisp_Object
 safe_run_hook_funcall (ptrdiff_t nargs, Lisp_Object *args)
 {
+  Lisp_Object iargs[2];
+
   eassert (nargs == 2);
-  /* Yes, run_hook_with_args works with args in the other order.  */
-  internal_condition_case_n (safe_run_hooks_1,
-			     2, ((Lisp_Object []) {args[1], args[0]}),
+  /* Yes, run_hook_with_args works this way.  */
+  iargs[0] = args[1];
+  iargs[1] = args[0];
+  internal_condition_case_n (safe_run_hooks_1, 2, iargs,
 			     Qt, safe_run_hooks_error);
   return Qnil;
 }
@@ -1892,12 +1895,16 @@ safe_run_hook_funcall (ptrdiff_t nargs, Lisp_Object *args)
 void
 safe_run_hooks (Lisp_Object hook)
 {
+  Lisp_Object args[2];
   struct gcpro gcpro1;
   ptrdiff_t count = SPECPDL_INDEX ();
 
+  args[0] = hook;
+  args[1] = hook;
+
   GCPRO1 (hook);
   specbind (Qinhibit_quit, Qt);
-  run_hook_with_args (2, ((Lisp_Object []) {hook, hook}), safe_run_hook_funcall);
+  run_hook_with_args (2, args, safe_run_hook_funcall);
   unbind_to (count, Qnil);
   UNGCPRO;
 }
@@ -2288,41 +2295,30 @@ read_decoded_event_from_main_queue (struct timespec *end_time,
 	    { /* An encoded byte sequence, let's try to decode it.  */
 	      struct coding_system *coding
 		= TERMINAL_KEYBOARD_CODING (terminal);
-
-	      if (raw_text_coding_system_p (coding))
-		{
-		  int i;
-		  if (meta_key != 2)
-		    for (i = 0; i < n; i++)
-		      events[i] = make_number (XINT (events[i]) & ~0x80);
+	      unsigned char src[MAX_ENCODED_BYTES];
+	      unsigned char dest[MAX_ENCODED_BYTES * MAX_MULTIBYTE_LENGTH];
+	      int i;
+	      for (i = 0; i < n; i++)
+		src[i] = XINT (events[i]);
+	      if (meta_key != 2)
+		for (i = 0; i < n; i++)
+		  src[i] &= ~0x80;
+	      coding->destination = dest;
+	      coding->dst_bytes = sizeof dest;
+	      decode_coding_c_string (coding, src, n, Qnil);
+	      eassert (coding->produced_char <= n);
+	      if (coding->produced_char == 0)
+		{ /* The encoded sequence is incomplete.  */
+		  if (n < MAX_ENCODED_BYTES) /* Avoid buffer overflow.  */
+		    continue;		     /* Read on!  */
 		}
 	      else
 		{
-		  unsigned char src[MAX_ENCODED_BYTES];
-		  unsigned char dest[MAX_ENCODED_BYTES * MAX_MULTIBYTE_LENGTH];
-		  int i;
-		  for (i = 0; i < n; i++)
-		    src[i] = XINT (events[i]);
-		  if (meta_key != 2)
-		    for (i = 0; i < n; i++)
-		      src[i] &= ~0x80;
-		  coding->destination = dest;
-		  coding->dst_bytes = sizeof dest;
-		  decode_coding_c_string (coding, src, n, Qnil);
-		  eassert (coding->produced_char <= n);
-		  if (coding->produced_char == 0)
-		    { /* The encoded sequence is incomplete.  */
-		      if (n < MAX_ENCODED_BYTES) /* Avoid buffer overflow.  */
-			continue;		     /* Read on!  */
-		    }
-		  else
-		    {
-		      const unsigned char *p = coding->destination;
-		      eassert (coding->carryover_bytes == 0);
-		      n = 0;
-		      while (n < coding->produced_char)
-			events[n++] = make_number (STRING_CHAR_ADVANCE (p));
-		    }
+		  const unsigned char *p = coding->destination;
+		  eassert (coding->carryover_bytes == 0);
+		  n = 0;
+		  while (n < coding->produced_char)
+		    events[n++] = make_number (STRING_CHAR_ADVANCE (p));
 		}
 	    }
 	  /* Now `events' should hold decoded events.
@@ -3034,7 +3030,6 @@ read_char (int commandflag, Lisp_Object map,
       Lisp_Object keys;
       ptrdiff_t key_count;
       bool key_count_reset;
-      ptrdiff_t command_key_start;
       struct gcpro gcpro1;
       ptrdiff_t count = SPECPDL_INDEX ();
 
@@ -3058,7 +3053,6 @@ read_char (int commandflag, Lisp_Object map,
       /* Save the this_command_keys status.  */
       key_count = this_command_key_count;
       key_count_reset = this_command_key_count_reset;
-      command_key_start = this_single_command_key_start;
 
       if (key_count > 0)
 	keys = Fcopy_sequence (this_command_keys);
@@ -3069,7 +3063,6 @@ read_char (int commandflag, Lisp_Object map,
       /* Clear out this_command_keys.  */
       this_command_key_count = 0;
       this_command_key_count_reset = 0;
-      this_single_command_key_start = 0;
 
       /* Now wipe the echo area.  */
       if (!NILP (echo_area_buffer[0]))
@@ -3093,20 +3086,12 @@ read_char (int commandflag, Lisp_Object map,
 	 and this_command_keys state.  */
       this_command_key_count = key_count;
       this_command_key_count_reset = key_count_reset;
-      this_single_command_key_start = command_key_start;
       if (key_count > 0)
 	this_command_keys = keys;
 
       cancel_echoing ();
       ok_to_echo_at_next_pause = saved_ok_to_echo;
-      /* Do not restore the echo area string when the user is
-         introducing a prefix argument. Otherwise we end with
-         repetitions of the partially introduced prefix
-         argument. (bug#19875) */
-      if (NILP (intern ("prefix-arg")))
-        {
-          kset_echo_string (current_kboard, saved_echo_string);
-        }
+      kset_echo_string (current_kboard, saved_echo_string);
       current_kboard->echo_after_prompt = saved_echo_after_prompt;
       if (saved_immediate_echo)
 	echo_now ();
@@ -3661,9 +3646,7 @@ kbd_buffer_store_event_hold (register struct input_event *event,
      as input, set quit-flag to cause an interrupt.  */
   if (!NILP (Vthrow_on_input)
       && event->kind != FOCUS_IN_EVENT
-      && event->kind != FOCUS_OUT_EVENT
       && event->kind != HELP_EVENT
-      && event->kind != ICONIFY_EVENT
       && event->kind != DEICONIFY_EVENT)
     {
       Vquit_flag = Vthrow_on_input;
@@ -3853,7 +3836,7 @@ kbd_buffer_get_event (KBOARD **kbp,
   if (noninteractive
       /* In case we are running as a daemon, only do this before
 	 detaching from the terminal.  */
-      || (IS_DAEMON && DAEMON_RUNNING))
+      || (IS_DAEMON && daemon_pipe[1] >= 0))
     {
       int c = getchar ();
       XSETINT (obj, c);
@@ -4380,18 +4363,19 @@ Lisp_Object pending_funcalls;
 static bool
 decode_timer (Lisp_Object timer, struct timespec *result)
 {
-  Lisp_Object *vec;
+  Lisp_Object *vector;
 
   if (! (VECTORP (timer) && ASIZE (timer) == 9))
     return 0;
-  vec = XVECTOR (timer)->contents;
-  if (! NILP (vec[0]))
+  vector = XVECTOR (timer)->contents;
+  if (! NILP (vector[0]))
     return 0;
-  if (! INTEGERP (vec[2]))
+  if (! INTEGERP (vector[2]))
     return false;
 
   struct lisp_time t;
-  if (decode_time_components (vec[1], vec[2], vec[3], vec[8], &t, 0) <= 0)
+  if (! decode_time_components (vector[1], vector[2], vector[3], vector[8],
+				&t, 0))
     return false;
   *result = lisp_to_timespec (t);
   return timespec_valid_p (*result);
@@ -4452,7 +4436,7 @@ timer_check_2 (Lisp_Object timers, Lisp_Object idle_timers)
       /* Set TIMER and TIMER_DIFFERENCE
 	 based on the next ordinary timer.
 	 TIMER_DIFFERENCE is the distance in time from NOW to when
-	 this timer becomes ripe.
+	 this timer becomes ripe (negative if it's already ripe).
          Skip past invalid timers and timers already handled.  */
       if (CONSP (timers))
 	{
@@ -5360,9 +5344,9 @@ make_lispy_position (struct frame *f, Lisp_Object x, Lisp_Object y,
 	  dy = yret = wy;
 	}
 
-      /* For clicks in the text area, fringes, margins, or vertical
-	 scroll bar, call buffer_posn_from_coords to extract TEXTPOS,
-	 the buffer position nearest to the click.  */
+      /* For clicks in the text area, fringes, or margins, call
+	 buffer_posn_from_coords to extract TEXTPOS, the buffer
+	 position nearest to the click.  */
       if (!textpos)
 	{
 	  Lisp_Object string2, object2 = Qnil;
@@ -5370,14 +5354,11 @@ make_lispy_position (struct frame *f, Lisp_Object x, Lisp_Object y,
 	  int dx2, dy2;
 	  int width2, height2;
 	  /* The pixel X coordinate passed to buffer_posn_from_coords
-	     is the X coordinate relative to the text area for clicks
-	     in text-area, right-margin/fringe and right-side vertical
-	     scroll bar, zero otherwise.  */
+	     is the X coordinate relative to the text area for
+	     text-area and right-margin clicks, zero otherwise.  */
 	  int x2
 	    = (part == ON_TEXT) ? xret
-	    : (part == ON_RIGHT_FRINGE || part == ON_RIGHT_MARGIN
-	       || (part == ON_VERTICAL_SCROLL_BAR
-		   && WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_RIGHT (w)))
+	    : (part == ON_RIGHT_FRINGE || part == ON_RIGHT_MARGIN)
 	    ? (XINT (x) - window_box_left (w, TEXT_AREA))
 	    : 0;
 	  int y2 = wy;
@@ -9591,18 +9572,6 @@ read_key_sequence (Lisp_Object *keybuf, int bufsize, Lisp_Object prompt,
 
       /* Record what part of this_command_keys is the current key sequence.  */
       this_single_command_key_start = this_command_key_count - t;
-      /* When 'input-method-function' called above causes events to be
-	 put on 'unread-post-input-method-events', and as result
-	 'reread' is set to 'true', the value of 't' can become larger
-	 than 'this_command_key_count', because 'add_command_key' is
-	 not called to update 'this_command_key_count'.  If this
-	 happens, 'this_single_command_key_start' will become negative
-	 above, and any call to 'this-single-command-keys' will return
-	 a garbled vector.  See bug #20223 for one such situation.
-	 Here we force 'this_single_command_key_start' to never become
-	 negative, to avoid that.  */
-      if (this_single_command_key_start < 0)
-	this_single_command_key_start = 0;
 
       /* Look for this sequence in input-decode-map.
 	 Scan from indec.end until we find a bound suffix.  */
@@ -10765,25 +10734,25 @@ The elements of this list correspond to the arguments of
 `set-input-mode'.  */)
   (void)
 {
+  Lisp_Object val[4];
   struct frame *sf = XFRAME (selected_frame);
 
-  Lisp_Object interrupt = interrupt_input ? Qt : Qnil;
-  Lisp_Object flow, meta;
+  val[0] = interrupt_input ? Qt : Qnil;
   if (FRAME_TERMCAP_P (sf) || FRAME_MSDOS_P (sf))
     {
-      flow = FRAME_TTY (sf)->flow_control ? Qt : Qnil;
-      meta = (FRAME_TTY (sf)->meta_key == 2
-	      ? make_number (0)
-	      : (CURTTY ()->meta_key == 1 ? Qt : Qnil));
+      val[1] = FRAME_TTY (sf)->flow_control ? Qt : Qnil;
+      val[2] = (FRAME_TTY (sf)->meta_key == 2
+                ? make_number (0)
+                : (CURTTY ()->meta_key == 1 ? Qt : Qnil));
     }
   else
     {
-      flow = Qnil;
-      meta = Qt;
+      val[1] = Qnil;
+      val[2] = Qt;
     }
-  Lisp_Object quit = make_number (quit_char);
+  XSETFASTINT (val[3], quit_char);
 
-  return list4 (interrupt, flow, meta, quit);
+  return Flist (ARRAYELTS (val), val);
 }
 
 DEFUN ("posn-at-x-y", Fposn_at_x_y, Sposn_at_x_y, 2, 4, 0,
@@ -11492,7 +11461,6 @@ for that character after that prefix key.  */);
 	       doc: /* Form to evaluate when Emacs starts up.
 Useful to set before you dump a modified Emacs.  */);
   Vtop_level = Qnil;
-  XSYMBOL (Qtop_level)->declared_special = false;
 
   DEFVAR_KBOARD ("keyboard-translate-table", Vkeyboard_translate_table,
                  doc: /* Translate table for local keyboard input, or nil.
@@ -11614,7 +11582,7 @@ and the minor mode maps regardless of `overriding-local-map'.  */);
 
   DEFVAR_LISP ("special-event-map", Vspecial_event_map,
 	       doc: /* Keymap defining bindings for special events to execute at low level.  */);
-  Vspecial_event_map = list1 (Qkeymap);
+  Vspecial_event_map = list1 (intern_c_string ("keymap"));
 
   DEFVAR_LISP ("track-mouse", do_mouse_tracking,
 	       doc: /* Non-nil means generate motion events for mouse motion.  */);
@@ -11734,7 +11702,7 @@ the previous echo area message.
 The input method function should refer to the variables
 `input-method-use-echo-area' and `input-method-exit-on-first-char'
 for guidance on what to do.  */);
-  Vinput_method_function = Qlist;
+  Vinput_method_function = Qnil;
 
   DEFVAR_LISP ("input-method-previous-message",
 	       Vinput_method_previous_message,

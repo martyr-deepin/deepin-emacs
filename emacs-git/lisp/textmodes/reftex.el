@@ -106,21 +106,17 @@
 (defvar reftex-syntax-table nil)
 (defvar reftex-syntax-table-for-bib nil)
 
-(defun reftex--prepare-syntax-tables ()
+(unless reftex-syntax-table
   (setq reftex-syntax-table (copy-syntax-table))
   (modify-syntax-entry ?\( "." reftex-syntax-table)
-  (modify-syntax-entry ?\) "." reftex-syntax-table)
+  (modify-syntax-entry ?\) "." reftex-syntax-table))
 
+(unless reftex-syntax-table-for-bib
   (setq reftex-syntax-table-for-bib (copy-syntax-table))
   (modify-syntax-entry ?\' "." reftex-syntax-table-for-bib)
   (modify-syntax-entry ?\" "." reftex-syntax-table-for-bib)
   (modify-syntax-entry ?\[ "." reftex-syntax-table-for-bib)
-  (modify-syntax-entry ?\] "." reftex-syntax-table-for-bib)
-  (modify-syntax-entry ?\( "." reftex-syntax-table-for-bib)
-  (modify-syntax-entry ?\) "." reftex-syntax-table-for-bib))
-
-(unless (and reftex-syntax-table reftex-syntax-table-for-bib)
-  (reftex--prepare-syntax-tables))
+  (modify-syntax-entry ?\] "." reftex-syntax-table-for-bib))
 
 ;; The following definitions are out of place, but I need them here
 ;; to make the compilation of reftex-mode not complain.
@@ -184,7 +180,15 @@ on the menu bar.
           (put 'reftex-auto-recenter-toc 'initialized t))
 
         ;; Prepare the special syntax tables.
-	(reftex--prepare-syntax-tables)
+        (setq reftex-syntax-table (copy-syntax-table (syntax-table)))
+        (modify-syntax-entry ?\( "." reftex-syntax-table)
+        (modify-syntax-entry ?\) "." reftex-syntax-table)
+
+        (setq reftex-syntax-table-for-bib (copy-syntax-table))
+        (modify-syntax-entry ?\' "." reftex-syntax-table-for-bib)
+        (modify-syntax-entry ?\" "." reftex-syntax-table-for-bib)
+        (modify-syntax-entry ?\[ "." reftex-syntax-table-for-bib)
+        (modify-syntax-entry ?\] "." reftex-syntax-table-for-bib)
 
         (run-hooks 'reftex-mode-hook))
     ;; Mode was turned off
@@ -2676,7 +2680,7 @@ With no argument, this command toggles
 
 ;;;***
 
-;;;### (autoloads nil "reftex-index" "reftex-index.el" "29cb6e91c2e06592053e9d543f30f0ea")
+;;;### (autoloads nil "reftex-index" "reftex-index.el" "d80e84d499050e32569a454d8db16861")
 ;;; Generated autoloads from reftex-index.el
 
 (autoload 'reftex-index-selection-or-word "reftex-index" "\
@@ -3046,7 +3050,7 @@ During a selection process, these are the local bindings.
 
 ;;;***
 
-;;;### (autoloads nil "reftex-toc" "reftex-toc.el" "8b6d6733d445a55206e84fc119909520")
+;;;### (autoloads nil "reftex-toc" "reftex-toc.el" "e04344fac7ba4c2043439e130bdd283f")
 ;;; Generated autoloads from reftex-toc.el
 
 (autoload 'reftex-toc "reftex-toc" "\

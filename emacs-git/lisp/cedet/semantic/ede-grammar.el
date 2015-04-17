@@ -51,7 +51,7 @@
 A grammar target consists of grammar files that build Emacs Lisp programs for
 parsing different languages.")
 
-(cl-defmethod ede-proj-makefile-dependencies ((this semantic-ede-proj-target-grammar))
+(defmethod ede-proj-makefile-dependencies ((this semantic-ede-proj-target-grammar))
   "Return a string representing the dependencies for THIS.
 Some compilers only use the first element in the dependencies, others
 have a list of intermediates (object files), and others don't care.
@@ -124,17 +124,17 @@ For Emacs Lisp, return addsuffix command on source files."
   "Compile Emacs Lisp programs.")
 
 ;;; Target options.
-(cl-defmethod ede-buffer-mine ((this semantic-ede-proj-target-grammar) buffer)
+(defmethod ede-buffer-mine ((this semantic-ede-proj-target-grammar) buffer)
   "Return t if object THIS lays claim to the file in BUFFER.
 Lays claim to all -by.el, and -wy.el files."
   ;; We need to be a little more careful than this, but at the moment it
   ;; is common to have only one target of this class per directory.
   (if (string-match "-[bw]y\\.elc?$" (buffer-file-name buffer))
       t
-    (cl-call-next-method) ; The usual thing.
+    (call-next-method) ; The usual thing.
     ))
 
-(cl-defmethod project-compile-target ((obj semantic-ede-proj-target-grammar))
+(defmethod project-compile-target ((obj semantic-ede-proj-target-grammar))
   "Compile all sources in a Lisp target OBJ."
   (let* ((cb (current-buffer))
 	 (proj (ede-target-parent obj))
@@ -167,13 +167,13 @@ Lays claim to all -by.el, and -wy.el files."
 
 ;;; Makefile generation functions
 ;;
-(cl-defmethod ede-proj-makefile-sourcevar ((this semantic-ede-proj-target-grammar))
+(defmethod ede-proj-makefile-sourcevar ((this semantic-ede-proj-target-grammar))
   "Return the variable name for THIS's sources."
   (cond ((ede-proj-automake-p)
 	 (error "No Automake support for Semantic Grammars"))
 	(t (concat (ede-pmake-varname this) "_SEMANTIC_GRAMMAR"))))
 
-(cl-defmethod ede-proj-makefile-insert-variables :after ((this semantic-ede-proj-target-grammar))
+(defmethod ede-proj-makefile-insert-variables :AFTER ((this semantic-ede-proj-target-grammar))
   "Insert variables needed by target THIS."
   (ede-proj-makefile-insert-loadpath-items
    (ede-proj-elisp-packages-to-loadpath
@@ -192,7 +192,7 @@ Lays claim to all -by.el, and -wy.el files."
 		" ")))
   )
 
-(cl-defmethod ede-proj-makefile-insert-rules :after ((this semantic-ede-proj-target-grammar))
+(defmethod ede-proj-makefile-insert-rules :after ((this semantic-ede-proj-target-grammar))
     "Insert rules needed by THIS target.
 This raises `max-specpdl-size' and `max-lisp-eval-depth', which can be
 needed for the compilation of the resulting parsers."
@@ -200,12 +200,12 @@ needed for the compilation of the resulting parsers."
 max-lisp-eval-depth 700)'\n"
 		    (oref this name))))
 
-(cl-defmethod ede-proj-makefile-insert-dist-dependencies ((this semantic-ede-proj-target-grammar))
+(defmethod ede-proj-makefile-insert-dist-dependencies ((this semantic-ede-proj-target-grammar))
   "Insert dist dependencies, or intermediate targets.
 This makes sure that all grammar lisp files are created before the dist
 runs, so they are always up to date.
 Argument THIS is the target that should insert stuff."
-  (cl-call-next-method)
+  (call-next-method)
   (insert " $(" (ede-pmake-varname this) "_SEMANTIC_GRAMMAR_EL)")
   )
 

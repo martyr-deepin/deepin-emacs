@@ -237,7 +237,8 @@ parse_region (Lisp_Object start, Lisp_Object end, Lisp_Object base_url,
 	if (node != NULL)
 	  result = make_dom (node);
       } else
-	result = Fcons (Qtop, Fcons (Qnil, Fnreverse (Fcons (r, result))));
+	result = Fcons (intern ("top"),
+			Fcons (Qnil, Fnreverse (Fcons (r, result))));
 
       xmlFreeDoc (doc);
     }

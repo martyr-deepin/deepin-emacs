@@ -40,6 +40,7 @@
 (defvar epg-debug-buffer nil)
 (defvar epg-agent-file nil)
 (defvar epg-agent-mtime nil)
+(defvar epg-error-output nil)
 
 ;; from gnupg/include/cipher.h
 (defconst epg-cipher-algorithm-alist
@@ -212,8 +213,7 @@
   result
   operation
   pinentry-mode
-  (error-output "")
-  error-buffer)
+  (error-output ""))
 
 ;; This is not an alias, just so we can mark it as autoloaded.
 ;;;###autoload
@@ -581,9 +581,11 @@ callback data (if any)."
 				 (symbol-name (epg-context-pinentry-mode
 					       context))))
 		       args))
+	 (coding-system-for-write 'binary)
+	 (coding-system-for-read 'binary)
+	 process-connection-type
 	 (process-environment process-environment)
 	 (buffer (generate-new-buffer " *epg*"))
-	 error-process
 	 process
 	 terminal-name
 	 agent-file
@@ -640,24 +642,13 @@ callback data (if any)."
       (make-local-variable 'epg-agent-file)
       (setq epg-agent-file agent-file)
       (make-local-variable 'epg-agent-mtime)
-      (setq epg-agent-mtime agent-mtime))
-    (setq error-process
-	  (make-pipe-process :name "epg-error"
-			     :buffer (generate-new-buffer " *epg-error*")
-			     ;; Suppress "XXX finished" line.
-			     :sentinel #'ignore
-			     :noquery t))
-    (setf (epg-context-error-buffer context) (process-buffer error-process))
+      (setq epg-agent-mtime agent-mtime)
+      (make-local-variable 'epg-error-output)
+      (setq epg-error-output nil))
     (with-file-modes 448
-      (setq process (make-process :name "epg"
-				  :buffer buffer
-				  :command (cons (epg-context-program context)
-						 args)
-				  :connection-type 'pipe
-				  :coding '(binary . binary)
-				  :filter #'epg--process-filter
-				  :stderr error-process
-				  :noquery t)))
+      (setq process (apply #'start-process "epg" buffer
+			   (epg-context-program context) args)))
+    (set-process-filter process #'epg--process-filter)
     (setf (epg-context-process context) process)))
 
 (defun epg--process-filter (process input)
@@ -699,7 +690,14 @@ callback data (if any)."
 			(if (and symbol
 				 (fboundp symbol))
 			    (funcall symbol epg-context string)))
-                      (setq epg-last-status (cons status string))))
+                      (setq epg-last-status (cons status string)))
+		  ;; Record other lines sent to stderr.  This assumes
+		  ;; that the process-filter receives output only from
+		  ;; stderr and the FD specified with --status-fd.
+		  (setq epg-error-output
+			(cons (buffer-substring (point)
+						(line-end-position))
+			      epg-error-output)))
                 (forward-line)
                 (setq epg-read-point (point)))))))))
 
@@ -742,17 +740,15 @@ callback data (if any)."
   (epg-context-set-result-for
    context 'error
    (nreverse (epg-context-result-for context 'error)))
-  (setf (epg-context-error-output context)
-	(with-current-buffer (epg-context-error-buffer context)
-	  (buffer-string))))
+  (with-current-buffer (process-buffer (epg-context-process context))
+    (setf (epg-context-error-output context)
+	(mapconcat #'identity (nreverse epg-error-output) "\n"))))
 
 (defun epg-reset (context)
   "Reset the CONTEXT."
   (if (and (epg-context-process context)
 	   (buffer-live-p (process-buffer (epg-context-process context))))
       (kill-buffer (process-buffer (epg-context-process context))))
-  (if (buffer-live-p (epg-context-error-buffer context))
-      (kill-buffer (epg-context-error-buffer context)))
   (setf (epg-context-process context) nil)
   (setf (epg-context-edit-callback context) nil))
 
@@ -2055,9 +2051,7 @@ If you are unsure, use synchronous version of this function
 
 (defun epg-start-generate-key (context parameters)
   "Initiate a key generation.
-PARAMETERS is a string which specifies parameters of the generated key.
-See Info node `(gnupg) Unattended GPG key generation' in the
-GnuPG manual for the format.
+PARAMETERS specifies parameters for the key.
 
 If you use this function, you will need to wait for the completion of
 `epg-gpg-program' by using `epg-wait-for-completion' and call
@@ -2067,9 +2061,9 @@ If you are unsure, use synchronous version of this function
   (setf (epg-context-operation context) 'generate-key)
   (setf (epg-context-result context) nil)
   (if (epg-data-file parameters)
-      (epg--start context (list "--batch" "--gen-key" "--"
+      (epg--start context (list "--batch" "--genkey" "--"
 			       (epg-data-file parameters)))
-    (epg--start context '("--batch" "--gen-key"))
+    (epg--start context '("--batch" "--genkey"))
     (if (eq (process-status (epg-context-process context)) 'run)
 	(process-send-string (epg-context-process context)
 			     (epg-data-string parameters)))

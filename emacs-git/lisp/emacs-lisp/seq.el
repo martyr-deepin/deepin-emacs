@@ -2,10 +2,9 @@
 
 ;; Copyright (C) 2014-2015 Free Software Foundation, Inc.
 
-;; Author: Nicolas Petton <nicolas@petton.fr>
+;; Author: Nicolas Petton <petton.nicolas@gmail.com>
 ;; Keywords: sequences
-;; Version: 1.4
-;; Package: seq
+;; Version: 1.0
 
 ;; Maintainer: emacs-devel@gnu.org
 
@@ -33,8 +32,8 @@
 ;;
 ;; All provided functions work on lists, strings and vectors.
 ;;
-;; Functions taking a predicate or iterating over a sequence using a
-;; function as argument take the function as their first argument and
+;; Functions taking a predicate or a function iterating over the
+;; sequence as argument take the function as their first argument and
 ;; the sequence as their second argument.  All other functions take
 ;; the sequence as their first argument.
 ;;
@@ -93,14 +92,14 @@ returned."
     (seq-subseq seq 0 (min (max n 0) (seq-length seq)))))
 
 (defun seq-drop-while (pred seq)
-  "Return a sequence from the first element for which (PRED element) is nil in SEQ.
+  "Return a sequence, from the first element for which (PRED element) is nil, of SEQ.
 The result is a sequence of the same type as SEQ."
   (if (listp seq)
       (seq--drop-while-list pred seq)
     (seq-drop seq (seq--count-successive pred seq))))
 
 (defun seq-take-while (pred seq)
-  "Return the successive elements for which (PRED element) is non-nil in SEQ.
+  "Return a sequence of the successive elements for which (PRED element) is non-nil in SEQ.
 The result is a sequence of the same type as SEQ."
   (if (listp seq)
       (seq--take-while-list pred seq)
@@ -153,7 +152,7 @@ If SEQ is empty, return INITIAL-VALUE and FUNCTION is not called."
     t))
 
 (defun seq-count (pred seq)
-  "Return the number of elements for which (PRED element) is non-nil in SEQ."
+  "Return the number of elements for which (PRED element) returns non-nil in seq."
   (let ((count 0))
     (seq-doseq (elt seq)
       (when (funcall pred elt)
@@ -172,7 +171,9 @@ The result is a sequence of the same type as SEQ."
   (if (listp seq)
       (sort (seq-copy seq) pred)
     (let ((result (seq-sort pred (append seq nil))))
-      (seq-into result (type-of seq)))))
+      (cond ((stringp seq) (concat result))
+            ((vectorp seq) (vconcat result))
+            (t (error "Unsupported sequence: %s" seq))))))
 
 (defun seq-contains-p (seq elt &optional testfn)
   "Return the first element in SEQ that equals to ELT.
@@ -196,18 +197,14 @@ If END is omitted, it defaults to the length of the sequence.
 If START or END is negative, it counts from the end."
   (cond ((or (stringp seq) (vectorp seq)) (substring seq start end))
         ((listp seq)
-         (let (len (errtext (format "Bad bounding indices: %s, %s" start end)))
+         (let (len)
            (and end (< end 0) (setq end (+ end (setq len (seq-length seq)))))
            (if (< start 0) (setq start (+ start (or len (setq len (seq-length seq))))))
-           (when (> start 0)
-             (setq seq (nthcdr (1- start) seq))
-             (or seq (error "%s" errtext))
-             (setq seq (cdr seq)))
+           (if (> start 0) (setq seq (nthcdr start seq)))
            (if end
                (let ((res nil))
-                 (while (and (>= (setq end (1- end)) start) seq)
+                 (while (>= (setq end (1- end)) start)
                    (push (pop seq) res))
-                 (or (= (1+ end) start) (error "%s" errtext))
                  (nreverse res))
              (seq-copy seq))))
         (t (error "Unsupported sequence: %s" seq))))
@@ -223,91 +220,15 @@ TYPE must be one of following symbols: vector, string or list.
     (`list (apply #'append (append seqs '(nil))))
     (t (error "Not a sequence type name: %s" type))))
 
-(defun seq-mapcat (function seq &optional type)
-  "Concatenate the result of applying FUNCTION to each element of SEQ.
-The result is a sequence of type TYPE, or a list if TYPE is nil."
-  (apply #'seq-concatenate (or type 'list)
-         (seq-map function seq)))
-
-(defun seq-partition (seq n)
-  "Return a list of the elements of SEQ grouped into sub-sequences of length N.
-The last sequence may contain less than N elements.  If N is a
-negative integer or 0, nil is returned."
-  (unless (< n 1)
-    (let ((result '()))
-      (while (not (seq-empty-p seq))
-        (push (seq-take seq n) result)
-        (setq seq (seq-drop seq n)))
-      (nreverse result))))
-
-(defun seq-intersection (seq1 seq2 &optional testfn)
-  "Return a list of the elements that appear in both SEQ1 and SEQ2.
-Equality is defined by TESTFN if non-nil or by `equal' if nil."
-  (seq-reduce (lambda (acc elt)
-                (if (seq-contains-p seq2 elt testfn)
-                    (cons elt acc)
-                  acc))
-              (seq-reverse seq1)
-              '()))
-
-(defun seq-difference (seq1 seq2 &optional testfn)
-  "Return a list of th elements that appear in SEQ1 but not in SEQ2.
-Equality is defined by TESTFN if non-nil or by `equal' if nil."
-  (seq-reduce (lambda (acc elt)
-                (if (not (seq-contains-p seq2 elt testfn))
-                    (cons elt acc)
-                  acc))
-              (seq-reverse seq1)
-              '()))
-
-(defun seq-group-by (function seq)
-  "Apply FUNCTION to each element of SEQ.
-Separate the elements of SEQ into an alist using the results as
-keys.  Keys are compared using `equal'."
-  (seq-reduce
-   (lambda (acc elt)
-     (let* ((key (funcall function elt))
-            (cell (assoc key acc)))
-       (if cell
-           (setcdr cell (push elt (cdr cell)))
-         (push (list key elt) acc))
-       acc))
-   (seq-reverse seq)
-   nil))
-
-(defalias 'seq-reverse
-  (if (ignore-errors (reverse [1 2]))
-      #'reverse
-    (lambda (seq)
-      "Return the reversed copy of list, vector, or string SEQ.
-See also the function `nreverse', which is used more often."
-      (let ((result '()))
-        (seq-map (lambda (elt) (push elt result))
-                 seq)
-        (if (listp seq)
-            result
-          (seq-into result (type-of seq)))))))
-
-(defun seq-into (seq type)
-  "Convert the sequence SEQ into a sequence of type TYPE.
-TYPE can be one of the following symbols: vector, string or list."
-  (pcase type
-    (`vector (vconcat seq))
-    (`string (concat seq))
-    (`list (append seq nil))
-    (t (error "Not a sequence type name: %s" type))))
-
 (defun seq--drop-list (list n)
-  "Return a list from LIST without its first N elements.
-This is an optimization for lists in `seq-drop'."
+  "Optimized version of `seq-drop' for lists."
   (while (and list (> n 0))
     (setq list (cdr list)
           n (1- n)))
   list)
 
 (defun seq--take-list (list n)
-  "Return a list from LIST made of its first N elements.
-This is an optimization for lists in `seq-take'."
+  "Optimized version of `seq-take' for lists."
   (let ((result '()))
     (while (and list (> n 0))
       (setq n (1- n))
@@ -315,15 +236,13 @@ This is an optimization for lists in `seq-take'."
     (nreverse result)))
 
 (defun seq--drop-while-list (pred list)
-  "Return a list from the first element for which (PRED element) is nil in LIST.
-This is an optimization for lists in `seq-drop-while'."
+  "Optimized version of `seq-drop-while' for lists."
   (while (and list (funcall pred (car list)))
     (setq list (cdr list)))
   list)
 
 (defun seq--take-while-list (pred list)
-  "Return the successive elements for which (PRED element) is non-nil in LIST.
-This is an optimization for lists in `seq-take-while'."
+  "Optimized version of `seq-take-while' for lists."
   (let ((result '()))
     (while (and list (funcall pred (car list)))
       (push (pop list) result))
@@ -338,19 +257,13 @@ This is an optimization for lists in `seq-take-while'."
       (setq n (+ 1 n)))
     n))
 
-(defun seq--activate-font-lock-keywords ()
-  "Activate font-lock keywords for some symbols defined in seq."
-  (font-lock-add-keywords 'emacs-lisp-mode
-                          '("\\<seq-doseq\\>")))
-
 (defalias 'seq-copy #'copy-sequence)
 (defalias 'seq-elt #'elt)
+(defalias 'seq-reverse #'reverse)
 (defalias 'seq-length #'length)
 (defalias 'seq-do #'mapc)
 (defalias 'seq-each #'seq-do)
 (defalias 'seq-map #'mapcar)
-
-(add-to-list 'emacs-lisp-mode-hook #'seq--activate-font-lock-keywords)
 
 (provide 'seq)
 ;;; seq.el ends here

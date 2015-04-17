@@ -102,7 +102,7 @@ All directories need at least one target.")
   "EDE Simple project class.
 Each directory needs a project file to control it.")
 
-(cl-defmethod ede-commit-project ((proj ede-simple-project))
+(defmethod ede-commit-project ((proj ede-simple-project))
   "Commit any change to PROJ to its file."
   (when (not (file-exists-p ede-simple-save-directory))
     (if (y-or-n-p (concat ede-simple-save-directory
@@ -111,7 +111,7 @@ Each directory needs a project file to control it.")
       (error "No save directory for new project")))
   (eieio-persistent-save proj))
 
-(cl-defmethod ede-find-subproject-for-directory ((proj ede-simple-project)
+(defmethod ede-find-subproject-for-directory ((proj ede-simple-project)
 					      dir)
   "Return PROJ, for handling all subdirs below DIR."
   proj)

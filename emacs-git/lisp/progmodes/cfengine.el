@@ -1350,8 +1350,7 @@ to the action header."
                  (when buffer-file-name
                    (shell-quote-argument buffer-file-name)))))
 
-  (add-function :before-until (local 'eldoc-documentation-function)
-                #'cfengine3-documentation-function)
+  (setq-local eldoc-documentation-function #'cfengine3-documentation-function)
 
   (add-hook 'completion-at-point-functions
             #'cfengine3-completion-function nil t)

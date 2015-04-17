@@ -217,7 +217,7 @@ read_minibuf_noninteractive (Lisp_Object map, Lisp_Object initial,
       suppress_echo_on_tty (fileno (stdin));
     }
 
-  fwrite (SDATA (prompt), 1, SBYTES (prompt), stdout);
+  fprintf (stdout, "%s", SDATA (prompt));
   fflush (stdout);
 
   val = Qnil;
@@ -395,7 +395,7 @@ read_minibuf (Lisp_Object map, Lisp_Object initial, Lisp_Object prompt,
   Lisp_Object dummy, frame;
 
   specbind (Qminibuffer_default, defalt);
-  specbind (Qinhibit_read_only, Qnil);
+  specbind (intern ("inhibit-read-only"), Qnil);
 
   /* If Vminibuffer_completing_file_name is `lambda' on entry, it was t
      in previous recursive minibuffer, but was not set explicitly
@@ -459,7 +459,7 @@ read_minibuf (Lisp_Object map, Lisp_Object initial, Lisp_Object prompt,
   if ((noninteractive
        /* In case we are running as a daemon, only do this before
 	  detaching from the terminal.  */
-       || (IS_DAEMON && DAEMON_RUNNING))
+       || (IS_DAEMON && (daemon_pipe[1] >= 0)))
       && NILP (Vexecuting_kbd_macro))
     {
       val = read_minibuf_noninteractive (map, initial, prompt,
@@ -1081,7 +1081,7 @@ A user option, or customizable variable, is one for which
   return Fintern (name, Qnil);
 }
 
-DEFUN ("read-buffer", Fread_buffer, Sread_buffer, 1, 4, 0,
+DEFUN ("read-buffer", Fread_buffer, Sread_buffer, 1, 3, 0,
        doc: /* Read the name of a buffer and return as a string.
 Prompt with PROMPT.
 Optional second arg DEF is value to return if user enters an empty line.
@@ -1093,11 +1093,8 @@ The argument PROMPT should be a string ending with a colon and a space.
 If `read-buffer-completion-ignore-case' is non-nil, completion ignores
 case while reading the buffer name.
 If `read-buffer-function' is non-nil, this works by calling it as a
-function, instead of the usual behavior.
-Optional arg PREDICATE if non-nil is a function limiting the buffers that can
-be considered.  */)
-  (Lisp_Object prompt, Lisp_Object def, Lisp_Object require_match,
-   Lisp_Object predicate)
+function, instead of the usual behavior.  */)
+  (Lisp_Object prompt, Lisp_Object def, Lisp_Object require_match)
 {
   Lisp_Object result;
   char *s;
@@ -1134,21 +1131,18 @@ be considered.  */)
 	    }
 
 	  AUTO_STRING (format, "%s (default %s): ");
-	  prompt = CALLN (Fformat, format, prompt,
-			  CONSP (def) ? XCAR (def) : def);
+	  prompt = Fformat (3, ((Lisp_Object [])
+				{format, prompt,
+				 CONSP (def) ? XCAR (def) : def}));
 	}
 
       result = Fcompleting_read (prompt, intern ("internal-complete-buffer"),
-				 predicate, require_match, Qnil,
+				 Qnil, require_match, Qnil,
 				 Qbuffer_name_history, def, Qnil);
     }
   else
-    result = (NILP (predicate)
-	      /* Partial backward compatibility for older read_buffer_functions
-		 which don't expect a `predicate' argument.  */
-	      ? call3 (Vread_buffer_function, prompt, def, require_match)
-	      : call4 (Vread_buffer_function, prompt, def, require_match,
-		       predicate));
+    result = Ffuncall (4, ((Lisp_Object [])
+      { Vread_buffer_function, prompt, def, require_match }));
   return unbind_to (count, result);
 }
 
@@ -1668,10 +1662,17 @@ Completion ignores case if the ambient value of
 See also `completing-read-function'.  */)
   (Lisp_Object prompt, Lisp_Object collection, Lisp_Object predicate, Lisp_Object require_match, Lisp_Object initial_input, Lisp_Object hist, Lisp_Object def, Lisp_Object inherit_input_method)
 {
-  return CALLN (Ffuncall,
-		Fsymbol_value (intern ("completing-read-function")),
-		prompt, collection, predicate, require_match, initial_input,
-		hist, def, inherit_input_method);
+  Lisp_Object args[9];
+  args[0] = Fsymbol_value (intern ("completing-read-function"));
+  args[1] = prompt;
+  args[2] = collection;
+  args[3] = predicate;
+  args[4] = require_match;
+  args[5] = initial_input;
+  args[6] = hist;
+  args[7] = def;
+  args[8] = inherit_input_method;
+  return Ffuncall (9, args);
 }
 
 /* Test whether TXT is an exact completion.  */
@@ -2078,7 +2079,9 @@ with completion; they always discard text properties.  */);
 	       doc: /* Text properties that are added to minibuffer prompts.
 These are in addition to the basic `field' property, and stickiness
 properties.  */);
-  Vminibuffer_prompt_properties = list2 (Qread_only, Qt);
+  /* We use `intern' here instead of Qread_only to avoid
+     initialization-order problems.  */
+  Vminibuffer_prompt_properties = list2 (intern_c_string ("read-only"), Qt);
 
   DEFVAR_LISP ("read-hide-char", Vread_hide_char,
 	       doc: /* Whether to hide input characters in noninteractive mode.

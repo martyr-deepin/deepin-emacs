@@ -383,7 +383,7 @@ the preceding lines; if the region is active, @key{TAB} indents each
 line within the region, not just the current line.
 
   The command @key{RET} (@code{newline}), which was documented in
-@ref{Inserting Text}, does the same as @kbd{C-j} followed by
+@ref{Inserting Text}, does the same as @key{C-j} followed by
 @key{TAB}: it inserts a new line, then adjusts the line's indentation.
 
   When indenting a line that starts within a parenthetical grouping,
@@ -546,7 +546,7 @@ your selected @dfn{style} with the syntactic construct and adds this
 onto the indentation of the @dfn{anchor statement}.
 
 @table @kbd
-@item C-c . @var{style} @key{RET}
+@item C-c . @key{RET} @var{style} @key{RET}
 Select a predefined style @var{style} (@code{c-set-style}).
 @end table
 
@@ -559,7 +559,7 @@ predefined styles, including @code{gnu}, @code{k&r}, @code{bsd},
 styles are primarily intended for one language, but any of them can be
 used with any of the languages supported by these modes.  To find out
 what a style looks like, select it and reindent some code, e.g., by
-typing @kbd{C-M-q} at the start of a function definition.
+typing @key{C-M-q} at the start of a function definition.
 
 @kindex C-c . @r{(C mode)}
 @findex c-set-style
@@ -843,9 +843,9 @@ show-paren-mode}.
   Electric Pair mode, a global minor mode, provides a way to easily
 insert matching delimiters.  Whenever you insert an opening delimiter,
 the matching closing delimiter is automatically inserted as well,
-leaving point between the two.  Conversely, when you insert a closing
+leaving point between the two. Conversely, when you insert a closing
 delimiter over an existing one, no inserting takes places and that
-position is simply skipped over.  These variables control additional
+position is simply skipped over. These variables control additional
 features of Electric Pair mode:
 
 @itemize @bullet
@@ -870,9 +870,7 @@ mode to skip whitespace forward before deciding whether to skip over
 the closing delimiter.
 @end itemize
 
-To toggle Electric Pair mode, type @kbd{M-x electric-pair-mode}.  To
-toggle the mode in a single buffer, use @kbd{M-x
-electric-pair-local-mode}.
+To toggle Electric Pair mode, type @kbd{M-x electric-pair-mode}.
 
 @node Comments
 @section Manipulating Comments
@@ -1668,7 +1666,7 @@ Delete the entire block of whitespace after point (@code{c-hungry-delete-forward
   As an alternative to the above commands, you can enable @dfn{hungry
 delete mode}.  When this feature is enabled (indicated by @samp{/h} in
 the mode line after the mode name), a single @key{DEL} deletes all
-preceding whitespace, not just one space, and a single @kbd{C-d}
+preceding whitespace, not just one space, and a single @kbd{C-c C-d}
 (but @emph{not} plain @key{Delete}) deletes all following whitespace.
 
 @table @kbd

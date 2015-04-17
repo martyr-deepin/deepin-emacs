@@ -35,8 +35,8 @@
 ;;; Code:
 
 (defvar sasl-mechanisms
-  '("SCRAM-SHA-1" "CRAM-MD5" "DIGEST-MD5" "PLAIN" "LOGIN" "ANONYMOUS"
-    "NTLM"))
+  '("CRAM-MD5" "DIGEST-MD5" "PLAIN" "LOGIN" "ANONYMOUS"
+    "NTLM" "SCRAM-MD5"))
 
 (defvar sasl-mechanism-alist
   '(("CRAM-MD5" sasl-cram)
@@ -45,7 +45,7 @@
     ("LOGIN" sasl-login)
     ("ANONYMOUS" sasl-anonymous)
     ("NTLM" sasl-ntlm)
-    ("SCRAM-SHA-1" sasl-scram-rfc)))
+    ("SCRAM-MD5" sasl-scram)))
 
 (defvar sasl-unique-id-function #'sasl-unique-id-function)
 

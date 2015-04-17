@@ -210,7 +210,7 @@ init_eval_once (void)
   specpdl = specpdl_ptr = pdlvec + 1;
   /* Don't forget to update docs (lispref node "Local Variables").  */
   max_specpdl_size = 1300; /* 1000 is not enough for CEDET's c-by.el.  */
-  max_lisp_eval_depth = 800;
+  max_lisp_eval_depth = 600;
 
   Vrun_hooks = Qnil;
 }
@@ -575,23 +575,10 @@ usage: (function ARG)  */)
   if (!NILP (Vinternal_interpreter_environment)
       && CONSP (quoted)
       && EQ (XCAR (quoted), Qlambda))
-    { /* This is a lambda expression within a lexical environment;
-	 return an interpreted closure instead of a simple lambda.  */
-      Lisp_Object cdr = XCDR (quoted);
-      Lisp_Object tmp = cdr;
-      if (CONSP (tmp)
-	  && (tmp = XCDR (tmp), CONSP (tmp))
-	  && (tmp = XCAR (tmp), CONSP (tmp))
-	  && (EQ (QCdocumentation, XCAR (tmp))))
-	{ /* Handle the special (:documentation <form>) to build the docstring
-	     dynamically.  */
-	  Lisp_Object docstring = eval_sub (Fcar (XCDR (tmp)));
-	  CHECK_STRING (docstring);
-	  cdr = Fcons (XCAR (cdr), Fcons (docstring, XCDR (XCDR (cdr))));
-	}
-      return Fcons (Qclosure, Fcons (Vinternal_interpreter_environment,
-				     cdr));
-    }
+    /* This is a lambda expression within a lexical environment;
+       return an interpreted closure instead of a simple lambda.  */
+    return Fcons (Qclosure, Fcons (Vinternal_interpreter_environment,
+				   XCDR (quoted)));
   else
     /* Simply quote the argument.  */
     return quoted;
@@ -2312,8 +2299,8 @@ usage: (apply FUNCTION &rest ARGUMENTS)  */)
       /* Avoid making funcall cons up a yet another new vector of arguments
 	 by explicitly supplying nil's for optional values.  */
       SAFE_ALLOCA_LISP (funcall_args, 1 + XSUBR (fun)->max_args);
-      memclear (funcall_args + numargs + 1,
-		(XSUBR (fun)->max_args - numargs) * word_size);
+      for (i = numargs; i < XSUBR (fun)->max_args; /* nothing */)
+	funcall_args[++i] = Qnil;
       funcall_nargs = 1 + XSUBR (fun)->max_args;
     }
   else
@@ -2548,14 +2535,15 @@ run_hook (Lisp_Object hook)
 void
 run_hook_with_args_2 (Lisp_Object hook, Lisp_Object arg1, Lisp_Object arg2)
 {
-  CALLN (Frun_hook_with_args, hook, arg1, arg2);
+  Frun_hook_with_args (3, ((Lisp_Object []) { hook, arg1, arg2 }));
 }
 
 /* Apply fn to arg.  */
 Lisp_Object
 apply1 (Lisp_Object fn, Lisp_Object arg)
 {
-  return NILP (arg) ? Ffuncall (1, &fn) : CALLN (Fapply, fn, arg);
+  return (NILP (arg) ? Ffuncall (1, &fn)
+	  : Fapply (2, ((Lisp_Object []) { fn, arg })));
 }
 
 /* Call function fn on no arguments.  */
@@ -2570,7 +2558,7 @@ call0 (Lisp_Object fn)
 Lisp_Object
 call1 (Lisp_Object fn, Lisp_Object arg1)
 {
-  return CALLN (Ffuncall, fn, arg1);
+  return Ffuncall (2, ((Lisp_Object []) { fn, arg1 }));
 }
 
 /* Call function fn with 2 arguments arg1, arg2.  */
@@ -2578,7 +2566,7 @@ call1 (Lisp_Object fn, Lisp_Object arg1)
 Lisp_Object
 call2 (Lisp_Object fn, Lisp_Object arg1, Lisp_Object arg2)
 {
-  return CALLN (Ffuncall, fn, arg1, arg2);
+  return Ffuncall (3, ((Lisp_Object []) { fn, arg1, arg2 }));
 }
 
 /* Call function fn with 3 arguments arg1, arg2, arg3.  */
@@ -2586,7 +2574,7 @@ call2 (Lisp_Object fn, Lisp_Object arg1, Lisp_Object arg2)
 Lisp_Object
 call3 (Lisp_Object fn, Lisp_Object arg1, Lisp_Object arg2, Lisp_Object arg3)
 {
-  return CALLN (Ffuncall, fn, arg1, arg2, arg3);
+  return Ffuncall (4, ((Lisp_Object []) { fn, arg1, arg2, arg3 }));
 }
 
 /* Call function fn with 4 arguments arg1, arg2, arg3, arg4.  */
@@ -2595,7 +2583,7 @@ Lisp_Object
 call4 (Lisp_Object fn, Lisp_Object arg1, Lisp_Object arg2, Lisp_Object arg3,
        Lisp_Object arg4)
 {
-  return CALLN (Ffuncall, fn, arg1, arg2, arg3, arg4);
+  return Ffuncall (5, ((Lisp_Object []) { fn, arg1, arg2, arg3, arg4 }));
 }
 
 /* Call function fn with 5 arguments arg1, arg2, arg3, arg4, arg5.  */
@@ -2604,7 +2592,7 @@ Lisp_Object
 call5 (Lisp_Object fn, Lisp_Object arg1, Lisp_Object arg2, Lisp_Object arg3,
        Lisp_Object arg4, Lisp_Object arg5)
 {
-  return CALLN (Ffuncall, fn, arg1, arg2, arg3, arg4, arg5);
+  return Ffuncall (6, ((Lisp_Object []) { fn, arg1, arg2, arg3, arg4, arg5 }));
 }
 
 /* Call function fn with 6 arguments arg1, arg2, arg3, arg4, arg5, arg6.  */
@@ -2613,7 +2601,8 @@ Lisp_Object
 call6 (Lisp_Object fn, Lisp_Object arg1, Lisp_Object arg2, Lisp_Object arg3,
        Lisp_Object arg4, Lisp_Object arg5, Lisp_Object arg6)
 {
-  return CALLN (Ffuncall, fn, arg1, arg2, arg3, arg4, arg5, arg6);
+  return Ffuncall (7, ((Lisp_Object [])
+    { fn, arg1, arg2, arg3, arg4, arg5, arg6 }));
 }
 
 /* Call function fn with 7 arguments arg1, arg2, arg3, arg4, arg5, arg6, arg7.  */
@@ -2622,7 +2611,8 @@ Lisp_Object
 call7 (Lisp_Object fn, Lisp_Object arg1, Lisp_Object arg2, Lisp_Object arg3,
        Lisp_Object arg4, Lisp_Object arg5, Lisp_Object arg6, Lisp_Object arg7)
 {
-  return CALLN (Ffuncall, fn, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+  return Ffuncall (8, ((Lisp_Object [])
+    { fn, arg1, arg2, arg3, arg4, arg5, arg6, arg7 }));
 }
 
 /* The caller should GCPRO all the elements of ARGS.  */
@@ -2648,8 +2638,8 @@ usage: (funcall FUNCTION &rest ARGUMENTS)  */)
   ptrdiff_t numargs = nargs - 1;
   Lisp_Object lisp_numargs;
   Lisp_Object val;
-  Lisp_Object *internal_args;
-  ptrdiff_t count;
+  register Lisp_Object *internal_args;
+  ptrdiff_t i, count;
 
   QUIT;
 
@@ -2704,8 +2694,8 @@ usage: (funcall FUNCTION &rest ARGUMENTS)  */)
 	      eassert (XSUBR (fun)->max_args <= ARRAYELTS (internal_argbuf));
 	      internal_args = internal_argbuf;
 	      memcpy (internal_args, args + 1, numargs * word_size);
-	      memclear (internal_args + numargs,
-			(XSUBR (fun)->max_args - numargs) * word_size);
+	      for (i = numargs; i < XSUBR (fun)->max_args; i++)
+		internal_args[i] = Qnil;
 	    }
 	  else
 	    internal_args = args + 1;
@@ -3681,7 +3671,6 @@ before making `inhibit-quit' nil.  */);
   DEFSYM (Qand_rest, "&rest");
   DEFSYM (Qand_optional, "&optional");
   DEFSYM (Qclosure, "closure");
-  DEFSYM (QCdocumentation, ":documentation");
   DEFSYM (Qdebug, "debug");
 
   DEFVAR_LISP ("inhibit-debugger", Vinhibit_debugger,

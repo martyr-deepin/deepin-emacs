@@ -573,12 +573,6 @@ using \\[read-only-mode]."
 
 Maximum length of the history list is determined by the value
 of `history-length', which see.")
-
-(defvar save-silently nil
-  "If non-nil, avoid messages when saving files.
-Error-related messages will still be printed, but all other
-messages will not.")
-
 
 (put 'ange-ftp-completion-hook-function 'safe-magic t)
 (defun ange-ftp-completion-hook-function (op &rest args)
@@ -1198,7 +1192,7 @@ containing it, until no links are left at any level.
 	    (setq dirfile (directory-file-name dir))
 	    ;; If these are equal, we have the (or a) root directory.
 	    (or (string= dir dirfile)
-		(and (memq system-type '(windows-nt ms-dos cygwin nacl))
+		(and (memq system-type '(windows-nt ms-dos cygwin))
 		     (eq (compare-strings dir 0 nil dirfile 0 nil t) t))
 		;; If this is the same dir we last got the truename for,
 		;; save time--don't recalculate.
@@ -1495,9 +1489,8 @@ expand wildcards (if any) and visit multiple files."
     (if (listp value)
 	(progn
 	  (setq value (nreverse value))
-	  (switch-to-buffer-other-window (car value))
-	  (mapc 'switch-to-buffer (cdr value))
-	  value)
+	  (cons (switch-to-buffer-other-window (car value))
+		(mapcar 'switch-to-buffer (cdr value))))
       (switch-to-buffer-other-window value))))
 
 (defun find-file-other-frame (filename &optional wildcards)
@@ -1519,9 +1512,8 @@ expand wildcards (if any) and visit multiple files."
     (if (listp value)
 	(progn
 	  (setq value (nreverse value))
-	  (switch-to-buffer-other-frame (car value))
-	  (mapc 'switch-to-buffer (cdr value))
-	  value)
+	  (cons (switch-to-buffer-other-frame (car value))
+		(mapcar 'switch-to-buffer (cdr value))))
       (switch-to-buffer-other-frame value))))
 
 (defun find-file-existing (filename)
@@ -1634,10 +1626,10 @@ killed."
             (confirm-nonexistent-file-or-buffer) file-name)
 	   t)))
   (unless (run-hook-with-args-until-failure 'kill-buffer-query-functions)
-    (user-error "Aborted"))
+    (error "Aborted"))
   (and (buffer-modified-p) buffer-file-name
        (not (yes-or-no-p "Kill and replace the buffer without saving it? "))
-       (user-error "Aborted"))
+       (error "Aborted"))
   (let ((obuf (current-buffer))
 	(ofile buffer-file-name)
 	(onum buffer-file-number)
@@ -1850,7 +1842,7 @@ OP-TYPE specifies the file operation being performed (for message to user)."
 	     (not (y-or-n-p (format "File %s is large (%s), really %s? "
 				    (file-name-nondirectory filename)
 				    (file-size-human-readable size) op-type))))
-    (user-error "Aborted")))
+    (error "Aborted")))
 
 (defun warn-maybe-out-of-memory (size)
   "Warn if an attempt to open file of SIZE bytes may run out of memory."
@@ -1870,13 +1862,6 @@ If that fails, try to open it with `find-file-literally'
 	     (file-size-human-readable size)
 	     out-of-memory-warning-percentage
 	     (file-size-human-readable (* total-free-memory 1024)))))))))
-
-(defun files--message (format &rest args)
-  "Like `message', except sometimes don't print to minibuffer.
-If the variable `save-silently' is non-nil, the message is not
-displayed on the minibuffer."
-  (apply #'message format args)
-  (when save-silently (message nil)))
 
 (defun find-file-noselect (filename &optional nowarn rawfile wildcards)
   "Read file FILENAME into a buffer and return the buffer.
@@ -1923,8 +1908,8 @@ the various files."
 	      (or nowarn
 		  find-file-suppress-same-file-warnings
 		  (string-equal filename (buffer-file-name other))
-		  (files--message "%s and %s are the same file"
-                                  filename (buffer-file-name other)))
+		  (message "%s and %s are the same file"
+			   filename (buffer-file-name other)))
 	      ;; Optionally also find that buffer.
 	      (if (or find-file-existing-other-name find-file-visit-truename)
 		  (setq buf other))))
@@ -2123,7 +2108,7 @@ Do you want to revisit the file normally now? ")
 (defun insert-file-contents-literally (filename &optional visit beg end replace)
   "Like `insert-file-contents', but only reads in the file literally.
 A buffer may be modified in several ways after reading into the buffer,
-due to Emacs features such as format decoding, character code
+to Emacs features such as format decoding, character code
 conversion, `find-file-hook', automatic uncompression, etc.
 
 This function ensures that none of these modifications will take place."
@@ -2141,7 +2126,7 @@ This function ensures that none of these modifications will take place."
 
 (defun insert-file-1 (filename insert-func)
   (if (file-directory-p filename)
-      (signal 'file-error (list "Opening input file" "Is a directory"
+      (signal 'file-error (list "Opening input file" "file is a directory"
                                 filename)))
   ;; Check whether the file is uncommonly large
   (abort-if-file-too-large (nth 7 (file-attributes filename)) "insert" filename)
@@ -3615,9 +3600,7 @@ Returns the new list."
   "Collect entries from CLASS-VARIABLES into VARIABLES.
 ROOT is the root directory of the project.
 Return the new variables list."
-  (let* ((file-name (or (buffer-file-name)
-			;; Handle non-file buffers, too.
-			(expand-file-name default-directory)))
+  (let* ((file-name (buffer-file-name))
 	 (sub-file-name (if file-name
                             ;; FIXME: Why not use file-relative-name?
 			    (substring file-name (length root)))))
@@ -3896,7 +3879,7 @@ the old visited file has been renamed to the new name FILENAME."
 	   (not no-query)
 	   (not (y-or-n-p (format "A buffer is visiting %s; proceed? "
 				  filename)))
-	   (user-error "Aborted")))
+	   (error "Aborted")))
     (or (equal filename buffer-file-name)
 	(progn
 	  (and filename (lock-buffer filename))
@@ -3944,19 +3927,17 @@ the old visited file has been renamed to the new name FILENAME."
 	   (make-local-variable 'backup-inhibited)
 	   (setq backup-inhibited t)))
     (let ((oauto buffer-auto-save-file-name))
-      (cond ((null filename)
-	     (setq buffer-auto-save-file-name nil))
-	    ((not buffer-auto-save-file-name)
-	     ;; If auto-save was not already on, turn it on if appropriate.
-	     (and buffer-file-name auto-save-default (auto-save-mode t)))
-	    (t
-	     ;; If auto save is on, start using a new name. We
-	     ;; deliberately don't rename or delete the old auto save
-	     ;; for the old visited file name.  This is because
-	     ;; perhaps the user wants to save the new state and then
-	     ;; compare with the previous state from the auto save
-	     ;; file.
-	     (setq buffer-auto-save-file-name (make-auto-save-file-name))))
+      ;; If auto-save was not already on, turn it on if appropriate.
+      (if (not buffer-auto-save-file-name)
+	  (and buffer-file-name auto-save-default
+	       (auto-save-mode t))
+	;; If auto save is on, start using a new name.
+	;; We deliberately don't rename or delete the old auto save
+	;; for the old visited file name.  This is because perhaps
+	;; the user wants to save the new state and then compare with the
+	;; previous state from the auto save file.
+	(setq buffer-auto-save-file-name
+	      (make-auto-save-file-name)))
       ;; Rename the old auto save file if any.
       (and oauto buffer-auto-save-file-name
 	   (file-exists-p oauto)
@@ -4022,7 +4003,7 @@ Interactively, confirmation is required unless you supply a prefix argument."
 		       (listp last-nonmenu-event)
 		       use-dialog-box))
 	     (or (y-or-n-p (format "File `%s' exists; overwrite? " filename))
-		 (user-error "Canceled")))
+		 (error "Canceled")))
 	(set-visited-file-name filename (not confirm))))
   (set-buffer-modified-p t)
   ;; Make buffer writable if file is writable.
@@ -4654,10 +4635,7 @@ See the subroutine `basic-save-buffer' for more information."
     ;; then Rmail-mbox never displays it due to buffer swapping.  If
     ;; the test is ever re-introduced, be sure to handle saving of
     ;; Rmail files.
-    (if (and modp
-             (buffer-file-name)
-             (not noninteractive)
-             (not save-silently))
+    (if (and modp (buffer-file-name) (not noninteractive))
 	(message "Saving file %s..." (buffer-file-name)))
     (basic-save-buffer)
     (and modp (memq arg '(4 64)) (setq buffer-backed-up nil))))
@@ -4799,9 +4777,7 @@ Before and after saving the buffer, this function runs
 	  ;; Support VC `implicit' locking.
 	  (vc-after-save)
 	  (run-hooks 'after-save-hook))
-      (or noninteractive
-          (not (called-interactively-p 'any))
-          (files--message "(No changes need to be saved)")))))
+      (or noninteractive (message "(No changes need to be saved)")))))
 
 ;; This does the "real job" of writing a buffer into its visited file
 ;; and making a backup file.  This is what is normally done
@@ -4874,10 +4850,9 @@ Before and after saving the buffer, this function runs
                                ;; Pass in nil&nil rather than point-min&max
                                ;; cause we're saving the whole buffer.
                                ;; write-region-annotate-functions may use it.
-                               (write-region nil nil
-                                             tempname nil  realname
-                                             buffer-file-truename 'excl)
-                               (when save-silently (message nil))
+			       (write-region nil nil
+					     tempname nil  realname
+					     buffer-file-truename 'excl)
 			       nil)
 			   (file-already-exists t))
 		    ;; The file was somehow created by someone else between
@@ -4922,9 +4897,8 @@ Before and after saving the buffer, this function runs
                 ;; Pass in nil&nil rather than point-min&max to indicate
                 ;; we're saving the buffer rather than just a region.
                 ;; write-region-annotate-functions may make us of it.
-                (write-region nil nil
-                              buffer-file-name nil t buffer-file-truename)
-                (when save-silently (message nil))
+		(write-region nil nil
+			      buffer-file-name nil t buffer-file-truename)
 		(setq success t))
 	    ;; If we get an error writing the new file, and we made
 	    ;; the backup by renaming, undo the backing-up.
@@ -5044,14 +5018,13 @@ change the additional actions you can take on files."
       (or queried (> files-done 0) abbrevs-done
 	  (cond
 	   ((null autosaved-buffers)
-            (when (called-interactively-p 'any)
-              (files--message "(No files need saving)")))
+	    (message "(No files need saving)"))
 	   ((= (length autosaved-buffers) 1)
-	    (files--message "(Saved %s)" (car autosaved-buffers)))
+	    (message "(Saved %s)" (car autosaved-buffers)))
 	   (t
-	    (files--message "(Saved %d files: %s)"
-                            (length autosaved-buffers)
-                            (mapconcat 'identity autosaved-buffers ", "))))))))
+	    (message "(Saved %d files: %s)"
+		     (length autosaved-buffers)
+		     (mapconcat 'identity autosaved-buffers ", "))))))))
 
 (defun clear-visited-file-modtime ()
   "Clear out records of last mod time of visited file.
@@ -5066,8 +5039,8 @@ It is not a good idea to use this function in Lisp programs, because it
 prints a message in the minibuffer.  Instead, use `set-buffer-modified-p'."
   (declare (interactive-only set-buffer-modified-p))
   (interactive "P")
-  (files--message (if arg "Modification-flag set"
-                    "Modification-flag cleared"))
+  (message (if arg "Modification-flag set"
+	       "Modification-flag cleared"))
   (set-buffer-modified-p arg))
 
 (defun toggle-read-only (&optional arg interactive)
@@ -5101,8 +5074,7 @@ instead of any buffer contents; END is ignored.
 This does character code conversion and applies annotations
 like `write-region' does."
   (interactive "r\nFAppend to file: ")
-  (prog1 (write-region start end filename t)
-    (when save-silently (message nil))))
+  (write-region start end filename t))
 
 (defun file-newest-backup (filename)
   "Return most recent backup file for FILENAME or nil if no backups exist."
@@ -5688,14 +5660,13 @@ Then you'll be asked about a number of files to recover."
   (interactive)
   (if (null auto-save-list-file-prefix)
       (error "You set `auto-save-list-file-prefix' to disable making session files"))
-  (let ((dir (file-name-directory auto-save-list-file-prefix))
-        (nd (file-name-nondirectory auto-save-list-file-prefix)))
+  (let ((dir (file-name-directory auto-save-list-file-prefix)))
     (unless (file-directory-p dir)
       (make-directory dir t))
     (unless (directory-files dir nil
-                             (if (string= "" nd)
-                                 directory-files-no-dot-files-regexp
-                               (concat "\\`" (regexp-quote nd)))
+			     (concat "\\`" (regexp-quote
+					    (file-name-nondirectory
+					     auto-save-list-file-prefix)))
 			     t)
       (error "No previous sessions to recover")))
   (let ((ls-lisp-support-shell-wildcards t))
@@ -6119,7 +6090,7 @@ and `list-directory-verbose-switches'."
 
 PATTERN is assumed to represent a file-name wildcard suitable for the
 underlying filesystem.  For Unix and GNU/Linux, each character from the
-set [ \\t\\n;<>&|()`'\"#$] is quoted with a backslash; for DOS/Windows, all
+set [ \\t\\n;<>&|()'\"#$] is quoted with a backslash; for DOS/Windows, all
 the parts of the pattern which don't include wildcard characters are
 quoted with double quotes.
 
@@ -6133,12 +6104,12 @@ need to be passed verbatim to shell commands."
       ;; argument has quotes, we can safely assume it is already
       ;; quoted by the caller.
       (if (or (string-match "[\"]" pattern)
-	      ;; We quote [&()#$`'] in case their shell is a port of a
+	      ;; We quote [&()#$'] in case their shell is a port of a
 	      ;; Unixy shell.  We quote [,=+] because stock DOS and
 	      ;; Windows shells require that in some cases, such as
 	      ;; passing arguments to batch files that use positional
 	      ;; arguments like %1.
-	      (not (string-match "[ \t;&()#$`',=+]" pattern)))
+	      (not (string-match "[ \t;&()#$',=+]" pattern)))
 	  pattern
 	(let ((result "\"")
 	      (beg 0)
@@ -6153,7 +6124,7 @@ need to be passed verbatim to shell commands."
 	  (concat result (substring pattern beg) "\""))))
      (t
       (let ((beg 0))
-	(while (string-match "[ \t\n;<>&|()`'\"#$]" pattern beg)
+	(while (string-match "[ \t\n;<>&|()'\"#$]" pattern beg)
 	  (setq pattern
 		(concat (substring pattern 0 (match-beginning 0))
 			"\\"
@@ -6615,40 +6586,35 @@ Runs the members of `kill-emacs-query-functions' in turn and stops
 if any returns nil.  If `confirm-kill-emacs' is non-nil, calls it."
   (interactive "P")
   (save-some-buffers arg t)
-  (let ((confirm confirm-kill-emacs))
-    (and
-     (or (not (memq t (mapcar (function
-                               (lambda (buf) (and (buffer-file-name buf)
-                                                  (buffer-modified-p buf))))
-                              (buffer-list))))
-         (progn (setq confirm nil)
-                (yes-or-no-p "Modified buffers exist; exit anyway? ")))
-     (or (not (fboundp 'process-list))
-         ;; process-list is not defined on MSDOS.
-         (let ((processes (process-list))
-               active)
-           (while processes
-             (and (memq (process-status (car processes)) '(run stop open listen))
-                  (process-query-on-exit-flag (car processes))
-                  (setq active t))
-             (setq processes (cdr processes)))
-           (or (not active)
-               (with-current-buffer-window
-                (get-buffer-create "*Process List*") nil
-                #'(lambda (window _value)
-                    (with-selected-window window
-                      (unwind-protect
-                          (progn
-                            (setq confirm nil)
-                            (yes-or-no-p "Active processes exist; kill them and exit anyway? "))
-                        (when (window-live-p window)
-                          (quit-restore-window window 'kill)))))
-                (list-processes t)))))
-     ;; Query the user for other things, perhaps.
-     (run-hook-with-args-until-failure 'kill-emacs-query-functions)
-     (or (null confirm)
-         (funcall confirm "Really exit Emacs? "))
-     (kill-emacs))))
+  (and (or (not (memq t (mapcar (function
+				  (lambda (buf) (and (buffer-file-name buf)
+						     (buffer-modified-p buf))))
+				(buffer-list))))
+	   (yes-or-no-p "Modified buffers exist; exit anyway? "))
+       (or (not (fboundp 'process-list))
+	   ;; process-list is not defined on MSDOS.
+	   (let ((processes (process-list))
+		 active)
+	     (while processes
+	       (and (memq (process-status (car processes)) '(run stop open listen))
+		    (process-query-on-exit-flag (car processes))
+		    (setq active t))
+	       (setq processes (cdr processes)))
+	     (or (not active)
+		 (with-current-buffer-window
+		  (get-buffer-create "*Process List*") nil
+		  #'(lambda (window _value)
+		      (with-selected-window window
+			(unwind-protect
+			    (yes-or-no-p "Active processes exist; kill them and exit anyway? ")
+			  (when (window-live-p window)
+			    (quit-restore-window window 'kill)))))
+		  (list-processes t)))))
+       ;; Query the user for other things, perhaps.
+       (run-hook-with-args-until-failure 'kill-emacs-query-functions)
+       (or (null confirm-kill-emacs)
+	   (funcall confirm-kill-emacs "Really exit Emacs? "))
+       (kill-emacs)))
 
 (defun save-buffers-kill-terminal (&optional arg)
   "Offer to save each buffer, then kill the current connection.

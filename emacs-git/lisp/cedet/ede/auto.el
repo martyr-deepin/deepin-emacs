@@ -30,7 +30,6 @@
 ;;; Code:
 
 (require 'eieio)
-(require 'cl-generic)
 
 (declare-function ede-directory-safe-p "ede")
 (declare-function ede-add-project-to-global-list "ede")
@@ -63,7 +62,7 @@ location is varied dependent on other complex criteria, this class
 can be used to define that match without loading the specific project
 into memory.")
 
-(cl-defmethod ede-dirmatch-installed ((dirmatch ede-project-autoload-dirmatch))
+(defmethod ede-dirmatch-installed ((dirmatch ede-project-autoload-dirmatch))
   "Return non-nil if the tool DIRMATCH might match is installed on the system."
   (let ((fc (oref dirmatch fromconfig)))
 
@@ -78,7 +77,7 @@ into memory.")
      (t (error "Unknown dirmatch type.")))))
 
 
-(cl-defmethod ede-do-dirmatch ((dirmatch ede-project-autoload-dirmatch) file)
+(defmethod ede-do-dirmatch ((dirmatch ede-project-autoload-dirmatch) file)
   "Does DIRMATCH match the filename FILE."
   (let ((fc (oref dirmatch fromconfig)))
 
@@ -272,7 +271,7 @@ added.  Possible values are:
 ;;
 
 ;; New method using detect.el
-(cl-defmethod ede-auto-detect-in-dir ((this ede-project-autoload) dir)
+(defmethod ede-auto-detect-in-dir ((this ede-project-autoload) dir)
   "Return non-nil if THIS project autoload is found in DIR."
   (let* ((d (file-name-as-directory dir))
 	 (pf (oref this proj-file))
@@ -289,7 +288,7 @@ added.  Possible values are:
 	    ;(message "Dirmatch %S not installed." dirmatch)
 	    )))))))
 
-(cl-defmethod ede-auto-load-project ((this ede-project-autoload) dir)
+(defmethod ede-auto-load-project ((this ede-project-autoload) dir)
   "Load in the project associated with THIS project autoload description.
 THIS project description should be valid for DIR, where the project will
 be loaded.
@@ -316,13 +315,13 @@ NOTE: Do not call this - it should only be called from `ede-load-project-file'."
 ;; See if we can do without them.
 
 ;; @FIXME - delete from loaddefs to remove this.
-(cl-defmethod ede-project-root ((this ede-project-autoload))
+(defmethod ede-project-root ((this ede-project-autoload))
   "If a project knows its root, return it here.
 Allows for one-project-object-for-a-tree type systems."
   nil)
 
 ;; @FIXME - delete from loaddefs to remove this.
-(cl-defmethod ede-project-root-directory ((this ede-project-autoload) &optional file)
+(defmethod ede-project-root-directory ((this ede-project-autoload) &optional file)
   "" nil)
 
 (provide 'ede/auto)

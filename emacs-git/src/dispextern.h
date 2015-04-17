@@ -1306,6 +1306,9 @@ struct glyph_string
   /* True means the background of this string has been drawn.  */
   bool_bf background_filled_p : 1;
 
+  /* True means glyph string must be drawn with 16-bit functions.  */
+  bool_bf two_byte_p : 1;
+
   /* True means that the original font determined for drawing this glyph
      string could not be loaded.  The member `font' has been set to
      the frame's default font in this case.  */
@@ -1810,10 +1813,8 @@ struct face_cache
   ((FACE) == (FACE)->ascii_face)
 
 /* Return the id of the realized face on frame F that is like the face
-   FACE, but is suitable for displaying character CHAR at buffer or
-   string position POS.  OBJECT is the string object, or nil for
-   buffer.  This macro is only meaningful for multibyte character
-   CHAR.  */
+   with id ID but is suitable for displaying character CHAR.
+   This macro is only meaningful for multibyte character CHAR.  */
 
 #define FACE_FOR_CHAR(F, FACE, CHAR, POS, OBJECT)	\
   face_for_char ((F), (FACE), (CHAR), (POS), (OBJECT))
@@ -1849,10 +1850,10 @@ GLYPH_CODE_P (Lisp_Object gc)
 	       : TYPE_MAXIMUM (EMACS_INT)))));
 }
 
-/* True means face attributes have been changed since the last
+/* Non-zero means face attributes have been changed since the last
    redisplay.  Used in redisplay_internal.  */
 
-extern bool face_change;
+extern int face_change_count;
 
 /* For reordering of bidirectional text.  */
 
@@ -3184,9 +3185,9 @@ struct glyph_row *row_containing_pos (struct window *, ptrdiff_t,
                                       struct glyph_row *, int);
 int line_bottom_y (struct it *);
 int default_line_pixel_height (struct window *);
-bool display_prop_intangible_p (Lisp_Object, Lisp_Object, ptrdiff_t, ptrdiff_t);
+int display_prop_intangible_p (Lisp_Object, Lisp_Object, ptrdiff_t, ptrdiff_t);
 void resize_echo_area_exactly (void);
-bool resize_mini_window (struct window *, bool);
+int resize_mini_window (struct window *, int);
 void set_vertical_scroll_bar (struct window *);
 void set_horizontal_scroll_bar (struct window *);
 int try_window (Lisp_Object, struct text_pos, int);
@@ -3201,10 +3202,10 @@ int window_box_right (struct window *, enum glyph_row_area);
 int estimate_mode_line_height (struct frame *, enum face_id);
 int move_it_to (struct it *, ptrdiff_t, int, int, int, int);
 void pixel_to_glyph_coords (struct frame *, int, int, int *, int *,
-                            NativeRectangle *, bool);
+                            NativeRectangle *, int);
 void remember_mouse_glyph (struct frame *, int, int, NativeRectangle *);
 
-void mark_window_display_accurate (Lisp_Object, bool);
+void mark_window_display_accurate (Lisp_Object, int);
 void redisplay_preserve_echo_area (int);
 void init_iterator (struct it *, struct window *, ptrdiff_t,
                     ptrdiff_t, struct glyph_row *, enum face_id);
@@ -3230,7 +3231,7 @@ extern void reseat_at_previous_visible_line_start (struct it *);
 extern Lisp_Object lookup_glyphless_char_display (int, struct it *);
 extern ptrdiff_t compute_display_string_pos (struct text_pos *,
 					     struct bidi_string_data *,
-					     struct window *, bool, int *);
+					     struct window *, int, int *);
 extern ptrdiff_t compute_display_string_end (ptrdiff_t,
 					     struct bidi_string_data *);
 extern void produce_stretch_glyph (struct it *);
@@ -3273,20 +3274,21 @@ extern void get_glyph_string_clip_rect (struct glyph_string *,
 extern Lisp_Object find_hot_spot (Lisp_Object, int, int);
 
 extern void handle_tool_bar_click (struct frame *,
-                                   int, int, bool, int);
+                                   int, int, int, int);
 
 extern void expose_frame (struct frame *, int, int, int, int);
-extern bool x_intersect_rectangles (XRectangle *, XRectangle *, XRectangle *);
+extern int x_intersect_rectangles (XRectangle *, XRectangle *,
+                                   XRectangle *);
 #endif	/* HAVE_WINDOW_SYSTEM */
 
 extern void note_mouse_highlight (struct frame *, int, int);
 extern void x_clear_window_mouse_face (struct window *);
 extern void cancel_mouse_face (struct frame *);
-extern bool clear_mouse_face (Mouse_HLInfo *);
+extern int clear_mouse_face (Mouse_HLInfo *);
 extern bool cursor_in_mouse_face_p (struct window *w);
 extern void tty_draw_row_with_mouse_face (struct window *, struct glyph_row *,
 					  int, int, enum draw_glyphs_face);
-extern void display_tty_menu_item (const char *, int, int, int, int, bool);
+extern void display_tty_menu_item (const char *, int, int, int, int, int);
 
 /* Flags passed to try_window.  */
 #define TRY_WINDOW_CHECK_MARGINS	(1 << 0)
@@ -3378,20 +3380,23 @@ char *choose_face_font (struct frame *, Lisp_Object *, Lisp_Object,
 #ifdef HAVE_WINDOW_SYSTEM
 void prepare_face_for_display (struct frame *, struct face *);
 #endif
-int lookup_named_face (struct frame *, Lisp_Object, bool);
+int lookup_named_face (struct frame *, Lisp_Object, int);
 int lookup_basic_face (struct frame *, int);
 int smaller_face (struct frame *, int, int);
 int face_with_height (struct frame *, int, int);
-int lookup_derived_face (struct frame *, Lisp_Object, int, bool);
+int lookup_derived_face (struct frame *, Lisp_Object, int, int);
 void init_frame_faces (struct frame *);
 void free_frame_faces (struct frame *);
 void recompute_basic_faces (struct frame *);
-int face_at_buffer_position (struct window *, ptrdiff_t, ptrdiff_t *, ptrdiff_t,
-                             bool, int);
-int face_for_overlay_string (struct window *, ptrdiff_t, ptrdiff_t *, ptrdiff_t,
-                             bool, Lisp_Object);
-int face_at_string_position (struct window *, Lisp_Object, ptrdiff_t, ptrdiff_t,
-                             ptrdiff_t *, enum face_id, bool);
+int face_at_buffer_position (struct window *w, ptrdiff_t pos,
+                             ptrdiff_t *endptr, ptrdiff_t limit,
+                             int mouse, int base_face_id);
+int face_for_overlay_string (struct window *w, ptrdiff_t pos,
+                             ptrdiff_t *endptr, ptrdiff_t limit,
+                             int mouse, Lisp_Object overlay);
+int face_at_string_position (struct window *w, Lisp_Object string,
+                             ptrdiff_t pos, ptrdiff_t bufpos,
+                             ptrdiff_t *endptr, enum face_id, int mouse);
 int merge_faces (struct frame *, Lisp_Object, int, int);
 int compute_char_face (struct frame *, int, Lisp_Object);
 void free_all_realized_faces (Lisp_Object);

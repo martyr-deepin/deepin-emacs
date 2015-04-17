@@ -153,11 +153,6 @@ This is a compatibility function for different Emacsen."
       (type   . "application/zip")
       ("copiousoutput"))
      ("pdf"
-      (viewer . pdf-view-mode)
-      (type . "application/pdf")
-      (test . (and (fboundp 'pdf-view-mode)
-		   (eq window-system 'x))))
-     ("pdf"
       (viewer . doc-view-mode)
       (type . "application/pdf")
       (test . (eq window-system 'x)))

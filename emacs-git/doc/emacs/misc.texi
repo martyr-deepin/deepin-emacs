@@ -787,10 +787,15 @@ also change the coding system for a running subshell by typing
 Coding}.
 
 @cindex @env{INSIDE_EMACS} environment variable
+@cindex @env{EMACS} environment variable
   Emacs sets the environment variable @env{INSIDE_EMACS} in the
 subshell to @samp{@var{version},comint}, where @var{version} is the
 Emacs version (e.g., @samp{24.1}).  Programs can check this variable
-to determine whether they are running inside an Emacs subshell.
+to determine whether they are running inside an Emacs subshell.  (It
+also sets the @env{EMACS} environment variable to @code{t}, if that
+environment variable is not already defined.  However, this
+environment variable is deprecated; programs that use it should switch
+to using @env{INSIDE_EMACS} instead.)
 
 @node Shell Mode
 @subsection Shell Mode
@@ -1421,7 +1426,7 @@ char mode.
 
 @table @kbd
 @item C-c C-c
-Send a literal @kbd{C-c} to the sub-shell.
+Send a literal @key{C-c} to the sub-shell.
 
 @item C-c @var{char}
 This is equivalent to @kbd{C-x @var{char}} in normal Emacs.  For

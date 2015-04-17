@@ -75,19 +75,12 @@ not get notifications."
   "Map notifications ids to messages.")
 
 (defun gnus-notifications-action (id key)
-  (let ((group-article (assoc id gnus-notifications-id-to-msg)))
-    (when group-article
-      (let ((group (cadr group-article))
-            (article (nth 2 group-article)))
-        (cond ((string= key "read")
-               (gnus-fetch-group group (list article))
-               (gnus-select-frame-set-input-focus (selected-frame)))
-              ((string= key "mark-read")
-               (gnus-update-read-articles
-                group
-                (delq article (gnus-list-of-unread-articles group)))
-               ;; gnus-group-refresh-group
-               (gnus-group-update-group group)))))))
+  (when (string= key "read")
+    (let ((group-article (assoc id gnus-notifications-id-to-msg)))
+      (when group-article
+        (let ((group (cadr group-article))
+              (article (nth 2 group-article)))
+          (gnus-fetch-group group (list article)))))))
 
 (defun gnus-notifications-notify (from subject photo-file)
   "Send a notification about a new mail.
@@ -97,7 +90,7 @@ Return a notification id if any, or t on success."
        'notifications-notify
        :title from
        :body subject
-       :actions '("read" "Read" "mark-read" "Mark As Read")
+       :actions '("read" "Read")
        :on-action 'gnus-notifications-action
        :app-icon (gnus-funcall-no-warning
                   'image-search-load-path "gnus/gnus.png")

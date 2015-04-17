@@ -1,4 +1,4 @@
-;;; gud.el --- Grand Unified Debugger mode for running GDB and other debuggers  -*- lexical-binding:t -*-
+;;; gud.el --- Grand Unified Debugger mode for running GDB and other debuggers
 
 ;; Copyright (C) 1992-1996, 1998, 2000-2015 Free Software Foundation,
 ;; Inc.
@@ -2813,7 +2813,7 @@ Obeying it means displaying in another window the specified file and line."
 	    (gud-find-file true-file)))
 	 (window (and buffer
 		      (or (get-buffer-window buffer)
-			  (display-buffer buffer '(nil (inhibit-same-window . t))))))
+			  (display-buffer buffer))))
 	 (pos))
     (when buffer
       (with-current-buffer buffer

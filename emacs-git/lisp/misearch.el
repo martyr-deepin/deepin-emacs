@@ -92,12 +92,9 @@ Isearch starts.")
 The value is nil when the search still is in the initial buffer.")
 
 ;;;###autoload
-(defvar multi-isearch-buffer-list nil
-  "Sequence of buffers visited by multiple buffers Isearch.
-This is nil if Isearch is not currently searching more than one buffer.")
+(defvar multi-isearch-buffer-list nil)
 ;;;###autoload
-(defvar multi-isearch-file-list nil
-  "Sequence of files visited by multiple file buffers Isearch.")
+(defvar multi-isearch-file-list nil)
 
 (defvar multi-isearch-orig-search-fun nil)
 (defvar multi-isearch-orig-wrap nil)
@@ -237,7 +234,7 @@ set in `multi-isearch-buffers' or `multi-isearch-buffers-regexp'."
 	 (ido-ignore-item-temp-list bufs))
     (while (not (string-equal
 		 (setq buf (read-buffer
-			    (if (eq read-buffer-function #'ido-read-buffer)
+			    (if (eq read-buffer-function 'ido-read-buffer)
 				"Next buffer to search (C-j to end): "
 			      "Next buffer to search (RET to end): ")
 			    nil t))
@@ -379,27 +376,6 @@ whose file names match the specified wildcard."
     (find-file (car multi-isearch-file-list))
     (goto-char (if isearch-forward (point-min) (point-max)))
     (isearch-forward-regexp nil t)))
-
-(defvar unload-function-defs-list)
-
-(defun multi-isearch-unload-function ()
-  "Remove autoloaded variables from `unload-function-defs-list'.
-Also prevent the feature from being reloaded via `isearch-mode-hook'."
-  (remove-hook 'isearch-mode-hook 'multi-isearch-setup)
-  (let ((defs (list (car unload-function-defs-list)))
-	(auto '(multi-isearch-next-buffer-function
-		multi-isearch-next-buffer-current-function
-		multi-isearch-current-buffer
-		multi-isearch-buffer-list multi-isearch-file-list)))
-    (dolist (def (cdr unload-function-defs-list))
-      (unless (and (symbolp def)
-		   (memq def auto))
-	(push def defs)))
-    (setq unload-function-defs-list (nreverse defs))
-    ;; .
-    nil))
-
-(defalias 'misearch-unload-function 'multi-isearch-unload-function)
 
 
 (provide 'multi-isearch)

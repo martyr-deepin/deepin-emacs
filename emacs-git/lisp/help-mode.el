@@ -621,13 +621,10 @@ See `help-make-xrefs'."
 
 
 ;; Additional functions for (re-)creating types of help buffers.
-
-;;;###autoload
-(defun help-xref-interned (symbol &optional buffer frame)
+(defun help-xref-interned (symbol)
   "Follow a hyperlink which appeared to be an arbitrary interned SYMBOL.
 Both variable, function and face documentation are extracted into a single
-help buffer. If SYMBOL is a variable, include buffer-local value for optional
-BUFFER or FRAME."
+help buffer."
   (with-current-buffer (help-buffer)
     ;; Push the previous item on the stack before clobbering the output buffer.
     (help-setup-xref nil nil)
@@ -643,7 +640,7 @@ BUFFER or FRAME."
 			  (get symbol 'variable-documentation))
 		  ;; Don't record the current entry in the stack.
 		  (setq help-xref-stack-item nil)
-		  (describe-variable symbol buffer frame))))
+		  (describe-variable symbol))))
       (cond
        (sdoc
 	;; We now have a help buffer on the variable.
@@ -724,14 +721,14 @@ BUFFER or FRAME."
   (interactive)
   (if help-xref-stack
       (help-xref-go-back (current-buffer))
-    (user-error "No previous help buffer")))
+    (error "No previous help buffer")))
 
 (defun help-go-forward ()
   "Go back to next topic in this help buffer."
   (interactive)
   (if help-xref-forward-stack
       (help-xref-go-forward (current-buffer))
-    (user-error "No next help buffer")))
+    (error "No next help buffer")))
 
 (defun help-do-xref (_pos function args)
   "Call the help cross-reference function FUNCTION with args ARGS.
@@ -739,8 +736,7 @@ Things are set up properly so that the resulting help-buffer has
 a proper [back] button."
   ;; There is a reference at point.  Follow it.
   (let ((help-xref-following t))
-    (apply function (if (eq function 'info)
-			(append args (list (generate-new-buffer-name "*info*"))) args))))
+    (apply function args)))
 
 ;; The doc string is meant to explain what buttons do.
 (defun help-follow-mouse ()
@@ -754,7 +750,7 @@ a proper [back] button."
 
 For the cross-reference format, see `help-make-xrefs'."
   (interactive)
-  (user-error "No cross-reference here"))
+  (error "No cross-reference here"))
 
 (defun help-follow-symbol (&optional pos)
   "In help buffer, show docs for symbol at POS, defaulting to point.

@@ -1,15 +1,14 @@
 RM=rm
-EMACS=../../src/emacs
-
-all: clean $(addsuffix .test,$(wildcard *.*))
+EMACS=emacs
 
 clean:
-	-$(RM) -f *.new
+	-$(RM) *.test
 
 # TODO:
 # - mark the places where the indentation is known to be incorrect,
 #   and allow either ignoring those errors or not.
 %.test: %
+	-$(RM) $<.new
 	$(EMACS) --batch $< \
 	    --eval '(indent-region (point-min) (point-max) nil)' \
 	    --eval '(write-region (point-min) (point-max) "$<.new")'

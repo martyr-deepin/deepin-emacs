@@ -235,9 +235,8 @@ If a buffer is visiting the desired autoload file, return it."
 	(enable-local-eval nil))
     ;; We used to use `raw-text' to read this file, but this causes
     ;; problems when the file contains non-ASCII characters.
-    (let ((delay-mode-hooks t))
-      (find-file-noselect
-       (autoload-ensure-default-file (autoload-generated-file))))))
+    (find-file-noselect
+     (autoload-ensure-default-file (autoload-generated-file)))))
 
 (defun autoload-generated-file ()
   (expand-file-name generated-autoload-file
@@ -401,7 +400,7 @@ which lists the file name and which functions are in it, etc."
     (erase-buffer)
     (setq buffer-undo-list t
           buffer-read-only nil)
-    (delay-mode-hooks (emacs-lisp-mode))
+    (emacs-lisp-mode)
     (setq default-directory (file-name-directory file))
     (insert-file-contents file nil)
     (let ((enable-local-variables :safe)

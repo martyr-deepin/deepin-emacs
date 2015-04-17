@@ -136,7 +136,7 @@
 (require 'cl-lib)
 (require 'frameset)
 
-(defvar desktop-file-version "208"
+(defvar desktop-file-version "206"
   "Version number of desktop file format.
 Written into the desktop file and used at desktop read to provide
 backward compatibility.")
@@ -629,18 +629,6 @@ Only valid during frame saving & restoring; intended for internal use.")
   "When the desktop file was last modified to the knowledge of this Emacs.
 Used to detect desktop file conflicts.")
 
-(defvar desktop-var-serdes-funs
-  (list (list
-	 'mark-ring
-	 (lambda (mr)
-	   (mapcar #'marker-position mr))
-	 (lambda (mr)
-	   (mapcar #'copy-marker mr))))
-  "Table of serialization/deserialization functions for variables.
-Each record is a list of form: (var serializer deserializer).
-These records can be freely reordered, deleted, or new ones added.
-However, for compatibility, don't modify the functions for existing records.")
-
 (defun desktop-owner (&optional dirname)
   "Return the PID of the Emacs process that owns the desktop file in DIRNAME.
 Return nil if no desktop file found or no Emacs process is using it.
@@ -756,24 +744,6 @@ is nil, ask the user where to save the desktop."
 
 ;; ----------------------------------------------------------------------------
 (defun desktop-buffer-info (buffer)
-  "Return information describing BUFFER.
-This function is not pure, as BUFFER is made current with
-`set-buffer'.
-
-Returns a list of all the necessary information to recreate the
-buffer, which is (in order):
-
-    `uniquify-buffer-base-name';
-    `buffer-file-name';
-    `buffer-name';
-    `major-mode';
-    list of minor-modes,;
-    `point';
-    `mark';
-    `buffer-read-only';
-    auxiliary information given by `desktop-save-buffer';
-    local variables;
-    auxiliary information given by `desktop-var-serdes-funs'."
   (set-buffer buffer)
   (list
    ;; base name of the buffer; replaces the buffer name if managed by uniquify
@@ -784,13 +754,16 @@ buffer, which is (in order):
    major-mode
    ;; minor modes
    (let (ret)
-     (dolist (minor-mode (mapcar #'car minor-mode-alist) ret)
-       (and (boundp minor-mode)
-            (symbol-value minor-mode)
-            (let* ((special (assq minor-mode desktop-minor-mode-table))
-                   (value (cond (special (cadr special))
-                                ((functionp minor-mode) minor-mode))))
-              (when value (cl-pushnew value ret))))))
+     (mapc
+      #'(lambda (minor-mode)
+	  (and (boundp minor-mode)
+	       (symbol-value minor-mode)
+	       (let* ((special (assq minor-mode desktop-minor-mode-table))
+		      (value (cond (special (cadr special))
+				   ((functionp minor-mode) minor-mode))))
+		 (when value (add-to-list 'ret value)))))
+      (mapcar #'car minor-mode-alist))
+     ret)
    ;; point and mark, and read-only status
    (point)
    (list (mark t) mark-active)
@@ -807,12 +780,7 @@ buffer, which is (in order):
 		(push here ll))
 	       ((member local loclist)
 		(push local ll)))))
-     ll)
-   (mapcar (lambda (record)
-	     (let ((var (car record)))
-	       (list var
-		     (funcall (cadr record) (symbol-value var)))))
-	   desktop-var-serdes-funs)))
+     ll)))
 
 ;; ----------------------------------------------------------------------------
 (defun desktop--v2s (value)
@@ -1151,8 +1119,7 @@ It returns t if a desktop file was loaded, nil otherwise."
 	      (desktop-buffer-fail-count 0)
 	      (owner (desktop-owner))
 	      ;; Avoid desktop saving during evaluation of desktop buffer.
-	      (desktop-save nil)
-	      (desktop-autosave-was-enabled))
+	      (desktop-save nil))
 	  (if (and owner
 		   (memq desktop-load-locked-desktop '(nil ask))
 		   (or (null desktop-load-locked-desktop)
@@ -1168,8 +1135,6 @@ Using it may cause conflicts.  Use it anyway? " owner)))))
 	    ;; Temporarily disable the autosave that will leave it
 	    ;; disabled when loading the desktop fails with errors,
 	    ;; thus not overwriting the desktop with broken contents.
-	    (setq desktop-autosave-was-enabled
-		  (memq 'desktop-auto-save-set-timer window-configuration-change-hook))
 	    (desktop-auto-save-disable)
 	    ;; Evaluate desktop buffer and remember when it was modified.
 	    (load (desktop-full-file-name) t t t)
@@ -1223,9 +1188,10 @@ Using it may cause conflicts.  Use it anyway? " owner)))))
 				  (set-window-prev-buffers window nil)
 				  (set-window-next-buffers window nil))))
  	    (setq desktop-saved-frameset nil)
-	    (if desktop-autosave-was-enabled (desktop-auto-save-enable))
+	    (desktop-auto-save-enable)
 	    t))
       ;; No desktop file found.
+      (desktop-clear)
       (let ((default-directory desktop-dirname))
         (run-hooks 'desktop-no-desktop-file-hook))
       (message "No desktop file.")
@@ -1371,9 +1337,7 @@ after that many seconds of idle time."
      buffer-readonly
      buffer-misc
      &optional
-     buffer-locals
-     compacted-vars
-     &rest _unsupported)
+     buffer-locals)
 
   (let ((desktop-file-version	    file-version)
 	(desktop-buffer-file-name   buffer-filename)
@@ -1463,14 +1427,7 @@ after that many seconds of idle time."
 		  (set (car this) (cdr this)))
 	      ;; An entry of the form `symbol'.
 	      (make-local-variable this)
-	      (makunbound this)))
-	  (unless (< desktop-file-version 208) ; Don't misinterpret any old custom args
-	    (dolist (record compacted-vars)
-	      (let*
-		  ((var (car record))
-		   (deser-fun (nth 2 (assq var desktop-var-serdes-funs))))
-		(if deser-fun (set var (funcall deser-fun (cadr record))))))))
-	result))))
+	      (makunbound this))))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Backward compatibility -- update parameters to 205 standards.

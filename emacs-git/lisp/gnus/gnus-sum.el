@@ -1160,9 +1160,9 @@ which it may alter in any way."
   'mail-decode-encoded-address-string
   "Function used to decode addresses with encoded words.")
 
-(defcustom gnus-extra-headers '(To Cc Keywords Gcc Newsgroups X-GM-LABELS)
+(defcustom gnus-extra-headers '(To Cc Keywords Gcc Newsgroups)
   "*Extra headers to parse."
-  :version "25.1"
+  :version "24.1"                       ; added Cc Keywords Gcc
   :group 'gnus-summary
   :type '(repeat symbol))
 
@@ -2424,7 +2424,6 @@ increase the score of each group you read."
 	      ["Lapsed" gnus-article-date-lapsed t]
 	      ["User-defined" gnus-article-date-user t])
 	     ("Display"
-	      ["Display HTML images" gnus-article-show-images t]
 	      ["Remove images" gnus-article-remove-images t]
 	      ["Toggle smiley" gnus-treat-smiley t]
 	      ["Show X-Face" gnus-article-display-x-face t]
@@ -5621,7 +5620,7 @@ If SELECT-ARTICLES, only select those articles from GROUP."
 	   (mm-decode-coding-string group charset)
 	   (mm-decode-coding-string (gnus-status-message group) charset))))
 
-    (unless (gnus-request-group group t nil (gnus-get-info group))
+    (unless (gnus-request-group group t)
       (when (derived-mode-p 'gnus-summary-mode)
 	(gnus-kill-buffer (current-buffer)))
       (error "Couldn't request group %s: %s"
@@ -9068,24 +9067,22 @@ non-numeric or nil fetch the number specified by the
 		       (regexp-opt ',(append refs (list id subject)))))))
 	      (gnus-fetch-headers (list last) (if (numberp limit)
 						  (* 2 limit) limit) t))))
-	 article-ids new-unreads)
+	 article-ids)
     (when (listp new-headers)
       (dolist (header new-headers)
-	(push (mail-header-number header) article-ids))
-      (setq article-ids (nreverse article-ids))
-      (setq new-unreads
-	    (gnus-sorted-intersection gnus-newsgroup-unselected article-ids))
-      (setq gnus-newsgroup-unselected
-	    (gnus-sorted-ndifference gnus-newsgroup-unselected new-unreads))
-      (setq gnus-newsgroup-unreads
-	    (gnus-sorted-nunion gnus-newsgroup-unreads new-unreads))
+	(push (mail-header-number header) article-ids)
+	(when (member (mail-header-number header) gnus-newsgroup-unselected)
+          (push (mail-header-number header) gnus-newsgroup-unreads)
+          (setq gnus-newsgroup-unselected
+                (delete (mail-header-number header)
+			gnus-newsgroup-unselected))))
       (setq gnus-newsgroup-headers
             (gnus-delete-duplicate-headers
              (gnus-merge
               'list gnus-newsgroup-headers new-headers
               'gnus-article-sort-by-number)))
       (setq gnus-newsgroup-articles
-	    (gnus-sorted-nunion gnus-newsgroup-articles article-ids))
+      	    (gnus-sorted-nunion gnus-newsgroup-articles (nreverse article-ids)))
       (gnus-summary-limit-include-thread id)))
   (gnus-summary-show-thread))
 
@@ -9870,11 +9867,9 @@ invalid IDNA string (`xn--bar' is invalid).
 You must have GNU Libidn (URL `http://www.gnu.org/software/libidn/')
 installed for this command to work."
   (interactive "P")
-  (if (not (and (mm-coding-system-p 'utf-8)
-		(condition-case nil
-		    (require 'idna)
-		  (file-error)
-		  (invalid-operation))
+  (if (not (and (condition-case nil (require 'idna)
+		  (file-error))
+		(mm-coding-system-p 'utf-8)
 		(symbol-value 'idna-program)
 		(executable-find (symbol-value 'idna-program))))
       (gnus-message
