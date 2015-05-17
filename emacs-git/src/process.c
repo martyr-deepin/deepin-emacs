@@ -136,8 +136,8 @@ extern int sys_select (int, fd_set *, fd_set *, fd_set *,
 
 /* Work around GCC 4.7.0 bug with strict overflow checking; see
    <http://gcc.gnu.org/bugzilla/show_bug.cgi?id=52904>.
-   These lines can be removed once the GCC bug is fixed.  */
-#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
+   This bug appears to be fixed in GCC 5.1, so don't work around it there.  */
+#if __GNUC__ == 4 && __GNUC_MINOR__ >= 3
 # pragma GCC diagnostic ignored "-Wstrict-overflow"
 #endif
 
@@ -189,30 +189,23 @@ process_socket (int domain, int type, int protocol)
 #define NETCONN1_P(p) (EQ (p->type, Qnetwork))
 #define SERIALCONN_P(p) (EQ (XPROCESS (p)->type, Qserial))
 #define SERIALCONN1_P(p) (EQ (p->type, Qserial))
+#define PIPECONN_P(p) (EQ (XPROCESS (p)->type, Qpipe))
+#define PIPECONN1_P(p) (EQ (p->type, Qpipe))
 
 /* Number of events of change of status of a process.  */
 static EMACS_INT process_tick;
 /* Number of events for which the user or sentinel has been notified.  */
 static EMACS_INT update_tick;
 
-/* Define NON_BLOCKING_CONNECT if we can support non-blocking connects.  */
+/* Define NON_BLOCKING_CONNECT if we can support non-blocking connects.
+   The code can be simplified by assuming NON_BLOCKING_CONNECT once
+   Emacs starts assuming POSIX 1003.1-2001 or later.  */
 
-/* Only W32 has this, it really means that select can't take write mask.  */
-#ifdef BROKEN_NON_BLOCKING_CONNECT
-#undef NON_BLOCKING_CONNECT
-enum { SELECT_CAN_DO_WRITE_MASK = false };
-#else
-enum { SELECT_CAN_DO_WRITE_MASK = true };
-#ifndef NON_BLOCKING_CONNECT
-#ifdef HAVE_SELECT
-#if defined (HAVE_GETPEERNAME) || defined (GNU_LINUX)
-#if defined (EWOULDBLOCK) || defined (EINPROGRESS)
-#define NON_BLOCKING_CONNECT
-#endif /* EWOULDBLOCK || EINPROGRESS */
-#endif /* HAVE_GETPEERNAME || GNU_LINUX */
-#endif /* HAVE_SELECT */
-#endif /* NON_BLOCKING_CONNECT */
-#endif /* BROKEN_NON_BLOCKING_CONNECT */
+#if (defined HAVE_SELECT				\
+     && (defined GNU_LINUX || defined HAVE_GETPEERNAME)	\
+     && (defined EWOULDBLOCK || defined EINPROGRESS))
+# define NON_BLOCKING_CONNECT
+#endif
 
 /* Define DATAGRAM_SOCKETS if datagrams can be used safely on
    this system.  We need to read full packets, so we need a
@@ -419,6 +412,11 @@ static void
 pset_write_queue (struct Lisp_Process *p, Lisp_Object val)
 {
   p->write_queue = val;
+}
+static void
+pset_stderrproc (struct Lisp_Process *p, Lisp_Object val)
+{
+  p->stderrproc = val;
 }
 
 
@@ -846,7 +844,7 @@ nil, indicating the current buffer's process.  */)
   p = XPROCESS (process);
 
   p->raw_status_new = 0;
-  if (NETCONN1_P (p) || SERIALCONN1_P (p))
+  if (NETCONN1_P (p) || SERIALCONN1_P (p) || PIPECONN1_P (p))
     {
       pset_status (p, list2 (Qexit, make_number (0)));
       p->tick = ++process_tick;
@@ -912,7 +910,7 @@ nil, indicating the current buffer's process.  */)
   status = p->status;
   if (CONSP (status))
     status = XCAR (status);
-  if (NETCONN1_P (p) || SERIALCONN1_P (p))
+  if (NETCONN1_P (p) || SERIALCONN1_P (p) || PIPECONN1_P (p))
     {
       if (EQ (status, Qexit))
 	status = Qclosed;
@@ -996,7 +994,7 @@ Return BUFFER.  */)
     CHECK_BUFFER (buffer);
   p = XPROCESS (process);
   pset_buffer (p, buffer);
-  if (NETCONN1_P (p) || SERIALCONN1_P (p))
+  if (NETCONN1_P (p) || SERIALCONN1_P (p) || PIPECONN1_P (p))
     pset_childp (p, Fplist_put (p->childp, QCbuffer, buffer));
   setup_process_coding_systems (process);
   return buffer;
@@ -1072,7 +1070,7 @@ The string argument is normally a multibyte string, except:
     }
 
   pset_filter (p, filter);
-  if (NETCONN1_P (p) || SERIALCONN1_P (p))
+  if (NETCONN1_P (p) || SERIALCONN1_P (p) || PIPECONN1_P (p))
     pset_childp (p, Fplist_put (p->childp, QCfilter, filter));
   setup_process_coding_systems (process);
   return filter;
@@ -1104,7 +1102,7 @@ It gets two arguments: the process, and a string describing the change.  */)
     sentinel = Qinternal_default_process_sentinel;
 
   pset_sentinel (p, sentinel);
-  if (NETCONN1_P (p) || SERIALCONN1_P (p))
+  if (NETCONN1_P (p) || SERIALCONN1_P (p) || PIPECONN1_P (p))
     pset_childp (p, Fplist_put (p->childp, QCsentinel, sentinel));
   return sentinel;
 }
@@ -1213,7 +1211,8 @@ list of keywords.  */)
 			  Fprocess_datagram_address (process));
 #endif
 
-  if ((!NETCONN_P (process) && !SERIALCONN_P (process)) || EQ (key, Qt))
+  if ((!NETCONN_P (process) && !SERIALCONN_P (process) && !PIPECONN_P (process))
+      || EQ (key, Qt))
     return contact;
   if (NILP (key) && NETCONN_P (process))
     return list2 (Fplist_get (contact, QChost),
@@ -1221,6 +1220,11 @@ list of keywords.  */)
   if (NILP (key) && SERIALCONN_P (process))
     return list2 (Fplist_get (contact, QCport),
 		  Fplist_get (contact, QCspeed));
+  /* FIXME: Return a meaningful value (e.g., the child end of the pipe)
+     if the pipe process is useful for purposes other than receiving
+     stderr.  */
+  if (NILP (key) && PIPECONN_P (process))
+    return Qt;
   return Fplist_get (contact, key);
 }
 
@@ -1338,7 +1342,7 @@ Returns nil if format of ADDRESS is invalid.  */)
   if (CONSP (address))
     {
       AUTO_STRING (format, "<Family %d>");
-      return Fformat (2, (Lisp_Object []) {format, Fcar (address)});
+      return CALLN (Fformat, format, Fcar (address));
     }
 
   return Qnil;
@@ -1355,34 +1359,67 @@ DEFUN ("process-list", Fprocess_list, Sprocess_list, 0, 0, 0,
 
 static void start_process_unwind (Lisp_Object proc);
 
-DEFUN ("start-process", Fstart_process, Sstart_process, 3, MANY, 0,
+DEFUN ("make-process", Fmake_process, Smake_process, 0, MANY, 0,
        doc: /* Start a program in a subprocess.  Return the process object for it.
-NAME is name for process.  It is modified if necessary to make it unique.
-BUFFER is the buffer (or buffer name) to associate with the process.
 
-Process output (both standard output and standard error streams) goes
-at end of BUFFER, unless you specify an output stream or filter
-function to handle the output.  BUFFER may also be nil, meaning that
-this process is not associated with any buffer.
+This is similar to `start-process', but arguments are specified as
+keyword/argument pairs.  The following arguments are defined:
 
-PROGRAM is the program file name.  It is searched for in `exec-path'
-(which see).  If nil, just associate a pty with the buffer.  Remaining
-arguments are strings to give program as arguments.
+:name NAME -- NAME is name for process.  It is modified if necessary
+to make it unique.
 
-If you want to separate standard output from standard error, invoke
-the command through a shell and redirect one of them using the shell
-syntax.
+:buffer BUFFER -- BUFFER is the buffer (or buffer-name) to associate
+with the process.  Process output goes at end of that buffer, unless
+you specify an output stream or filter function to handle the output.
+BUFFER may be also nil, meaning that this process is not associated
+with any buffer.
 
-usage: (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)  */)
+:command COMMAND -- COMMAND is a list starting with the program file
+name, followed by strings to give to the program as arguments.
+
+:coding CODING -- If CODING is a symbol, it specifies the coding
+system used for both reading and writing for this process.  If CODING
+is a cons (DECODING . ENCODING), DECODING is used for reading, and
+ENCODING is used for writing.
+
+:noquery BOOL -- When exiting Emacs, query the user if BOOL is nil and
+the process is running.  If BOOL is not given, query before exiting.
+
+:stop BOOL -- Start process in the `stopped' state if BOOL non-nil.
+In the stopped state, a process does not accept incoming data, but you
+can send outgoing data.  The stopped state is cleared by
+`continue-process' and set by `stop-process'.
+
+:connection-type TYPE -- TYPE is control type of device used to
+communicate with subprocesses.  Values are `pipe' to use a pipe, `pty'
+to use a pty, or nil to use the default specified through
+`process-connection-type'.
+
+:filter FILTER -- Install FILTER as the process filter.
+
+:sentinel SENTINEL -- Install SENTINEL as the process sentinel.
+
+:stderr STDERR -- STDERR is either a buffer or a pipe process attached
+to the standard error of subprocess.  Specifying this implies
+`:connection-type' is set to `pipe'.
+
+usage: (make-process &rest ARGS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
-  Lisp_Object buffer, name, program, proc, current_dir, tem;
-  unsigned char **new_argv;
-  ptrdiff_t i;
+  Lisp_Object buffer, name, command, program, proc, contact, current_dir, tem;
+  Lisp_Object xstderr, stderrproc;
   ptrdiff_t count = SPECPDL_INDEX ();
+  struct gcpro gcpro1;
   USE_SAFE_ALLOCA;
 
-  buffer = args[1];
+  if (nargs == 0)
+    return Qnil;
+
+  /* Save arguments for process-contact and clone-process.  */
+  contact = Flist (nargs, args);
+  GCPRO1 (contact);
+
+  buffer = Fplist_get (contact, QCbuffer);
   if (!NILP (buffer))
     buffer = Fget_buffer_create (buffer);
 
@@ -1402,13 +1439,38 @@ usage: (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)  */)
     UNGCPRO;
   }
 
-  name = args[0];
+  name = Fplist_get (contact, QCname);
   CHECK_STRING (name);
 
-  program = args[2];
+  command = Fplist_get (contact, QCcommand);
+  if (CONSP (command))
+    program = XCAR (command);
+  else
+    program = Qnil;
 
   if (!NILP (program))
     CHECK_STRING (program);
+
+  stderrproc = Qnil;
+  xstderr = Fplist_get (contact, QCstderr);
+  if (PROCESSP (xstderr))
+    {
+      if (!PIPECONN_P (xstderr))
+	error ("Process is not a pipe process");
+      stderrproc = xstderr;
+    }
+  else if (!NILP (xstderr))
+    {
+      struct gcpro gcpro1, gcpro2;
+      CHECK_STRING (program);
+      GCPRO2 (buffer, current_dir);
+      stderrproc = CALLN (Fmake_pipe_process,
+			  QCname,
+			  concat2 (name, build_string (" stderr")),
+			  QCbuffer,
+			  Fget_buffer_create (xstderr));
+      UNGCPRO;
+    }
 
   proc = make_process (name);
   /* If an error occurs and we can't start the process, we want to
@@ -1421,9 +1483,31 @@ usage: (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)  */)
   pset_plist (XPROCESS (proc), Qnil);
   pset_type (XPROCESS (proc), Qreal);
   pset_buffer (XPROCESS (proc), buffer);
-  pset_sentinel (XPROCESS (proc), Qinternal_default_process_sentinel);
-  pset_filter (XPROCESS (proc), Qinternal_default_process_filter);
-  pset_command (XPROCESS (proc), Flist (nargs - 2, args + 2));
+  pset_sentinel (XPROCESS (proc), Fplist_get (contact, QCsentinel));
+  pset_filter (XPROCESS (proc), Fplist_get (contact, QCfilter));
+  pset_command (XPROCESS (proc), Fcopy_sequence (command));
+
+  if (tem = Fplist_get (contact, QCnoquery), !NILP (tem))
+    XPROCESS (proc)->kill_without_query = 1;
+  if (tem = Fplist_get (contact, QCstop), !NILP (tem))
+    pset_command (XPROCESS (proc), Qt);
+
+  tem = Fplist_get (contact, QCconnection_type);
+  if (EQ (tem, Qpty))
+    XPROCESS (proc)->pty_flag = true;
+  else if (EQ (tem, Qpipe))
+    XPROCESS (proc)->pty_flag = false;
+  else if (NILP (tem))
+    XPROCESS (proc)->pty_flag = !NILP (Vprocess_connection_type);
+  else
+    report_file_error ("Unknown connection type", tem);
+
+  if (!NILP (stderrproc))
+    {
+      pset_stderrproc (XPROCESS (proc), stderrproc);
+
+      XPROCESS (proc)->pty_flag = false;
+    }
 
 #ifdef HAVE_GNUTLS
   /* AKA GNUTLS_INITSTAGE(proc).  */
@@ -1453,15 +1537,29 @@ usage: (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)  */)
     Lisp_Object val, *args2;
     struct gcpro gcpro1, gcpro2;
 
-    val = Vcoding_system_for_read;
+    tem = Fplist_get (contact, QCcoding);
+    if (!NILP (tem))
+      {
+	val = tem;
+	if (CONSP (val))
+	  val = XCAR (val);
+      }
+    else
+      val = Vcoding_system_for_read;
     if (NILP (val))
       {
-	SAFE_ALLOCA_LISP (args2, nargs + 1);
-	args2[0] = Qstart_process;
-	for (i = 0; i < nargs; i++) args2[i + 1] = args[i];
+	ptrdiff_t nargs2 = 3 + XINT (Flength (command));
+	Lisp_Object tem2;
+	SAFE_ALLOCA_LISP (args2, nargs2);
+	ptrdiff_t i = 0;
+	args2[i++] = Qstart_process;
+	args2[i++] = name;
+	args2[i++] = buffer;
+	for (tem2 = command; CONSP (tem2); tem2 = XCDR (tem2))
+	  args2[i++] = XCAR (tem2);
 	GCPRO2 (proc, current_dir);
 	if (!NILP (program))
-	  coding_systems = Ffind_operation_coding_system (nargs + 1, args2);
+	  coding_systems = Ffind_operation_coding_system (nargs2, args2);
 	UNGCPRO;
 	if (CONSP (coding_systems))
 	  val = XCAR (coding_systems);
@@ -1470,17 +1568,30 @@ usage: (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)  */)
       }
     pset_decode_coding_system (XPROCESS (proc), val);
 
-    val = Vcoding_system_for_write;
+    if (!NILP (tem))
+      {
+	val = tem;
+	if (CONSP (val))
+	  val = XCDR (val);
+      }
+    else
+      val = Vcoding_system_for_write;
     if (NILP (val))
       {
 	if (EQ (coding_systems, Qt))
 	  {
-	    SAFE_ALLOCA_LISP (args2, nargs + 1);
-	    args2[0] = Qstart_process;
-	    for (i = 0; i < nargs; i++) args2[i + 1] = args[i];
+	    ptrdiff_t nargs2 = 3 + XINT (Flength (command));
+	    Lisp_Object tem2;
+	    SAFE_ALLOCA_LISP (args2, nargs2);
+	    ptrdiff_t i = 0;
+	    args2[i++] = Qstart_process;
+	    args2[i++] = name;
+	    args2[i++] = buffer;
+	    for (tem2 = command; CONSP (tem2); tem2 = XCDR (tem2))
+	      args2[i++] = XCAR (tem2);
 	    GCPRO2 (proc, current_dir);
 	    if (!NILP (program))
-	      coding_systems = Ffind_operation_coding_system (nargs + 1, args2);
+	      coding_systems = Ffind_operation_coding_system (nargs2, args2);
 	    UNGCPRO;
 	  }
 	if (CONSP (coding_systems))
@@ -1506,16 +1617,18 @@ usage: (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)  */)
 
   if (!NILP (program))
     {
+      Lisp_Object program_args = XCDR (command);
+
       /* If program file name is not absolute, search our path for it.
 	 Put the name we will really use in TEM.  */
       if (!IS_DIRECTORY_SEP (SREF (program, 0))
 	  && !(SCHARS (program) > 1
 	       && IS_DEVICE_SEP (SREF (program, 1))))
 	{
-	  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
+	  struct gcpro gcpro1, gcpro2;
 
 	  tem = Qnil;
-	  GCPRO4 (name, program, buffer, current_dir);
+	  GCPRO2 (buffer, current_dir);
 	  openp (Vexec_path, program, Vexec_suffixes, &tem,
 		 make_number (X_OK), false);
 	  UNGCPRO;
@@ -1533,54 +1646,55 @@ usage: (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)  */)
       /* Remove "/:" from TEM.  */
       tem = remove_slash_colon (tem);
 
-      {
-	Lisp_Object arg_encoding = Qnil;
-	struct gcpro gcpro1;
-	GCPRO1 (tem);
+      Lisp_Object arg_encoding = Qnil;
+      struct gcpro gcpro1;
+      GCPRO1 (tem);
 
-	/* Encode the file name and put it in NEW_ARGV.
-	   That's where the child will use it to execute the program.  */
-	tem = list1 (ENCODE_FILE (tem));
+      /* Encode the file name and put it in NEW_ARGV.
+	 That's where the child will use it to execute the program.  */
+      tem = list1 (ENCODE_FILE (tem));
+      ptrdiff_t new_argc = 1;
 
-	/* Here we encode arguments by the coding system used for sending
-	   data to the process.  We don't support using different coding
-	   systems for encoding arguments and for encoding data sent to the
-	   process.  */
+      /* Here we encode arguments by the coding system used for sending
+	 data to the process.  We don't support using different coding
+	 systems for encoding arguments and for encoding data sent to the
+	 process.  */
 
-	for (i = 3; i < nargs; i++)
-	  {
-	    tem = Fcons (args[i], tem);
-	    CHECK_STRING (XCAR (tem));
-	    if (STRING_MULTIBYTE (XCAR (tem)))
-	      {
-		if (NILP (arg_encoding))
-		  arg_encoding = (complement_process_encoding_system
-				  (XPROCESS (proc)->encode_coding_system));
-		XSETCAR (tem,
-			 code_convert_string_norecord
-			 (XCAR (tem), arg_encoding, 1));
-	      }
-	  }
+      for (Lisp_Object tem2 = program_args; CONSP (tem2); tem2 = XCDR (tem2))
+	{
+	  Lisp_Object arg = XCAR (tem2);
+	  CHECK_STRING (arg);
+	  if (STRING_MULTIBYTE (arg))
+	    {
+	      if (NILP (arg_encoding))
+		arg_encoding = (complement_process_encoding_system
+				(XPROCESS (proc)->encode_coding_system));
+	      arg = code_convert_string_norecord (arg, arg_encoding, 1);
+	    }
+	  tem = Fcons (arg, tem);
+	  new_argc++;
+	}
 
-	UNGCPRO;
-      }
+      UNGCPRO;
 
       /* Now that everything is encoded we can collect the strings into
 	 NEW_ARGV.  */
-      SAFE_NALLOCA (new_argv, 1, nargs - 1);
-      new_argv[nargs - 2] = 0;
+      char **new_argv;
+      SAFE_NALLOCA (new_argv, 1, new_argc + 1);
+      new_argv[new_argc] = 0;
 
-      for (i = nargs - 2; i-- != 0; )
+      for (ptrdiff_t i = new_argc - 1; i >= 0; i--)
 	{
-	  new_argv[i] = SDATA (XCAR (tem));
+	  new_argv[i] = SSDATA (XCAR (tem));
 	  tem = XCDR (tem);
 	}
 
-      create_process (proc, (char **) new_argv, current_dir);
+      create_process (proc, new_argv, current_dir);
     }
   else
     create_pty (proc);
 
+  UNGCPRO;
   SAFE_FREE ();
   return unbind_to (count, proc);
 }
@@ -1640,7 +1754,7 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
   int inchannel, outchannel;
   pid_t pid;
   int vfork_errno;
-  int forkin, forkout;
+  int forkin, forkout, forkerr = -1;
   bool pty_flag = 0;
   char pty_name[PTY_NAME_SIZE];
   Lisp_Object lisp_pty_name = Qnil;
@@ -1648,7 +1762,7 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
 
   inchannel = outchannel = -1;
 
-  if (!NILP (Vprocess_connection_type))
+  if (p->pty_flag)
     outchannel = inchannel = allocate_pty (pty_name);
 
   if (inchannel >= 0)
@@ -1678,6 +1792,17 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
       outchannel = p->open_fd[WRITE_TO_SUBPROCESS];
       inchannel = p->open_fd[READ_FROM_SUBPROCESS];
       forkout = p->open_fd[SUBPROCESS_STDOUT];
+
+      if (!NILP (p->stderrproc))
+	{
+	  struct Lisp_Process *pp = XPROCESS (p->stderrproc);
+
+	  forkerr = pp->open_fd[SUBPROCESS_STDOUT];
+
+	  /* Close unnecessary file descriptors.  */
+	  close_process_fd (&pp->open_fd[WRITE_TO_SUBPROCESS]);
+	  close_process_fd (&pp->open_fd[SUBPROCESS_STDIN]);
+	}
     }
 
 #ifndef WINDOWSNT
@@ -1701,8 +1826,12 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
   p->pty_flag = pty_flag;
   pset_status (p, Qrun);
 
-  FD_SET (inchannel, &input_wait_mask);
-  FD_SET (inchannel, &non_keyboard_wait_mask);
+  if (!EQ (p->command, Qt))
+    {
+      FD_SET (inchannel, &input_wait_mask);
+      FD_SET (inchannel, &non_keyboard_wait_mask);
+    }
+
   if (inchannel > max_process_desc)
     max_process_desc = inchannel;
 
@@ -1720,6 +1849,7 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
     char **volatile new_argv_volatile = new_argv;
     int volatile forkin_volatile = forkin;
     int volatile forkout_volatile = forkout;
+    int volatile forkerr_volatile = forkerr;
     struct Lisp_Process *p_volatile = p;
 
     pid = vfork ();
@@ -1729,6 +1859,7 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
     new_argv = new_argv_volatile;
     forkin = forkin_volatile;
     forkout = forkout_volatile;
+    forkerr = forkerr_volatile;
     p = p_volatile;
 
     pty_flag = p->pty_flag;
@@ -1739,6 +1870,7 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
     {
       int xforkin = forkin;
       int xforkout = forkout;
+      int xforkerr = forkerr;
 
       /* Make the pty be the controlling terminal of the process.  */
 #ifdef HAVE_PTYS
@@ -1838,10 +1970,13 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
 
       if (pty_flag)
 	child_setup_tty (xforkout);
+
+      if (xforkerr < 0)
+	xforkerr = xforkout;
 #ifdef WINDOWSNT
-      pid = child_setup (xforkin, xforkout, xforkout, new_argv, 1, current_dir);
+      pid = child_setup (xforkin, xforkout, xforkerr, new_argv, 1, current_dir);
 #else  /* not WINDOWSNT */
-      child_setup (xforkin, xforkout, xforkout, new_argv, 1, current_dir);
+      child_setup (xforkin, xforkout, xforkerr, new_argv, 1, current_dir);
 #endif /* not WINDOWSNT */
     }
 
@@ -1886,6 +2021,11 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
 	close_process_fd (&p->open_fd[READ_FROM_EXEC_MONITOR]);
       }
 #endif
+      if (!NILP (p->stderrproc))
+	{
+	  struct Lisp_Process *pp = XPROCESS (p->stderrproc);
+	  close_process_fd (&pp->open_fd[SUBPROCESS_STDOUT]);
+	}
     }
 }
 
@@ -1894,7 +2034,7 @@ create_pty (Lisp_Object process)
 {
   struct Lisp_Process *p = XPROCESS (process);
   char pty_name[PTY_NAME_SIZE];
-  int pty_fd = NILP (Vprocess_connection_type) ? -1 : allocate_pty (pty_name);
+  int pty_fd = !p->pty_flag ? -1 : allocate_pty (pty_name);
 
   if (pty_fd >= 0)
     {
@@ -1942,6 +2082,187 @@ create_pty (Lisp_Object process)
     }
 
   p->pid = -2;
+}
+
+DEFUN ("make-pipe-process", Fmake_pipe_process, Smake_pipe_process,
+       0, MANY, 0,
+       doc: /* Create and return a bidirectional pipe process.
+
+In Emacs, pipes are represented by process objects, so input and
+output work as for subprocesses, and `delete-process' closes a pipe.
+However, a pipe process has no process id, it cannot be signaled,
+and the status codes are different from normal processes.
+
+Arguments are specified as keyword/argument pairs.  The following
+arguments are defined:
+
+:name NAME -- NAME is the name of the process.  It is modified if necessary to make it unique.
+
+:buffer BUFFER -- BUFFER is the buffer (or buffer-name) to associate
+with the process.  Process output goes at the end of that buffer,
+unless you specify an output stream or filter function to handle the
+output.  If BUFFER is not given, the value of NAME is used.
+
+:coding CODING -- If CODING is a symbol, it specifies the coding
+system used for both reading and writing for this process.  If CODING
+is a cons (DECODING . ENCODING), DECODING is used for reading, and
+ENCODING is used for writing.
+
+:noquery BOOL -- When exiting Emacs, query the user if BOOL is nil and
+the process is running.  If BOOL is not given, query before exiting.
+
+:stop BOOL -- Start process in the `stopped' state if BOOL non-nil.
+In the stopped state, a pipe process does not accept incoming data,
+but you can send outgoing data.  The stopped state is cleared by
+`continue-process' and set by `stop-process'.
+
+:filter FILTER -- Install FILTER as the process filter.
+
+:sentinel SENTINEL -- Install SENTINEL as the process sentinel.
+
+usage:  (make-pipe-process &rest ARGS)  */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  Lisp_Object proc, contact;
+  struct Lisp_Process *p;
+  struct gcpro gcpro1;
+  Lisp_Object name, buffer;
+  Lisp_Object tem;
+  ptrdiff_t specpdl_count;
+  int inchannel, outchannel;
+
+  if (nargs == 0)
+    return Qnil;
+
+  contact = Flist (nargs, args);
+  GCPRO1 (contact);
+
+  name = Fplist_get (contact, QCname);
+  CHECK_STRING (name);
+  proc = make_process (name);
+  specpdl_count = SPECPDL_INDEX ();
+  record_unwind_protect (remove_process, proc);
+  p = XPROCESS (proc);
+
+  if (emacs_pipe (p->open_fd + SUBPROCESS_STDIN) != 0
+      || emacs_pipe (p->open_fd + READ_FROM_SUBPROCESS) != 0)
+    report_file_error ("Creating pipe", Qnil);
+  outchannel = p->open_fd[WRITE_TO_SUBPROCESS];
+  inchannel = p->open_fd[READ_FROM_SUBPROCESS];
+
+  fcntl (inchannel, F_SETFL, O_NONBLOCK);
+  fcntl (outchannel, F_SETFL, O_NONBLOCK);
+
+#ifdef WINDOWSNT
+  register_aux_fd (inchannel);
+#endif
+
+  /* Record this as an active process, with its channels.  */
+  chan_process[inchannel] = proc;
+  p->infd = inchannel;
+  p->outfd = outchannel;
+
+  if (inchannel > max_process_desc)
+    max_process_desc = inchannel;
+
+  buffer = Fplist_get (contact, QCbuffer);
+  if (NILP (buffer))
+    buffer = name;
+  buffer = Fget_buffer_create (buffer);
+  pset_buffer (p, buffer);
+
+  pset_childp (p, contact);
+  pset_plist (p, Fcopy_sequence (Fplist_get (contact, QCplist)));
+  pset_type (p, Qpipe);
+  pset_sentinel (p, Fplist_get (contact, QCsentinel));
+  pset_filter (p, Fplist_get (contact, QCfilter));
+  pset_log (p, Qnil);
+  if (tem = Fplist_get (contact, QCnoquery), !NILP (tem))
+    p->kill_without_query = 1;
+  if (tem = Fplist_get (contact, QCstop), !NILP (tem))
+    pset_command (p, Qt);
+  eassert (! p->pty_flag);
+
+  if (!EQ (p->command, Qt))
+    {
+      FD_SET (inchannel, &input_wait_mask);
+      FD_SET (inchannel, &non_keyboard_wait_mask);
+    }
+#ifdef ADAPTIVE_READ_BUFFERING
+  p->adaptive_read_buffering
+    = (NILP (Vprocess_adaptive_read_buffering) ? 0
+       : EQ (Vprocess_adaptive_read_buffering, Qt) ? 1 : 2);
+#endif
+
+  /* Make the process marker point into the process buffer (if any).  */
+  if (BUFFERP (buffer))
+    set_marker_both (p->mark, buffer,
+		     BUF_ZV (XBUFFER (buffer)),
+		     BUF_ZV_BYTE (XBUFFER (buffer)));
+
+  {
+    /* Setup coding systems for communicating with the network stream.  */
+
+    /* Qt denotes we have not yet called Ffind_operation_coding_system.  */
+    Lisp_Object coding_systems = Qt;
+    Lisp_Object val;
+
+    tem = Fplist_get (contact, QCcoding);
+    val = Qnil;
+    if (!NILP (tem))
+      {
+	val = tem;
+	if (CONSP (val))
+	  val = XCAR (val);
+      }
+    else if (!NILP (Vcoding_system_for_read))
+      val = Vcoding_system_for_read;
+    else if ((!NILP (buffer) && NILP (BVAR (XBUFFER (buffer), enable_multibyte_characters)))
+	     || (NILP (buffer) && NILP (BVAR (&buffer_defaults, enable_multibyte_characters))))
+      /* We dare not decode end-of-line format by setting VAL to
+	 Qraw_text, because the existing Emacs Lisp libraries
+	 assume that they receive bare code including a sequence of
+	 CR LF.  */
+      val = Qnil;
+    else
+      {
+	if (CONSP (coding_systems))
+	  val = XCAR (coding_systems);
+	else if (CONSP (Vdefault_process_coding_system))
+	  val = XCAR (Vdefault_process_coding_system);
+	else
+	  val = Qnil;
+      }
+    pset_decode_coding_system (p, val);
+
+    if (!NILP (tem))
+      {
+	val = tem;
+	if (CONSP (val))
+	  val = XCDR (val);
+      }
+    else if (!NILP (Vcoding_system_for_write))
+      val = Vcoding_system_for_write;
+    else if (NILP (BVAR (current_buffer, enable_multibyte_characters)))
+      val = Qnil;
+    else
+      {
+	if (CONSP (coding_systems))
+	  val = XCDR (coding_systems);
+	else if (CONSP (Vdefault_process_coding_system))
+	  val = XCDR (Vdefault_process_coding_system);
+	else
+	  val = Qnil;
+      }
+    pset_encode_coding_system (p, val);
+  }
+  /* This may signal an error.  */
+  setup_process_coding_systems (proc);
+
+  specpdl_ptr = specpdl + specpdl_count;
+
+  UNGCPRO;
+  return proc;
 }
 
 
@@ -3422,7 +3743,7 @@ usage: (make-network-process &rest ARGS)  */)
     struct gcpro gcpro1;
     /* Qt denotes we have not yet called Ffind_operation_coding_system.  */
     Lisp_Object coding_systems = Qt;
-    Lisp_Object fargs[5], val;
+    Lisp_Object val;
 
     if (!NILP (tem))
       {
@@ -3445,10 +3766,10 @@ usage: (make-network-process &rest ARGS)  */)
 	  coding_systems = Qnil;
 	else
 	  {
-	    fargs[0] = Qopen_network_stream, fargs[1] = name,
-	      fargs[2] = buffer, fargs[3] = host, fargs[4] = service;
 	    GCPRO1 (proc);
-	    coding_systems = Ffind_operation_coding_system (5, fargs);
+	    coding_systems = CALLN (Ffind_operation_coding_system,
+				    Qopen_network_stream, name, buffer,
+				    host, service);
 	    UNGCPRO;
 	  }
 	if (CONSP (coding_systems))
@@ -3478,10 +3799,10 @@ usage: (make-network-process &rest ARGS)  */)
 	      coding_systems = Qnil;
 	    else
 	      {
-		fargs[0] = Qopen_network_stream, fargs[1] = name,
-		  fargs[2] = buffer, fargs[3] = host, fargs[4] = service;
 		GCPRO1 (proc);
-		coding_systems = Ffind_operation_coding_system (5, fargs);
+		coding_systems = CALLN (Ffind_operation_coding_system,
+					Qopen_network_stream, name, buffer,
+					host, service);
 		UNGCPRO;
 	      }
 	  }
@@ -4064,12 +4385,12 @@ server_accept_connection (Lisp_Object server, int channel)
 	unsigned char *ip = (unsigned char *)&saddr.in.sin_addr.s_addr;
 
 	AUTO_STRING (ipv4_format, "%d.%d.%d.%d");
-	host = Fformat (5, ((Lisp_Object [])
-	  { ipv4_format, make_number (ip[0]),
-	    make_number (ip[1]), make_number (ip[2]), make_number (ip[3]) }));
+	host = CALLN (Fformat, ipv4_format,
+		      make_number (ip[0]), make_number (ip[1]),
+		      make_number (ip[2]), make_number (ip[3]));
 	service = make_number (ntohs (saddr.in.sin_port));
 	AUTO_STRING (caller_format, " <%s:%d>");
-	caller = Fformat (3, (Lisp_Object []) {caller_format, host, service});
+	caller = CALLN (Fformat, caller_format, host, service);
       }
       break;
 
@@ -4084,10 +4405,10 @@ server_accept_connection (Lisp_Object server, int channel)
 	args[0] = ipv6_format;
 	for (i = 0; i < 8; i++)
 	  args[i + 1] = make_number (ntohs (ip6[i]));
-	host = Fformat (9, args);
+	host = CALLMANY (Fformat, args);
 	service = make_number (ntohs (saddr.in.sin_port));
 	AUTO_STRING (caller_format, " <[%s]:%d>");
-	caller = Fformat (3, (Lisp_Object []) {caller_format, host, service});
+	caller = CALLN (Fformat, caller_format, host, service);
       }
       break;
 #endif
@@ -4464,37 +4785,41 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
       if (wait_proc && wait_proc->raw_status_new)
 	update_status (wait_proc);
       if (wait_proc
-	  && wait_proc->infd >= 0
 	  && ! EQ (wait_proc->status, Qrun)
 	  && ! EQ (wait_proc->status, Qconnect))
 	{
 	  bool read_some_bytes = false;
 
 	  clear_waiting_for_input ();
-	  XSETPROCESS (proc, wait_proc);
 
-	  /* Read data from the process, until we exhaust it.  */
-	  while (true)
+	  /* If data can be read from the process, do so until exhausted.  */
+	  if (wait_proc->infd >= 0)
 	    {
-	      int nread = read_process_output (proc, wait_proc->infd);
-	      if (nread < 0)
+	      XSETPROCESS (proc, wait_proc);
+
+	      while (true)
 		{
-		  if (errno == EIO || errno == EAGAIN)
-		    break;
+		  int nread = read_process_output (proc, wait_proc->infd);
+		  if (nread < 0)
+		    {
+		    if (errno == EIO || errno == EAGAIN)
+		      break;
 #ifdef EWOULDBLOCK
-		  if (errno == EWOULDBLOCK)
-		    break;
+		    if (errno == EWOULDBLOCK)
+		      break;
 #endif
-		}
-	      else
-		{
-		  if (got_some_input < nread)
-		    got_some_input = nread;
-		  if (nread == 0)
-		    break;
-		  read_some_bytes = true;
+		    }
+		  else
+		    {
+		      if (got_some_input < nread)
+			got_some_input = nread;
+		      if (nread == 0)
+			break;
+		      read_some_bytes = true;
+		    }
 		}
 	    }
+
 	  if (read_some_bytes && do_display)
 	    redisplay_preserve_echo_area (10);
 
@@ -4525,7 +4850,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 	    Available = input_wait_mask;
           Writeok = write_mask;
  	  check_delay = wait_proc ? 0 : process_output_delay_count;
-	  check_write = SELECT_CAN_DO_WRITE_MASK;
+	  check_write = true;
 	}
 
       /* If frame size has changed or the window is newly mapped,
@@ -4812,7 +5137,8 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 		 available now and a closed pipe.
 		 With luck, a closed pipe will be accompanied by
 		 subprocess termination and SIGCHLD.  */
-	      else if (nread == 0 && !NETCONN_P (proc) && !SERIALCONN_P (proc))
+	      else if (nread == 0 && !NETCONN_P (proc) && !SERIALCONN_P (proc)
+		       && !PIPECONN_P (proc))
 		;
 #endif
 #ifdef HAVE_PTYS
@@ -4844,8 +5170,18 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 #endif /* HAVE_PTYS */
 	      /* If we can detect process termination, don't consider the
 		 process gone just because its pipe is closed.  */
-	      else if (nread == 0 && !NETCONN_P (proc) && !SERIALCONN_P (proc))
+	      else if (nread == 0 && !NETCONN_P (proc) && !SERIALCONN_P (proc)
+		       && !PIPECONN_P (proc))
 		;
+	      else if (nread == 0 && PIPECONN_P (proc))
+		{
+		  /* Preserve status of processes already terminated.  */
+		  XPROCESS (proc)->tick = ++process_tick;
+		  deactivate_process (proc);
+		  if (EQ (XPROCESS (proc)->status, Qrun))
+		    pset_status (XPROCESS (proc),
+				 list2 (Qexit, make_number (0)));
+		}
 	      else
 		{
 		  /* Preserve status of processes already terminated.  */
@@ -5658,9 +5994,10 @@ emacs_get_tty_pgrp (struct Lisp_Process *p)
 
 DEFUN ("process-running-child-p", Fprocess_running_child_p,
        Sprocess_running_child_p, 0, 1, 0,
-       doc: /* Return t if PROCESS has given the terminal to a child.
-If the operating system does not make it possible to find out,
-return t unconditionally.  */)
+       doc: /* Return non-nil if PROCESS has given the terminal to a
+child.  If the operating system does not make it possible to find out,
+return t.  If we can find out, return the numeric ID of the foreground
+process group.  */)
   (Lisp_Object process)
 {
   /* Initialize in case ioctl doesn't exist or gives an error,
@@ -5683,6 +6020,8 @@ return t unconditionally.  */)
 
   if (gid == p->pid)
     return Qnil;
+  if (gid != -1)
+    return make_number (gid);
   return Qt;
 }
 
@@ -5879,7 +6218,8 @@ If PROCESS is a network or serial process, inhibit handling of incoming
 traffic.  */)
   (Lisp_Object process, Lisp_Object current_group)
 {
-  if (PROCESSP (process) && (NETCONN_P (process) || SERIALCONN_P (process)))
+  if (PROCESSP (process) && (NETCONN_P (process) || SERIALCONN_P (process)
+			     || PIPECONN_P (process)))
     {
       struct Lisp_Process *p;
 
@@ -5908,7 +6248,8 @@ If PROCESS is a network or serial process, resume handling of incoming
 traffic.  */)
   (Lisp_Object process, Lisp_Object current_group)
 {
-  if (PROCESSP (process) && (NETCONN_P (process) || SERIALCONN_P (process)))
+  if (PROCESSP (process) && (NETCONN_P (process) || SERIALCONN_P (process)
+			     || PIPECONN_P (process)))
     {
       struct Lisp_Process *p;
 
@@ -6955,7 +7296,7 @@ kill_buffer_processes (Lisp_Object buffer)
   FOR_EACH_PROCESS (tail, proc)
     if (NILP (buffer) || EQ (XPROCESS (proc)->buffer, buffer))
       {
-	if (NETCONN_P (proc) || SERIALCONN_P (proc))
+	if (NETCONN_P (proc) || SERIALCONN_P (proc) || PIPECONN_P (proc))
 	  Fdelete_process (proc);
 	else if (XPROCESS (proc)->infd >= 0)
 	  process_send_signal (proc, SIGHUP, Qnil, 1);
@@ -7161,40 +7502,6 @@ init_process_emacs (void)
   memset (datagram_address, 0, sizeof datagram_address);
 #endif
 
- {
-   Lisp_Object subfeatures = Qnil;
-   const struct socket_options *sopt;
-
-#define ADD_SUBFEATURE(key, val) \
-  subfeatures = pure_cons (pure_cons (key, pure_cons (val, Qnil)), subfeatures)
-
-#ifdef NON_BLOCKING_CONNECT
-   ADD_SUBFEATURE (QCnowait, Qt);
-#endif
-#ifdef DATAGRAM_SOCKETS
-   ADD_SUBFEATURE (QCtype, Qdatagram);
-#endif
-#ifdef HAVE_SEQPACKET
-   ADD_SUBFEATURE (QCtype, Qseqpacket);
-#endif
-#ifdef HAVE_LOCAL_SOCKETS
-   ADD_SUBFEATURE (QCfamily, Qlocal);
-#endif
-   ADD_SUBFEATURE (QCfamily, Qipv4);
-#ifdef AF_INET6
-   ADD_SUBFEATURE (QCfamily, Qipv6);
-#endif
-#ifdef HAVE_GETSOCKNAME
-   ADD_SUBFEATURE (QCservice, Qt);
-#endif
-   ADD_SUBFEATURE (QCserver, Qt);
-
-   for (sopt = socket_options; sopt->name; sopt++)
-     subfeatures = pure_cons (intern_c_string (sopt->name), subfeatures);
-
-   Fprovide (intern_c_string ("make-network-process"), subfeatures);
- }
-
 #if defined (DARWIN_OS)
   /* PTYs are broken on Darwin < 6, but are sometimes useful for interactive
      processes.  As such, we only change the default value.  */
@@ -7255,6 +7562,7 @@ syms_of_process (void)
   DEFSYM (Qreal, "real");
   DEFSYM (Qnetwork, "network");
   DEFSYM (Qserial, "serial");
+  DEFSYM (Qpipe, "pipe");
   DEFSYM (QCbuffer, ":buffer");
   DEFSYM (QChost, ":host");
   DEFSYM (QCservice, ":service");
@@ -7269,6 +7577,11 @@ syms_of_process (void)
   DEFSYM (QCstop, ":stop");
   DEFSYM (QCoptions, ":options");
   DEFSYM (QCplist, ":plist");
+  DEFSYM (QCcommand, ":command");
+  DEFSYM (QCconnection_type, ":connection-type");
+  DEFSYM (QCstderr, ":stderr");
+  DEFSYM (Qpty, "pty");
+  DEFSYM (Qpipe, "pipe");
 
   DEFSYM (Qlast_nonmenu_event, "last-nonmenu-event");
 
@@ -7371,7 +7684,8 @@ The variable takes effect when `start-process' is called.  */);
   defsubr (&Sprocess_plist);
   defsubr (&Sset_process_plist);
   defsubr (&Sprocess_list);
-  defsubr (&Sstart_process);
+  defsubr (&Smake_process);
+  defsubr (&Smake_pipe_process);
   defsubr (&Sserial_process_configure);
   defsubr (&Smake_serial_process);
   defsubr (&Sset_network_process_option);
@@ -7409,4 +7723,39 @@ The variable takes effect when `start-process' is called.  */);
   defsubr (&Sprocess_inherit_coding_system_flag);
   defsubr (&Slist_system_processes);
   defsubr (&Sprocess_attributes);
+
+ {
+   Lisp_Object subfeatures = Qnil;
+   const struct socket_options *sopt;
+
+#define ADD_SUBFEATURE(key, val) \
+  subfeatures = pure_cons (pure_cons (key, pure_cons (val, Qnil)), subfeatures)
+
+#ifdef NON_BLOCKING_CONNECT
+   ADD_SUBFEATURE (QCnowait, Qt);
+#endif
+#ifdef DATAGRAM_SOCKETS
+   ADD_SUBFEATURE (QCtype, Qdatagram);
+#endif
+#ifdef HAVE_SEQPACKET
+   ADD_SUBFEATURE (QCtype, Qseqpacket);
+#endif
+#ifdef HAVE_LOCAL_SOCKETS
+   ADD_SUBFEATURE (QCfamily, Qlocal);
+#endif
+   ADD_SUBFEATURE (QCfamily, Qipv4);
+#ifdef AF_INET6
+   ADD_SUBFEATURE (QCfamily, Qipv6);
+#endif
+#ifdef HAVE_GETSOCKNAME
+   ADD_SUBFEATURE (QCservice, Qt);
+#endif
+   ADD_SUBFEATURE (QCserver, Qt);
+
+   for (sopt = socket_options; sopt->name; sopt++)
+     subfeatures = pure_cons (intern_c_string (sopt->name), subfeatures);
+
+   Fprovide (intern_c_string ("make-network-process"), subfeatures);
+ }
+
 }

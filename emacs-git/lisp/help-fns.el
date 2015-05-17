@@ -54,20 +54,22 @@ The functions will receive the function name as argument.")
 				(and fn (symbol-name fn))))
      (list (if (equal val "")
 	       fn (intern val)))))
-  (if (null function)
-      (message "You didn't specify a function")
-    (help-setup-xref (list #'describe-function function)
-		     (called-interactively-p 'interactive))
-    (save-excursion
-      (with-help-window (help-buffer)
-	(prin1 function)
-	;; Use " is " instead of a colon so that
-	;; it is easier to get out the function name using forward-sexp.
-	(princ " is ")
-	(describe-function-1 function)
-	(with-current-buffer standard-output
-	  ;; Return the text we displayed.
-	  (buffer-string))))))
+  (or (and function (symbolp function))
+      (user-error "You didn't specify a function symbol"))
+  (or (fboundp function)
+      (user-error "Symbol's function definition is void: %s" function))
+  (help-setup-xref (list #'describe-function function)
+                   (called-interactively-p 'interactive))
+  (save-excursion
+    (with-help-window (help-buffer)
+      (prin1 function)
+      ;; Use " is " instead of a colon so that
+      ;; it is easier to get out the function name using forward-sexp.
+      (princ " is ")
+      (describe-function-1 function)
+      (with-current-buffer standard-output
+        ;; Return the text we displayed.
+        (buffer-string)))))
 
 
 ;; Could be this, if we make symbol-file do the work below.
@@ -329,7 +331,7 @@ suitable file is found, return nil."
 
       (with-current-buffer standard-output
         (fill-region-as-paragraph pt2 (point))
-        (unless (looking-back "\n\n")
+        (unless (looking-back "\n\n" (- (point) 2))
           (terpri))))))
 
 (defun help-fns--compiler-macro (function)
@@ -352,7 +354,9 @@ suitable file is found, return nil."
       (insert ".\n"))))
 
 (defun help-fns--signature (function doc real-def real-function)
-  (unless (keymapp function)    ; If definition is a keymap, skip arglist note.
+  "Insert usage at point and return docstring.  With highlighting."
+  (if (keymapp function)
+      doc                       ; If definition is a keymap, skip arglist note.
     (let* ((advertised (gethash real-def advertised-signature-table t))
            (arglist (if (listp advertised)
                         advertised (help-function-arglist real-def)))
@@ -477,7 +481,8 @@ FILE is the file where FUNCTION was probably defined."
 	      function))
 	 ;; Get the real definition.
 	 (def (if (symbolp real-function)
-		  (symbol-function real-function)
+		  (or (symbol-function real-function)
+		      (signal 'void-function (list real-function)))
 		real-function))
 	 (aliased (or (symbolp def)
 		      ;; Advised & aliased function.
@@ -490,6 +495,9 @@ FILE is the file where FUNCTION was probably defined."
 			       f))
 		    ((subrp def) (intern (subr-name def)))
 		    (t def)))
+	 (sig-key (if (subrp def)
+                      (indirect-function real-def)
+                    real-def))
 	 (file-name (find-lisp-object-file-name function def))
          (pt1 (with-current-buffer (help-buffer) (point)))
 	 (beg (if (and (or (byte-code-function-p def)
@@ -581,7 +589,7 @@ FILE is the file where FUNCTION was probably defined."
 
         (help-fns--key-bindings function)
         (with-current-buffer standard-output
-          (setq doc (help-fns--signature function doc real-def real-function))
+          (setq doc (help-fns--signature function doc sig-key real-function))
 	  (run-hook-with-args 'help-fns-describe-function-functions function)
           (insert "\n"
                   (or doc "Not documented.")))))))
@@ -928,6 +936,37 @@ file-local variable.\n")
 	      ;; Return the text we displayed.
 	      (buffer-string))))))))
 
+
+;;;###autoload
+(defun describe-function-or-variable (symbol &optional buffer frame)
+  "Display the full documentation of the function or variable SYMBOL.
+If SYMBOL is a variable and has a buffer-local value in BUFFER or FRAME
+\(default to the current buffer and current frame), it is displayed along
+with the global value."
+  (interactive
+   (let* ((v-or-f (variable-at-point))
+          (found (symbolp v-or-f))
+          (v-or-f (if found v-or-f (function-called-at-point)))
+          (found (or found v-or-f))
+          (enable-recursive-minibuffers t)
+          val)
+     (setq val (completing-read (if found
+				    (format
+                                        "Describe function or variable (default %s): " v-or-f)
+				  "Describe function or variable: ")
+				obarray
+				(lambda (vv)
+				  (or (fboundp vv)
+				      (get vv 'variable-documentation)
+				      (and (boundp vv) (not (keywordp vv)))))
+				t nil nil
+				(if found (symbol-name v-or-f))))
+     (list (if (equal val "")
+	       v-or-f (intern val)))))
+  (if (not (symbolp symbol)) (message "You didn't specify a function or variable")
+    (unless (buffer-live-p buffer) (setq buffer (current-buffer)))
+    (unless (frame-live-p frame) (setq frame (selected-frame)))
+    (help-xref-interned symbol buffer frame)))
 
 ;;;###autoload
 (defun describe-syntax (&optional buffer)

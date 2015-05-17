@@ -875,7 +875,8 @@ please check its value")
     ;; processed.  This is consistent with the way main in emacs.c
     ;; does things.
     (while (and (not done) args)
-      (let* ((longopts '(("--no-init-file") ("--no-site-file") ("--debug-init")
+      (let* ((longopts '(("--no-init-file") ("--no-site-file")
+                         ("--no-x-resources") ("--debug-init")
                          ("--user") ("--iconic") ("--icon-type") ("--quick")
 			 ("--no-blinking-cursor") ("--basic-display")))
              (argi (pop args))
@@ -906,7 +907,11 @@ please check its value")
 	 ((member argi '("-Q" "-quick"))
 	  (setq init-file-user nil
 		site-run-file nil
-		inhibit-x-resources t))
+		inhibit-x-resources t)
+	  ;; Stop it showing up in emacs -Q's customize-rogue.
+	  (put 'site-run-file 'standard-value '(nil)))
+         ((member argi '("-no-x-resources"))
+          (setq inhibit-x-resources t))
 	 ((member argi '("-D" "-basic-display"))
 	  (setq no-blinking-cursor t
 		emacs-basic-display t)
@@ -917,7 +922,8 @@ please check its value")
 	  (setq init-file-user (or argval (pop args))
 		argval nil))
 	 ((equal argi "-no-site-file")
-	  (setq site-run-file nil))
+	  (setq site-run-file nil)
+	  (put 'site-run-file 'standard-value '(nil)))
 	 ((equal argi "-debug-init")
 	  (setq init-file-debug t))
 	 ((equal argi "-iconic")

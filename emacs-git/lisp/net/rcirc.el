@@ -1924,17 +1924,13 @@ Uninteresting lines are those whose responses are listed in
       (goto-char overlay-arrow-position)
     (message "No unread messages")))
 
-(defun rcirc-non-irc-buffer ()
-  (let ((buflist (buffer-list))
-	buffer)
-    (while (and buflist (not buffer))
-      (with-current-buffer (car buflist)
-	(unless (or (eq major-mode 'rcirc-mode)
-		    (= ?\s (aref (buffer-name) 0)) ; internal buffers
-		    (get-buffer-window (current-buffer)))
-	  (setq buffer (current-buffer))))
-      (setq buflist (cdr buflist)))
-    buffer))
+(defun rcirc-bury-buffers ()
+  "Bury all RCIRC buffers."
+  (interactive)
+  (dolist (buf (buffer-list))
+    (when (eq 'rcirc-mode (with-current-buffer buf major-mode))
+      (bury-buffer buf)         ; buffers not shown
+      (quit-windows-on buf))))  ; buffers shown in a window
 
 (defun rcirc-next-active-buffer (arg)
   "Switch to the next rcirc buffer with activity.
@@ -1949,15 +1945,13 @@ With prefix ARG, go to the next low priority buffer with activity."
 	  (switch-to-buffer (car (if arg lopri hipri)))
 	  (when (> (point) rcirc-prompt-start-marker)
 	    (recenter -1)))
-      (if (eq major-mode 'rcirc-mode)
-	  (switch-to-buffer (rcirc-non-irc-buffer))
-	(message "%s" (concat
-		       "No IRC activity."
-		       (when lopri
-			 (concat
-			  "  Type C-u "
-			  (key-description (this-command-keys))
-			  " for low priority activity."))))))))
+      (rcirc-bury-buffers)
+      (message "No IRC activity.%s"
+               (if lopri
+                   (concat
+                    "  Type C-u " (key-description (this-command-keys))
+                    " for low priority activity.")
+                 "")))))
 
 (define-obsolete-variable-alias 'rcirc-activity-hooks
   'rcirc-activity-functions "24.3")
@@ -2167,6 +2161,7 @@ activity.  Only run if the buffer is not visible and
        ,interactive-form
        (let ((process (or process (rcirc-buffer-process)))
 	     (target (or target rcirc-target)))
+         (ignore target)        ; mark `target' variable as ignorable
 	 ,@body))))
 
 (defun-rcirc-command msg (message)
@@ -2693,7 +2688,7 @@ the only argument."
 (defun rcirc-handler-KICK (process sender args _text)
   (let* ((channel (car args))
 	 (nick (cadr args))
-	 (reason (cl-caddr args))
+	 (reason (nth 2 args))
 	 (message (concat nick " " channel " " reason)))
     (rcirc-print process sender "KICK" channel message t)
     ;; print in private chat buffer if it exists
@@ -2777,7 +2772,7 @@ the only argument."
   "RPL_AWAY"
   (let* ((nick (cadr args))
 	 (rec (assoc-string nick rcirc-nick-away-alist))
-	 (away-message (cl-caddr args)))
+	 (away-message (nth 2 args)))
     (when (or (not rec)
 	      (not (string= (cdr rec) away-message)))
       ;; away message has changed
@@ -2806,7 +2801,7 @@ the only argument."
   (let ((buffer (or (rcirc-get-buffer process (cadr args))
 		    (rcirc-get-temp-buffer-create process (cadr args)))))
     (with-current-buffer buffer
-      (setq rcirc-topic (cl-caddr args)))))
+      (setq rcirc-topic (nth 2 args)))))
 
 (defun rcirc-handler-333 (process sender args _text)
   "333 says who set the topic and when.
@@ -2814,7 +2809,7 @@ Not in rfc1459.txt"
   (let ((buffer (or (rcirc-get-buffer process (cadr args))
 		    (rcirc-get-temp-buffer-create process (cadr args)))))
     (with-current-buffer buffer
-      (let ((setter (cl-caddr args))
+      (let ((setter (nth 2 args))
 	    (time (current-time-string
 		   (seconds-to-time
 		    (string-to-number (cl-cadddr args))))))
@@ -2823,7 +2818,7 @@ Not in rfc1459.txt"
 
 (defun rcirc-handler-477 (process sender args _text)
   "ERR_NOCHANMODES"
-  (rcirc-print process sender "477" (cadr args) (cl-caddr args)))
+  (rcirc-print process sender "477" (cadr args) (nth 2 args)))
 
 (defun rcirc-handler-MODE (process sender args _text)
   (let ((target (car args))
@@ -2883,7 +2878,7 @@ Passwords are stored in `rcirc-authinfo' (which see)."
     (dolist (i rcirc-authinfo)
       (let ((process (rcirc-buffer-process))
 	    (server (car i))
-	    (nick (cl-caddr i))
+	    (nick (nth 2 i))
 	    (method (cadr i))
 	    (args (cl-cdddr i)))
 	(when (and (string-match server rcirc-server))

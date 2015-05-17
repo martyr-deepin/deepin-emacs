@@ -411,7 +411,8 @@ In the ATTS property list, possible attributes are `:family',
 
 See Info node `(elisp) Faces' in the Emacs Lisp manual for more
 information."
-  (declare (doc-string 3))
+  (declare (doc-string 3)
+           (indent 1))
   ;; It is better not to use backquote in this file,
   ;; because that makes a bootstrapping problem
   ;; if you need to recompile all the Lisp files using interpreted code.
@@ -448,8 +449,7 @@ information."
   ;; Record the group on the `current' list.
   (let ((elt (assoc load-file-name custom-current-group-alist)))
     (if elt (setcdr elt symbol)
-      (push (cons (purecopy load-file-name) symbol)
-	    custom-current-group-alist)))
+      (push (cons load-file-name symbol) custom-current-group-alist)))
   (run-hooks 'custom-define-hook)
   symbol)
 

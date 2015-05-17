@@ -420,122 +420,122 @@ Signal an error if X is not a list."
 
 (defun cl-caaar (x)
   "Return the `car' of the `car' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (car (car x))))
 
 (defun cl-caadr (x)
   "Return the `car' of the `car' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (car (cdr x))))
 
 (defun cl-cadar (x)
   "Return the `car' of the `cdr' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (cdr (car x))))
 
 (defun cl-caddr (x)
   "Return the `car' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (cdr (cdr x))))
 
 (defun cl-cdaar (x)
   "Return the `cdr' of the `car' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (car (car x))))
 
 (defun cl-cdadr (x)
   "Return the `cdr' of the `car' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (car (cdr x))))
 
 (defun cl-cddar (x)
   "Return the `cdr' of the `cdr' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (cdr (car x))))
 
 (defun cl-cdddr (x)
   "Return the `cdr' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (cdr (cdr x))))
 
 (defun cl-caaaar (x)
   "Return the `car' of the `car' of the `car' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (car (car (car x)))))
 
 (defun cl-caaadr (x)
   "Return the `car' of the `car' of the `car' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (car (car (cdr x)))))
 
 (defun cl-caadar (x)
   "Return the `car' of the `car' of the `cdr' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (car (cdr (car x)))))
 
 (defun cl-caaddr (x)
   "Return the `car' of the `car' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (car (cdr (cdr x)))))
 
 (defun cl-cadaar (x)
   "Return the `car' of the `cdr' of the `car' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (cdr (car (car x)))))
 
 (defun cl-cadadr (x)
   "Return the `car' of the `cdr' of the `car' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (cdr (car (cdr x)))))
 
 (defun cl-caddar (x)
   "Return the `car' of the `cdr' of the `cdr' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (cdr (cdr (car x)))))
 
 (defun cl-cadddr (x)
   "Return the `car' of the `cdr' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (car (cdr (cdr (cdr x)))))
 
 (defun cl-cdaaar (x)
   "Return the `cdr' of the `car' of the `car' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (car (car (car x)))))
 
 (defun cl-cdaadr (x)
   "Return the `cdr' of the `car' of the `car' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (car (car (cdr x)))))
 
 (defun cl-cdadar (x)
   "Return the `cdr' of the `car' of the `cdr' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (car (cdr (car x)))))
 
 (defun cl-cdaddr (x)
   "Return the `cdr' of the `car' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (car (cdr (cdr x)))))
 
 (defun cl-cddaar (x)
   "Return the `cdr' of the `cdr' of the `car' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (cdr (car (car x)))))
 
 (defun cl-cddadr (x)
   "Return the `cdr' of the `cdr' of the `car' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (cdr (car (cdr x)))))
 
 (defun cl-cdddar (x)
   "Return the `cdr' of the `cdr' of the `cdr' of the `car' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (cdr (cdr (car x)))))
 
 (defun cl-cddddr (x)
   "Return the `cdr' of the `cdr' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro cl--compiler-macro-cXXr))
+  (declare (compiler-macro internal--compiler-macro-cXXr))
   (cdr (cdr (cdr (cdr x)))))
 
 ;;(defun last* (x &optional n)
@@ -628,7 +628,6 @@ Return a new alist composed by associating KEYS to corresponding VALUES;
 the process stops as soon as KEYS or VALUES run out.
 If ALIST is non-nil, the new pairs are prepended to it."
   (nconc (cl-mapcar 'cons keys values) alist))
-
 
 ;;; Generalized variables.
 
@@ -731,26 +730,11 @@ If ALIST is non-nil, the new pairs are prepended to it."
 
 ;;; Miscellaneous.
 
-;;;###autoload
-(progn
-  ;; The `assert' macro from the cl package signals
-  ;; `cl-assertion-failed' at runtime so always define it.
-  (define-error 'cl-assertion-failed (purecopy "Assertion failed"))
-  ;; Make sure functions defined with cl-defsubst can be inlined even in
-  ;; packages which do not require CL.  We don't put an autoload cookie
-  ;; directly on that function, since those cookies only go to cl-loaddefs.
-  (autoload 'cl--defsubst-expand "cl-macs")
-  ;; Autoload, so autoload.el and font-lock can use it even when CL
-  ;; is not loaded.
-  (put 'cl-defun    'doc-string-elt 3)
-  (put 'cl-defmacro 'doc-string-elt 3)
-  (put 'cl-defsubst 'doc-string-elt 3)
-  (put 'cl-defstruct 'doc-string-elt 2))
-
 (provide 'cl-lib)
-(or (load "cl-loaddefs" 'noerror 'quiet)
-    ;; When bootstrapping, cl-loaddefs hasn't been built yet!
-    (require 'cl-macs))
+(unless (load "cl-loaddefs" 'noerror 'quiet)
+  ;; When bootstrapping, cl-loaddefs hasn't been built yet!
+  (require 'cl-macs)
+  (require 'cl-seq))
 
 ;; Local variables:
 ;; byte-compile-dynamic: t

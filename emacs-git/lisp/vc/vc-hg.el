@@ -131,6 +131,17 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
   :version "23.1"
   :group 'vc-hg)
 
+(defcustom vc-hg-annotate-switches nil
+  "String or list of strings specifying switches for hg annotate under VC.
+If nil, use the value of `vc-annotate-switches'.  If t, use no
+switches."
+  :type '(choice (const :tag "Unspecified" nil)
+		 (const :tag "None" t)
+		 (string :tag "Argument String")
+		 (repeat :tag "Argument List" :value ("") string))
+  :version "25.1"
+  :group 'vc-hg)
+
 (defcustom vc-hg-program "hg"
   "Name of the Mercurial executable (excluding any arguments)."
   :type 'string
@@ -358,10 +369,11 @@ If LIMIT is non-nil, show no more than this many entries."
 (defun vc-hg-annotate-command (file buffer &optional revision)
   "Execute \"hg annotate\" on FILE, inserting the contents in BUFFER.
 Optional arg REVISION is a revision to annotate from."
-  (vc-hg-command buffer 0 file "annotate" "-d" "-n" "--follow"
-                 (when revision (concat "-r" revision))))
+  (apply #'vc-hg-command buffer 0 file "annotate" "-d" "-n" "--follow"
+	 (append (vc-switches 'hg 'annotate)
+                 (if revision (list (concat "-r" revision))))))
 
-(declare-function vc-annotate-convert-time "vc-annotate" (time))
+(declare-function vc-annotate-convert-time "vc-annotate" (&optional time))
 
 ;; The format for one line output by "hg annotate -d -n" looks like this:
 ;;215 Wed Jun 20 21:22:58 2007 -0700: CONTENTS
@@ -647,20 +659,6 @@ REV is the revision to check out into WORKFILE."
   (vc-hg-command buffer 1 nil "outgoing" "-n" (unless (string= remote-location "")
 						remote-location)))
 
-(declare-function log-view-get-marked "log-view" ())
-
-;; XXX maybe also add key bindings for these functions.
-(defun vc-hg-push ()
-  (interactive)
-  (let ((marked-list (log-view-get-marked)))
-    (if marked-list
-        (apply #'vc-hg-command
-               nil 0 nil
-               "push"
-               (apply 'nconc
-                      (mapcar (lambda (arg) (list "-r" arg)) marked-list)))
-      (error "No log entries selected for push"))))
-
 (defvar vc-hg-error-regexp-alist nil
   ;; 'hg pull' does not list modified files, so, for now, the only
   ;; benefit of `vc-compilation-mode' is that one can get rid of
@@ -670,6 +668,47 @@ REV is the revision to check out into WORKFILE."
   "Value of `compilation-error-regexp-alist' in *vc-hg* buffers.")
 
 (autoload 'vc-do-async-command "vc-dispatcher")
+(autoload 'log-view-get-marked "log-view")
+
+(defun vc-hg--pushpull (command prompt &optional obsolete)
+  "Run COMMAND (a string; either push or pull) on the current Hg branch.
+If PROMPT is non-nil, prompt for the Hg command to run.
+If OBSOLETE is non-nil, behave like the old versions of the Hg push/pull
+commands, which only operated on marked files."
+  (let (marked-list)
+    ;; The `vc-hg-pull' and `vc-hg-push' commands existed before the
+    ;; `pull'/`push' VC actions were implemented.
+    ;; The following is for backwards compatibility.
+    (if (and obsolete (setq marked-list (log-view-get-marked)))
+	(apply #'vc-hg-command
+	       nil 0 nil
+	       command
+	       (apply 'nconc
+		      (mapcar (lambda (arg) (list "-r" arg)) marked-list)))
+      (let* ((root (vc-hg-root default-directory))
+	     (buffer (format "*vc-hg : %s*" (expand-file-name root)))
+	     (hg-program vc-hg-program)
+	     ;; Fixme: before updating the working copy to the latest
+	     ;; state, should check if it's visiting an old revision.
+	     (args (if (equal command "pull") '("-u"))))
+	;; If necessary, prompt for the exact command.
+        ;; TODO if pushing, prompt if no default push location - cf bzr.
+	(when prompt
+	  (setq args (split-string
+		      (read-shell-command
+                       (format "Hg %s command: " command)
+                       (format "%s %s%s" hg-program command
+                               (if (not args) ""
+                                 (concat " " (mapconcat 'identity args " "))))
+                       'vc-hg-history)
+		      " " t))
+	  (setq hg-program (car  args)
+		command    (cadr args)
+		args       (cddr args)))
+	(apply 'vc-do-async-command buffer root hg-program command args)
+        (with-current-buffer buffer
+          (vc-run-delayed (vc-compilation-mode 'hg)))
+	(vc-set-async-update buffer)))))
 
 (defun vc-hg-pull (prompt)
   "Issue a Mercurial pull command.
@@ -681,39 +720,17 @@ specific Mercurial pull command.  The default is \"hg pull -u\",
 which fetches changesets from the default remote repository and
 then attempts to update the working directory."
   (interactive "P")
-  (let (marked-list)
-    ;; The `vc-hg-pull' command existed before the `pull' VC action
-    ;; was implemented.  Keep it for backward compatibility.
-    (if (and (called-interactively-p 'interactive)
-	     (setq marked-list (log-view-get-marked)))
-	(apply #'vc-hg-command
-	       nil 0 nil
-	       "pull"
-	       (apply 'nconc
-		      (mapcar (lambda (arg) (list "-r" arg))
-			      marked-list)))
-      (let* ((root (vc-hg-root default-directory))
-	     (buffer (format "*vc-hg : %s*" (expand-file-name root)))
-	     (command "pull")
-	     (hg-program vc-hg-program)
-	     ;; Fixme: before updating the working copy to the latest
-	     ;; state, should check if it's visiting an old revision.
-	     (args '("-u")))
-	;; If necessary, prompt for the exact command.
-	(when prompt
-	  (setq args (split-string
-		      (read-shell-command "Run Hg (like this): "
-					  (format "%s pull -u" hg-program)
-					  'vc-hg-history)
-		      " " t))
-	  (setq hg-program (car  args)
-		command    (cadr args)
-		args       (cddr args)))
-	(apply 'vc-do-async-command buffer root hg-program
-	       command args)
-        (with-current-buffer buffer
-          (vc-run-delayed (vc-compilation-mode 'hg)))
-	(vc-set-async-update buffer)))))
+  (vc-hg--pushpull "pull" prompt (called-interactively-p 'interactive)))
+
+(defun vc-hg-push (prompt)
+  "Push changes from the current Mercurial branch.
+Normally, this runs \"hg push\".  If PROMPT is non-nil, prompt
+for the Hg command to run.
+
+If called interactively with a set of marked Log View buffers,
+call \"hg push -r REVS\" to push the specified revisions REVS."
+  (interactive "P")
+  (vc-hg--pushpull "push" prompt (called-interactively-p 'interactive)))
 
 (defun vc-hg-merge-branch ()
   "Merge incoming changes into the current working directory.

@@ -106,17 +106,21 @@
 (defvar reftex-syntax-table nil)
 (defvar reftex-syntax-table-for-bib nil)
 
-(unless reftex-syntax-table
+(defun reftex--prepare-syntax-tables ()
   (setq reftex-syntax-table (copy-syntax-table))
   (modify-syntax-entry ?\( "." reftex-syntax-table)
-  (modify-syntax-entry ?\) "." reftex-syntax-table))
+  (modify-syntax-entry ?\) "." reftex-syntax-table)
 
-(unless reftex-syntax-table-for-bib
   (setq reftex-syntax-table-for-bib (copy-syntax-table))
   (modify-syntax-entry ?\' "." reftex-syntax-table-for-bib)
   (modify-syntax-entry ?\" "." reftex-syntax-table-for-bib)
   (modify-syntax-entry ?\[ "." reftex-syntax-table-for-bib)
-  (modify-syntax-entry ?\] "." reftex-syntax-table-for-bib))
+  (modify-syntax-entry ?\] "." reftex-syntax-table-for-bib)
+  (modify-syntax-entry ?\( "." reftex-syntax-table-for-bib)
+  (modify-syntax-entry ?\) "." reftex-syntax-table-for-bib))
+
+(unless (and reftex-syntax-table reftex-syntax-table-for-bib)
+  (reftex--prepare-syntax-tables))
 
 ;; The following definitions are out of place, but I need them here
 ;; to make the compilation of reftex-mode not complain.
@@ -180,15 +184,7 @@ on the menu bar.
           (put 'reftex-auto-recenter-toc 'initialized t))
 
         ;; Prepare the special syntax tables.
-        (setq reftex-syntax-table (copy-syntax-table (syntax-table)))
-        (modify-syntax-entry ?\( "." reftex-syntax-table)
-        (modify-syntax-entry ?\) "." reftex-syntax-table)
-
-        (setq reftex-syntax-table-for-bib (copy-syntax-table))
-        (modify-syntax-entry ?\' "." reftex-syntax-table-for-bib)
-        (modify-syntax-entry ?\" "." reftex-syntax-table-for-bib)
-        (modify-syntax-entry ?\[ "." reftex-syntax-table-for-bib)
-        (modify-syntax-entry ?\] "." reftex-syntax-table-for-bib)
+	(reftex--prepare-syntax-tables)
 
         (run-hooks 'reftex-mode-hook))
     ;; Mode was turned off
@@ -2450,7 +2446,7 @@ of ENTRY-LIST is a list of cons cells (\"MACRONAME\" . LEVEL).  See
 
 ;;;***
 
-;;;### (autoloads nil "reftex-cite" "reftex-cite.el" "5a53c260fa01268c04ea2f558add9d7d")
+;;;### (autoloads nil "reftex-cite" "reftex-cite.el" "83811ccf3471820f0ad0dc005ffc88d5")
 ;;; Generated autoloads from reftex-cite.el
 
 (autoload 'reftex-default-bibliography "reftex-cite" "\
@@ -2680,7 +2676,7 @@ With no argument, this command toggles
 
 ;;;***
 
-;;;### (autoloads nil "reftex-index" "reftex-index.el" "d80e84d499050e32569a454d8db16861")
+;;;### (autoloads nil "reftex-index" "reftex-index.el" "29cb6e91c2e06592053e9d543f30f0ea")
 ;;; Generated autoloads from reftex-index.el
 
 (autoload 'reftex-index-selection-or-word "reftex-index" "\
@@ -2936,7 +2932,7 @@ When LEVEL is non-nil, increase section numbers on that level.
 
 ;;;***
 
-;;;### (autoloads nil "reftex-ref" "reftex-ref.el" "64cd7a4eaec426177a8fb3689139d935")
+;;;### (autoloads nil "reftex-ref" "reftex-ref.el" "2689a4cea701a9d284e0967c313da989")
 ;;; Generated autoloads from reftex-ref.el
 
 (autoload 'reftex-label-location "reftex-ref" "\
@@ -3050,7 +3046,7 @@ During a selection process, these are the local bindings.
 
 ;;;***
 
-;;;### (autoloads nil "reftex-toc" "reftex-toc.el" "e04344fac7ba4c2043439e130bdd283f")
+;;;### (autoloads nil "reftex-toc" "reftex-toc.el" "70daa7ce5ba54f2c8d469337f64636c1")
 ;;; Generated autoloads from reftex-toc.el
 
 (autoload 'reftex-toc "reftex-toc" "\

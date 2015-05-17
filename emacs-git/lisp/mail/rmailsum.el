@@ -1,7 +1,6 @@
-;;; rmailsum.el --- make summary buffers for the mail reader
+;;; rmailsum.el --- make summary buffers for the mail reader  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985, 1993-1996, 2000-2015 Free Software Foundation,
-;; Inc.
+;; Copyright (C) 1985, 1993-1996, 2000-2015 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: mail
@@ -263,7 +262,7 @@ Setting this option to nil might speed up the generation of summaries."
 ;; Regenerate the contents of the summary
 ;; using the same selection criterion as last time.
 ;; M-x revert-buffer in a summary buffer calls this function.
-(defun rmail-update-summary (&rest ignore)
+(defun rmail-update-summary (&rest _)
   (apply (car rmail-summary-redo) (cdr rmail-summary-redo)))
 
 ;;;###autoload
@@ -341,13 +340,30 @@ Emacs will list the message in the summary."
   "Return t, if for message number MSG, regexp REGEXP matches in the header."
   (rmail-apply-in-message msg 'rmail-message-regexp-p-1 msg regexp))
 
+(defun rmail--decode-and-apply (function &rest args)
+  "Make an RFC2047-decoded copy of current buffer, apply FUNCTION with ARGS."
+  (let ((buff (current-buffer)))
+    (with-temp-buffer
+      (insert-buffer-substring buff)
+      (goto-char (point-min))
+      ;; FIXME?  In rmail-show-message-1, decoding depends on
+      ;; rmail-enable-mime being non-nil (?).
+      (rfc2047-decode-region (point-min)
+			     (save-excursion
+			       (progn
+				 (search-forward "\n\n" nil 'move)
+				 (point))))
+      (apply function args))))
+
 (defun rmail-message-regexp-p-1 (msg regexp)
   ;; Search functions can expect to start from the beginning.
   (narrow-to-region (point) (save-excursion (search-forward "\n\n") (point)))
   (if (and rmail-enable-mime
 	   rmail-search-mime-header-function)
       (funcall rmail-search-mime-header-function msg regexp (point))
-    (re-search-forward regexp nil t)))
+    ;; We need to search the full headers, but probably want to decode
+    ;; them so they match the ones people see displayed.  (Bug#19088)
+    (rmail--decode-and-apply 're-search-forward regexp nil t)))
 
 ;;;###autoload
 (defun rmail-summary-by-topic (subject &optional whole-message)
@@ -371,7 +387,9 @@ SUBJECT is a string of regexps separated by commas."
 
 (defun rmail-message-subject-p (msg subject &optional whole-message)
   (if whole-message
-      (rmail-apply-in-message msg 're-search-forward subject nil t)
+      ;; SUBJECT and rmail-simplified-subject are 2047 decoded.
+      (rmail-apply-in-message msg 'rmail--decode-and-apply
+			      're-search-forward subject nil t)
     (string-match subject (rmail-simplified-subject msg))))
 
 ;;;###autoload
@@ -656,7 +674,7 @@ LINES is the number of lines in the message (if we should display that)
   (goto-char (point-min))
   (let ((line (rmail-header-summary))
 	(labels (rmail-get-summary-labels))
-	pos status prefix basic-start basic-end linecount-string)
+        status prefix basic-start basic-end linecount-string)
 
     (setq linecount-string
 	  (cond
@@ -728,7 +746,7 @@ the message being processed."
 				 ;; Get all the lines of the From field
 				 ;; so that we get a whole comment if there is one,
 				 ;; so that mail-strip-quoted-names can discard it.
-				 (let ((opoint (point)))
+				 (progn
 				   (while (progn (forward-line 1)
 						 (looking-at "[ \t]")))
 				   ;; Back up over newline, then trailing spaces or tabs
@@ -791,7 +809,7 @@ the message being processed."
 		 (forward-line 1)
 		 (setq str (buffer-substring pos (1- (point))))
 		 (while (looking-at "[ \t]")
-		   (setq str (concat str " " 
+		   (setq str (concat str " "
 				     (buffer-substring (match-end 0)
 						       (line-end-position))))
 		   (forward-line 1))
@@ -804,7 +822,8 @@ the message being processed."
 
 (defun rmail-summary-next-all (&optional number)
   (interactive "p")
-  (forward-line (if number number 1))
+  (or number (setq number 1))
+  (forward-line number)
   ;; It doesn't look nice to move forward past the last message line.
   (and (eobp) (> number 0)
        (forward-line -1))
@@ -812,17 +831,14 @@ the message being processed."
 
 (defun rmail-summary-previous-all (&optional number)
   (interactive "p")
-  (forward-line (- (if number number 1)))
-  ;; It doesn't look nice to move forward past the last message line.
-  (and (eobp) (< number 0)
-       (forward-line -1))
-  (display-buffer rmail-buffer))
+  (rmail-summary-next-all (- (or number 1))))
 
 (defun rmail-summary-next-msg (&optional number)
   "Display next non-deleted msg from rmail file.
 With optional prefix argument NUMBER, moves forward this number of non-deleted
 messages, or backward if NUMBER is negative."
   (interactive "p")
+  (or number (setq number 1))
   (forward-line 0)
   (and (> number 0) (end-of-line))
   (let ((count (if (< number 0) (- number) number))
@@ -840,7 +856,7 @@ messages, or backward if NUMBER is negative."
 With optional prefix argument NUMBER, moves backward this number of
 non-deleted messages."
   (interactive "p")
-  (rmail-summary-next-msg (- (if number number 1))))
+  (rmail-summary-next-msg (- (or number 1))))
 
 (defun rmail-summary-next-labeled-message (n labels)
   "Show next message with LABELS.  Defaults to last labels used.
@@ -912,8 +928,8 @@ A prefix argument serves as a repeat count;
 a negative argument means to delete and move backward."
   (interactive "p")
   (unless (numberp count) (setq count 1))
-  (let (end del-msg
-	    (backward (< count 0)))
+  (let (del-msg
+        (backward (< count 0)))
     (while (and (/= count 0)
 		;; Don't waste time if we are at the beginning
 		;; and trying to go backward.
@@ -1032,7 +1048,7 @@ Optional prefix ARG means undelete ARG previous messages."
 	  (forward-line 1))
 	(setq n (1- n)))
     (rmail-summary-goto-msg 1)
-    (dotimes (i rmail-total-messages)
+    (dotimes (_ rmail-total-messages)
       (rmail-summary-goto-msg)
       (let (del-msg)
 	(when (rmail-summary-deleted-p)

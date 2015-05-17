@@ -374,8 +374,7 @@ font_style_to_value (enum font_property_index prop, Lisp_Object val,
       elt = Fmake_vector (make_number (2), make_number (100));
       ASET (elt, 1, val);
       ASET (font_style_table, prop - FONT_WEIGHT_INDEX,
-	    Fvconcat (2, ((Lisp_Object [])
-	      { table, Fmake_vector (make_number (1), elt) })));
+	    CALLN (Fvconcat, table, Fmake_vector (make_number (1), elt)));
       return (100 << 8) | (i << 4);
     }
   else
@@ -989,15 +988,14 @@ font_expand_wildcards (Lisp_Object *field, int n)
 	  if (i == 0 || ! NILP (tmp[i - 1]))
 	    /* None of TMP[X] corresponds to Jth field.  */
 	    return -1;
-	  for (; j < range[i].from; j++)
-	    field[j] = Qnil;
+	  memclear (field + j, (range[i].from - j) * word_size);
+	  j = range[i].from;
 	}
       field[j++] = tmp[i];
     }
   if (! NILP (tmp[n - 1]) && j < XLFD_REGISTRY_INDEX)
     return -1;
-  for (; j < XLFD_LAST_INDEX; j++)
-    field[j] = Qnil;
+  memclear (field + j, (XLFD_LAST_INDEX - j) * word_size);
   if (INTEGERP (field[XLFD_ENCODING_INDEX]))
     field[XLFD_ENCODING_INDEX]
       = Fintern (Fnumber_to_string (field[XLFD_ENCODING_INDEX]), Qnil);
@@ -2138,7 +2136,6 @@ font_score (Lisp_Object entity, Lisp_Object *spec_prop)
       }
 
   /* Score the size.  Maximum difference is 127.  */
-  i = FONT_SIZE_INDEX;
   if (! NILP (spec_prop[FONT_SIZE_INDEX])
       && XINT (AREF (entity, FONT_SIZE_INDEX)) > 0)
     {
@@ -3401,16 +3398,11 @@ font_open_by_spec (struct frame *f, Lisp_Object spec)
 Lisp_Object
 font_open_by_name (struct frame *f, Lisp_Object name)
 {
-  Lisp_Object args[2];
-  Lisp_Object spec, ret;
-
-  args[0] = QCname;
-  args[1] = name;
-  spec = Ffont_spec (2, args);
-  ret = font_open_by_spec (f, spec);
+  Lisp_Object spec = CALLN (Ffont_spec, QCname, name);
+  Lisp_Object ret = font_open_by_spec (f, spec);
   /* Do not lose name originally put in.  */
   if (!NILP (ret))
-    font_put_extra (ret, QCuser_spec, args[1]);
+    font_put_extra (ret, QCuser_spec, name);
 
   return ret;
 }
@@ -3714,10 +3706,10 @@ font_at (int c, ptrdiff_t pos, struct face *face, struct window *w,
 
       if (STRINGP (string))
 	face_id = face_at_string_position (w, string, pos, 0, &endptr,
-					   DEFAULT_FACE_ID, 0);
+					   DEFAULT_FACE_ID, false);
       else
 	face_id = face_at_buffer_position (w, pos, &endptr,
-					   pos + 100, 0, -1);
+					   pos + 100, false, -1);
       face = FACE_FROM_ID (f, face_id);
     }
   if (multibyte)
@@ -3761,7 +3753,7 @@ font_range (ptrdiff_t pos, ptrdiff_t pos_byte, ptrdiff_t *limit,
 	  int face_id;
 
 	  face_id = face_at_buffer_position (w, pos, &ignore,
-					     *limit, 0, -1);
+					     *limit, false, -1);
 	  face = FACE_FROM_ID (XFRAME (w->frame), face_id);
 	}
     }
@@ -4182,13 +4174,7 @@ how close they are to PREFER.  */)
   else
     vec = font_vconcat_entity_vectors (list);
   if (n == 0 || n >= ASIZE (vec))
-    {
-      Lisp_Object args[2];
-
-      args[0] = vec;
-      args[1] = Qnil;
-      list = Fappend (2, args);
-    }
+    list = CALLN (Fappend, vec, Qnil);
   else
     {
       for (list = Qnil, n--; n >= 0; n--)

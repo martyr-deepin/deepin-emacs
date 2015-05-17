@@ -263,7 +263,7 @@ This command assumes point is not in a string or comment."
           (backward-up-list arg)
           (kill-sexp)
           (insert current-sexp))
-      (error "Not at a sexp"))))
+      (user-error "Not at a sexp"))))
 
 (defvar beginning-of-defun-function nil
   "If non-nil, function for `beginning-of-defun-raw' to call.
@@ -714,7 +714,8 @@ character."
   (condition-case data
       ;; Buffer can't have more than (point-max) sexps.
       (scan-sexps (point-min) (point-max))
-    (scan-error (goto-char (nth 2 data))
+    (scan-error (push-mark)
+		(goto-char (nth 2 data))
 		;; Could print (nth 1 data), which is either
 		;; "Containing expression ends prematurely" or
 		;; "Unbalanced parentheses", but those may not be so
@@ -735,22 +736,19 @@ character."
         )
     (call-interactively 'minibuffer-complete)))
 
-(defun lisp-complete-symbol (&optional predicate)
+(defun lisp-complete-symbol (&optional _predicate)
   "Perform completion on Lisp symbol preceding point.
 Compare that symbol against the known Lisp symbols.
 If no characters can be completed, display a list of possible completions.
 Repeating the command at that point scrolls the list.
 
-When called from a program, optional arg PREDICATE is a predicate
-determining which symbols are considered, e.g. `commandp'.
-If PREDICATE is nil, the context determines which symbols are
-considered.  If the symbol starts just after an open-parenthesis, only
-symbols with function definitions are considered.  Otherwise, all
-symbols with function definitions, values or properties are
-considered."
+The context determines which symbols are considered.  If the
+symbol starts just after an open-parenthesis, only symbols with
+function definitions are considered.  Otherwise, all symbols with
+function definitions, values or properties are considered."
   (declare (obsolete completion-at-point "24.4"))
   (interactive)
-  (let* ((data (lisp-completion-at-point predicate))
+  (let* ((data (lisp-completion-at-point))
          (plist (nthcdr 3 data)))
     (if (null data)
         (minibuffer-message "Nothing to complete")

@@ -308,7 +308,7 @@ file the tag was in."
     (save-excursion
       (or (visit-tags-table-buffer file)
 	  (signal 'file-error (list "Visiting tags table"
-				    "file does not exist"
+				    "No such file or directory"
 				    file)))
       ;; Set FILE to the expanded name.
       (setq file tags-file-name)))
@@ -947,6 +947,7 @@ onto a ring and may be popped back to with \\[pop-tag-mark].
 Contrast this with the ring of marks gone to by the command.
 
 See documentation of variable `tags-file-name'."
+  (declare (obsolete xref-find-definitions "25.1"))
   (interactive (find-tag-interactive "Find tag: "))
   (let* ((buf (find-tag-noselect tagname next-p regexp-p))
 	 (pos (with-current-buffer buf (point))))
@@ -2073,11 +2074,27 @@ for \\[find-tag] (which see)."
 ;; we hit the limit rarely.
 (defconst etags--xref-limit 1000)
 
+(defvar etags-xref-find-definitions-tag-order '(tag-exact-match-p
+                                                tag-implicit-name-match-p)
+  "Tag order used in `etags-xref-find' to look for definitions.")
+
 ;;;###autoload
 (defun etags-xref-find (action id)
   (pcase action
     (`definitions (etags--xref-find-definitions id))
+    (`references (etags--xref-find-matches id 'symbol))
+    (`matches (etags--xref-find-matches id 'regexp))
     (`apropos (etags--xref-find-definitions id t))))
+
+(defun etags--xref-find-matches (input kind)
+  (let ((dirs (if tags-table-list
+                  (mapcar #'file-name-directory tags-table-list)
+                ;; If no tags files are loaded, prompt for the dir.
+                (list (read-directory-name "In directory: " nil nil t)))))
+    (cl-mapcan
+     (lambda (dir)
+       (xref-collect-matches input dir kind))
+     dirs)))
 
 (defun etags--xref-find-definitions (pattern &optional regexp?)
   ;; This emulates the behaviour of `find-tag-in-order' but instead of
@@ -2094,22 +2111,44 @@ for \\[find-tag] (which see)."
       (while (visit-tags-table-buffer (not first-time))
         (setq first-time nil)
         (dolist (order-fun (cond (regexp? find-tag-regexp-tag-order)
-                                 (t find-tag-tag-order)))
+                                 (t etags-xref-find-definitions-tag-order)))
           (goto-char (point-min))
           (while (and (funcall search-fun pattern nil t)
                       (< (hash-table-count marks) etags--xref-limit))
             (when (funcall order-fun pattern)
               (beginning-of-line)
-              (cl-destructuring-bind (hint line &rest pos) (etags-snarf-tag)
+              (pcase-let* ((tag-info (etags-snarf-tag))
+                           (`(,hint ,line . _) tag-info))
                 (unless (eq hint t) ; hint==t if we are in a filename line
                   (let* ((file (file-of-tag))
                          (mark-key (cons file line)))
                     (unless (gethash mark-key marks)
-                      (let ((loc (xref-make-file-location
-                                  (expand-file-name file) line 0)))
+                      (let ((loc (xref-make-etags-location
+                                  tag-info (expand-file-name file))))
                         (push (xref-make hint loc) xrefs)
                         (puthash mark-key t marks)))))))))))
     (nreverse xrefs)))
+
+(defclass xref-etags-location (xref-location)
+  ((tag-info :type list   :initarg :tag-info)
+   (file     :type string :initarg :file
+             :reader xref-location-group))
+  :documentation "Location of an etags tag.")
+
+(defun xref-make-etags-location (tag-info file)
+  (make-instance 'xref-etags-location :tag-info tag-info
+                 :file (expand-file-name file)))
+
+(cl-defmethod xref-location-marker ((l xref-etags-location))
+  (with-slots (tag-info file) l
+    (let ((buffer (find-file-noselect file)))
+      (with-current-buffer buffer
+        (etags-goto-tag-location tag-info)
+        (point-marker)))))
+
+(cl-defmethod xref-location-line ((l xref-etags-location))
+  (with-slots (tag-info) l
+    (nth 1 tag-info)))
 
 
 (provide 'etags)

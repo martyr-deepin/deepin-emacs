@@ -476,7 +476,7 @@ status of this file.  Otherwise, the value returned is one of:
   ;; - `copied' and `moved' (might be handled by `removed' and `added')
   (or (vc-file-getprop file 'vc-state)
       (when (> (length file) 0)         ;Why??  --Stef
-	(setq backend (or backend (vc-backend file)))
+	(setq backend (or backend (vc-responsible-backend file)))
 	(when backend
           (vc-state-refresh file backend)))))
 
@@ -495,7 +495,7 @@ status of this file.  Otherwise, the value returned is one of:
 If FILE is not registered, this function always returns nil."
   (or (vc-file-getprop file 'vc-working-revision)
       (progn
-	(setq backend (or backend (vc-backend file)))
+	(setq backend (or backend (vc-responsible-backend file)))
 	(when backend
 	  (vc-file-setprop file 'vc-working-revision
 			   (vc-call-backend backend 'working-revision file))))))
@@ -883,6 +883,8 @@ current, and kill the buffer that visits the link."
     (define-key map "u" 'vc-revert)
     (define-key map "v" 'vc-next-action)
     (define-key map "+" 'vc-update)
+    ;; I'd prefer some kind of symmetry with vc-update:
+    (define-key map "P" 'vc-push)
     (define-key map "=" 'vc-diff)
     (define-key map "D" 'vc-root-diff)
     (define-key map "~" 'vc-revision-other-window)
@@ -940,6 +942,10 @@ current, and kill the buffer that visits the link."
     (bindings--define-key map [vc-revert]
       '(menu-item "Revert to Base Version" vc-revert
 		  :help "Revert working copies of the selected file set to their repository contents"))
+    ;; TODO Only :enable if (vc-find-backend-function backend 'push)
+    (bindings--define-key map [vc-push]
+      '(menu-item "Push Changes" vc-push
+		  :help "Push the current branch's changes"))
     (bindings--define-key map [vc-update]
       '(menu-item "Update to Latest Version" vc-update
 		  :help "Update the current fileset's files to their tip revisions"))

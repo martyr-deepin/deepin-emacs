@@ -2850,11 +2850,16 @@ Any other value means to ask for each directory."
 ;; to e.g. recursive-delete-file and put it somewhere else.
 (defun dired-delete-file (file &optional recursive trash) "\
 Delete FILE or directory (possibly recursively if optional RECURSIVE is true.)
-RECURSIVE determines what to do with a non-empty directory.  If RECURSIVE is:
-nil, do not delete.
-`always', delete recursively without asking.
-`top', ask for each directory at top level.
-Anything else, ask for each sub-directory."
+RECURSIVE determines what to do with a non-empty directory.  The effect of
+its possible values is:
+
+  nil           -- do not delete.
+  `always'      -- delete recursively without asking.
+  `top'         -- ask for each directory at top level.
+  Anything else -- ask for each sub-directory.
+
+TRASH non-nil means to trash the file instead of deleting, provided
+`delete-by-moving-to-trash' (which see) is non-nil."
   ;; This test is equivalent to
   ;; (and (file-directory-p fn) (not (file-symlink-p fn)))
   ;; but more efficient
@@ -3884,7 +3889,7 @@ Ask means pop up a menu for the user to select one of copy, move or link."
 
 ;;; Start of automatically extracted autoloads.
 
-;;;### (autoloads nil "dired-aux" "dired-aux.el" "65f8aa57ace423283926d92dff903ca7")
+;;;### (autoloads nil "dired-aux" "dired-aux.el" "8820677763cb69eef827e38b86d35f47")
 ;;; Generated autoloads from dired-aux.el
 
 (autoload 'dired-diff "dired-aux" "\

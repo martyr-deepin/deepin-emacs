@@ -849,9 +849,9 @@ ns_cursor_type_to_lisp (int arg)
   switch (arg)
     {
     case FILLED_BOX_CURSOR: return Qbox;
-    case HOLLOW_BOX_CURSOR: return intern ("hollow");
-    case HBAR_CURSOR:	    return intern ("hbar");
-    case BAR_CURSOR:	    return intern ("bar");
+    case HOLLOW_BOX_CURSOR: return Qhollow;
+    case HBAR_CURSOR:	    return Qhbar;
+    case BAR_CURSOR:	    return Qbar;
     case NO_CURSOR:
     default:		    return intern ("no");
     }
@@ -1075,7 +1075,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
   Lisp_Object name;
   int minibuffer_only = 0;
   long window_prompting = 0;
-  int width, height;
   ptrdiff_t count = specpdl_ptr - specpdl;
   struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
   Lisp_Object display;
@@ -1455,6 +1454,15 @@ ns_run_file_dialog (void)
   ns_fd_data.panel = nil;
 }
 
+#ifdef NS_IMPL_COCOA
+#if MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_9
+#define MODAL_OK_RESPONSE NSModalResponseOK
+#endif
+#endif
+#ifndef MODAL_OK_RESPONSE
+#define MODAL_OK_RESPONSE NSOKButton
+#endif
+
 DEFUN ("ns-read-file-name", Fns_read_file_name, Sns_read_file_name, 1, 5, 0,
        doc: /* Use a graphical panel to read a file name, using prompt PROMPT.
 Optional arg DIR, if non-nil, supplies a default directory.
@@ -1466,10 +1474,9 @@ Optional arg DIR_ONLY_P, if non-nil, means choose only directories.  */)
    Lisp_Object init, Lisp_Object dir_only_p)
 {
   static id fileDelegate = nil;
-  BOOL ret;
   BOOL isSave = NILP (mustmatch) && NILP (dir_only_p);
   id panel;
-  Lisp_Object fname;
+  Lisp_Object fname = Qnil;
 
   NSString *promptS = NILP (prompt) || !STRINGP (prompt) ? nil :
     [NSString stringWithUTF8String: SSDATA (prompt)];
@@ -1549,20 +1556,17 @@ Optional arg DIR_ONLY_P, if non-nil, means choose only directories.  */)
   while (ns_fd_data.panel != nil)
     [NSApp run];
 
-  ret = (ns_fd_data.ret == NSOKButton);
-
-  if (ret)
+  if (ns_fd_data.ret == MODAL_OK_RESPONSE)
     {
       NSString *str = ns_filename_from_panel (panel);
       if (! str) str = ns_directory_from_panel (panel);
-      if (! str) ret = NO;
-      else fname = build_string ([str UTF8String]);
+      if (str) fname = build_string ([str UTF8String]);
     }
 
   [[FRAME_NS_VIEW (SELECTED_FRAME ()) window] makeKeyWindow];
   unblock_input ();
 
-  return ret ? fname : Qnil;
+  return fname;
 }
 
 const char *
@@ -2677,7 +2681,16 @@ compute_tip_xy (struct frame *f,
       pt.y = dpyinfo->last_mouse_motion_y;
       /* Convert to screen coordinates */
       pt = [view convertPoint: pt toView: nil];
+#if !defined (NS_IMPL_COCOA) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_7
       pt = [[view window] convertBaseToScreen: pt];
+#else
+      {
+        NSRect r = NSMakeRect (pt.x, pt.y, 0, 0);
+        r = [[view window] convertRectToScreen: r];
+        pt.x = r.origin.x;
+        pt.y = r.origin.y;
+      }
+#endif
     }
   else
     {
@@ -2804,6 +2817,87 @@ Value is t if tooltip was open, nil otherwise.  */)
     return Qnil;
   [ns_tooltip hide];
   return Qt;
+}
+
+DEFUN ("x-frame-geometry", Fx_frame_geometry, Sx_frame_geometry, 0, 1, 0,
+       doc: /* Return geometric attributes of frame FRAME.
+
+FRAME must be a live frame and defaults to the selected one.
+
+The return value is an association list containing the following
+elements (all size values are in pixels).
+
+- `frame-outer-size' is a cons of the outer width and height of FRAME.
+  The outer size include the title bar and the external borders as well
+  as any menu and/or tool bar of frame.
+
+- `border' is a cons of the horizontal and vertical width of FRAME's
+  external borders.
+
+- `title-bar-height' is the height of the title bar of FRAME.
+
+- `menu-bar-external' if `t' means the menu bar is external (not
+  included in the inner edges of FRAME).
+
+- `menu-bar-size' is a cons of the width and height of the menu bar of
+  FRAME.
+
+- `tool-bar-external' if `t' means the tool bar is external (not
+  included in the inner edges of FRAME).
+
+- `tool-bar-side' tells tells on which side the tool bar on FRAME is and
+  can be one of `left', `top', `right' or `bottom'.
+
+- `tool-bar-size' is a cons of the width and height of the tool bar of
+  FRAME.
+
+- `frame-inner-size' is a cons of the inner width and height of FRAME.
+  This excludes FRAME's title bar and external border as well as any
+  external menu and/or tool bar.  */)
+  (Lisp_Object frame)
+{
+  struct frame *f = decode_live_frame (frame);
+  int inner_width = FRAME_PIXEL_WIDTH (f);
+  int inner_height = FRAME_PIXEL_HEIGHT (f);
+  Lisp_Object fullscreen = Fframe_parameter (frame, Qfullscreen);
+  int border = f->border_width;
+  int title = FRAME_NS_TITLEBAR_HEIGHT (f);
+  int outer_width = FRAME_PIXEL_WIDTH (f) + 2 * border;
+  int outer_height = FRAME_PIXEL_HEIGHT (f) + 2 * border;
+  int tool_bar_height = FRAME_TOOLBAR_HEIGHT (f);
+  int tool_bar_width = tool_bar_height > 0
+    ? outer_width - 2 * FRAME_INTERNAL_BORDER_WIDTH (f)
+    : 0;
+  // Always 0 on NS.
+  int menu_bar_height = 0;
+  int menu_bar_width = 0;
+
+  return
+    listn (CONSTYPE_HEAP, 10,
+	   Fcons (Qframe_position,
+		  Fcons (make_number (f->left_pos), make_number (f->top_pos))),
+	   Fcons (Qframe_outer_size,
+		  Fcons (make_number (outer_width), make_number (outer_height))),
+	   Fcons (Qexternal_border_size,
+		  ((EQ (fullscreen, Qfullboth) || EQ (fullscreen, Qfullscreen))
+		   ? Fcons (make_number (0), make_number (0))
+		   : Fcons (make_number (border), make_number (border)))),
+           Fcons (Qtitle_height,
+		  ((EQ (fullscreen, Qfullboth) || EQ (fullscreen, Qfullscreen))
+		   ? make_number (0)
+		   : make_number (title))),
+	   Fcons (Qmenu_bar_external, FRAME_EXTERNAL_MENU_BAR (f) ? Qt : Qnil),
+	   Fcons (Qmenu_bar_size,
+		  Fcons (make_number (menu_bar_width),
+			 make_number (menu_bar_height))),
+	   Fcons (Qtool_bar_external, FRAME_EXTERNAL_TOOL_BAR (f) ? Qt : Qnil),
+	   Fcons (Qtool_bar_position, FRAME_TOOL_BAR_POSITION (f)),
+	   Fcons (Qtool_bar_size,
+		  Fcons (make_number (tool_bar_width),
+			 make_number (tool_bar_height))),
+	   Fcons (Qframe_inner_size,
+		  Fcons (make_number (inner_width),
+			 make_number (inner_height))));
 }
 
 
@@ -2989,6 +3083,7 @@ be used as the image of the icon representing the frame.  */);
   defsubr (&Sx_display_pixel_width);
   defsubr (&Sx_display_pixel_height);
   defsubr (&Sns_display_monitor_attributes_list);
+  defsubr (&Sx_frame_geometry);
   defsubr (&Sx_display_mm_width);
   defsubr (&Sx_display_mm_height);
   defsubr (&Sx_display_screens);

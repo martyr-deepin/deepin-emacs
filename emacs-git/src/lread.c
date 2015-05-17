@@ -28,6 +28,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <sys/file.h>
 #include <errno.h>
 #include <limits.h>	/* For CHAR_BIT.  */
+#include <math.h>
 #include <stat-time.h>
 #include "lisp.h"
 #include "intervals.h"
@@ -947,7 +948,7 @@ load_warn_old_style_backquotes (Lisp_Object file)
   if (!NILP (Vold_style_backquotes))
     {
       AUTO_STRING (format, "Loading `%s': old-style backquotes detected!");
-      Fmessage (2, (Lisp_Object []) {format, file});
+      CALLN (Fmessage, format, file);
     }
 }
 
@@ -1032,12 +1033,8 @@ Return t if the file exists and loads successfully.  */)
   bool compiled = 0;
   Lisp_Object handler;
   bool safe_p = 1;
-  const char *fmode = "r";
+  const char *fmode = "r" FOPEN_TEXT;
   int version;
-
-#ifdef DOS_NT
-  fmode = "rt";
-#endif /* DOS_NT */
 
   CHECK_STRING (file);
 
@@ -1100,12 +1097,7 @@ Return t if the file exists and loads successfully.  */)
 	{
 	  suffixes = Fget_load_suffixes ();
 	  if (NILP (must_suffix))
-	    {
-	      Lisp_Object arg[2];
-	      arg[0] = suffixes;
-	      arg[1] = Vload_file_rep_suffixes;
-	      suffixes = Fappend (2, arg);
-	    }
+	    suffixes = CALLN (Fappend, suffixes, Vload_file_rep_suffixes);
 	}
 
       fd = openp (Vload_path, file, suffixes, &found, Qnil, load_prefer_newer);
@@ -1227,10 +1219,7 @@ Return t if the file exists and loads successfully.  */)
 	  compiled = 1;
 
 	  efound = ENCODE_FILE (found);
-
-#ifdef DOS_NT
-	  fmode = "rb";
-#endif /* DOS_NT */
+	  fmode = "r" FOPEN_BINARY;
 
           /* openp already checked for newness, no point doing it again.
              FIXME would be nice to get a message when openp
@@ -3035,7 +3024,7 @@ read1 (Lisp_Object readcharfun, int *pch, bool first_in_list)
 
 		ch = read_escape (readcharfun, 1);
 
-		/* CH is -1 if \ newline has just been seen.  */
+		/* CH is -1 if \ newline or \ space has just been seen.  */
 		if (ch == -1)
 		  {
 		    if (p == read_buffer)
@@ -3291,7 +3280,7 @@ substitute_object_recurse (Lisp_Object object, Lisp_Object placeholder, Lisp_Obj
     {
     case Lisp_Vectorlike:
       {
-	ptrdiff_t i, length = 0;
+	ptrdiff_t i = 0, length = 0;
 	if (BOOL_VECTOR_P (subtree))
 	  return subtree;		/* No sub-objects anyway.  */
 	else if (CHAR_TABLE_P (subtree) || SUB_CHAR_TABLE_P (subtree)
@@ -3306,7 +3295,9 @@ substitute_object_recurse (Lisp_Object object, Lisp_Object placeholder, Lisp_Obj
 	     behavior.  */
 	  wrong_type_argument (Qsequencep, subtree);
 
-	for (i = 0; i < length; i++)
+	if (SUB_CHAR_TABLE_P (subtree))
+	  i = 2;
+	for ( ; i < length; i++)
 	  SUBSTITUTE (AREF (subtree, i),
 		      ASET (subtree, i, true_value));
 	return subtree;
@@ -3374,10 +3365,6 @@ string_to_number (char const *string, int base, bool ignore_trailing)
   bool float_syntax = 0;
   double value = 0;
 
-  /* Compute NaN and infinities using a variable, to cope with compilers that
-     think they are smarter than we are.  */
-  double zero = 0;
-
   /* Negate the value ourselves.  This treats 0, NaNs, and infinity properly on
      IEEE floating point hosts, and works around a formerly-common bug where
      atof ("-0.0") drops the sign.  */
@@ -3429,30 +3416,15 @@ string_to_number (char const *string, int base, bool ignore_trailing)
 	    {
 	      state |= E_EXP;
 	      cp += 3;
-	      value = 1.0 / zero;
+	      value = INFINITY;
 	    }
 	  else if (cp[-1] == '+'
 		   && cp[0] == 'N' && cp[1] == 'a' && cp[2] == 'N')
 	    {
 	      state |= E_EXP;
 	      cp += 3;
-	      value = zero / zero;
-
-	      /* If that made a "negative" NaN, negate it.  */
-	      {
-		int i;
-		union { double d; char c[sizeof (double)]; }
-		  u_data, u_minus_zero;
-		u_data.d = value;
-		u_minus_zero.d = -0.0;
-		for (i = 0; i < sizeof (double); i++)
-		  if (u_data.c[i] & u_minus_zero.c[i])
-		    {
-		      value = -value;
-		      break;
-		    }
-	      }
-	      /* Now VALUE is a positive NaN.  */
+	      /* NAN is a "positive" NaN on all known Emacs hosts.  */
+	      value = NAN;
 	    }
 	  else
 	    cp = ecp;
@@ -3806,8 +3778,11 @@ intern_1 (const char *str, ptrdiff_t len)
   Lisp_Object obarray = check_obarray (Vobarray);
   Lisp_Object tem = oblookup (obarray, str, len, len);
 
-  return SYMBOLP (tem) ? tem : intern_driver (make_string (str, len),
-					      obarray, tem);
+  return (SYMBOLP (tem) ? tem
+	  /* The above `oblookup' was done on the basis of nchars==nbytes, so
+	     the string has to be unibyte.  */
+	  : intern_driver (make_unibyte_string (str, len),
+			   obarray, tem));
 }
 
 Lisp_Object
@@ -4401,12 +4376,10 @@ init_lread (void)
           /* Replace nils from EMACSLOADPATH by default.  */
           while (CONSP (elpath))
             {
-              Lisp_Object arg[2];
               elem = XCAR (elpath);
               elpath = XCDR (elpath);
-              arg[0] = Vload_path;
-              arg[1] = NILP (elem) ? default_lpath : Fcons (elem, Qnil);
-              Vload_path = Fappend (2, arg);
+              Vload_path = CALLN (Fappend, Vload_path,
+				  NILP (elem) ? default_lpath : list1 (elem));
             }
         }                       /* Fmemq (Qnil, Vload_path) */
     }
@@ -4619,8 +4592,10 @@ of the file, regardless of whether or not it has the `.elc' extension.  */);
 
   DEFVAR_LISP ("load-read-function", Vload_read_function,
 	       doc: /* Function used by `load' and `eval-region' for reading expressions.
-The default is nil, which means use the function `read'.  */);
-  Vload_read_function = Qnil;
+Called with a single argument (the stream from which to read).
+The default is to use the function `read'.  */);
+  DEFSYM (Qread, "read");
+  Vload_read_function = Qread;
 
   DEFVAR_LISP ("load-source-file-function", Vload_source_file_function,
 	       doc: /* Function called in `load' to load an Emacs Lisp source file.

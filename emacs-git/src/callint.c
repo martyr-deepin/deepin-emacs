@@ -229,17 +229,10 @@ read_file_name (Lisp_Object default_filename, Lisp_Object mustmatch,
 		Lisp_Object initial, Lisp_Object predicate)
 {
   struct gcpro gcpro1;
-  Lisp_Object args[7];
-
   GCPRO1 (default_filename);
-  args[0] = intern ("read-file-name");
-  args[1] = callint_message;
-  args[2] = Qnil;
-  args[3] = default_filename;
-  args[4] = mustmatch;
-  args[5] = initial;
-  args[6] = predicate;
-  RETURN_UNGCPRO (Ffuncall (7, args));
+  RETURN_UNGCPRO (CALLN (Ffuncall, intern ("read-file-name"),
+			 callint_message, Qnil, default_filename,
+			 mustmatch, initial, predicate));
 }
 
 /* BEWARE: Calling this directly from C would defeat the purpose!  */
@@ -397,15 +390,11 @@ invoke it.  If KEYS is omitted or nil, the return value of
       Vreal_this_command = save_real_this_command;
       kset_last_command (current_kboard, save_last_command);
 
-      {
-	Lisp_Object args[3];
-	args[0] = Qfuncall_interactively;
-	args[1] = function;
-	args[2] = specs;
-	Lisp_Object result = unbind_to (speccount, Fapply (3, args));
-	SAFE_FREE ();
-	return result;
-      }
+      Lisp_Object result
+	= unbind_to (speccount, CALLN (Fapply, Qfuncall_interactively,
+				       function, specs));
+      SAFE_FREE ();
+      return result;
     }
 
   /* SPECS is set to a string; use it as an interactive prompt.
@@ -509,12 +498,7 @@ invoke it.  If KEYS is omitted or nil, the return value of
   visargs = args + nargs;
   varies = (signed char *) (visargs + nargs);
 
-  for (i = 0; i < nargs; i++)
-    {
-      args[i] = Qnil;
-      visargs[i] = Qnil;
-      varies[i] = 0;
-    }
+  memclear (args, nargs * (2 * word_size + 1));
 
   GCPRO5 (prefix_arg, function, *args, *visargs, up_event);
   gcpro3.nvars = nargs;
@@ -547,13 +531,13 @@ invoke it.  If KEYS is omitted or nil, the return value of
 	  args[i] = Fcurrent_buffer ();
 	  if (EQ (selected_window, minibuf_window))
 	    args[i] = Fother_buffer (args[i], Qnil, Qnil);
-	  args[i] = Fread_buffer (callint_message, args[i], Qt);
+	  args[i] = Fread_buffer (callint_message, args[i], Qt, Qnil);
 	  break;
 
 	case 'B':		/* Name of buffer, possibly nonexistent.  */
 	  args[i] = Fread_buffer (callint_message,
 				  Fother_buffer (Fcurrent_buffer (), Qnil, Qnil),
-				  Qnil);
+				  Qnil, Qnil);
 	  break;
 
         case 'c':		/* Character.  */
@@ -631,9 +615,9 @@ invoke it.  If KEYS is omitted or nil, the return value of
 	      {
 		Lisp_Object tem2;
 
-		teml = Fget (teml, intern ("event-symbol-elements"));
+		teml = Fget (teml, Qevent_symbol_elements);
 		/* Ignore first element, which is the base key.  */
-		tem2 = Fmemq (intern ("down"), Fcdr (teml));
+		tem2 = Fmemq (Qdown, Fcdr (teml));
 		if (! NILP (tem2))
 		  up_event = Fread_event (Qnil, Qnil, Qnil);
 	      }
@@ -663,9 +647,9 @@ invoke it.  If KEYS is omitted or nil, the return value of
 	      {
 		Lisp_Object tem2;
 
-		teml = Fget (teml, intern ("event-symbol-elements"));
+		teml = Fget (teml, Qevent_symbol_elements);
 		/* Ignore first element, which is the base key.  */
-		tem2 = Fmemq (intern ("down"), Fcdr (teml));
+		tem2 = Fmemq (Qdown, Fcdr (teml));
 		if (! NILP (tem2))
 		  up_event = Fread_event (Qnil, Qnil, Qnil);
 	      }
@@ -781,7 +765,7 @@ invoke it.  If KEYS is omitted or nil, the return value of
 				   argument if no prefix.  */
 	  if (NILP (prefix_arg))
 	    {
-	      args[i] = Qnil;
+	      /* args[i] = Qnil; */
 	      varies[i] = -1;
 	    }
 	  else

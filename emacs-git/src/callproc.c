@@ -1020,7 +1020,7 @@ create_temp_file (ptrdiff_t nargs, Lisp_Object *args,
     specbind (intern ("coding-system-for-write"), val);
     /* POSIX lets mk[s]temp use "."; don't invoke jka-compr if we
        happen to get a ".Z" suffix.  */
-    specbind (intern ("file-name-handler-alist"), Qnil);
+    specbind (Qfile_name_handler_alist, Qnil);
     write_region (start, end, filename_string, Qnil, Qlambda, Qnil, Qnil, fd);
 
     unbind_to (count1, Qnil);
@@ -1595,12 +1595,12 @@ init_callproc (void)
 #ifdef HAVE_NS
 	  const char *path_exec = ns_exec_path ();
 #endif
+	  /* Running uninstalled, so default to tem rather than PATH_EXEC.  */
 	  Vexec_path = decode_env_path ("EMACSPATH",
 #ifdef HAVE_NS
 					path_exec ? path_exec :
 #endif
-					PATH_EXEC, 0);
-	  Vexec_path = Fcons (tem, Vexec_path);
+					SSDATA (tem), 0);
 	  Vexec_path = nconc2 (decode_env_path ("PATH", "", 0), Vexec_path);
 	}
 

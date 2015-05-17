@@ -512,7 +512,7 @@ non-@code{nil} and the character inserted is in the table
 @c Cross refs reworded to prevent overfull hbox.  --rjc 15mar92
 This command performs abbrev expansion if Abbrev mode is enabled and
 the inserted character does not have word-constituent
-syntax. (@xref{Abbrevs}, and @ref{Syntax Class Table}.)  It is also
+syntax.  (@xref{Abbrevs}, and @ref{Syntax Class Table}.)  It is also
 responsible for calling @code{blink-paren-function} when the inserted
 character has close parenthesis syntax (@pxref{Blinking}).
 
@@ -811,7 +811,7 @@ Delete trailing whitespace in the region defined by @var{start} and
 This command deletes whitespace characters after the last
 non-whitespace character in each line in the region.
 
-If this command acts on the entire buffer (i.e. if called
+If this command acts on the entire buffer (i.e., if called
 interactively with the mark inactive, or called from Lisp with
 @var{end} @code{nil}), it also deletes all trailing lines at the end of the
 buffer if the variable @code{delete-trailing-lines} is non-@code{nil}.
@@ -2720,7 +2720,7 @@ text properties are considered, since strings never have overlays.
 @defun get-pos-property position prop &optional object
 This function is like @code{get-char-property}, except that it pays
 attention to properties' stickiness and overlays' advancement settings
-instead of the property of the character at (i.e. right after)
+instead of the property of the character at (i.e., right after)
 @var{position}.
 @end defun
 
@@ -3731,6 +3731,7 @@ clicks on the link quickly without moving the mouse.  This behavior is
 controlled by the user option @code{mouse-1-click-follows-link}.
 @xref{Mouse References,,, emacs, The GNU Emacs Manual}.
 
+@cindex follow-link (text or overlay property)
   To set up the link so that it obeys
 @code{mouse-1-click-follows-link}, you must either (1) apply a
 @code{follow-link} text or overlay property to the link text, or (2)

@@ -68,8 +68,8 @@ University of California, as described above. */
  * 1994 Line-by-line regexp tags by Tom Tromey.
  * 2001 Nested classes by Francesco Potortì (concept by Mykola Dzyuba).
  * 2002 #line directives by Francesco Potortì.
- *
- * Francesco Potortì <pot@gnu.org> has maintained and improved it since 1993.
+ * Francesco Potortì maintained and improved it for many years
+   starting in 1993.
  */
 
 /*
@@ -122,7 +122,7 @@ char pot_etags_version[] = "@(#) pot revision number is 17.38.1.4";
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
+#include <sysstdio.h>
 #include <ctype.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -176,17 +176,8 @@ char pot_etags_version[] = "@(#) pot revision number is 17.38.1.4";
  * SYNOPSIS:	Type *xnew (int n, Type);
  *		void xrnew (OldPointer, int n, Type);
  */
-#if DEBUG
-# include "chkmalloc.h"
-# define xnew(n,Type)	  ((Type *) trace_malloc (__FILE__, __LINE__, \
-						  (n) * sizeof (Type)))
-# define xrnew(op,n,Type) ((op) = (Type *) trace_realloc (__FILE__, __LINE__, \
-					(char *) (op), (n) * sizeof (Type)))
-#else
-# define xnew(n,Type)	  ((Type *) xmalloc ((n) * sizeof (Type)))
-# define xrnew(op,n,Type) ((op) = (Type *) xrealloc ( \
-					(char *) (op), (n) * sizeof (Type)))
-#endif
+#define xnew(n, Type)      ((Type *) xmalloc ((n) * sizeof (Type)))
+#define xrnew(op, n, Type) ((op) = (Type *) xrealloc (op, (n) * sizeof (Type)))
 
 typedef void Lang_function (FILE *);
 
@@ -348,7 +339,7 @@ static void canonicalize_filename (char *);
 static void linebuffer_init (linebuffer *);
 static void linebuffer_setlen (linebuffer *, int);
 static void *xmalloc (size_t);
-static void *xrealloc (char *, size_t);
+static void *xrealloc (void *, size_t);
 
 
 static char searchar = '/';	/* use /.../ searches */
@@ -1532,11 +1523,11 @@ process_file_name (char *file, language *lang)
   if (real_name == compressed_name)
     {
       char *cmd = concat (compr->command, " ", real_name);
-      inf = popen (cmd, "rb");
+      inf = popen (cmd, "r" FOPEN_BINARY);
       free (cmd);
     }
   else
-    inf = fopen (real_name, "rb");
+    inf = fopen (real_name, "r" FOPEN_BINARY);
   if (inf == NULL)
     {
       perror (real_name);
@@ -2871,7 +2862,10 @@ consider_token (char *str, int len, int c, int *c_extp,
      case st_none:
        if (constantypedefs
 	   && structdef == snone
-	   && structtype == st_C_enum && bracelev > structbracelev)
+	   && structtype == st_C_enum && bracelev > structbracelev
+	   /* Don't tag tokens in expressions that assign values to enum
+	      constants.  */
+	   && fvdef != vignore)
 	 return true;		/* enum constant */
        switch (fvdef)
 	 {
@@ -3185,7 +3179,19 @@ C_entries (int c_ext, FILE *inf)
 		      cpptoken = false;
 		  }
 	      if (cpptoken)
-		definedef = dsharpseen;
+		{
+		  definedef = dsharpseen;
+		  /* This is needed for tagging enum values: when there are
+		     preprocessor conditionals inside the enum, we need to
+		     reset the value of fvdef so that the next enum value is
+		     tagged even though the one before it did not end in a
+		     comma.  */
+		  if (fvdef == vignore && instruct && parlev == 0)
+		    {
+		      if (strneq (cp, "#if", 3) || strneq (cp, "#el", 3))
+			fvdef = fvnone;
+		    }
+		}
 	    } /* if (definedef == dnone) */
 	  continue;
 	case '[':
@@ -3516,7 +3522,10 @@ C_entries (int c_ext, FILE *inf)
 	    case fstartlist:
 	    case finlist:
 	    case fignore:
+	      break;
 	    case vignore:
+	      if (instruct && parlev == 0)
+		fvdef = fvnone;
 	      break;
 	    case fdefunname:
 	      fvdef = fignore;
@@ -5600,7 +5609,7 @@ analyze_regex (char *regex_arg)
 	char *regexfile = regex_arg + 1;
 
 	/* regexfile is a file containing regexps, one per line. */
-	regexfp = fopen (regexfile, "rb");
+	regexfp = fopen (regexfile, "r" FOPEN_BINARY);
 	if (regexfp == NULL)
 	  pfatal (regexfile);
 	linebuffer_init (&regexbuf);
@@ -6533,7 +6542,7 @@ xmalloc (size_t size)
 }
 
 static void *
-xrealloc (char *ptr, size_t size)
+xrealloc (void *ptr, size_t size)
 {
   void *result = realloc (ptr, size);
   if (result == NULL)

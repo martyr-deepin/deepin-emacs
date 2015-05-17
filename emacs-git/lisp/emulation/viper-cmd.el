@@ -961,11 +961,11 @@ Suffixes such as .el or .elc should be stripped."
 (defun viper-ESC (arg)
   "Emulate ESC key in Emacs.
 Prevents multiple escape keystrokes if viper-no-multiple-ESC is true.
-If viper-no-multiple-ESC is 'twice double ESC would ding in vi-state.
+If `viper-no-multiple-ESC' is `twice' double ESC would ding in vi-state.
 Other ESC sequences are emulated via the current Emacs's major mode
 keymap.  This is more convenient on TTYs, since this won't block
 function keys such as up, down, etc.  ESC will also will also work as
-a Meta key in this case.  When viper-no-multiple-ESC is nil, ESC works
+a Meta key in this case.  When `viper-no-multiple-ESC' is nil, ESC works
 as a Meta key and any number of multiple escapes are allowed."
   (interactive "P")
   (let (char)
@@ -4533,7 +4533,7 @@ One can use `` and '' to temporarily jump 1 step back."
   (interactive)
   (if viper-cted
       (let ((p (point)) (c (current-column)) bol (indent t))
-	(if (looking-back "[0^]")
+	(if (looking-back "[0^]" (1- (point)))
 	    (progn
 	      (if (eq ?^ (preceding-char))
 		  (setq viper-preserve-indent t))
@@ -4545,7 +4545,7 @@ One can use `` and '' to temporarily jump 1 step back."
 	(delete-region (point) p)
 	(if indent
 	    (indent-to (- c viper-shift-width)))
-	(if (or (bolp) (looking-back "[^ \t]"))
+	(if (or (bolp) (looking-back "[^ \t]" (1- (point))))
 	    (setq viper-cted nil)))))
 
 ;; do smart indent

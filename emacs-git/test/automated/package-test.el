@@ -36,6 +36,8 @@
 (require 'ert)
 (require 'cl-lib)
 
+(setq package-menu-async nil)
+
 (defvar package-test-user-dir nil
   "Directory to use for installing packages during testing.")
 
@@ -73,6 +75,24 @@
                        :kind 'single)
   "Expected `package-desc' parsed from new-pkg-1.0.el.")
 
+(defvar simple-depend-desc-1
+  (package-desc-create :name 'simple-depend-1
+                       :version '(1 0)
+                       :summary "A single-file package with a dependency."
+                       :kind 'single
+                       :reqs '((simple-depend (1 0))
+                               (multi-file (0 1))))
+  "`package-desc' used for testing dependencies.")
+
+(defvar simple-depend-desc-2
+  (package-desc-create :name 'simple-depend-2
+                       :version '(1 0)
+                       :summary "A single-file package with a dependency."
+                       :kind 'single
+                       :reqs '((simple-depend-1 (1 0))
+                               (multi-file (0 1))))
+  "`package-desc' used for testing dependencies.")
+
 (defvar package-test-data-dir (expand-file-name "data/package" package-test-file-dir)
   "Base directory of package test files.")
 
@@ -83,6 +103,7 @@
 (cl-defmacro with-package-test ((&optional &key file
                                            basedir
                                            install
+                                           location
                                            update-news
                                            upload-base)
                                 &rest body)
@@ -92,9 +113,9 @@
           (process-environment (cons (format "HOME=%s" package-test-user-dir)
                                      process-environment))
           (package-user-dir package-test-user-dir)
-          (package-archives `(("gnu" . ,package-test-data-dir)))
-          (old-yes-no-defn (symbol-function 'yes-or-no-p))
+          (package-archives `(("gnu" . ,(or ,location package-test-data-dir))))
           (default-directory package-test-file-dir)
+          abbreviated-home-dir
           package--initialized
           package-alist
           ,@(if update-news
@@ -104,28 +125,31 @@
                 '((package-test-archive-upload-base (make-temp-file "pkg-archive-base-" t))
                   (package-archive-upload-base package-test-archive-upload-base))
               (list (cl-gensym)))) ;; Dummy value so `let' doesn't try to bind `nil'
+     (let ((buf (get-buffer "*Packages*")))
+       (when (buffer-live-p buf)
+         (kill-buffer buf)))
      (unwind-protect
          (progn
            ,(if basedir `(cd ,basedir))
-           (setf (symbol-function 'yes-or-no-p) #'(lambda (&rest r) t))
            (unless (file-directory-p package-user-dir)
              (mkdir package-user-dir))
-           ,@(when install
-               `((package-initialize)
-                 (package-refresh-contents)
-                 (mapc 'package-install ,install)))
-           (with-temp-buffer
-             ,(if file
-                  `(insert-file-contents ,file))
-             ,@body))
+           (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest r) t))
+                     ((symbol-function 'y-or-n-p)    (lambda (&rest r) t)))
+             ,@(when install
+                 `((package-initialize)
+                   (package-refresh-contents)
+                   (mapc 'package-install ,install)))
+             (with-temp-buffer
+               ,(if file
+                    `(insert-file-contents ,file))
+               ,@body)))
 
        (when (file-directory-p package-test-user-dir)
          (delete-directory package-test-user-dir t))
 
        (when (and (boundp 'package-test-archive-upload-base)
                   (file-directory-p package-test-archive-upload-base))
-         (delete-directory package-test-archive-upload-base t))
-       (setf (symbol-function 'yes-or-no-p) old-yes-no-defn))))
+         (delete-directory package-test-archive-upload-base t)))))
 
 (defmacro with-fake-help-buffer (&rest body)
   "Execute BODY in a temp buffer which is treated as the \"*Help*\" buffer."
@@ -237,7 +261,7 @@ Must called from within a `tar-mode' buffer."
                                             package-test-file-dir))
            (package-archives `(("older" . ,package-test-data-dir)
                                ("newer" . ,newer-version)))
-           (package-archive-priorities '(("newer" . 100))))
+           (package-archive-priorities '(("older" . 100))))
 
       (package-initialize)
       (package-refresh-contents)
@@ -305,7 +329,7 @@ Must called from within a `tar-mode' buffer."
 
         ;; New version should be available and old version should be installed
         (goto-char (point-min))
-        (should (re-search-forward "^\\s-+simple-single\\s-+1.4\\s-+new" nil t))
+        (should (re-search-forward "^\\s-+simple-single\\s-+1.4\\s-+available" nil t))
         (should (re-search-forward "^\\s-+simple-single\\s-+1.3\\s-+installed" nil t))
 
         (goto-char (point-min))
@@ -315,6 +339,37 @@ Must called from within a `tar-mode' buffer."
         (package-menu-execute)
         (package-menu-refresh)
         (should (package-installed-p 'simple-single '(1 4)))))))
+
+(ert-deftest package-test-update-archives-async ()
+  "Test updating package archives asynchronously."
+  (skip-unless (executable-find "python2"))
+  ;; For some reason this test doesn't work reliably on hydra.nixos.org.
+  (skip-unless (not (getenv "NIX_STORE")))
+  (with-package-test (:basedir
+                      package-test-data-dir
+                      :location "http://0.0.0.0:8000/")
+    (let* ((package-menu-async t)
+           (process (start-process
+                     "package-server" "package-server-buffer"
+                     (executable-find "python2")
+                     (expand-file-name "package-test-server.py"))))
+      (unwind-protect
+          (progn
+            (list-packages)
+            (should package--downloads-in-progress)
+            (should mode-line-process)
+            (should-not
+             (with-timeout (10 'timeout)
+               (while package--downloads-in-progress
+                 (accept-process-output nil 1))
+               nil))
+            ;; If the server process died, there's some non-Emacs problem.
+            ;; Eg maybe the port was already in use.
+            (skip-unless (process-live-p process))
+            (goto-char (point-min))
+            (should
+             (search-forward-regexp "^ +simple-single" nil t)))
+        (if (process-live-p process) (kill-process process))))))
 
 (ert-deftest package-test-describe-package ()
   "Test displaying help for a package."
@@ -339,8 +394,7 @@ Must called from within a `tar-mode' buffer."
      (goto-char (point-min))
      (should (search-forward "simple-single is an installed package." nil t))
      (should (search-forward
-              (format "Status: Installed in `%s/' (unsigned)."
-                      (expand-file-name "simple-single-1.3" package-user-dir))
+              "Status: Installed in `~/simple-single-1.3/' (unsigned)."
               nil t))
      (should (search-forward "Version: 1.3" nil t))
      (should (search-forward "Summary: A single-file package with no dependencies"
@@ -401,16 +455,19 @@ Must called from within a `tar-mode' buffer."
       ;; Check if the installed package status is updated.
       (let ((buf (package-list-packages)))
 	(package-menu-refresh)
-	(should (re-search-forward "^\\s-+signed-good\\s-+1\\.0\\s-+installed"
-				   nil t)))
+	(should (re-search-forward
+		 "^\\s-+signed-good\\s-+\\(\\S-+\\)\\s-+\\(\\S-+\\)\\s-"
+		 nil t))
+	(should (string-equal (match-string-no-properties 1) "1.0"))
+	(should (string-equal (match-string-no-properties 2) "installed")))
       ;; Check if the package description is updated.
       (with-fake-help-buffer
        (describe-package 'signed-good)
        (goto-char (point-min))
-       (should (search-forward "signed-good is an installed package." nil t))
+       (should (re-search-forward "signed-good is an? \\(\\S-+\\) package." nil t))
+       (should (string-equal (match-string-no-properties 1) "installed"))
        (should (search-forward
-		(format "Status: Installed in `%s/'."
-			(expand-file-name "signed-good-1.0" package-user-dir))
+		"Status: Installed in `~/signed-good-1.0/'."
 		nil t))))))
 
 
@@ -479,6 +536,61 @@ Must called from within a `tar-mode' buffer."
                (buffer-substring (point-min) (point-max)))))
       (should (equal archive-contents
                      (list 1 package-x-test--single-archive-entry-1-4))))))
+
+(ert-deftest package-test-get-deps ()
+  "Test `package--get-deps' with complex structures."
+  (let ((package-alist
+         (mapcar (lambda (p) (list (package-desc-name p) p))
+           (list simple-single-desc
+                 simple-depend-desc
+                 multi-file-desc
+                 new-pkg-desc
+                 simple-depend-desc-1
+                 simple-depend-desc-2))))
+    (should
+     (equal (package--get-deps 'simple-depend)
+            '(simple-single)))
+    (should
+     (equal (package--get-deps 'simple-depend 'indirect)
+            nil))
+    (should
+     (equal (package--get-deps 'simple-depend 'direct)
+            '(simple-single)))
+    (should
+     (equal (package--get-deps 'simple-depend-2)
+            '(simple-depend-1 multi-file simple-depend simple-single)))
+    (should
+     (equal (package--get-deps 'simple-depend-2 'indirect)
+            '(simple-depend multi-file simple-single)))
+    (should
+     (equal (package--get-deps 'simple-depend-2 'direct)
+            '(simple-depend-1 multi-file)))))
+
+(ert-deftest package-test-sort-by-dependence ()
+  "Test `package--sort-by-dependence' with complex structures."
+  (let ((package-alist
+         (mapcar (lambda (p) (list (package-desc-name p) p))
+           (list simple-single-desc
+                 simple-depend-desc
+                 multi-file-desc
+                 new-pkg-desc
+                 simple-depend-desc-1
+                 simple-depend-desc-2)))
+        (delete-list
+         (list simple-single-desc
+               simple-depend-desc
+               multi-file-desc
+               new-pkg-desc
+               simple-depend-desc-1
+               simple-depend-desc-2)))
+    (should
+     (equal (package--sort-by-dependence delete-list)
+            (list simple-depend-desc-2 simple-depend-desc-1 new-pkg-desc
+                  multi-file-desc simple-depend-desc simple-single-desc)))
+    (should
+     (equal (package--sort-by-dependence (reverse delete-list))
+            (list new-pkg-desc simple-depend-desc-2 simple-depend-desc-1
+                  multi-file-desc simple-depend-desc simple-single-desc)))))
 
 (provide 'package-test)
 

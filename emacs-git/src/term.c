@@ -1862,9 +1862,11 @@ produce_glyphless_glyph (struct it *it, Lisp_Object acronym)
       else
 	{
 	  eassert (it->glyphless_method == GLYPHLESS_DISPLAY_HEX_CODE);
-	  len = (it->c < 0x10000 ? sprintf (buf, "\\u%04X", it->c)
-		 : it->c <= MAX_UNICODE_CHAR ? sprintf (buf, "\\U%06X", it->c)
-		 : sprintf (buf, "\\x%06X", it->c));
+	  len = sprintf (buf,
+			 (it->c < 0x10000 ? "\\u%04X"
+			  : it->c <= MAX_UNICODE_CHAR ? "\\U%06X"
+			  : "\\x%06X"),
+			 it->c + 0u);
 	}
       str = buf;
     }
@@ -2253,10 +2255,9 @@ A suspended tty may be resumed by calling `resume-tty' on it.  */)
       /* First run `suspend-tty-functions' and then clean up the tty
 	 state because `suspend-tty-functions' might need to change
 	 the tty state.  */
-      Lisp_Object args[2];
-      args[0] = intern ("suspend-tty-functions");
-      XSETTERMINAL (args[1], t);
-      Frun_hook_with_args (2, args);
+      Lisp_Object term;
+      XSETTERMINAL (term, t);
+      CALLN (Frun_hook_with_args, intern ("suspend-tty-functions"), term);
 
       reset_sys_modes (t->display_info.tty);
       delete_keyboard_wait_descriptor (fileno (f));
@@ -2353,13 +2354,10 @@ frame's terminal). */)
       set_tty_hooks (t);
       init_sys_modes (t->display_info.tty);
 
-      {
-        /* Run `resume-tty-functions'.  */
-        Lisp_Object args[2];
-        args[0] = intern ("resume-tty-functions");
-        XSETTERMINAL (args[1], t);
-        Frun_hook_with_args (2, args);
-      }
+      /* Run `resume-tty-functions'.  */
+      Lisp_Object term;
+      XSETTERMINAL (term, t);
+      CALLN (Frun_hook_with_args, intern ("resume-tty-functions"), term);
     }
 
   set_tty_hooks (t);

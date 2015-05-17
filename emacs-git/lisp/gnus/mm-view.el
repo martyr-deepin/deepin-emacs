@@ -217,7 +217,7 @@
 	 handle
 	 `(lambda ()
 	    (let ((inhibit-read-only t))
-	      (delete-region ,(copy-marker (point-min) t)
+	      (delete-region ,(point-min-marker)
 			     ,(point-max-marker)))))))))
 
 (defvar mm-w3m-standalone-supports-m17n-p (if (featurep 'mule) 'undecided)
@@ -628,6 +628,8 @@ If MODE is not set, try to find mode automatically."
   (while (search-forward "\r\n" nil t)
     (replace-match "\n"))
   t)
+
+(autoload 'epg-decrypt-string "epg")
 
 (defun mm-view-pkcs7-decrypt (handle &optional from)
   (insert-buffer-substring (mm-handle-buffer handle))

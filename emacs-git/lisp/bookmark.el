@@ -1756,7 +1756,7 @@ if an annotation exists."
   (save-selected-window
     (pop-to-buffer (get-buffer-create "*Bookmark Annotation*") t)
     (delete-region (point-min) (point-max))
-    (dolist (full-record bookmark-alist)
+    (dolist (full-record (bookmark-maybe-sort-alist))
       (let* ((name (bookmark-name-from-full-record full-record))
              (ann  (bookmark-get-annotation full-record)))
         (insert (concat name ":\n"))
@@ -2064,7 +2064,8 @@ To carry out the deletions that you've marked, use \\<bookmark-bmenu-mode-map>\\
 (defun bookmark-bmenu-goto-bookmark (name)
   "Move point to bookmark with name NAME."
   (goto-char (point-min))
-  (while (not (equal name (bookmark-bmenu-bookmark)))
+  (while (not (or (equal name (bookmark-bmenu-bookmark))
+                  (eobp)))
     (forward-line 1))
   (forward-line 0))
 

@@ -1,7 +1,7 @@
 \input texinfo    @c -*-texinfo-*-
 @setfilename ../../info/cl.info
 @settitle Common Lisp Extensions
-@documentencoding UTF-8
+@include docstyle.texi
 @include emacsver.texi
 
 @copying
@@ -296,6 +296,13 @@ list.  Also, the function body is enclosed in an implicit block
 called @var{name}; @pxref{Blocks and Exits}.
 @end defmac
 
+@defmac cl-iter-defun name arglist body@dots{}
+This form is identical to the regular @code{iter-defun} form, except
+that @var{arglist} is allowed to be a full Common Lisp argument
+list.  Also, the function body is enclosed in an implicit block
+called @var{name}; @pxref{Blocks and Exits}.
+@end defmac
+
 @defmac cl-defsubst name arglist body@dots{}
 This is just like @code{cl-defun}, except that the function that
 is defined is automatically proclaimed @code{inline}, i.e.,
@@ -563,20 +570,20 @@ When @file{foo.el} is compiled, these variables will be set during
 the compilation itself:
 
 @example
-foo1  foo3  foo5  foo7      ; `compile'
+foo1  foo3  foo5  foo7      ; 'compile'
 @end example
 
 When @file{foo.elc} is loaded, these variables will be set:
 
 @example
-foo2  foo3  foo6  foo7      ; `load'
+foo2  foo3  foo6  foo7      ; 'load'
 @end example
 
 And if @file{foo.el} is loaded uncompiled, these variables will
 be set:
 
 @example
-foo4  foo5  foo6  foo7      ; `eval'
+foo4  foo5  foo6  foo7      ; 'eval'
 @end example
 
 If these seven @code{cl-eval-when}s had been, say, inside a @code{defun},
@@ -971,7 +978,7 @@ a
 The generalized variable @code{buffer-substring}, listed above,
 also works in this way by replacing a portion of the current buffer.
 
-@c FIXME?  Also `eq'? (see cl-lib.el)
+@c FIXME?  Also 'eq'? (see cl-lib.el)
 
 @c Currently commented out in cl.el.
 @ignore
@@ -2237,6 +2244,11 @@ This clause is like @code{always}, except that the loop returns
 This clause stops the loop when the specified form is non-@code{nil};
 in this case, it returns that non-@code{nil} value.  If all the
 values were @code{nil}, the loop returns @code{nil}.
+
+@item iter-by @var{iterator}
+This clause iterates over the values from the specified form, an
+iterator object.  See (@pxref{Generators,,,elisp,GNU Emacs Lisp
+Reference Manual}).
 @end table
 
 @node Accumulation Clauses

@@ -346,7 +346,8 @@ no text on the right side of the rectangle."
 (defun delete-whitespace-rectangle-line (startcol _endcol fill)
   (when (= (move-to-column startcol (if fill t 'coerce)) startcol)
     (unless (= (point) (point-at-eol))
-      (delete-region (point) (progn (skip-syntax-forward " ") (point))))))
+      (delete-region (point) (progn (skip-syntax-forward " " (point-at-eol))
+				    (point))))))
 
 ;;;###autoload
 (defalias 'close-rectangle 'delete-whitespace-rectangle) ;; Old name
@@ -586,8 +587,7 @@ Activates the region if needed.  Only lasts until the region is deactivated."
     (add-hook 'deactivate-mark-hook
               (lambda () (rectangle-mark-mode -1)))
     (unless (region-active-p)
-      (push-mark)
-      (activate-mark)
+      (push-mark (point) t t)
       (message "Mark set (rectangle mode)"))))
 
 (defun rectangle-exchange-point-and-mark (&optional arg)

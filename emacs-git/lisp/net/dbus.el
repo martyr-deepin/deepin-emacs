@@ -707,7 +707,8 @@ Example:
 		 (setq counter (match-string 2 (symbol-name key))
 		       args (cdr args)
 		       value (car args))
-		 (unless (and (<= counter 63) (stringp value))
+		 (unless (and (<= (string-to-number counter) 63)
+			      (stringp value))
 		   (signal 'wrong-type-argument
 			   (list "Wrong argument" key value)))
 		 (format
@@ -868,7 +869,7 @@ association to the service from D-Bus."
 				;; Service.
 				(string-equal service (cadr e))
 				;; Non-empty object path.
-				(cl-caddr e)
+				(nth 2 e)
 				(throw :found t)))))
 			 dbus-registered-objects-table)
 			nil))))

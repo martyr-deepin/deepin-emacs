@@ -265,20 +265,10 @@ ffap most of the time."
   :group 'ffap
   :risky t)
 
-(defcustom ffap-url-fetcher
-  (if (fboundp 'browse-url)
-      'browse-url			; rely on browse-url-browser-function
-    'w3-fetch)
-  ;; Remote control references:
-  ;; http://www.ncsa.uiuc.edu/SDG/Software/XMosaic/remote-control.html
-  ;; http://home.netscape.com/newsref/std/x-remote.html
+(defcustom ffap-url-fetcher 'browse-url
   "A function of one argument, called by ffap to fetch an URL.
-Reasonable choices are `w3-fetch' or a `browse-url-*' function.
 For a fancy alternative, get `ffap-url.el'."
-  :type '(choice (const w3-fetch)
-		 (const browse-url)	; in recent versions of browse-url
-		 (const browse-url-netscape)
-		 (const browse-url-mosaic)
+  :type '(choice (const browse-url)
 		 function)
   :group 'ffap
   :risky t)
@@ -476,7 +466,7 @@ Returned values:
 	      ;; (file-error "connection failed" "address already in use"
 	      ;;	     "ftp.uu.net" "ffap-machine-p")
 	      ((equal mesg "connection failed")
-	       (if (equal (nth 2 error) "permission denied")
+	       (if (string= (downcase (nth 2 error)) "permission denied")
 		   nil			; host does not exist
 		 ;; Other errors mean the host exists:
 		 (nth 2 error)))
@@ -1014,7 +1004,7 @@ If a given RFC isn't in these then `ffap-rfc-path' is offered."
     ;; Slightly controversial decisions:
     ;; * strip trailing "@" and ":"
     ;; * no commas (good for latex)
-    (file "--:\\\\$+<>@-Z_[:alpha:]~*?" "<@" "@>;.,!:")
+    (file "--:\\\\$\\{\\}+<>@-Z_[:alpha:]~*?" "<@" "@>;.,!:")
     ;; An url, or maybe a email/news message-id:
     (url "--:=&?$+@-Z_[:alpha:]~#,%;*()!'" "^[0-9a-zA-Z]" ":;.,!?")
     ;; Find a string that does *not* contain a colon:
@@ -1298,7 +1288,7 @@ which may actually result in an URL rather than a filename."
                    nil
                    nil
                    (if dir (cons guess (length dir)) guess)
-                   (list 'file-name-history)
+                   'file-name-history
                    (and buffer-file-name
                         (abbreviate-file-name buffer-file-name)))))
         ;; Remove the special handler manually.  We used to just let-bind
@@ -1439,7 +1429,7 @@ and the functions `ffap-file-at-point' and `ffap-url-at-point'."
 		 (expand-file-name filename)))
        ;; User does not want to find a non-existent file:
        ((signal 'file-error (list "Opening file buffer"
-				  "no such file or directory"
+				  "No such file or directory"
 				  filename)))))))
 
 ;; Shortcut: allow {M-x ffap} rather than {M-x find-file-at-point}.

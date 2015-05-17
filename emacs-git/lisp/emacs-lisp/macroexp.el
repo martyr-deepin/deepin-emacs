@@ -168,6 +168,26 @@ and also to avoid outputting the warning during normal execution."
                 form))))))))
    (t form)))
 
+(defun macroexp-macroexpand (form env)
+  "Like `macroexpand' but checking obsolescence."
+  (let ((new-form
+         (macroexpand form env)))
+    (if (and (not (eq form new-form))   ;It was a macro call.
+             (car-safe form)
+             (symbolp (car form))
+             (get (car form) 'byte-obsolete-info)
+             (or (not (fboundp 'byte-compile-warning-enabled-p))
+                 (byte-compile-warning-enabled-p 'obsolete)))
+        (let* ((fun (car form))
+               (obsolete (get fun 'byte-obsolete-info)))
+          (macroexp--warn-and-return
+           (macroexp--obsolete-warning
+            fun obsolete
+            (if (symbolp (symbol-function fun))
+                "alias" "macro"))
+           new-form))
+      new-form)))
+
 (defun macroexp--expand-all (form)
   "Expand all macros in FORM.
 This is an internal version of `macroexpand-all'.
@@ -180,24 +200,7 @@ Assumes the caller has bound `macroexpand-all-environment'."
       (macroexpand (macroexp--all-forms form 1)
 		   macroexpand-all-environment)
     ;; Normal form; get its expansion, and then expand arguments.
-    (let ((new-form
-           (macroexpand form macroexpand-all-environment)))
-      (setq form
-            (if (and (not (eq form new-form)) ;It was a macro call.
-                     (car-safe form)
-                     (symbolp (car form))
-                     (get (car form) 'byte-obsolete-info)
-                     (or (not (fboundp 'byte-compile-warning-enabled-p))
-                         (byte-compile-warning-enabled-p 'obsolete)))
-                (let* ((fun (car form))
-                       (obsolete (get fun 'byte-obsolete-info)))
-                  (macroexp--warn-and-return
-                   (macroexp--obsolete-warning
-                    fun obsolete
-                    (if (symbolp (symbol-function fun))
-                        "alias" "macro"))
-                   new-form))
-              new-form)))
+    (setq form (macroexp-macroexpand form macroexpand-all-environment))
     (pcase form
       (`(cond . ,clauses)
        (macroexp--cons 'cond (macroexp--all-clauses clauses) form))
@@ -293,6 +296,17 @@ definitions to shadow the loaded ones for use in file byte-compilation."
     (macroexp--expand-all form)))
 
 ;;; Handy functions to use in macros.
+
+(defun macroexp-parse-body (body)
+  "Parse a function BODY into (DECLARATIONS . EXPS)."
+  (let ((decls ()))
+    (while (and (cdr body)
+                (let ((e (car body)))
+                  (or (stringp e)
+                      (memq (car-safe e)
+                            '(:documentation declare interactive cl-declare)))))
+      (push (pop body) decls))
+    (cons (nreverse decls) body)))
 
 (defun macroexp-progn (exps)
   "Return an expression equivalent to `(progn ,@EXPS)."
@@ -451,6 +465,8 @@ itself or not."
 (defvar macroexp--pending-eager-loads nil
   "Stack of files currently undergoing eager macro-expansion.")
 
+(defvar macroexp--debug-eager nil)
+
 (defun internal-macroexpand-for-load (form full-p)
   ;; Called from the eager-macroexpansion in readevalloop.
   (cond
@@ -466,8 +482,10 @@ itself or not."
            (tail (member elem (cdr (member elem bt)))))
       (if tail (setcdr tail (list '…)))
       (if (eq (car-safe (car bt)) 'macroexpand-all) (setq bt (cdr bt)))
-      (message "Warning: Eager macro-expansion skipped due to cycle:\n  %s"
-               (mapconcat #'prin1-to-string (nreverse bt) " => "))
+      (if macroexp--debug-eager
+          (debug 'eager-macroexp-cycle)
+        (message "Warning: Eager macro-expansion skipped due to cycle:\n  %s"
+                 (mapconcat #'prin1-to-string (nreverse bt) " => ")))
       (push 'skip macroexp--pending-eager-loads)
       form))
    (t

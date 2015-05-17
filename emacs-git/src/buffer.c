@@ -134,227 +134,227 @@ CHECK_OVERLAY (Lisp_Object x)
 static void
 bset_abbrev_mode (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (abbrev_mode) = val;
+  b->abbrev_mode_ = val;
 }
 static void
 bset_abbrev_table (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (abbrev_table) = val;
+  b->abbrev_table_ = val;
 }
 static void
 bset_auto_fill_function (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (auto_fill_function) = val;
+  b->auto_fill_function_ = val;
 }
 static void
 bset_auto_save_file_format (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (auto_save_file_format) = val;
+  b->auto_save_file_format_ = val;
 }
 static void
 bset_auto_save_file_name (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (auto_save_file_name) = val;
+  b->auto_save_file_name_ = val;
 }
 static void
 bset_backed_up (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (backed_up) = val;
+  b->backed_up_ = val;
 }
 static void
 bset_begv_marker (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (begv_marker) = val;
+  b->begv_marker_ = val;
 }
 static void
 bset_bidi_display_reordering (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (bidi_display_reordering) = val;
+  b->bidi_display_reordering_ = val;
 }
 static void
 bset_buffer_file_coding_system (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (buffer_file_coding_system) = val;
+  b->buffer_file_coding_system_ = val;
 }
 static void
 bset_case_fold_search (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (case_fold_search) = val;
+  b->case_fold_search_ = val;
 }
 static void
 bset_ctl_arrow (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (ctl_arrow) = val;
+  b->ctl_arrow_ = val;
 }
 static void
 bset_cursor_in_non_selected_windows (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (cursor_in_non_selected_windows) = val;
+  b->cursor_in_non_selected_windows_ = val;
 }
 static void
 bset_cursor_type (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (cursor_type) = val;
+  b->cursor_type_ = val;
 }
 static void
 bset_display_table (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (display_table) = val;
+  b->display_table_ = val;
 }
 static void
 bset_extra_line_spacing (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (extra_line_spacing) = val;
+  b->extra_line_spacing_ = val;
 }
 static void
 bset_file_format (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (file_format) = val;
+  b->file_format_ = val;
 }
 static void
 bset_file_truename (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (file_truename) = val;
+  b->file_truename_ = val;
 }
 static void
 bset_fringe_cursor_alist (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (fringe_cursor_alist) = val;
+  b->fringe_cursor_alist_ = val;
 }
 static void
 bset_fringe_indicator_alist (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (fringe_indicator_alist) = val;
+  b->fringe_indicator_alist_ = val;
 }
 static void
 bset_fringes_outside_margins (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (fringes_outside_margins) = val;
+  b->fringes_outside_margins_ = val;
 }
 static void
 bset_header_line_format (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (header_line_format) = val;
+  b->header_line_format_ = val;
 }
 static void
 bset_indicate_buffer_boundaries (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (indicate_buffer_boundaries) = val;
+  b->indicate_buffer_boundaries_ = val;
 }
 static void
 bset_indicate_empty_lines (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (indicate_empty_lines) = val;
+  b->indicate_empty_lines_ = val;
 }
 static void
 bset_invisibility_spec (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (invisibility_spec) = val;
+  b->invisibility_spec_ = val;
 }
 static void
 bset_left_fringe_width (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (left_fringe_width) = val;
+  b->left_fringe_width_ = val;
 }
 static void
 bset_major_mode (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (major_mode) = val;
+  b->major_mode_ = val;
 }
 static void
 bset_mark (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (mark) = val;
+  b->mark_ = val;
 }
 static void
 bset_minor_modes (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (minor_modes) = val;
+  b->minor_modes_ = val;
 }
 static void
 bset_mode_line_format (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (mode_line_format) = val;
+  b->mode_line_format_ = val;
 }
 static void
 bset_mode_name (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (mode_name) = val;
+  b->mode_name_ = val;
 }
 static void
 bset_name (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (name) = val;
+  b->name_ = val;
 }
 static void
 bset_overwrite_mode (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (overwrite_mode) = val;
+  b->overwrite_mode_ = val;
 }
 static void
 bset_pt_marker (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (pt_marker) = val;
+  b->pt_marker_ = val;
 }
 static void
 bset_right_fringe_width (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (right_fringe_width) = val;
+  b->right_fringe_width_ = val;
 }
 static void
 bset_save_length (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (save_length) = val;
+  b->save_length_ = val;
 }
 static void
 bset_scroll_bar_width (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (scroll_bar_width) = val;
+  b->scroll_bar_width_ = val;
 }
 static void
 bset_scroll_bar_height (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (scroll_bar_height) = val;
+  b->scroll_bar_height_ = val;
 }
 static void
 bset_scroll_down_aggressively (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (scroll_down_aggressively) = val;
+  b->scroll_down_aggressively_ = val;
 }
 static void
 bset_scroll_up_aggressively (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (scroll_up_aggressively) = val;
+  b->scroll_up_aggressively_ = val;
 }
 static void
 bset_selective_display (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (selective_display) = val;
+  b->selective_display_ = val;
 }
 static void
 bset_selective_display_ellipses (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (selective_display_ellipses) = val;
+  b->selective_display_ellipses_ = val;
 }
 static void
 bset_vertical_scroll_bar_type (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (vertical_scroll_bar_type) = val;
+  b->vertical_scroll_bar_type_ = val;
 }
 static void
 bset_horizontal_scroll_bar_type (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (horizontal_scroll_bar_type) = val;
+  b->horizontal_scroll_bar_type_ = val;
 }
 static void
 bset_word_wrap (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (word_wrap) = val;
+  b->word_wrap_ = val;
 }
 static void
 bset_zv_marker (struct buffer *b, Lisp_Object val)
 {
-  b->INTERNAL_FIELD (zv_marker) = val;
+  b->zv_marker_ = val;
 }
 
 void
@@ -387,7 +387,6 @@ followed by the rest of the buffers.  */)
   if (FRAMEP (frame))
     {
       Lisp_Object framelist, prevlist, tail;
-      Lisp_Object args[3];
 
       framelist = Fcopy_sequence (XFRAME (frame)->buffer_list);
       prevlist = Fnreverse (Fcopy_sequence
@@ -408,10 +407,7 @@ followed by the rest of the buffers.  */)
 	  tail = XCDR (tail);
 	}
 
-      args[0] = framelist;
-      args[1] = general;
-      args[2] = prevlist;
-      return Fnconc (3, args);
+      return CALLN (Fnconc, framelist, general, prevlist);
     }
   else
     return general;
@@ -1595,7 +1591,7 @@ compact_buffer (struct buffer *buffer)
 	 turned off in that buffer.  Calling truncate_undo_list on
 	 Qt tends to return NULL, which effectively turns undo back on.
 	 So don't call truncate_undo_list if undo_list is Qt.  */
-      if (!EQ (buffer->INTERNAL_FIELD (undo_list), Qt))
+      if (!EQ (BVAR(buffer, undo_list), Qt))
 	truncate_undo_list (buffer);
 
       /* Shrink buffer gaps.  */
@@ -1654,15 +1650,14 @@ cleaning up all windows currently displaying the buffer to be killed. */)
   /* Run hooks with the buffer to be killed the current buffer.  */
   {
     ptrdiff_t count = SPECPDL_INDEX ();
-    Lisp_Object arglist[1];
 
     record_unwind_protect (save_excursion_restore, save_excursion_save ());
     set_buffer_internal (b);
 
     /* First run the query functions; if any query is answered no,
        don't kill the buffer.  */
-    arglist[0] = Qkill_buffer_query_functions;
-    tem = Frun_hook_with_args_until_failure (1, arglist);
+    tem = CALLN (Frun_hook_with_args_until_failure,
+		 Qkill_buffer_query_functions);
     if (NILP (tem))
       return unbind_to (count, Qnil);
 
@@ -5413,7 +5408,7 @@ syms_of_buffer (void)
   DEFSYM (Qoverwrite_mode, "overwrite-mode");
   Fput (Qoverwrite_mode, Qchoice,
 	list3 (Qnil, intern ("overwrite-mode-textual"),
-	       intern ("overwrite-mode-binary")));
+	       Qoverwrite_mode_binary));
 
   Fput (Qprotected_field, Qerror_conditions,
 	listn (CONSTYPE_PURE, 2, Qprotected_field, Qerror));
@@ -6201,6 +6196,7 @@ If the buffer has never been shown in a window, the value is nil.  */);
 See the command `transient-mark-mode' for a description of this minor mode.
 
 Non-nil also enables highlighting of the region whenever the mark is active.
+The region is highlighted with the `region' face.
 The variable `highlight-nonselected-windows' controls whether to highlight
 all windows or just the selected window.
 
@@ -6331,6 +6327,8 @@ Functions running this hook are, `get-buffer-create',
   defsubr (&Soverlay_get);
   defsubr (&Soverlay_put);
   defsubr (&Srestore_buffer_modified_p);
+
+  Fput (intern_c_string ("erase-buffer"), Qdisabled, Qt);
 }
 
 void
@@ -6338,8 +6336,4 @@ keys_of_buffer (void)
 {
   initial_define_key (control_x_map, 'b', "switch-to-buffer");
   initial_define_key (control_x_map, 'k', "kill-buffer");
-
-  /* This must not be in syms_of_buffer, because Qdisabled is not
-     initialized when that function gets called.  */
-  Fput (intern_c_string ("erase-buffer"), Qdisabled, Qt);
 }
