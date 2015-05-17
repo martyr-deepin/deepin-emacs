@@ -20,6 +20,7 @@ cd ./emacs-git && ./autogen.sh
 sudo cp ./site-start.el /usr/share/deepin-emacs/common/share/emacs/site-lisp/
 sudo cp -r ./site-lisp /usr/share/deepin-emacs
 sudo ln -s /usr/share/deepin-emacs/common/bin/emacs /usr/bin/deepin-emacs
+sudo ln -s /usr/share/icons/hicolor/scalable/apps/
 sudo cp ./deepin-emacs.desktop /usr/share/applications/
 </pre></code>
 
