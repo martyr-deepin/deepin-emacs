@@ -1,3 +1,5 @@
-#name : print "..."
+# -*- mode: snippet -*-
+# name: print
+# key: p
 # --
-print "${format}"
+print($0)

@@ -1,4 +1,7 @@
-#name : if ... : ...
+# -*- mode: snippet -*-
+# name: if
+# key: if
+# group : control structure
 # --
-if ${condition}:
+if ${1:cond}:
     $0
