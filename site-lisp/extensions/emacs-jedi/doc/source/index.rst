@@ -9,10 +9,16 @@
      * `Configuration`_
      * `Command`_
      * `Troubleshooting`_
+     * `FAQ`_
+     * :doc:`Complete overview <contents>`
+     * :doc:`changelog`
 
+   * `Q & A in StackOverflow
+     <http://stackoverflow.com/questions/tagged/emacs-jedi>`_
+     (with ``emacs-jedi`` tag)
    * `Repository <https://github.com/tkf/emacs-jedi>`_ (at GitHub)
    * `Issue tracker <https://github.com/tkf/emacs-jedi/issues>`_ (at GitHub)
-   * `Travis CI <https://travis-ci.org/#!/tkf/emacs-jedi>`_ |build-status|
+   * `Travis CI <https://travis-ci.org/tkf/emacs-jedi>`_ |build-status|
 
    .. [#] There are
      `released version <http://tkf.github.io/emacs-jedi/released>`_  and
@@ -32,7 +38,11 @@ Quick start
 ===========
 
 (1) **Install** Jedi.el via el-get, Marmalade or MELPA (see install_ for
-    more info).
+    more info), i.e., either
+
+    - ``M-x el-get-install RET jedi RET`` or
+    - ``M-x package-install RET jedi RET`` or
+    - (manually install...)
 
 (2) **Configure** Emacs using this::
 
@@ -42,14 +52,13 @@ Quick start
     If you install Jedi.el manually (BTW, you shouldn't!), you need to add
     more stuff to it.  See `manual install`_ section.
 
-(3) (NOTE: el-get user can skip this step)
-    **Setup Python requirements** in virtualenv by doing this in your shell::
+(3) **Install Python server** (jediepcserver.py) by running
 
-      cd PATH/TO/JEDI
-      make requirements
+    - ``M-x jedi:install-server`` in Emacs
 
-    Typically, ``PATH/TO/JEDI/`` is something like ``~/.emacs.d/elpa/jedi-*/``.
-    If you prefer not using virtualenv, see install_ for more information.
+    (see also :el:symbol:`jedi:install-server`).
+
+See install_ section for minimal examples.
 
 
 Screenshots
@@ -87,15 +96,24 @@ Emacs
 -----
 - EPC_
 - deferred.el_ (> v0.3)
-- auto-complete_
+- auto-complete_ or company-mode_
+- python-environment.el_
 
-If your completion popup is broken when width of completion candidates
-is wide, try the newest version of popup.el_.
+For auto-complete_ users, if your completion popup is broken when width of completion
+candidates is wide, try the newest version of popup.el_.
 
 .. _deferred.el: https://github.com/kiwanami/emacs-deferred
 .. _popup.el: https://github.com/auto-complete/popup-el
+.. _python-environment.el: https://github.com/tkf/emacs-python-environment
 
-Jedi.el is currently tested against Emacs 24.3-devel, 24.2 and 23.1.
+Jedi.el is currently tested against Emacs 24.3-devel, 24.2
+
+Command line program
+--------------------
+
+- virtualenv_
+
+.. _virtualenv: http://www.virtualenv.org
 
 Python
 ------
@@ -103,14 +121,7 @@ Python
 - python-epc_
 - argparse (for Python 2.6)
 
-Jedi.el is tested against Python 2.6, 2.7 and 3.2.
-
-Optional dependencies for automatic installation:
--------------------------------------------------
-- virtualenv_
-- make
-
-.. _virtualenv: http://www.virtualenv.org
+Jedi.el is tested against Python 2.6, 2.7, 3.2 and 3.3, 3.4.
 
 
 Install
@@ -119,49 +130,110 @@ Install
 el-get
 ------
 
-The easiest way to install Jedi.el is to use el-get_:
-just do ``M-x el-get-install jedi``.
-You need to have virtualenv_ to automatically install Python module
-dependencies.  If your el-get does not have the recipes for Jedi.el
-yet, get them from `this pull request`_.
+If you have el-get_ installed, Jedi.el can be installed by these Emacs
+command:
+
+- ``M-x el-get-install RET jedi RET``
+- ``M-x jedi:install-server RET`` (see also :ref:`pyinstall`)
+
+Note that Python packages are *not* installed automatically anymore
+(there is `a plan <https://github.com/tkf/emacs-jedi/issues/134>`_ to
+fix it).
+
+Here is a minimal example to setup Jedi.el via el-get_:
+
+.. literalinclude:: jedi-el-get.el
+   :language: cl
+
+See also: :ref:`minimal-tryout`.
 
 .. _el-get: https://github.com/dimitri/el-get
-.. _this pull request: https://github.com/dimitri/el-get/pull/927
 
 
 package.el (Marmalade or MELPA)
 -------------------------------
 
-You can install Jedi.el using package.el interface from Marmalade_ or
-MELPA_.  As package.el does not support installing non-elisp packages,
-you need to install Python part manually (see the next section).
+You can install Jedi.el using package.el interface.
+You need to add Marmalade_ or MELPA_ to :el:symbol:`package-archives`.
 
-.. _marmalade: http://marmalade-repo.org/packages/jedi
-.. _MELPA: http://melpa.milkbox.net
+After you setup :el:symbol:`package-archives` properly, Jedi.el can be
+installed by these Emacs command:
+
+- (auto-complete)``M-x package-install RET jedi RET``
+- (company-mode)``M-x package-install RET company-jedi RET``
+- ``M-x jedi:install-server RET`` (see also :ref:`pyinstall`)
+
+Here is a minimal example to setup Jedi.el via package.el + MELPA:
+
+.. literalinclude:: jedi-melpa.el
+   :language: cl
+
+.. Un-comment the following once v0.2.0 is released in Marmalade:
+
+   Here is a minimal example to setup Jedi.el via package.el + Marmalade.
+   The only difference with the above MELPA case is the value of
+   :el:symbol:`package-archives`:
+
+   .. literalinclude:: jedi-marmalade.el
+      :language: cl
+
+See also: :ref:`minimal-tryout`.
+
+.. _Marmalade: http://marmalade-repo.org
+.. _MELPA: http://melpa.org
 
 Manual install
 --------------
 
-1. Install EPC_ and auto-complete_.
+1. Install EPC_ and (auto-complete_ or company-mode_).
 2. Install Jedi.el.  Download the repository of Jedi.el and add it to
    `load-path`.
-3. Install Jedi_ and python-epc_ by
+3. Add ``(autoload 'jedi:setup "jedi" nil t)`` in your Emacs configuration.
+4. Run ``M-x jedi:install-server RET`` (see also :ref:`pyinstall`)
 
-   - ``make requirements`` (no need for root privileges [#]_) or
-   - ``pip install -r requirements.txt`` if you want to determine
-     where to install Python modules.  You need root privileges (i.e.,
-     ``sudo``) to install it in system directory.
+.. _pyinstall:
 
-4. Add ``(autoload 'jedi:setup "jedi" nil t)`` in your Emacs configuration.
+Python server (jediepcserver.py) installation
+---------------------------------------------
 
-.. [#] You need virtualenv_ for ``make requirements``.  It installs
-   all requirements for Jedi EPC server in an isolated Python
-   environment in ``env/`` directory under the directory where jedi.el
-   locates.  Note that you don't need to worry about if you want to
-   use Jedi.el to complete modules in another virtualenv you made.
-   Jedi EPC server recognize the virtualenv it is in (i.e., the
-   environment variable ``VIRTUAL_ENV`` in your Emacs) and then add
-   modules in that environment to its ``sys.path``.
+As of Jedi.el v0.2.0, jediepcserver.py installation is done by running
+Emacs command :el:symbol:`jedi:install-server`, i.e., typing
+``M-x jedi:install-server RET`` in Emacs.  The same command can be used to
+update Python packages used by Jedi.el.  So, running this command
+after updating Jedi.el each time is recommended.
+
+You can configure the location of the Python packages installed by
+:el:symbol:`jedi:install-server` by changing the following variables:
+
+- :el:symbol:`jedi:environment-root`
+- :el:symbol:`python-environment-directory`
+- :el:symbol:`python-environment-default-root-name`
+
+If you want to install Python packages manually, rather than using
+:el:symbol:`jedi:install-server`, see :ref:`manual-pyinstall` below.
+
+.. _manual-pyinstall:
+
+Manually install Python server (jediepcserver.py)
+-------------------------------------------------
+
+Install jediepcserver.py script to wherever you want.  For example,
+you can use...
+
+- pip::
+
+    pip install -U PATH/TO/EMACS-JEDI/
+
+- setup.py directly::
+
+    cd PATH/TO/EMACS-JEDI/
+    python setup.py install
+
+Then find where your jediepcserver.py ends up.  Set the location by::
+
+    (setq jedi:server-command '("PATH/TO/jediepcserver.py"))
+
+See also :el:symbol:`jedi:server-command`.
 
 
 Setup
@@ -195,6 +267,7 @@ Jedi.el and EIN simultaneously.
 .. _Python binding: python-epc_
 .. _python-epc: https://github.com/tkf/python-epc
 .. _auto-complete: https://github.com/auto-complete/auto-complete
+.. _company-mode: https://github.com/company-mode/company-mode
 .. _jedi-direx: https://github.com/tkf/emacs-jedi-direx
 
 .. Build status badge
@@ -204,8 +277,6 @@ Jedi.el and EIN simultaneously.
    :alt: Build Status
 
 
-.. ^- put some space after README.rst
-
 Configuration
 =============
 
@@ -214,8 +285,10 @@ Configuration
 .. el:function:: jedi:setup
 .. el:function:: jedi:ac-setup
 .. el:variable:: jedi:complete-on-dot
+.. el:variable:: jedi:environment-root
+.. el:variable:: jedi:environment-virtualenv
 .. el:variable:: jedi:server-command
-   :value: '("python" "JEDI:SOURCE-DIR/jediepcserver.py")
+   :value: '("~/.emacs.d/.python-environments/default/bin/jediepcserver.py")
 .. el:variable:: jedi:server-args
 .. el:variable:: jedi:get-in-function-call-timeout
 .. el:variable:: jedi:get-in-function-call-delay
@@ -226,6 +299,7 @@ Configuration
 .. el:variable:: jedi:doc-display-buffer
 .. el:variable:: jedi:install-imenu
 .. el:variable:: jedi:imenu-create-index-function
+.. el:variable:: jedi:install-python-jedi-dev-command
 
 
 Keybinds
@@ -233,18 +307,6 @@ Keybinds
 
 .. el:keymap:: jedi-mode-map
 .. el:variable:: jedi:use-shortcuts
-
-.. el:variable:: jedi:setup-keys
-.. el:variable:: jedi:key-complete
-   :value: (kbd "<C-tab>")
-.. el:variable:: jedi:key-goto-definition
-   :value: (kbd "C-.")
-.. el:variable:: jedi:key-show-doc
-   :value: (kbd "C-c d")
-.. el:variable:: jedi:key-related-names
-   :value: (kbd "C-c r")
-.. el:variable:: jedi:goto-definition-pop-marker
-   :value: (kbd "C-,")
 
 
 Command
@@ -265,55 +327,60 @@ Command
 .. el:function:: anything-jedi-related-names
 
 .. el:package:: jedi
+.. el:function:: jedi:install-server
+.. el:function:: jedi:install-python-jedi-dev
 .. el:function:: jedi:pop-to-epc-buffer
 .. el:function:: jedi:toggle-log-traceback
 .. el:function:: jedi:toggle-debug-server
+.. el:function:: jedi:show-setup-info
 .. el:function:: jedi:show-version-info
 
 
 Troubleshooting
 ===============
 
-Before posting question or bug report in the `issue tracker`_, please
-investigate the problem by yourself.  Here is some checklist.
+.. note:: If you have a question, ask question in StackOverflow_ with
+   ``emacs-jedi`` tag.  We stopped using the issue tracker for Q & A.
 
-#. You can try Jedi.el without installing it, by running
-   ``make tryout`` if you have carton_ installed.  This will
-   install requirements for Jedi.el separated from your local setup in
-   ``.emacs.d``.  You can also check the configuration file
-   tryout-jedi.el_ to see a minimum working configuration.  This is
-   the configuration file loaded by ``make tryout``.  If you have
-   trouble setting up Jedi.el, compare your configuration file and
-   ``tryout-jedi.el``.
+Before posting question in StackOverflow_ or bug report in the `issue
+tracker`_, please investigate the problem by yourself.  Here is some
+checklist.
 
-   If you get some error during ``make tryout`` or any other ``make``
-   tasks, checking ``elpa/install.log`` may help you finding the
-   problem.
+It is best to mention that you went through this list (or stuck with
+somewhere) in your question or bug report.
 
-   .. _carton: https://github.com/rejeep/carton
-   .. _tryout-jedi.el:
-      https://github.com/tkf/emacs-jedi/blob/master/tryout-jedi.el
+.. _StackOverflow: http://stackoverflow.com/questions/tagged/emacs-jedi
 
-   If you install carton_ in a different place or you don't add it to
-   the ``$PATH``, you can call ``make`` like this:
-   ``make CARTON=PATH/TO/bin/carton tryout``.
-   Typically, ``PATH/TO/bin/carton`` is ``~/.carton/bin/carton``.
+#. Run :kbd:`M-x` :el:symbol:`jedi:show-setup-info` :kbd:`RET` (if you
+   don't have it, try :el:symbol:`jedi:show-version-info` instead).
+   This helps you in two ways.
 
-   If you are too lazy to go to carton_ site to checkout how to
-   install it, here is what you need to do::
+   1. Paste the result of this function when you are asking question
+      or reporting bug, to give people basic information.
 
-     curl -fsSkL https://raw.github.com/rejeep/carton/master/go | sh
-     make CARTON=$HOME/.carton/bin/carton tryout
+      Unless you are sure that it is irrelevant, it is recommended to
+      put this information.  If you think it is too long for a simple
+      question/report, you can always use https://gist.github.com etc.
 
-   Note that this carton_ is different from `the one for Perl
-   <https://github.com/miyagawa/carton>`_.
+   2. To make sure jedi.el is running correctly and communicating with
+      Jedi EPC server.
 
-#. To make sure that jedi.el is running correctly, you can
-   do ``M-x jedi:show-jedi-version``.  It will show the versions
-   of the Python libraries you are using.
+      This is the least complex way to communicate with the Jedi
+      server.  If it doesn't work, rest of Jedi.el functions will not
+      work.
 
-   This is least complex way to communicate with the Jedi server.  If
-   it doesn't work, rest of Jedi.el functions will not work.
+#. You can try Jedi.el without installing it, in a "clean Emacs setup"
+   [#]_ .  If you don't know what is wrong and don't know what to do
+   next, this it the best thing to try.  This helps you to find
+   out if your setting is wrong or if it is actually a bug in Jedi.el.
+
+   Check :ref:`quick-try`.  If it works, compare with your Emacs setup
+   carefully.  It is likely that there is something wrong in your
+   Emacs setup.  You should also check minimal working examples in the
+   install_ section.
+
+   (Note that currently there is no automated way to do this in
+   Windows without Cygwin.  If you know it, please document!)
 
 #. To check that :el:symbol:`jedi:setup` is called properly via
    :el:symbol:`python-mode-hook`, run ``M-: jedi-mode RET`` in
@@ -333,6 +400,14 @@ investigate the problem by yourself.  Here is some checklist.
    by ``<f1> k C-c ?`` (or ``C-h`` instead of ``<f1>``), for example.
    This one should show the help for :el:symbol:`jedi:show-doc`.
 
+#. If you get something like ``deferred error : (error ...)`` in your
+   echo area (equivalently, the ``*Messages*`` buffer), most of the
+   time the error is from Python-Jedi.  Get traceback following "`How
+   to get traceback`_" and see where the error is from.  If it is from
+   Python-Jedi, send the bug report to its `issue tracker`__.
+
+   __ https://github.com/davidhalter/jedi/issues
+
 #. Make sure you are reading right version of document.  If you
    are using developmental version (installed via el-get, MELPA
    or manually from github), you should read `developmental version
@@ -341,26 +416,210 @@ investigate the problem by yourself.  Here is some checklist.
    <http://tkf.github.io/emacs-jedi/released>`_.
 
 
+.. [#] By "clean Emacs setup" I mean a Emacs process started in such a
+   way that it does not read your Emacs configuration file and
+   libraries installed by you.  In this manual, several ways to do
+   that are described.  See :ref:`quick-try`.
+
+
 FAQ
 ===
+
+.. _quick-try:
+
+How to quickly try Jedi.el without installing it
+------------------------------------------------
+
+There are two ways.  One for new users and one for Jedi.el developers.
+
+1. :ref:`minimal-tryout`
+2. :ref:`make-tryout`
+
+
+.. _minimal-tryout:
+
+Use minimal example setting to try Jedi.el without installation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This is recommended if you are new to Jedi.el.
+
+1. Try Jedi.el without installation using package.el + MELPA
+
+   Here is how to try el-get setup without touching your
+   ``~/.emacs.d/``.  This version uses package.el and MELPA.  Once
+   emacs is launched, type ``M-x package-install RET jedi RET`` and
+   ``M-x jedi:install-server RET``:
+
+   .. literalinclude:: jedi-melpa.sh
+      :language: sh
+
+2. Try Jedi.el without installation using el-get
+
+   If you want to try el-get setup, do the following instead.  You may
+   remove ``--eval "(setq el-get-install-skip-emacswiki-recipes nil)"``
+   like the last commented line, but it will be very slow to start Emacs.
+   Once emacs is launched, type ``M-x el-get-install RET jedi RET`` and
+   ``M-x jedi:install-server RET``
+
+   .. literalinclude:: jedi-el-get.sh
+      :language: sh
+
+
+The above methods run minimal example mentioned in the install_
+section.
+
+
+.. note:: In older Emacs version (< 24.4), the method 1 using
+   package.el may result in an error something like
+
+   .. sourcecode:: text
+
+      jedi.el:37:1:Error: Cannot open load file: python-environment
+
+   In this case, :kbd:`M-x package-install RET python-environment RET`
+   may solve the problem.
+
+
+.. _make-tryout:
+
+Use ``make tryout`` to try Jedi.el without installation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This is recommended if you want to develop Jedi.el.  If you have cask_
+command, then you just have to:
+
+.. sourcecode:: sh
+
+   git clone https://github.com/tkf/emacs-jedi.git
+   cd emacs-jedi
+   make tryout
+
+If you are too lazy to go to cask_ site to checkout how to install it,
+here is what you need to do::
+
+  curl -fsSkL https://raw.github.com/cask/cask/master/go | python
+  make CASK=$HOME/.cask/bin/cask tryout
+
+``make tryout`` will install requirements for Jedi.el separated from
+your local setup in ``~/.emacs.d/``.  You can also check the
+configuration file tryout-jedi.el_ to see a minimum working
+configuration.  This is the configuration file loaded by ``make tryout``.
+
+.. _cask: https://github.com/cask/cask
+.. _tryout-jedi.el:
+   https://github.com/tkf/emacs-jedi/blob/master/tryout-jedi.el
+
+If you install cask_ in a different place or you don't add it to the
+``$PATH``, you can call ``make`` like this: ``make
+CASK=PATH/TO/bin/cask tryout``.  Typically, ``PATH/TO/bin/cask`` is
+``~/.cask/bin/cask``.
+
 
 How to update Python dependencies
 ---------------------------------
 
-.. note:: el-get user can just use ``M-x el-get-update RET jedi RET``
-   to update Emacs Lisp *and* Python dependencies.
+Simply run Emacs command ``M-x jedi:install-server``.
+See also :el:symbol:`jedi:install-server`.
 
-Simply run::
+.. warning:: The following command does not work as of version 0.2.0
+   anymore::
 
-  cd PATH/TO/JEDI
-  make requirements
+     make requirements
+     pip install -r PATH/TO/requirements.txt
 
-Or, if you install dependencies to somewhere else (i.e., you did not
-use the ``make`` command when you installed.), use ``pip`` directly.
-You may need ``sudo`` depending on the location you installed
-dependencies.::
+.. warning:: (For el-get user) ``M-x el-get-update RET jedi RET``
+   will *not* update Python dependencies anymore.
 
-  pip install -r PATH/TO/requirements.txt
+
+How to use Python 3 (or any other specific version of Python)
+-------------------------------------------------------------
+
+Using Python 3 as default Python, only in Jedi.el
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Set :el:symbol:`jedi:environment-virtualenv` and
+:el:symbol:`jedi:environment-virtualenv`, like this::
+
+   (setq jedi:environment-root "jedi")  ; or any other name you like
+   (setq jedi:environment-virtualenv
+         (append python-environment-virtualenv
+                 '("--python" "/PATH/TO/python3")))
+
+Or you can just set, for example, ``virtualenv3`` if it is run by
+Python 3::
+
+   (setq jedi:environment-virtualenv
+         (list "virtualenv3" "--system-site-packages"))
+
+.. note:: ``--system-site-packages`` is the default option in
+   :el:symbol:`python-environment-virtualenv` so you need it if you
+   want to the default behavior.  As to why it is the default, see the
+   discussion here: `tkf/emacs-python-environment#3
+   <https://github.com/tkf/emacs-python-environment/issues/3>`_.
+
+.. note:: In principle, you can modify
+   :el:symbol:`python-environment-virtualenv` and do not touch
+   :el:symbol:`jedi:environment-virtualenv` *and*
+   :el:symbol:`jedi:environment-root`.  However, it changes default
+   environment to use Python 3 so make sure all other Python packages
+   you need are compatible with Python 3.
+
+
+Automatically use appropriate Python version
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This can be done by making :el:symbol:`jedi:server-command`,
+:el:symbol:`jedi:environment-root` and
+:el:symbol:`jedi:environment-virtualenv` buffer local using
+:el:symbol:`make-local-variable` and set them appropriately.  See
+:el:symbol:`jedi:server-command` for more info.  You might need to use
+:el:symbol:`python-environment-bin`.
+
+
+How to setup proxy
+------------------
+
+:el:symbol:`jedi:install-server` runs `pip install`_.  So, you may
+want to set proxy for it.  In that case, set :envvar:`http_proxy` and
+:envvar:`https_proxy` [#]_.
+
+If you want to set it in ``~/.bashrc``, do something like the
+following.  Since Emacs [#]_ and other programs read this variable, it
+may be the best approach.::
+
+   export http_proxy=http://[user:passwd@]proxy.server:port
+   export https_proxy=https://[user:passwd@]proxy.server:port
+
+If you want to set it in Emacs setting, do something like this::
+
+  (setenv "http_proxy" "http://[user:passwd@]proxy.server:port")
+  (setenv "https_proxy" "https://[user:passwd@]proxy.server:port")
+
+If you want to setup proxy only for pip, you can use
+:envvar:`PIP_PROXY` instead of :envvar:`http_proxy` and
+:envvar:`https_proxy`.  This sets default value for `pip --proxy option`_
+(see also `pip > User Guide > Environment Variables`_).
+
+.. [#] See also:
+   http://stackoverflow.com/questions/14149422/using-pip-behind-a-proxy
+
+   (BTW, :envvar:`http_proxy` and :envvar:`https_proxy` are not
+   mentioned in pip manual.  If anybody know official information from
+   pip regarding :envvar:`http_proxy` and :envvar:`https_proxy`,
+   please add it here.)
+
+.. [#]
+   `Proxies - URL Programmer's Manual
+   <http://www.gnu.org/software/emacs/manual/html_node/url/Proxies.html>`_
+
+.. _`pip install`:
+  http://pip.readthedocs.org/en/latest/reference/pip_install.html
+
+.. _`pip --proxy option`:
+  http://pip.readthedocs.org/en/latest/reference/pip.html#cmdoption--proxy
+
+.. _`pip > User Guide > Environment Variables`:
+  http://pip.readthedocs.org/en/latest/user_guide.html#environment-variables
 
 
 How to get traceback
@@ -409,128 +668,10 @@ Emacs to edit something, not to wait some random lisp program to finish.
 EPC_ and deferred.el_ are perfect libraries to achieve this goal.
 
 
-Changelog
-=========
+More resources
+==============
 
-v0.1.3 (WIP)
-------------
+.. toctree::
 
-Highlights:
-
-- Add :el:symbol:`jedi:toggle-log-traceback` and
-  :el:symbol:`jedi:pop-to-epc-buffer`.
-- Add default keybind and a simple way to setup recommended keybinds.
-  See issue `#47`_ for the reason and discussion behind this change.
-- Now :el:symbol:`jedi:ac-setup` auto-magically enables auto-complete-mode.
-  This is to help people from setting up auto-complete when they were not
-  using it before installing jedi.el.  See:
-  `#40 <https://github.com/tkf/emacs-jedi/issues/40>`_,
-  `bbatsov/prelude#251 <https://github.com/bbatsov/prelude/issues/251>`_,
-  `stackoverflow <http://stackoverflow.com/questions/15658963>`_.
-
-Contributions from:
-
-.. include:: releases/v0.1.3/authors.txt
-
-Closed issues and pulled patches:
-
-   .. include:: releases/v0.1.3/closed.txt
-
-v0.1.2 (2013-05-26)
--------------------
-
-Highlights:
-
-- Package is available from Marmalade_.
-- Add imenu support (see :el:symbol:`jedi:install-imenu` and
-  :el:symbol:`jedi:imenu-create-index-function`).
-  Currently it is not on by default as it needs developmental version
-  of Jedi_.
-- Add :el:symbol:`jedi:goto-definition-config` configurable option.
-- Jedi.el now pools server instances.
-  So, for example, you can create buffer-local :el:symbol:`jedi:server-args`
-  to setup project-specific Jedi server (issue-28_).
-- Do not expand common part when completing on inserting dot using
-  :el:symbol:`jedi:dot-complete`.
-- Strip off newlines from candidate summary.  This prevents
-  popup to be disrupted when showing candidates summary
-  containing newlines (e.g., ``json.__all__``).
-
-Contributions from:
-
-.. include:: releases/v0.1.2/authors.txt
-
-Closed issues and pulled patches:
-
-   .. include:: releases/v0.1.2/closed.txt
-
-.. _marmalade: http://marmalade-repo.org/packages/jedi
-.. _issue-28: https://github.com/tkf/emacs-jedi/issues/28
-
-v0.1.1 (2012-12-01)
--------------------
-
-- Add experimental "full-name" support [#fullname]_.
-- PR-11_ fixes Makefile for BSD make (thanks, `@goro1080`_!).
-- Fix issue-9_: line number sent to the server was shifted when the cursor
-  is at the beginning of line.
-- Fix issue-10_: get_in_function_call was called in non-python-mode buffer.
-- Fix issue-7_: server process was killed unexpectedly.
-- Add :el:symbol:`jedi:setup-keys`.  You don't need to manually add
-  Jedi commands to :el:symbol:`python-mode-map` now.
-
-Contributions from:
-
-.. include:: releases/v0.1.1/authors.txt
-
-Closed issues and pulled patches:
-
-   .. include:: releases/v0.1.1/closed.txt
-
-.. _@goro1080: https://github.com/goro1080
-
-.. _PR-11: https://github.com/tkf/emacs-jedi/pull/11
-.. _issue-10: https://github.com/tkf/emacs-jedi/issues/10
-.. _issue-9: https://github.com/tkf/emacs-jedi/issues/9
-.. _issue-7: https://github.com/tkf/emacs-jedi/issues/7
-
-.. [#fullname] `jedi:get-full-name-*` functions require developmental
-   version of Jedi_.
-   See also: `Request: Definition.fullname · Issue #61 ·
-   davidhalter/jedi <https://github.com/davidhalter/jedi/issues/61>`_
-
-v0.1.0 (2012-11-09)
--------------------
-
-- PR-8_ adds ELDoc like argument highlighting (thanks, `@syohex`_!).
-- PR-2_ adds meta-data in header comment for ELPA (thanks, `@syohex`_!).
-- PR-1_ fixes Makefile for newer pip version (thanks, `@L42y`_!).
-- First version.
-
-Contributions from:
-
-.. include:: releases/v0.1.0/authors.txt
-
-Closed issues and pulled patches:
-
-   .. include:: releases/v0.1.0/closed.txt
-
-.. _PR-8: https://github.com/tkf/emacs-jedi/pull/8
-.. _PR-2: https://github.com/tkf/emacs-jedi/pull/2
-.. _PR-1: https://github.com/tkf/emacs-jedi/pull/1
-
-.. _@syohex: https://github.com/syohex
-.. _@L42y: https://github.com/L42y
-
-
-.. authors-to-github account map:
-
-.. _Aaron Meurer: https://github.com/asmeurer
-.. _Danilo Bargen: https://github.com/dbrgn
-.. _Fabián Ezequiel Gallina: https://github.com/fgallina
-.. _immerrr: https://github.com/immerrr
-.. _Jaakko Pallari: https://github.com/jkpl
-.. _Kiyono Goro: https://github.com/goro1080
-.. _L42y: https://github.com/L42y
-.. _Ryan Olf: https://github.com/ryanolf
-.. _Syohei YOSHIDA: https://github.com/syohex
+   deprecation
+   changelog
