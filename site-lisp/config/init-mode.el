@@ -134,6 +134,8 @@
                     ("\\.jade" . jade-mode)
                     ("\\.rb$" . enh-ruby-mode)
                     ("\\.go$" . go-mode)
+                    ("\\.vala$" . vala-mode)
+                    ("\\.vapi$" . vala-mode)
                     ))
   (add-to-alist 'auto-mode-alist elt-cons))
 
@@ -152,6 +154,7 @@
 (autoload 'css-mode "init-css-mode")
 (autoload 'enh-ruby-mode "init-ruby")
 (autoload 'go-mode "init-golang")
+(autoload 'vala-mode "vala-mode")
 (add-to-list 'interpreter-mode-alist '("ruby" . enh-ruby-mode))
 (add-hook
  'c-mode-common-hook
