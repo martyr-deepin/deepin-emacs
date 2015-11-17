@@ -6,7 +6,7 @@ Emacs is hackable OS for top hacker, most of emacs extension is written by elisp
 Deepin Emacs is mix many extensions from [AndyStewart](http://www.emacswiki.org/emacs/AndyStewart),
 you can found all extensions under [site-lisp](https://gitcafe.com/Deepin/deepin-emacs/tree/master/site-lisp).
 
-Deepin Emacs's target is build a development environment that user don't need use configure elisp code line by line.
+Deepin Emacs's target is build a development environment that user don't need config elisp code line by line.
 Deepin Emacs has provide below feature:
 
 - Code auto completion with most languages. (by autocomplete extensions)
