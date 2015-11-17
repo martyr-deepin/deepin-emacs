@@ -1,13 +1,13 @@
 # Deepin Emacs
 
-**Description**: Customize emacs for Deepin.
+**Description**: Is a customized emacs for Deepin
 
-Emacs is hackable OS for top hacker, most of emacs extension is written by elisp.
-Deepin Emacs is mix many extensions from [AndyStewart](http://www.emacswiki.org/emacs/AndyStewart),
-you can found all extensions under [site-lisp](https://gitcafe.com/Deepin/deepin-emacs/tree/master/site-lisp).
+Emacs is hackable OS for top hackers, most of emacs extensions are written in elisp.
+Deepin Emacs merged many extensions from [AndyStewart](http://www.emacswiki.org/emacs/AndyStewart),
+you can find all extensions under [site-lisp](https://gitcafe.com/Deepin/deepin-emacs/tree/master/site-lisp).
 
-Deepin Emacs's target is build a development environment that user don't need config elisp code line by line.
-Deepin Emacs has provide below feature:
+Deepin Emacs’s target is to build a development environment that users don’t need to config elisp code line by line.
+Deepin Emacs provides below features:
 
 - Code auto completion with most languages. (by autocomplete extensions)
 - Code template system. (by yasnippet extension)
