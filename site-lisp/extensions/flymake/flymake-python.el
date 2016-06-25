@@ -27,8 +27,14 @@ The CMDLINE should be something like:
 
 (setq flymake-info-line-regex (append flymake-info-line-regex '("unused$" "^redefinition" "used$")))
 
+(defvar flymake-allowed-file-name-masks nil)
 (add-to-list 'flymake-allowed-file-name-masks
              (list "\\.py\\'" (apply-partially 'flymake-command-parse "pyflakes %f")))
+
 (add-hook 'python-mode-hook 'flymake-mode)
 
 (provide 'flymake-python)
+
+
+
+

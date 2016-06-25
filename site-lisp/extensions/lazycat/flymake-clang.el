@@ -23,6 +23,8 @@
   (flymake-safe-delete-file (concat (file-name-directory buffer-file-name) "a.out"))
   )
 
+
+(defvar flymake-allowed-file-name-masks nil)
 (defun flymake-clang-load ()
   (interactive)
   (unless (eq buffer-file-name nil)
