@@ -162,7 +162,7 @@
  '(highlight-cl-and-other ((t (:foreground "#20ABFC" :underline nil))))
  '(highlight-cl-macro ((t (:underline nil))))
  '(highlight-symbol-face ((((class color) (background dark)) (:background "grey" :foreground "white"))))
- '(hl-line ((t (:background "grey5"))))
+ '(hl-line ((t (:background "grey13"))))
  '(hl-sexp-face ((((class color) (background dark)) (:background "gray2"))))
  '(hs-face ((t (:background "DarkRed" :foreground "grey" :box (:line-width 1 :color "grey50")))))
  '(hs-fringe-face ((t (:background "DarkRed" :foreground "grey" :box (:line-width 2 :color "grey75" :style released-button)))))
