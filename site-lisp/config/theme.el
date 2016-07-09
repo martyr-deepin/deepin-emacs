@@ -200,7 +200,7 @@
  '(italic ((t (:underline nil :slant normal))))
  '(jedi:highlight-function-argument ((t (:foreground "gold"))))
  '(lazy-highlight ((((class color) (min-colors 88) (background dark)) (:background "grey20"))))
- '(linum ((t (:background "black" :foreground "gray15"))))
+ '(linum ((t (:background "black" :foreground "gray40"))))
  '(match ((((class color) (min-colors 88) (background dark)) (:background "Black" :foreground "Grey70" :weight extra-bold))))
  '(message-header-subject ((t (:foreground "gold" :weight bold))))
  '(message-header-to ((t (:foreground "DarkRed" :weight bold))))
