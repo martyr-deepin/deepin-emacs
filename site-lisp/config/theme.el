@@ -1,4 +1,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Emacs 主题设置 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defvar emacs-font-name "文泉驿等宽微米黑"
+  "The font name of English.")
+(defvar emacs-font-size 12
+  "The default font size.")
+(if (display-grayscale-p)
+    (progn
+      (set-frame-font (format "%s-%s" (eval emacs-font-name) (eval emacs-font-size)))
+      (set-fontset-font (frame-parameter nil 'font) 'unicode (eval emacs-font-name))))
+
 (set-face-attribute 'default nil :height 130)
 (set-fringe-mode '(0 . 0))              ;Make fringe mini size
 (setq linum-format (concat " %" (number-to-string (length (number-to-string (count-lines (point-min) (point-max))))) "d "))
@@ -200,7 +209,7 @@
  '(italic ((t (:underline nil :slant normal))))
  '(jedi:highlight-function-argument ((t (:foreground "gold"))))
  '(lazy-highlight ((((class color) (min-colors 88) (background dark)) (:background "grey20"))))
- '(linum ((t (:background "black" :foreground "gray40"))))
+ '(linum ((t (:background "black" :foreground "gray35"))))
  '(match ((((class color) (min-colors 88) (background dark)) (:background "Black" :foreground "Grey70" :weight extra-bold))))
  '(message-header-subject ((t (:foreground "gold" :weight bold))))
  '(message-header-to ((t (:foreground "DarkRed" :weight bold))))
