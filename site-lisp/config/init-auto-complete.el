@@ -82,7 +82,8 @@
 ;;; Require
 
 (require 'auto-complete-config)
-(require 'auto-complete-clang-extension)
+(if (executable-find "g++")
+    (require 'auto-complete-clang-extension))
 
 ;;; Code:
 
