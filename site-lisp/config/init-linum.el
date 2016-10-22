@@ -113,6 +113,7 @@
                'jade-mode-hook
                'enh-ruby-mode-hook
                'vala-mode-hook
+               'rust-mode-hook
                ))
   (add-hook hook (lambda () (linum-mode 1))))
 

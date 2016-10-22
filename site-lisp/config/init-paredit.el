@@ -97,6 +97,7 @@
                'jade-mode-hook
                'css-mode-hook
                'enh-ruby-mode-hook
+               'rust-mode-hook
                ))
   (add-hook hook '(lambda () (paredit-mode 1))))
 
