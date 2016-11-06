@@ -101,7 +101,7 @@
         (("w" . "W3m") . (lambda () (interactive) (cycle-buffer-in-special-mode 'w3m-mode)))
         (("t" . "Term") . (lambda () (interactive) (cycle-buffer-in-special-mode 'term-mode)))
         (("y" . "Yaoddmuse") . (lambda () (interactive) (cycle-buffer-in-special-mode 'yaoddmuse-mode)))
-        (("r" . "Ruby") . (lambda () (interactive) (cycle-buffer-in-special-mode 'enh-ruby-mode)))
+        (("r" . "Rust") . (lambda () (interactive) (cycle-buffer-in-special-mode 'rust-mode)))
         (("V" . "DocView") . (lambda () (interactive) (cycle-buffer-in-special-mode 'doc-view-mode)))
         (("c" . "C-Mode") . (lambda () (interactive) (cycle-buffer-in-special-mode 'c-mode)))
         (("C" . "C++-Mode") . (lambda () (interactive) (cycle-buffer-in-special-mode 'c++-mode)))
