@@ -84,22 +84,6 @@
 
 ;;; Code:
 
-(add-hook 'c-mode-hook
-          (lambda ()
-            (require 'flymake)
-            (require 'flymake-extension)
-            (require 'flymake-c)
-            (flymake-mode)
-            ))
-
-(add-hook 'c++-mode-hook
-          (lambda ()
-            (require 'flymake)
-            (require 'flymake-extension)
-            (require 'flymake-c++)
-            (flymake-mode)
-            ))
-
 (add-hook 'shell-mode-hook
           (lambda ()
             (require 'flymake)

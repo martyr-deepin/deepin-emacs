@@ -166,9 +166,6 @@
 
     (require 'c-eldoc)
     (c-turn-on-eldoc-mode)
-
-    (require 'flymake-clang)
-    (flymake-clang-load)
     ))
 
 ;;; ### Auto-fill ###
