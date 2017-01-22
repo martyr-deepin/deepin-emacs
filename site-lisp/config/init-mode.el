@@ -137,6 +137,7 @@
                     ("\\.vala$" . vala-mode)
                     ("\\.vapi$" . vala-mode)
                     ("\\.rs$" . rust-mode)
+                    ("\\.pro$" . qmake-mode)
                     ))
   (add-to-alist 'auto-mode-alist elt-cons))
 
@@ -157,6 +158,7 @@
 (autoload 'go-mode "init-golang")
 (autoload 'vala-mode "vala-mode")
 (autoload 'rust-mode "rust-mode")
+(autoload 'qmake-mode "qmake-mode")
 (add-to-list 'interpreter-mode-alist '("ruby" . enh-ruby-mode))
 (add-hook
  'c-mode-common-hook
