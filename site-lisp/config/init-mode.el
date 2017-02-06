@@ -138,6 +138,7 @@
                     ("\\.vapi$" . vala-mode)
                     ("\\.rs$" . rust-mode)
                     ("\\.pro$" . qmake-mode)
+                    ("\\.h$" . c++-mode)
                     ))
   (add-to-alist 'auto-mode-alist elt-cons))
 
@@ -160,15 +161,51 @@
 (autoload 'rust-mode "rust-mode")
 (autoload 'qmake-mode "qmake-mode")
 (add-to-list 'interpreter-mode-alist '("ruby" . enh-ruby-mode))
-(add-hook
- 'c-mode-common-hook
- '(lambda ()
-    (require 'google-c-style)
-    (google-set-c-style)
 
-    (require 'c-eldoc)
-    (c-turn-on-eldoc-mode)
+(defun c-mode-style-setup ()
+  (interactive)
+  "Set up c-mode and related modes.
+
+ Includes support for Qt code (signal, slots and alikes)."
+  ;; eldoc.
+  (require 'c-eldoc)
+  (c-turn-on-eldoc-mode)
+
+  ;; base-style
+  (c-set-style "stroustrup")
+  ;; set auto cr mode
+  (c-toggle-auto-hungry-state 1)
+
+  ;; qt keywords and stuff ...
+  ;; set up indenting correctly for new qt kewords
+  (setq c-protection-key (concat "\\<\\(public\\|public slot\\|protected"
+                                 "\\|protected slot\\|private\\|private slot"
+                                 "\\)\\>")
+        c-C++-access-key (concat "\\<\\(signals\\|public\\|protected\\|private"
+                                 "\\|public slots\\|protected slots\\|private slots"
+                                 "\\)\\>[ \t]*:"))
+  (progn
+    ;; modify the colour of slots to match public, private, etc ...
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<\\(slots\\|signals\\)\\>" . font-lock-type-face)))
+    ;; make new font for rest of qt keywords
+    (make-face 'qt-keywords-face)
+    (set-face-foreground 'qt-keywords-face "DeepSkyBlue1")
+    ;; qt keywords
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<Q_OBJECT\\>" . 'qt-keywords-face)))
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<SIGNAL\\|SLOT\\>" . 'qt-keywords-face)))
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<Q[A-Z][A-Za-z]*" . 'qt-keywords-face)))
     ))
+(dolist (hook (list                     ;设置用空格替代TAB的模式
+               'c-mode-hook
+               'c++-mode-hook
+               'c-mode-common-hook
+               ))
+  (add-hook hook '(lambda () (c-mode-style-setup))))
+
 
 ;;; ### Auto-fill ###
 ;;; --- 自动换行
