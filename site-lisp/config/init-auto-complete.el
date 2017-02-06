@@ -100,6 +100,7 @@
    ac-source-words-in-same-mode-buffers
    ac-source-files-in-current-dir
    ac-source-filename
+   ac-source-c-headers
    ))
 
 (provide 'init-auto-complete)
