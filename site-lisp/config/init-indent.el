@@ -104,6 +104,11 @@
                'qml-mode-hook
                ))
   (add-hook hook '(lambda () (setq indent-tabs-mode nil))))
+(dolist (hook (list
+               'c-mode-hook
+               'c++-mode-hook))
+  (add-hook hook '(lambda ()
+                    (require 'c-braces))))
 
 (provide 'init-indent)
 
