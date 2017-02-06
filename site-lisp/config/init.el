@@ -18,6 +18,7 @@
   (require 'init-jedi)
   (require 'init-tabbar)
   (require 'init-mode)
+  (require 'init-qt)
   (require 'init-dired)
   (require 'init-session)
   (require 'init-paredit)

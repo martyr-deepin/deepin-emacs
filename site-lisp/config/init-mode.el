@@ -138,7 +138,6 @@
                     ("\\.vapi$" . vala-mode)
                     ("\\.rs$" . rust-mode)
                     ("\\.pro$" . qmake-mode)
-                    ("\\.h$" . c++-mode)
                     ))
   (add-to-alist 'auto-mode-alist elt-cons))
 
