@@ -92,7 +92,7 @@ $ sudo apt-get install \
                texinfo \
                libxaw7-dev \
                libxpm-dev \
-               libpng12-dev \
+               libpng-dev \
                libjpeg-dev \
                libtiff5-dev \
                libgif-dev \
