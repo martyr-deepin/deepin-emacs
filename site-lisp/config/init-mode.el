@@ -134,8 +134,8 @@
                     ("\\.jade" . jade-mode)
                     ("\\.rb$" . enh-ruby-mode)
                     ("\\.go$" . go-mode)
-                    ("\\.vala$" . vala-mode)
-                    ("\\.vapi$" . vala-mode)
+                    ;; ("\\.vala$" . vala-mode)
+                    ;; ("\\.vapi$" . vala-mode)
                     ("\\.rs$" . rust-mode)
                     ("\\.pro$" . qmake-mode)
                     ))
@@ -156,10 +156,9 @@
 (autoload 'css-mode "init-css-mode")
 (autoload 'enh-ruby-mode "init-ruby")
 (autoload 'go-mode "init-golang")
-(autoload 'vala-mode "vala-mode")
+;; (autoload 'vala-mode "vala-mode")
 (autoload 'rust-mode "rust-mode")
 (autoload 'qmake-mode "qmake-mode")
-(autoload 'c++-mode "cc-mode")
 (add-to-list 'interpreter-mode-alist '("ruby" . enh-ruby-mode))
 
 ;;; ### Auto-fill ###

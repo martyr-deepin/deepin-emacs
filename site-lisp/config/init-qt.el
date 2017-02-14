@@ -80,7 +80,7 @@
 ;;
 
 ;;; Require
-
+(require 'cc-mode)
 
 ;;; Code:
 (defun c-mode-style-setup ()
