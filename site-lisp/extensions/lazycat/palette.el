@@ -1578,7 +1578,6 @@ See `palette-mode' for more information."
     (set-buffer (get-buffer-create "Palette (Hue x Saturation)"))
     ;; Create the palette frame.  Prevent `1on1-change-cursor-on-input-method-flag' (from
     ;; `oneonone.el') from changing the cursor color.
-    (make-variable-frame-local '1on1-change-cursor-on-input-method-flag)
     (modify-frame-parameters
      (make-frame
       `((menu-bar-lines . 0) (tool-bar-lines . 0) (left-fringe . 0) (right-fringe . 0)

@@ -110,20 +110,11 @@
   "The current frame's windows and their buffers.
 This is an alist mapping windows to their current buffers.")
 ;; Emacs 23 not need below setup anymore.
-(when (> emacs-major-version 22)
-  (eval-when-compile
-    (with-no-warnings
-      (make-variable-frame-local 'winpoint-frame-windows))))
 
 (defvar winpoint-frame-positions nil
   "The current frame's windows and their associated buffer positions.
 This is an alist mapping windows to an alist mapping buffers to
 their stored point marker.")
-;; Emacs 23 not need below setup anymore.
-(when (> emacs-major-version 22)
-  (eval-when-compile
-    (with-no-warnings
-      (make-variable-frame-local 'winpoint-frame-positions))))
 
 (defalias 'window-point-remember-mode 'winpoint-mode)
 (define-minor-mode winpoint-mode
