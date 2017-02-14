@@ -81,6 +81,8 @@
 
 ;;; Require
 (require 'cc-mode)
+(require 'c-eldoc)
+(require 'modern-cpp-font-lock)
 
 ;;; Code:
 (defun c-mode-style-setup ()
@@ -89,8 +91,10 @@
 
  Includes support for Qt code (signal, slots and alikes)."
   ;; eldoc.
-  (require 'c-eldoc)
   (c-turn-on-eldoc-mode)
+
+  ;; cpp font lock.
+  (modern-c++-font-lock-global-mode t)
 
   ;; base-style
   (c-set-style "stroustrup")
