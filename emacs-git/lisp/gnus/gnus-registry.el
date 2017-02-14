@@ -1,6 +1,6 @@
 ;;; gnus-registry.el --- article registry for Gnus
 
-;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2017 Free Software Foundation, Inc.
 
 ;; Author: Ted Zlatanov <tzz@lifelogs.com>
 ;; Keywords: news registry
@@ -86,12 +86,6 @@
 (require 'nnmail)
 (require 'easymenu)
 (require 'registry)
-
-;; Silence XEmacs byte compiler, which will otherwise complain about
-;; call to `eieio-persistent-read'.
-(when (featurep 'xemacs)
-   (byte-compiler-options
-     (warnings (- callargs))))
 
 (defvar gnus-adaptive-word-syntax-table)
 
@@ -194,17 +188,17 @@ are tracked this way by default."
   "The splitting strategy applied to the keys in `gnus-registry-track-extra'.
 
 Given a set of unique found groups G and counts for each element
-of G, and a key K (typically 'sender or 'subject):
+of G, and a key K (typically `sender' or `subject'):
 
 When nil, if G has only one element, use it.  Otherwise give up.
 This is the fastest but also least useful strategy.
 
-When 'majority, use the majority by count.  So if there is a
+When `majority', use the majority by count.  So if there is a
 group with the most articles counted by K, use that.  Ties are
 resolved in no particular order, simply the first one found wins.
 This is the slowest strategy but also the most accurate one.
 
-When 'first, the first element of G wins.  This is fast and
+When `first', the first element of G wins.  This is fast and
 should be OK if your senders and subjects don't \"bleed\" across
 groups."
   :group 'gnus-registry
@@ -251,7 +245,7 @@ In order to prevent constant pruning, we prune back to a number
 somewhat less than the maximum size.  This option controls
 exactly how much less.  For example, given a maximum size of
 50000 and a prune factor of 0.1, the pruning process will try to
-cut the registry back to \(- 50000 \(* 50000 0.1\)\) -> 45000
+cut the registry back to \(- 50000 \(* 50000 0.1)) -> 45000
 entries.  The pruning process is constrained by the presence of
 \"precious\" entries."
   :version "25.1"
@@ -558,7 +552,7 @@ See the Info node `(gnus)Fancy Mail Splitting' for more details."
                      do (gnus-message
                          ;; warn more if gnus-registry-track-extra
                          (if gnus-registry-track-extra 7 9)
-                         "%s (extra tracking) traced subject '%s' to %s"
+                         "%s (extra tracking) traced subject `%s' to %s"
                          log-agent subject group)
                     and collect group))
          ;; filter the found groups and return them
@@ -585,7 +579,7 @@ See the Info node `(gnus)Fancy Mail Splitting' for more details."
                      do (gnus-message
                          ;; warn more if gnus-registry-track-extra
                          (if gnus-registry-track-extra 7 9)
-                         "%s (extra tracking) traced sender '%s' to %s"
+                         "%s (extra tracking) traced sender `%s' to %s"
                          log-agent sender group)
                      and collect group)))
 
@@ -615,7 +609,7 @@ See the Info node `(gnus)Fancy Mail Splitting' for more details."
                          do (gnus-message
                              ;; warn more if gnus-registry-track-extra
                              (if gnus-registry-track-extra 7 9)
-                             "%s (extra tracking) traced recipient '%s' to %s"
+                             "%s (extra tracking) traced recipient `%s' to %s"
                              log-agent recp group)
                         and collect group)))))
 
@@ -630,7 +624,7 @@ See the Info node `(gnus)Fancy Mail Splitting' for more details."
 (defun gnus-registry-post-process-groups (mode key groups)
   "Inspects GROUPS found by MODE for KEY to determine which ones to follow.
 
-MODE can be 'subject' or 'sender' for example.  The KEY is the
+MODE can be `subject' or `sender' for example.  The KEY is the
 value by which MODE was searched.
 
 Transforms each group name to the equivalent short name.
@@ -712,12 +706,12 @@ possible.  Uses `gnus-registry-split-strategy'."
      ((null out)
       (gnus-message
        5
-       "%s: no matches for %s '%s'."
+       "%s: no matches for %s `%s'."
        log-agent mode key)
       nil)
      (t (gnus-message
          5
-         "%s: too many extra matches (%s) for %s '%s'.  Returning none."
+         "%s: too many extra matches (%s) for %s `%s'.  Returning none."
          log-agent out mode key)
         nil))))
 
@@ -832,8 +826,7 @@ Addresses without a name will say \"noname\"."
 
 (defun gnus-registry-sort-addresses (&rest addresses)
   "Return a normalized and sorted list of ADDRESSES."
-  (sort (apply 'nconc (mapcar 'gnus-registry-extract-addresses addresses))
-        'string-lessp))
+  (sort (mapcan 'gnus-registry-extract-addresses addresses) 'string-lessp))
 
 (defun gnus-registry-simplify-subject (subject)
   (if (stringp subject)
@@ -881,7 +874,7 @@ FUNCTION should take two parameters, a mark symbol and the cell value."
 
 ;; FIXME: Why not merge gnus-registry--set/remove-mark and
 ;; gnus-registry-set-article-mark-internal?
-(defun gnus-registry--set/remove-mark (remove mark articles)
+(defun gnus-registry--set/remove-mark (mark remove articles)
   "Set/remove the MARK over process-marked ARTICLES."
   ;; If this is called and the user doesn't want the
   ;; registry enabled, we'll ask anyhow.
@@ -1036,7 +1029,7 @@ only the last one's marks are returned."
   (let* ((article (last articles))
          (id (gnus-registry-fetch-message-id-fast article))
          (marks (when id (gnus-registry-get-id-key id 'mark))))
-    (when (gmm-called-interactively-p 'any)
+    (when (called-interactively-p 'any)
       (gnus-message 1 "Marks are %S" marks))
     marks))
 
@@ -1100,7 +1093,7 @@ only the last one's marks are returned."
         (when (and (< 0 expected)
                    (= 0 (mod count 100)))
           (message "importing: %d of %d (%.2f%%)"
-                   count expected (/ (* 100 count) expected)))
+                   count expected (/ (* 100.0 count) expected)))
         (setq entry (car-safe old)
               old (cdr-safe old))
         (let* ((id (car-safe entry))

@@ -1,6 +1,6 @@
 ;;; xscheme.el --- run MIT Scheme under Emacs        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1986-1987, 1989-1990, 2001-2015 Free Software
+;; Copyright (C) 1986-1987, 1989-1990, 2001-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -347,9 +347,9 @@ the command interpreter stack:
 
 Some possible command interpreter types and their meanings are:
 
-\[Evaluator]	read-eval-print loop for evaluating expressions
-\[Debugger]	single character commands for debugging errors
-\[Where]		single character commands for examining environments
+[Evaluator]	read-eval-print loop for evaluating expressions
+[Debugger]	single character commands for debugging errors
+[Where]		single character commands for examining environments
 
 Starting with release 6.2 of Scheme, the latter two types of command
 interpreters will change the major mode of the Scheme process buffer
@@ -1174,9 +1174,10 @@ the remaining input.")
 
 (defun xscheme-prompt-for-expression-exit ()
   (interactive)
-  (if (eq (xscheme-region-expression-p (point-min) (point-max)) 'one)
+  (if (eq (xscheme-region-expression-p (minibuffer-prompt-end) (point-max))
+	  'one)
       (exit-minibuffer)
-      (error "input must be a single, complete expression")))
+    (error "Input must be a single, complete expression")))
 
 (defun xscheme-region-expression-p (start end)
   (save-excursion

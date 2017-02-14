@@ -1,6 +1,6 @@
 ;;; perl-mode.el --- Perl code editing commands for GNU Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1990, 1994, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1990, 1994, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: William F. Mann
 ;; Maintainer: emacs-devel@gnu.org
@@ -204,10 +204,13 @@
   '((?\( . ?\)) (?\[ . ?\]) (?\{ . ?\}) (?\< . ?\>)))
 
 (eval-and-compile
+  (defconst perl--syntax-exp-intro-keywords
+    '("split" "if" "unless" "until" "while" "print"
+      "grep" "map" "not" "or" "and" "for" "foreach"))
+
   (defconst perl--syntax-exp-intro-regexp
     (concat "\\(?:\\(?:^\\|[^$@&%[:word:]]\\)"
-            (regexp-opt '("split" "if" "unless" "until" "while" "print"
-                          "grep" "map" "not" "or" "and" "for" "foreach"))
+            (regexp-opt perl--syntax-exp-intro-keywords)
             "\\|[-?:.,;|&+*=!~({[]\\|\\(^\\)\\)[ \t\n]*")))
 
 ;; FIXME: handle here-docs and regexps.
@@ -278,8 +281,13 @@
                       (forward-comment (- (point-max)))
                       (put-text-property (point) (match-end 2)
                                          'syntax-multiline t)
-                      (not (memq (char-before)
-                                 '(?? ?: ?. ?, ?\; ?= ?! ?~ ?\( ?\[)))))
+                      (not (or (and (eq ?w (char-syntax (preceding-char)))
+                                    (let ((end (point)))
+                                      (backward-sexp 1)
+                                      (member (buffer-substring (point) end)
+                                              perl--syntax-exp-intro-keywords)))
+                               (memq (char-before)
+                                     '(?? ?: ?. ?, ?\; ?= ?! ?~ ?\( ?\[))))))
                nil ;; A division sign instead of a regexp-match.
              (put-text-property (match-beginning 2) (match-end 2)
                                 'syntax-table (string-to-syntax "\""))
@@ -293,17 +301,23 @@
        ;; sub tr {...}
        (3 (ignore
            (if (save-excursion (goto-char (match-beginning 0))
-                               (forward-word -1)
+                               (forward-word-strictly -1)
                                (looking-at-p "sub[ \t\n]"))
                ;; This is defining a function.
                nil
-             (put-text-property (match-beginning 3) (match-end 3)
-                                'syntax-table
-                                (if (assoc (char-after (match-beginning 3))
-                                           perl-quote-like-pairs)
-                                    (string-to-syntax "|")
-                                  (string-to-syntax "\"")))
-             (perl-syntax-propertize-special-constructs end)))))
+             (unless (nth 8 (save-excursion (syntax-ppss (match-beginning 1))))
+               ;; Don't add this syntax-table property if
+               ;; within a string, which would misbehave in cases such as
+               ;; $a = "foo y \"toto\" bar" where we'd end up changing the
+               ;; syntax of the backslash and hence de-escaping the embedded
+               ;; double quote.
+               (put-text-property (match-beginning 3) (match-end 3)
+                                  'syntax-table
+                                  (if (assoc (char-after (match-beginning 3))
+                                             perl-quote-like-pairs)
+                                      (string-to-syntax "|")
+                                    (string-to-syntax "\"")))
+               (perl-syntax-propertize-special-constructs end))))))
       ;; Here documents.
       ((concat
         "\\(?:"
@@ -390,7 +404,8 @@
                        (skip-syntax-backward " ")
                        (skip-syntax-backward "w")
                        (member (buffer-substring
-                                (point) (progn (forward-word 1) (point)))
+                                (point) (progn (forward-word-strictly 1)
+                                               (point)))
                                '("tr" "s" "y"))))
             (close (cdr (assq char perl-quote-like-pairs)))
             (st (perl-quote-syntax-table char)))
@@ -918,7 +933,7 @@ Returns (parse-state) if line starts inside a string."
            (if (save-excursion (goto-char indent-point)
                                (looking-at
                                 (if perl-indent-parens-as-block
-                                    "[ \t]*[{(\[]" "[ \t]*{")))
+                                    "[ \t]*[{([]" "[ \t]*{")))
                perl-continued-brace-offset 0)))
        (t
         ;; This line starts a new statement.
@@ -979,7 +994,7 @@ Returns (parse-state) if line starts inside a string."
         ((memq c '(?\) ?\] ?\} ?\"))
          (forward-sexp -1) (forward-comment (- (point))) t)
         ((eq ?w (char-syntax c))
-         (forward-word -1) (forward-comment (- (point))) t)
+         (forward-word-strictly -1) (forward-comment (- (point))) t)
         (t (forward-char -1) (forward-comment (- (point))) t)))))
 
 ;; note: this may be slower than the c-mode version, but I can understand it.

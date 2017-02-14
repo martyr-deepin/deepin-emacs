@@ -1,13 +1,13 @@
-/* NeXT/Open/GNUstep / MacOSX Cocoa selection processing for emacs.
-   Copyright (C) 1993-1994, 2005-2006, 2008-2015 Free Software
+/* NeXT/Open/GNUstep / macOS Cocoa selection processing for emacs.
+   Copyright (C) 1993-1994, 2005-2006, 2008-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,7 +21,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 Originally by Carl Edman
 Updated by Christian Limpach (chris@nice.ch)
 OpenStep/Rhapsody port by Scott Bender (sbender@harmony-ds.com)
-MacOSX/Aqua port by Christophe de Dinechin (descubes@earthlink.net)
+macOS/Aqua port by Christophe de Dinechin (descubes@earthlink.net)
 GNUstep port and post-20 update by Adrian Robert (arobert@cogsci.ucsd.edu)
 */
 
@@ -385,18 +385,12 @@ Disowning it means there is no such selection.  */)
 
 
 DEFUN ("ns-selection-exists-p", Fns_selection_exists_p, Sns_selection_exists_p,
-       0, 2, 0, doc: /* Whether there is an owner for the given X selection.
+       0, 1, 0, doc: /* Whether there is an owner for the given X selection.
 SELECTION should be the name of the selection in question, typically
 one of the symbols `PRIMARY', `SECONDARY', or `CLIPBOARD'.  (X expects
 these literal upper-case names.)  The symbol nil is the same as
-`PRIMARY', and t is the same as `SECONDARY'.
-
-TERMINAL should be a terminal object or a frame specifying the X
-server to query.  If omitted or nil, that stands for the selected
-frame's display, or the first available X display.
-
-On Nextstep, TERMINAL is unused.  */)
-     (Lisp_Object selection, Lisp_Object terminal)
+`PRIMARY', and t is the same as `SECONDARY'.  */)
+     (Lisp_Object selection)
 {
   id pb;
   NSArray *types;
@@ -416,20 +410,14 @@ On Nextstep, TERMINAL is unused.  */)
 
 
 DEFUN ("ns-selection-owner-p", Fns_selection_owner_p, Sns_selection_owner_p,
-       0, 2, 0,
+       0, 1, 0,
        doc: /* Whether the current Emacs process owns the given X Selection.
 The arg should be the name of the selection in question, typically one of
 the symbols `PRIMARY', `SECONDARY', or `CLIPBOARD'.
 \(Those are literal upper-case symbol names, since that's what X expects.)
 For convenience, the symbol nil is the same as `PRIMARY',
-and t is the same as `SECONDARY'.
-
-TERMINAL should be a terminal object or a frame specifying the X
-server to query.  If omitted or nil, that stands for the selected
-frame's display, or the first available X display.
-
-On Nextstep, TERMINAL is unused.  */)
-     (Lisp_Object selection, Lisp_Object terminal)
+and t is the same as `SECONDARY'.  */)
+     (Lisp_Object selection)
 {
   check_window_system (NULL);
   CHECK_SYMBOL (selection);
@@ -442,22 +430,12 @@ On Nextstep, TERMINAL is unused.  */)
 
 
 DEFUN ("ns-get-selection", Fns_get_selection,
-       Sns_get_selection, 2, 4, 0,
+       Sns_get_selection, 2, 2, 0,
        doc: /* Return text selected from some X window.
 SELECTION-SYMBOL is typically `PRIMARY', `SECONDARY', or `CLIPBOARD'.
 \(Those are literal upper-case symbol names, since that's what X expects.)
-TARGET-TYPE is the type of data desired, typically `STRING'.
-
-TIME-STAMP is the time to use in the XConvertSelection call for foreign
-selections.  If omitted, defaults to the time for the last event.
-
-TERMINAL should be a terminal object or a frame specifying the X
-server to query.  If omitted or nil, that stands for the selected
-frame's display, or the first available X display.
-
-On Nextstep, TIME-STAMP and TERMINAL are unused.  */)
-     (Lisp_Object selection_name, Lisp_Object target_type,
-      Lisp_Object time_stamp, Lisp_Object terminal)
+TARGET-TYPE is the type of data desired, typically `STRING'.  */)
+     (Lisp_Object selection_name, Lisp_Object target_type)
 {
   Lisp_Object val = Qnil;
 
@@ -488,16 +466,16 @@ nxatoms_of_nsselect (void)
   NXSecondaryPboard = @"Secondary";
 
   // This is a memory loss, never released.
-  pasteboard_changecount =
-    [[NSMutableDictionary
-       dictionaryWithObjectsAndKeys:
-            [NSNumber numberWithLong:0], NSGeneralPboard,
-            [NSNumber numberWithLong:0], NXPrimaryPboard,
-            [NSNumber numberWithLong:0], NXSecondaryPboard,
-            [NSNumber numberWithLong:0], NSStringPboardType,
-            [NSNumber numberWithLong:0], NSFilenamesPboardType,
-            [NSNumber numberWithLong:0], NSTabularTextPboardType,
-       nil] retain];
+  pasteboard_changecount
+    = [[NSMutableDictionary
+	 dictionaryWithObjectsAndKeys:
+	     [NSNumber numberWithLong:0], NSGeneralPboard,
+	     [NSNumber numberWithLong:0], NXPrimaryPboard,
+	     [NSNumber numberWithLong:0], NXSecondaryPboard,
+	     [NSNumber numberWithLong:0], NSStringPboardType,
+	     [NSNumber numberWithLong:0], NSFilenamesPboardType,
+	     [NSNumber numberWithLong:0], NSTabularTextPboardType,
+	 nil] retain];
 }
 
 void

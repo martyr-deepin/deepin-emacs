@@ -1,8 +1,6 @@
 ;;; calc-nlfit.el --- nonlinear curve fitting for Calc
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
-
-;; Maintainer: Jay Belanger <jay.p.belanger@gmail.com>
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 

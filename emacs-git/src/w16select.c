@@ -1,13 +1,13 @@
 /* 16-bit Windows Selection processing for emacs on MS-Windows
 
-Copyright (C) 1996-1997, 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 1996-1997, 2001-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -64,8 +64,6 @@ unsigned get_clipboard_data_size (unsigned);
 unsigned get_clipboard_data (unsigned, void *, unsigned, int);
 unsigned close_clipboard (void);
 unsigned clipboard_compact (unsigned);
-
-Lisp_Object QCLIPBOARD, QPRIMARY;
 
 /* The segment address and the size of the buffer in low
    memory used to move data between us and WinOldAp module.  */
@@ -719,8 +717,7 @@ variable is set, it is used for the next communication only.
 After the communication, this variable is set to nil.  */);
   Vnext_selection_coding_system = Qnil;
 
-  QPRIMARY   = intern ("PRIMARY");	staticpro (&QPRIMARY);
-  QCLIPBOARD = intern ("CLIPBOARD");	staticpro (&QCLIPBOARD);
+  DEFSYM (QCLIPBOARD, "CLIPBOARD");
 }
 
 #endif /* MSDOS */

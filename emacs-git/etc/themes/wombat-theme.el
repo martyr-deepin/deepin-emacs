@@ -1,6 +1,6 @@
-;;; wombat-theme.el --- Custom face theme for Emacs  -*-coding: utf-8 -*-
+;;; wombat-theme.el --- Custom face theme for Emacs
 
-;; Copyright (C) 2011-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
 ;; Author: Kristoffer Grönlund <krig@koru.se>
 
@@ -46,6 +46,7 @@ are included.")
    ;; Escape and prompt faces
    `(minibuffer-prompt ((,class (:foreground "#e5786d"))))
    `(escape-glyph ((,class (:foreground "#ddaa6f" :weight bold))))
+   `(homoglyph ((,class (:foreground "#ddaa6f" :weight bold))))
    ;; Font lock faces
    `(font-lock-builtin-face ((,class (:foreground "#e5786d"))))
    `(font-lock-comment-face ((,class (:foreground "#99968b"))))

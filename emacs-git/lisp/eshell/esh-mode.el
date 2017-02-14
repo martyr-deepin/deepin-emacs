@@ -1,6 +1,6 @@
 ;;; esh-mode.el --- user interface  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -143,7 +143,7 @@ See variable `eshell-scroll-show-maximum-output' and function
   :type '(radio (const :tag "Do not scroll Eshell windows" nil)
 		(const :tag "Scroll all windows showing the buffer" all)
 		(const :tag "Scroll only the selected window" this)
-		(const :tag "Scroll all windows other than selected" this))
+		(const :tag "Scroll all windows other than selected" others))
   :group 'eshell-mode)
 
 (defcustom eshell-scroll-show-maximum-output t
@@ -206,7 +206,7 @@ This is used by `eshell-watch-for-password-prompt'."
 
 ;; Internal Variables:
 
-;; these are only set to `nil' initially for the sake of the
+;; these are only set to nil initially for the sake of the
 ;; byte-compiler, when compiling other files which `require' this one
 (defvar eshell-mode nil)
 (defvar eshell-mode-map nil)
@@ -296,7 +296,7 @@ and the hook `eshell-exit-hook'."
   (run-hooks 'eshell-exit-hook))
 
 ;;;###autoload
-(define-derived-mode eshell-mode fundamental-mode "EShell"
+(define-derived-mode eshell-mode fundamental-mode "Eshell"
   "Emacs shell interactive mode."
   (setq-local eshell-mode t)
 
@@ -344,7 +344,6 @@ and the hook `eshell-exit-hook'."
 
   (setq local-abbrev-table eshell-mode-abbrev-table)
 
-  (set (make-local-variable 'dired-directory) default-directory)
   (set (make-local-variable 'list-buffers-directory)
        (expand-file-name default-directory))
 
@@ -380,6 +379,11 @@ and the hook `eshell-exit-hook'."
   (let ((modules-list (copy-sequence eshell-modules-list)))
     (make-local-variable 'eshell-modules-list)
     (setq eshell-modules-list modules-list))
+
+  ;; This is to avoid making the paragraph base direction
+  ;; right-to-left if the first word just happens to start with a
+  ;; strong R2L character.
+  (setq bidi-paragraph-direction 'left-to-right)
 
   ;; load extension modules into memory.  This will cause any global
   ;; variables they define to be visible, since some of the core
@@ -628,10 +632,11 @@ newline."
   (let ((proc-running-p (and (eshell-interactive-process)
 			     (not queue-p)))
 	(inhibit-point-motion-hooks t)
-	after-change-functions)
+	(inhibit-modification-hooks t))
     (unless (and proc-running-p
 		 (not (eq (process-status
-			   (eshell-interactive-process)) 'run)))
+			   (eshell-interactive-process))
+                          'run)))
       (if (or proc-running-p
 	      (>= (point) eshell-last-output-end))
 	  (goto-char (point-max))
@@ -698,7 +703,7 @@ This is done after all necessary filtering has been done."
   (let ((oprocbuf (if process (process-buffer process)
 		    (current-buffer)))
 	(inhibit-point-motion-hooks t)
-	after-change-functions)
+	(inhibit-modification-hooks t))
     (let ((functions eshell-preoutput-filter-functions))
       (while (and functions string)
 	(setq string (funcall (car functions) string))
@@ -877,9 +882,8 @@ If SCROLLBACK is non-nil, clear the scrollback contents."
   (interactive)
   (if scrollback
       (eshell/clear-scrollback)
-    (let ((number-newlines (count-lines (window-start) (point))))
-      (insert (make-string number-newlines ?\n))
-      (eshell-send-input))))
+    (insert (make-string (window-size) ?\n))
+    (eshell-send-input)))
 
 (defun eshell/clear-scrollback ()
   "Clear the scrollback content of the eshell window."

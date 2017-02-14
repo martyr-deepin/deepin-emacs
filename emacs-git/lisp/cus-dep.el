@@ -1,6 +1,6 @@
 ;;; cus-dep.el --- find customization dependencies
 ;;
-;; Copyright (C) 1997, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2001-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Keywords: internal
@@ -33,7 +33,7 @@
 
 ;; See finder-no-scan-regexp in finder.el.
 (defvar custom-dependencies-no-scan-regexp "\\(^\\.#\\|\\(loaddefs\\|\
-ldefs-boot\\|cus-load\\|finder-inf\\|esh-groups\\|subdirs\\)\\.el$\\)"
+ldefs-boot.*\\|cus-load\\|finder-inf\\|esh-groups\\|subdirs\\)\\.el$\\)"
   "Regexp matching file names not to scan for `custom-make-dependencies'.")
 
 (require 'autoload)
@@ -60,7 +60,7 @@ Usage: emacs -batch -l ./cus-dep.el -f custom-make-dependencies DIRS"
       ;; Use up command-line-args-left else Emacs can try to open
       ;; the args as directories after we are done.
       (while (setq subdir (pop command-line-args-left))
-        (message "Directory %s" subdir)
+        (message "Scanning %s for custom" subdir)
         (let ((files (directory-files subdir nil "\\`[^=.].*\\.el\\'"))
               (default-directory
                 (file-name-as-directory (expand-file-name subdir)))

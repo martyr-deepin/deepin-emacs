@@ -1,6 +1,6 @@
 ;;; custom.el --- tools for declaring and initializing options
 ;;
-;; Copyright (C) 1996-1997, 1999, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1996-1997, 1999, 2001-2017 Free Software Foundation,
 ;; Inc.
 ;;
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
@@ -155,15 +155,14 @@ set to nil, as the value is no longer rogue."
     (unless (memq :group args)
       (custom-add-to-group (custom-current-group) symbol 'custom-variable))
     (while args
-      (let ((arg (car args)))
-	(setq args (cdr args))
-	(unless (symbolp arg)
+      (let ((keyword (pop args)))
+	(unless (symbolp keyword)
 	  (error "Junk in args %S" args))
-	(let ((keyword arg)
-	      (value (car args)))
-	  (unless args
-	    (error "Keyword %s is missing an argument" keyword))
-	  (setq args (cdr args))
+        (unless args
+          (error "Keyword %s is missing an argument" keyword))
+	(let ((value (pop args)))
+          ;; Can't use `pcase' because it is loaded after `custom.el'
+          ;; during bootstrap.  See `loadup.el'.
 	  (cond ((eq keyword :initialize)
 		 (setq initialize value))
 		((eq keyword :set)
@@ -225,6 +224,7 @@ The remaining arguments to `defcustom' should have the form
 The following keywords are meaningful:
 
 :type	VALUE should be a widget type for editing the symbol's value.
+	Every `defcustom' should specify a value for this keyword.
 :options VALUE should be a list of valid members of the widget type.
 :initialize
 	VALUE should be a function used to initialize the
@@ -411,8 +411,7 @@ In the ATTS property list, possible attributes are `:family',
 
 See Info node `(elisp) Faces' in the Emacs Lisp manual for more
 information."
-  (declare (doc-string 3)
-           (indent 1))
+  (declare (doc-string 3))
   ;; It is better not to use backquote in this file,
   ;; because that makes a bootstrapping problem
   ;; if you need to recompile all the Lisp files using interpreted code.
@@ -465,7 +464,7 @@ are not usually written so.
 MEMBERS should be an alist of the form ((NAME WIDGET)...) where
 NAME is a symbol and WIDGET is a widget for editing that symbol.
 Useful widgets are `custom-variable' for editing variables,
-`custom-face' for edit faces, and `custom-group' for editing groups.
+`custom-face' for editing faces, and `custom-group' for editing groups.
 
 The remaining arguments should have the form
 
@@ -1120,7 +1119,7 @@ directory first---see `custom-theme-load-path'."
   :group 'customize
   :version "22.1")
 
-(defcustom custom-theme-load-path (list 'custom-theme-directory t)
+(defvar custom-theme-load-path (list 'custom-theme-directory t)
   "List of directories to search for custom theme files.
 When loading custom themes (e.g. in `customize-themes' and
 `load-theme'), Emacs searches for theme files in the specified
@@ -1132,13 +1131,11 @@ order.  Each element in the list should be one of the following:
 - a directory name (a string).
 
 Each theme file is named THEME-theme.el, where THEME is the theme
-name."
-  :type '(repeat (choice (const :tag "custom-theme-directory"
-				custom-theme-directory)
-			 (const :tag "Built-in theme directory" t)
-			 directory))
-  :group 'customize
-  :version "24.1")
+name.
+
+This variable is designed for use in lisp code (including
+external packages).  For manual user customizations, use
+`custom-theme-directory' instead.")
 
 (defvar custom--inhibit-theme-enable nil
   "Whether the custom-theme-set-* functions act immediately.
@@ -1214,13 +1211,11 @@ Return t if THEME was successfully loaded, nil otherwise."
     (put theme 'theme-documentation nil))
   (let ((fn (locate-file (concat (symbol-name theme) "-theme.el")
 			 (custom-theme--load-path)
-			 '("" "c")))
-	hash)
+			 '("" "c"))))
     (unless fn
       (error "Unable to find theme file for `%s'" theme))
     (with-temp-buffer
       (insert-file-contents fn)
-      (setq hash (secure-hash 'sha256 (current-buffer)))
       ;; Check file safety with `custom-safe-themes', prompting the
       ;; user if necessary.
       (when (or no-confirm
@@ -1228,8 +1223,9 @@ Return t if THEME was successfully loaded, nil otherwise."
 		(and (memq 'default custom-safe-themes)
 		     (equal (file-name-directory fn)
 			    (expand-file-name "themes/" data-directory)))
-		(member hash custom-safe-themes)
-		(custom-theme-load-confirm hash))
+                (let ((hash (secure-hash 'sha256 (current-buffer))))
+                  (or (member hash custom-safe-themes)
+                      (custom-theme-load-confirm hash))))
 	(let ((custom--inhibit-theme-enable t)
               (buffer-file-name fn))    ;For load-history.
 	  (eval-buffer))

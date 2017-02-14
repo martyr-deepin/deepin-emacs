@@ -1,6 +1,6 @@
 ;;; todo-mode.el --- facilities for making and maintaining todo lists
 
-;; Copyright (C) 1997, 1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Oliver Seidel <privat@os10000.net>
 ;;	Stephen Berman <stephen.berman@gmx.net>
@@ -74,7 +74,7 @@ truenames (those with the extension \".toda\")."
   (let ((files (if (file-exists-p todo-directory)
 		   (mapcar 'file-truename
 		    (directory-files todo-directory t
-				     (if archives "\.toda$" "\.todo$") t)))))
+				     (if archives "\\.toda$" "\\.todo$") t)))))
     (sort files (lambda (s1 s2) (let ((cis1 (upcase s1))
 				      (cis2 (upcase s2)))
 				  (string< cis1 cis2))))))
@@ -237,7 +237,8 @@ The final element is \"*\", indicating an unspecified month.")
 		   (when (string= (widget-value widget) todo-item-mark)
 		     (widget-put
 		      widget :error
-		      "Invalid value: must be distinct from `todo-item-mark'")
+		      (format-message
+		       "Invalid value: must be distinct from `todo-item-mark'"))
 		     widget)))
   :initialize 'custom-initialize-default
   :set 'todo-reset-prefix
@@ -611,11 +612,12 @@ Otherwise, `todo-show' always visits `todo-default-todo-file'."
 (defun todo-show (&optional solicit-file interactive)
   "Visit a todo file and display one of its categories.
 
-When invoked in Todo mode, prompt for which todo file to visit.
-When invoked outside of Todo mode with non-nil prefix argument
-SOLICIT-FILE prompt for which todo file to visit; otherwise visit
-`todo-default-todo-file'.  Subsequent invocations from outside
-of Todo mode revisit this file or, with option
+When invoked in Todo mode, Todo Archive mode or Todo Filtered
+Items mode, or when invoked anywhere else with a prefix argument,
+prompt for which todo file to visit.  When invoked outside of a
+Todo mode buffer without a prefix argument, visit
+`todo-default-todo-file'.  Subsequent invocations from outside of
+Todo mode revisit this file or, with option
 `todo-show-current-file' non-nil (the default), whichever todo
 file was last visited.
 
@@ -642,10 +644,7 @@ In Todo mode just the category's unfinished todo items are shown
 by default.  The done items are hidden, but typing
 `\\[todo-toggle-view-done-items]' displays them below the todo
 items.  With non-nil user option `todo-show-with-done' both todo
-and done items are always shown on visiting a category.
-
-Invoking this command in Todo Archive mode visits the
-corresponding todo file, displaying the corresponding category."
+and done items are always shown on visiting a category."
   (interactive "P\np")
   (when todo-default-todo-file
     (todo-check-file (todo-absolute-file-name todo-default-todo-file)))
@@ -672,7 +671,7 @@ corresponding todo file, displaying the corresponding category."
 						      todo-filtered-items-mode))))
 			  (if (funcall todo-files-function)
 			      (todo-read-file-name "Choose a todo file to visit: "
-						    nil t)
+						   nil t)
 			    (user-error "There are no todo files")))
 			 ((and (eq major-mode 'todo-archive-mode)
 			       ;; Called noninteractively via todo-quit
@@ -732,7 +731,10 @@ corresponding todo file, displaying the corresponding category."
 	(when (or (member file todo-visited)
 		  (eq todo-show-first 'first))
 	  (unless (todo-check-file file) (throw 'end nil))
-	  (set-window-buffer (selected-window)
+          ;; If todo-show is called from the minibuffer, don't visit
+          ;; the todo file there.
+	  (set-window-buffer (if (minibufferp) (minibuffer-selected-window)
+			       (selected-window))
 			     (set-buffer (find-file-noselect file 'nowarn)))
 	  (if (equal (file-name-extension (buffer-file-name)) "toda")
 	      (unless (derived-mode-p 'todo-archive-mode) (todo-archive-mode))
@@ -743,6 +745,11 @@ corresponding todo file, displaying the corresponding category."
 	    (setq todo-category-number (todo-category-number cat)))
 	  ;; If this is a new todo file, add its first category.
 	  (when (zerop (buffer-size))
+            ;; Don't confuse an erased buffer with a fresh buffer for
+            ;; adding a new todo file -- it might have been erased by
+            ;; mistake or due to a bug (e.g. Bug#20832).
+            (when (buffer-modified-p)
+              (error "Buffer is empty but modified, please report a bug"))
 	    (let (cat-added)
 	      (unwind-protect
 		  (setq todo-category-number
@@ -895,17 +902,19 @@ Categories mode."
       (todo-show)
     (let* ((archive (eq where 'archive))
 	   (cat (unless archive where))
+           (goto-archive (and cat
+                              todo-skip-archived-categories
+                              (zerop (todo-get-count 'todo cat))
+                              (zerop (todo-get-count 'done cat))
+                              (not (zerop (todo-get-count 'archived cat)))))
 	   (file0 (when cat		; We're in Todo Categories mode.
-		    ;; With non-nil `todo-skip-archived-categories'
-		    ;; jump to archive file of a category with only
-		    ;; archived items.
-		    (if (and todo-skip-archived-categories
-			     (zerop (todo-get-count 'todo cat))
-			     (zerop (todo-get-count 'done cat))
-			     (not (zerop (todo-get-count 'archived cat))))
+		    (if goto-archive
+			;; If the category has only archived items and
+			;; `todo-skip-archived-categories' is non-nil, jump to
+			;; the archive category.
 			(concat (file-name-sans-extension
 				 todo-current-todo-file) ".toda")
-		      ;; Otherwise, jump to current todo file.
+		      ;; Otherwise, jump to the category in the todo file.
 		      todo-current-todo-file)))
 	   (len (length todo-categories))
 	   (cat+file (unless cat
@@ -916,18 +925,15 @@ Categories mode."
 	   (category (or cat (car cat+file))))
       (unless cat (setq file0 (cdr cat+file)))
       (with-current-buffer (find-file-noselect file0 'nowarn)
-	(setq todo-current-todo-file file0)
-	;; If called from Todo Categories mode, clean up before jumping.
-	(if (string= (buffer-name) todo-categories-buffer)
-	    (kill-buffer))
-	(set-window-buffer (selected-window)
-			   (set-buffer (find-buffer-visiting file0)))
-	(unless todo-global-current-todo-file
-	  (setq todo-global-current-todo-file todo-current-todo-file))
-	(todo-category-number category)
-	(todo-category-select)
-	(goto-char (point-min))
-	(when add-item (todo-insert-item--basic))))))
+        (when goto-archive (todo-archive-mode))
+        (set-window-buffer (selected-window)
+                           (set-buffer (find-buffer-visiting file0)))
+        (unless todo-global-current-todo-file
+          (setq todo-global-current-todo-file todo-current-todo-file))
+        (todo-category-number category)
+        (todo-category-select)
+        (goto-char (point-min))
+        (when add-item (todo-insert-item--basic))))))
 
 (defun todo-next-item (&optional count)
   "Move point down to the beginning of the next item.
@@ -1103,7 +1109,7 @@ these files, also rename them accordingly."
 	 (snname (todo-short-file-name nname))
 	 (files (directory-files todo-directory t
 				 (concat ".*" (regexp-quote soname)
-					 ".*\.tod[aorty]$") t)))
+					 ".*\\.tod[aorty]$") t)))
     (dolist (f files)
       (let* ((sfname (todo-short-file-name f))
 	     (fext (file-name-extension f t))
@@ -1334,12 +1340,13 @@ todo or done items."
 			    "deleting it will also delete the file.\n"
 			    "Do you want to proceed? ")))
 		  ((> archived 0)
-		   (todo-y-or-n-p (concat "This category has archived items; "
+		   (todo-y-or-n-p (format-message
+				   (concat "This category has archived items; "
 				     "the archived category will remain\n"
 				     "after deleting the todo category.  "
 				     "Do you still want to delete it\n"
 				     "(see `todo-skip-archived-categories' "
-				     "for another option)? ")))
+				     "for another option)? "))))
 		  (t
 		   (todo-y-or-n-p (concat "Permanently remove category \"" cat
 				     "\"" (and arg " and all its entries")
@@ -1404,7 +1411,12 @@ the archive of the file moved to, creating it if it does not exist."
 	(setq todo-files (funcall todo-files-function))
 	(todo-reevaluate-filelist-defcustoms))
       (dolist (buf buffers)
+        ;; Make sure archive file is in Todo Archive mode so that
+        ;; todo-categories has correct value.
 	(with-current-buffer (find-file-noselect buf)
+          (when (equal (file-name-extension (buffer-file-name)) "toda")
+            (unless (derived-mode-p 'todo-archive-mode)
+              (todo-archive-mode)))
 	  (widen)
 	  (goto-char (point-max))
 	  (let* ((beg (re-search-backward
@@ -1456,10 +1468,18 @@ the archive of the file moved to, creating it if it does not exist."
 		  (re-search-backward
 		   (concat "^" (regexp-quote todo-category-beg)
 			   "\\(" (regexp-quote cat) "\\)$") nil t)
-		  (replace-match new nil nil nil 1)))
-	      (setq todo-categories
-		    (append todo-categories (list (cons (or new cat) counts))))
-	      (todo-update-categories-sexp)
+		  (replace-match new nil nil nil 1))
+                (setq todo-categories
+                      (append todo-categories (list (cons (or new cat) counts))))
+                (goto-char (point-min))
+                (if (looking-at "((\"")
+                    ;; Delete existing sexp.
+                    (delete-region (line-beginning-position) (line-end-position))
+                  ;; Otherwise, file is new, so make space for categories sexp.
+                  (insert "\n")
+                  (goto-char (point-min)))
+                ;; Insert (new or updated) sexp.
+                (prin1 todo-categories (current-buffer)))
 	      ;; If archive was just created, save it to avoid "File
 	      ;; <xyz> no longer exists!" message on invoking
 	      ;; `todo-view-archived-items'.
@@ -1490,9 +1510,7 @@ the archive of the file moved to, creating it if it does not exist."
 		(setq todo-category-number 1))
 	      (todo-category-select)))))
       (set-window-buffer (selected-window)
-			 (set-buffer (find-file-noselect nfile)))
-      (todo-category-number (or new cat))
-      (todo-category-select))))
+			 (set-buffer (find-file-noselect nfile))))))
 
 (defun todo-merge-category (&optional file)
   "Merge current category into another existing category.
@@ -1686,7 +1704,8 @@ only when no items are marked."
 		   (when (string= (widget-value widget) todo-prefix)
 		     (widget-put
 		      widget :error
-		      "Invalid value: must be distinct from `todo-prefix'")
+		      (format-message
+		       "Invalid value: must be distinct from `todo-prefix'"))
 		     widget)))
   :set (lambda (symbol value)
 	 (custom-set-default symbol (propertize value 'face 'todo-mark)))
@@ -2251,9 +2270,8 @@ made in the number or names of categories."
 		 (mlist (append tmn-array nil))
 		 (tma-array todo-month-abbrev-array)
 		 (mablist (append tma-array nil))
-		 (yy (and oyear (unless (string= oyear "*")
-				  (string-to-number oyear))))
-		 (mm (or (and omonth (unless (string= omonth "*")
+		 (yy (and oyear (string-to-number oyear))) ; 0 if year is "*".
+		 (mm (or (and omonth (if (string= omonth "*") 13
 				       (string-to-number omonth)))
 			 (1+ (- (length mlist)
 				(length (or (member omonthname mlist)
@@ -2319,12 +2337,11 @@ made in the number or names of categories."
 			     (if omonth
 				 (number-to-string mm)
 			       (aref tma-array (1- mm))))))
-		(let ((yy (string-to-number year)) ; 0 if year is "*".
-		      ;; When mm is 13 (corresponding to "*" as value
-		      ;; of month), this raises an args-out-of-range
-		      ;; error in calendar-last-day-of-month, so use 1
-		      ;; (corresponding to January) to get 31 days.
-		      (mm (if (= mm 13) 1 mm)))
+                ;; Since the number corresponding to the arbitrary
+                ;; month name "*" is out of the range of
+                ;; calendar-last-day-of-month, set it to 1
+                ;; (corresponding to January) to allow 31 days.
+                (let ((mm (if (= mm 13) 1 mm)))
 		  (if (> (string-to-number day)
 			 (calendar-last-day-of-month mm yy))
 		      (user-error "%s %s does not have %s days"
@@ -2336,7 +2353,7 @@ made in the number or names of categories."
 		      monthname omonthname
 		      day (cond
 			   ((not current-prefix-arg)
-			    (todo-read-date 'day mm oyear))
+			    (todo-read-date 'day mm yy))
 			   ((string= oday "*")
 			    (user-error "Cannot increment *"))
 			   ((or (string= omonth "*") (string= omonthname "*"))
@@ -3952,7 +3969,7 @@ regexp items."
 (defun todo-find-filtered-items-file ()
   "Choose a filtered items file and visit it."
   (interactive)
-  (let ((files (directory-files todo-directory t "\.tod[rty]$" t))
+  (let ((files (directory-files todo-directory t "\\.tod[rty]$" t))
 	falist file)
     (dolist (f files)
       (let ((type (cond ((equal (file-name-extension f) "todr") "regexp")
@@ -4643,13 +4660,15 @@ name in `todo-directory'.  See also the documentation string of
 		    (goto-char (match-beginning 0))
 		  (goto-char (point-max)))
 		(backward-char)
-		(when (looking-back "\\[\\([^][]+\\)\\]")
+		(when (looking-back "\\[\\([^][]+\\)\\]"
+                                    (line-beginning-position))
 		  (setq cat (match-string 1))
 		  (goto-char (match-beginning 0))
 		  (replace-match ""))
 		;; If the item ends with a non-comment parenthesis not
 		;; followed by a period, we lose (but we inherit that
 		;; problem from the legacy code).
+                ;; FIXME: fails on multiline comment
 		(when (looking-back "(\\(.*\\)) " (line-beginning-position))
 		  (setq comment (match-string 1))
 		  (replace-match "")
@@ -4881,7 +4900,7 @@ With nil or omitted CATEGORY, default to the current category."
 	(widen)
 	(goto-char (point-min))
 	(setq todo-categories
-	      (if (looking-at "\(\(\"")
+	      (if (looking-at "((\"")
 		  (read (buffer-substring-no-properties
 			 (line-beginning-position)
 			 (line-end-position)))
@@ -5026,7 +5045,7 @@ but the categories sexp differs from the current value of
 	;; Warn user if categories sexp has changed.
 	(unless (string= ssexp cats)
 	  (message (concat "The sexp at the beginning of the file differs "
-			   "from the value of `todo-categories.\n"
+			   "from the value of `todo-categories'.\n"
 			   "If the sexp is wrong, you can fix it with "
 			   "M-x todo-repair-categories-sexp,\n"
 			   "but note this reverts any changes you have "
@@ -5219,7 +5238,8 @@ Also preserve category display, if applicable."
   (with-current-buffer buffer
     (widen)
     (let ((todo-category-number (cdr (assq 'catnum misc))))
-      (todo-category-select))))
+      (todo-category-select)
+      (current-buffer))))
 
 (add-to-list 'desktop-buffer-mode-handlers
 	     '(todo-mode . todo-restore-desktop-buffer))
@@ -5443,7 +5463,7 @@ dynamically create item insertion commands.")
 The list consists of item insertion parameters that can be passed
 as insertion command arguments in fixed positions.  If a position
 in the list is not occupied by the corresponding parameter, it is
-occupied by `nil'."
+occupied by nil."
   (let* ((arg (list (car todo-insert-item--args)))
 	 (args (nconc (cdr todo-insert-item--args)
 		      (list (car (todo-insert-item--argsleft
@@ -5566,7 +5586,8 @@ already entered and those still available."
 							'(add/edit delete))
 					      " comment"))))
 			  params " "))
-	 (this-key (let ((key (read-key (concat todo-edit-item--prompt p->k))))
+	 (key-prompt (substitute-command-keys todo-edit-item--prompt))
+	 (this-key (let ((key (read-key (concat key-prompt p->k))))
 		     (and (characterp key) (char-to-string key))))
 	 (this-param (car (rassoc this-key params))))
     (pcase this-param
@@ -5631,9 +5652,10 @@ have been removed."
     (when deleted
       (let ((pl (> (length deleted) 1))
 	    (names (mapconcat (lambda (f) (concat "\"" f "\"")) deleted ", ")))
-	(message (concat "File" (if pl "s" "") " " names " ha" (if pl "ve" "s")
+	(message (concat "File" (if pl "s" "") " %s ha" (if pl "ve" "s")
 			 " been deleted and removed from\n"
-			 "the list of category completion files")))
+			 "the list of category completion files")
+		 names))
       (todo-reevaluate-category-completions-files-defcustom)
       (custom-set-default 'todo-category-completions-files
 			  (symbol-value 'todo-category-completions-files))
@@ -5728,8 +5750,11 @@ With non-nil argument FILE prompt for a file and complete only
 against categories in that file; otherwise complete against all
 categories from `todo-category-completions-files'."
   ;; Allow SPC to insert spaces, for adding new category names.
-  (let ((map minibuffer-local-completion-map))
-    (define-key map " " nil)
+  (let ((minibuffer-local-completion-map
+         (let ((map (make-sparse-keymap)))
+           (set-keymap-parent map minibuffer-local-completion-map)
+           (define-key map " " nil)
+           map)))
     (let* ((add (eq match-type 'add))
 	   (archive (eq match-type 'archive))
 	   (file0 (when (and file (> (length todo-files) 1))
@@ -5917,7 +5942,7 @@ number of the last the day of the month."
     (and day (setq day (if (eq day '*)
 			   (symbol-name '*)
 			 (number-to-string day))))
-    (and month (setq month (if (eq month '*)
+    (and month (setq month (if (= month 13)
 			       (symbol-name '*)
 			     (number-to-string month))))
     (if arg
@@ -6010,7 +6035,7 @@ the empty string (i.e., no time string)."
   "The :set function for user option `todo-nondiary-marker'."
   (let* ((oldvalue (symbol-value symbol))
 	 (files (append todo-files todo-archives
-			(directory-files todo-directory t "\.tod[rty]$" t))))
+			(directory-files todo-directory t "\\.tod[rty]$" t))))
     (custom-set-default symbol value)
     ;; Need to reset these to get font-locking right.
     (setq todo-nondiary-start (nth 0 todo-nondiary-marker)
@@ -6063,7 +6088,7 @@ the empty string (i.e., no time string)."
   "The :set function for user option `todo-done-string'."
   (let ((oldvalue (symbol-value symbol))
 	(files (append todo-files todo-archives
-		       (directory-files todo-directory t "\.todr$" t))))
+		       (directory-files todo-directory t "\\.todr$" t))))
     (custom-set-default symbol value)
     ;; Need to reset this to get font-locking right.
     (setq todo-done-string-start
@@ -6092,7 +6117,7 @@ the empty string (i.e., no time string)."
   "The :set function for user option `todo-comment-string'."
   (let ((oldvalue (symbol-value symbol))
   	(files (append todo-files todo-archives
-		       (directory-files todo-directory t "\.todr$" t))))
+		       (directory-files todo-directory t "\\.todr$" t))))
     (custom-set-default symbol value)
     (when (not (equal value oldvalue))
       (dolist (f files)
@@ -6118,7 +6143,7 @@ the empty string (i.e., no time string)."
   "The :set function for user option `todo-highlight-item'."
   (let ((oldvalue (symbol-value symbol))
 	(files (append todo-files todo-archives
-		       (directory-files todo-directory t "\.tod[rty]$" t))))
+		       (directory-files todo-directory t "\\.tod[rty]$" t))))
     (custom-set-default symbol value)
     (when (not (equal value oldvalue))
       (dolist (f files)
@@ -6566,8 +6591,7 @@ Added to `window-configuration-change-hook' in Todo mode."
   "Make some settings that apply to multiple Todo modes."
   (add-to-invisibility-spec 'todo)
   (setq buffer-read-only t)
-  (when (and (boundp 'desktop-save-mode) desktop-save-mode)
-    (setq-local desktop-save-buffer 'todo-desktop-save-buffer))
+  (setq-local desktop-save-buffer 'todo-desktop-save-buffer)
   (when (boundp 'hl-line-range-function)
     (setq-local hl-line-range-function
 		(lambda() (save-excursion
@@ -6590,7 +6614,9 @@ Added to `window-configuration-change-hook' in Todo mode."
 
 \\{todo-mode-map}"
   (if (called-interactively-p 'any)
-      (message "Type `M-x todo-show' to enter Todo mode")
+      (message "%s"
+               (substitute-command-keys
+                "Type `\\[todo-show]' to enter Todo mode"))
     (todo-modes-set-1)
     (todo-modes-set-2)
     (todo-modes-set-3)

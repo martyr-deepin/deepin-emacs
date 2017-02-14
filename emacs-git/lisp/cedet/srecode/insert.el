@@ -1,6 +1,6 @@
 ;;; srecode/insert.el --- Insert srecode templates to an output stream.
 
-;; Copyright (C) 2005, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2005, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -45,9 +45,9 @@
 Only the ASK style inserter will query the user for a value.
 Dictionary value references that ask begin with the ? character.
 Possible values are:
-  'ask   - Prompt in the minibuffer as the value is inserted.
-  'field - Use the dictionary macro name as the inserted value,
-           and place a field there.  Matched fields change together.
+  `ask'   - Prompt in the minibuffer as the value is inserted.
+  `field' - Use the dictionary macro name as the inserted value,
+            and place a field there.  Matched fields change together.
 
 NOTE: The field feature does not yet work with XEmacs."
   :group 'srecode
@@ -194,9 +194,10 @@ Buffer based features related to change hooks is handled one level up."
     ;; area.  Return value is not important.
     ))
 
-(declare-function data-debug-new-buffer "data-debug")
-(declare-function data-debug-insert-stuff-list "data-debug")
-(declare-function data-debug-insert-thing dictionary "data-debug")
+(declare-function data-debug-new-buffer "data-debug" (name))
+(declare-function data-debug-insert-stuff-list "data-debug" (stufflist prefix))
+(declare-function data-debug-insert-thing "data-debug"
+                  (thing prefix prebuttontext &optional parent))
 
 (defun srecode-insert-show-error-report (dictionary format &rest args)
   "Display an error report based on DICTIONARY, FORMAT and ARGS.
@@ -216,7 +217,7 @@ insertions."
     (data-debug-insert-thing dictionary "" "> ")
     ;; Show the error message.
     (insert (propertize "Error" 'face '(:weight bold)) "\n")
-    (insert (apply #'format format args))
+    (insert (apply #'format-message format args))
     (pop-to-buffer (current-buffer))))
 
 (defun srecode-insert-report-error (dictionary format &rest args)
@@ -377,9 +378,9 @@ Can't be blank, or it might be used by regular variable insertion.")
     (where :initform 'begin
 	   :initarg :where
 	   :documentation
-	   "This should be 'begin or 'end, indicating where to insert a CR.
-When set to 'begin, it will insert a CR if we are not at 'bol'.
-When set to 'end it will insert a CR if we are not at 'eol'.")
+	   "This should be `begin' or `end', indicating where to insert a CR.
+When `begin', insert a CR if not at 'bol'.
+When `end', insert a CR if not at 'eol'.")
     ;; @TODO - Add slot and control for the number of blank
     ;;         lines before and after point.
    )
@@ -762,7 +763,7 @@ Arguments ESCAPE-START and ESCAPE-END are the current escape sequences in use."
 (cl-defmethod srecode-insert-method ((sti srecode-template-inserter-point)
 				  dictionary)
   "Insert the STI inserter.
-Save point in the class allocated 'point' slot.
+Save point in the class allocated `point' slot.
 If `srecode-template-inserter-point-override' non-nil then this
 generalized marker will do something else.  See
 `srecode-template-inserter-include-wrap' as an example."

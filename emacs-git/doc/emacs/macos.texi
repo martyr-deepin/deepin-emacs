@@ -1,21 +1,21 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 2000-2015 Free Software Foundation, Inc.
+@c Copyright (C) 2000-2017 Free Software Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Mac OS / GNUstep
 @appendix Emacs and Mac OS / GNUstep
-@cindex Mac OS X
+@cindex macOS
 @cindex Macintosh
 @cindex GNUstep
 
   This section describes the peculiarities of using Emacs built with
 the GNUstep libraries on GNU/Linux or other operating systems, or on
-Mac OS X with native window system support.  On Mac OS X, Emacs can be
+macOS with native window system support.  On macOS, Emacs can be
 built either without window system support, with X11, or with the
 Cocoa interface; this section only applies to the Cocoa build.  This
-does not support versions of Mac OS X earlier than 10.6.
+does not support versions before Mac OS X 10.6.
 
   For various historical and technical reasons, Emacs uses the term
-@samp{Nextstep} internally, instead of ``Cocoa'' or ``Mac OS X''; for
+@samp{Nextstep} internally, instead of ``Cocoa'' or ``macOS''; for
 instance, most of the commands and variables described in this section
 begin with @samp{ns-}, which is short for @samp{Nextstep}.  NeXTstep
 was an application interface released by NeXT Inc during the 1980s, of
@@ -51,9 +51,9 @@ modifier keys; a value to @code{left} means be the same key as
 @code{ns-alternate-modifier}; a value of @code{none} tells Emacs to
 ignore them.
 
-  @kbd{S-Mouse-1} adjusts the region to the click position,
-just like @kbd{Mouse-3} (@code{mouse-save-then-kill}); it does not pop
-up a menu for changing the default face, as @kbd{S-Mouse-1} normally
+  @kbd{S-mouse-1} adjusts the region to the click position,
+just like @kbd{mouse-3} (@code{mouse-save-then-kill}); it does not pop
+up a menu for changing the default face, as @kbd{S-mouse-1} normally
 does (@pxref{Text Scale}).  This change makes Emacs behave more like
 other Mac / GNUstep applications.
 
@@ -66,7 +66,7 @@ file names.
   On GNUstep, in an X-windows environment you need to use @kbd{Cmd-c}
 instead of one of the @kbd{C-w} or @kbd{M-w} commands to transfer text
 to the X primary selection; otherwise, Emacs will use the
-``clipboard'' selection.  Likewise, @kbd{Cmd-y} (instead of @kbd{C-y})
+clipboard selection.  Likewise, @kbd{Cmd-y} (instead of @kbd{C-y})
 yanks from the X primary selection instead of the kill-ring or
 clipboard.
 
@@ -84,7 +84,7 @@ set, which often causes the subprocesses it launches to behave differently than
 they would when launched from the shell.
 
 For the PATH and MANPATH variables, a system-wide method
-of setting PATH is recommended on Mac OS X, using the
+of setting PATH is recommended on macOS, using the
 @file{/etc/paths} files and the @file{/etc/paths.d} directory.
 
 @node Mac / GNUstep Customization
@@ -117,8 +117,8 @@ close the altered one.
 Useful in this context is the listing of all faces obtained by
 @kbd{M-x list-faces-display}.
 
-@cindex Core Text, on Mac OS X
-In Mac OS X, Emacs uses a Core Text based font backend
+@cindex Core Text, on macOS
+In macOS, Emacs uses a Core Text based font backend
 by default.  If you prefer the older font style, enter the following
 at the command-line before starting Emacs:
 
@@ -131,9 +131,9 @@ at the command-line before starting Emacs:
 @section Windowing System Events under Mac OS / GNUstep
 
   Nextstep applications receive a number of special events which have
-no X equivalent.  These are sent as specially defined ``keys'', which
+no X equivalent.  These are sent as specially defined key events, which
 do not correspond to any sequence of keystrokes.  Under Emacs, these
-``key'' events can be bound to functions just like ordinary
+key events can be bound to functions just like ordinary
 keystrokes.  Here is a list of these events.
 
 @table @key

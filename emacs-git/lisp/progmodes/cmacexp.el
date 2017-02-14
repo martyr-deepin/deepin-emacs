@@ -1,6 +1,6 @@
 ;;; cmacexp.el --- expand C macros in a region
 
-;; Copyright (C) 1992, 1994, 1996, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1992, 1994, 1996, 2000-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Francesco Potortì <pot@gnu.org>
@@ -389,8 +389,9 @@ Optional arg DISPLAY non-nil means show messages in the echo area."
 		;; Put the messages inside a comment, so they won't get in
 		;; the way of font-lock, highlighting etc.
 		(insert
-		 (format "/* Preprocessor terminated with status %s\n\n   Messages from `%s\':\n\n"
-			 exit-status cppcommand))
+		 (format
+		  "/* Preprocessor terminated with status %s\n\n   Messages from '%s':\n\n"
+		  exit-status cppcommand))
 		(goto-char (+ (point)
 			      (nth 1 (insert-file-contents tempname))))
 		(insert "\n\n*/\n")))
@@ -404,7 +405,3 @@ Optional arg DISPLAY non-nil means show messages in the echo area."
       (kill-buffer outbuf))))
 
 ;;; cmacexp.el ends here
-
-;; Local Variables:
-;; coding: utf-8
-;; End:

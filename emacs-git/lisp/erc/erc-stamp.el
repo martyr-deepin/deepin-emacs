@@ -1,6 +1,6 @@
 ;;; erc-stamp.el --- Timestamping for ERC messages
 
-;; Copyright (C) 2002-2004, 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2004, 2006-2017 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -347,7 +347,8 @@ changed, it will then print it off to the right."
 Return the empty string if FORMAT is nil."
   (if format
       (let ((ts (format-time-string format time)))
-	(erc-put-text-property 0 (length ts) 'face 'erc-timestamp-face ts)
+	(erc-put-text-property 0 (length ts)
+			       'font-lock-face 'erc-timestamp-face ts)
 	(erc-put-text-property 0 (length ts) 'invisible 'timestamp ts)
 	(erc-put-text-property 0 (length ts)
 			       'isearch-open-invisible 'timestamp ts)
@@ -370,8 +371,8 @@ Return the empty string if FORMAT is nil."
   (and erc-echo-timestamps (not (bound-and-true-p cursor-sensor-mode))
        (cursor-sensor-mode 1))
   (if erc-hide-timestamps
-      (add-to-invisibility-spec 'timespec)
-    (remove-from-invisibility-spec 'timespec)))
+      (add-to-invisibility-spec 'timestamp)
+    (remove-from-invisibility-spec 'timestamp)))
 
 (defun erc-hide-timestamps ()
   "Hide timestamp information from display."

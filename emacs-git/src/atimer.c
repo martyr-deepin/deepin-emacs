@@ -1,12 +1,12 @@
 /* Asynchronous timers.
-   Copyright (C) 2000-2015 Free Software Foundation, Inc.
+   Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,15 +20,19 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <stdio.h>
 
 #include "lisp.h"
+#include "keyboard.h"
 #include "syssignal.h"
 #include "systime.h"
-#include "blockinput.h"
 #include "atimer.h"
 #include <unistd.h>
 
 #ifdef HAVE_TIMERFD
 #include <errno.h>
 # include <sys/timerfd.h>
+#endif
+
+#ifdef MSDOS
+#include "msdos.h"
 #endif
 
 /* Free-list of atimer structures.  */
@@ -492,9 +496,9 @@ debug_timer_callback (struct atimer *t)
     {
 #ifdef HAVE_SETITIMER
       struct timespec delta = timespec_sub (now, r->expected);
-      /* Too late if later than expected + 0.01s.  FIXME:
+      /* Too late if later than expected + 0.02s.  FIXME:
 	 this should depend from system clock resolution.  */
-      if (timespec_cmp (delta, make_timespec (0, 10000000)) > 0)
+      if (timespec_cmp (delta, make_timespec (0, 20000000)) > 0)
 	r->intime = 0;
       else
 #endif /* HAVE_SETITIMER */
@@ -523,8 +527,26 @@ Return t if all self-tests are passed, nil otherwise.  */)
 			    debug_timer_callback, results[i]);
     }
 
+#ifdef HAVE_TIMERFD
   /* Wait for 1s but process timers.  */
   wait_reading_process_output (1, 0, 0, false, Qnil, NULL, 0);
+#else
+  /* If timerfd is not supported, wait_reading_process_output won't
+     pay attention to timers that expired, and the callbacks won't be
+     called.  So we need to run the expired timers' callbacks by
+     hand.  */
+  /* Wait 1.2 sec for the timers to expire.  */
+  struct timespec tend =
+    timespec_add (current_timespec (), make_timespec (1, 200000000));
+
+  while (timespec_cmp (current_timespec (), tend) < 0)
+    {
+      /* Wait for 5 msec between iterations.  */
+      wait_reading_process_output (0, 5000000, 0, false, Qnil, NULL, 0);
+      if (pending_signals)
+	do_pending_atimers ();
+    }
+#endif
   /* Shut up the compiler by "using" this variable.  */
   (void) timer;
 

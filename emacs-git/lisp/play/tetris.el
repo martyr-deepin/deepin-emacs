@@ -1,6 +1,6 @@
 ;;; tetris.el --- implementation of Tetris for Emacs
 
-;; Copyright (C) 1997, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Glynn Clements <glynn@sensei.co.uk>
 ;; Version: 2.01
@@ -87,9 +87,15 @@ If the return value is a number, it is used as the timer period."
 
 (defcustom tetris-x-colors
   [[0 0 1] [0.7 0 1] [1 1 0] [1 0 1] [0 1 1] [0 1 0] [1 0 0]]
-  "Vector of colors of the various shapes."
+  "Vector of RGB colors of the various shapes."
   :group 'tetris
-  :type 'sexp)
+  :type '(vector (vector :tag "Shape 1" number number number)
+                 (vector :tag "Shape 2" number number number)
+                 (vector :tag "Shape 3" number number number)
+                 (vector :tag "Shape 4" number number number)
+                 (vector :tag "Shape 5" number number number)
+                 (vector :tag "Shape 6" number number number)
+                 (vector :tag "Shape 7" number number number)))
 
 (defcustom tetris-buffer-name "*Tetris*"
   "Name used for Tetris buffer."
@@ -265,7 +271,7 @@ each one of its four blocks.")
     (define-key map [left]	'tetris-move-left)
     (define-key map [right]	'tetris-move-right)
     (define-key map [up]	'tetris-rotate-prev)
-    (define-key map [down]	'tetris-rotate-next)
+    (define-key map [down]	'tetris-move-down)
     map))
 
 (defvar tetris-null-map
@@ -522,6 +528,16 @@ Drops the shape one square, testing for collision."
     (setq tetris-pos-x (1+ tetris-pos-x))
     (if (tetris-test-shape)
 	(setq tetris-pos-x (1- tetris-pos-x)))
+    (tetris-draw-shape)))
+
+(defun tetris-move-down ()
+  "Move the shape one square to the bottom."
+  (interactive)
+  (unless tetris-paused
+    (tetris-erase-shape)
+    (setq tetris-pos-y (1+ tetris-pos-y))
+    (if (tetris-test-shape)
+	(setq tetris-pos-y (1- tetris-pos-y)))
     (tetris-draw-shape)))
 
 (defun tetris-rotate-prev ()

@@ -1,6 +1,6 @@
 ;;; facemenu.el --- create a face menu for interactively adding fonts to text
 
-;; Copyright (C) 1994-1996, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1996, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Boris Goldowsky <boris@gnu.org>
 ;; Keywords: faces
@@ -458,7 +458,7 @@ These special properties include `invisible', `intangible' and `read-only'."
 
 (defcustom list-colors-sort nil
   "Color sort order for `list-colors-display'.
-`nil' means default implementation-dependent order (defined in `x-colors').
+nil means default implementation-dependent order (defined in `x-colors').
 `name' sorts by color name.
 `rgb' sorts by red, green, blue components.
 `(rgb-dist . COLOR)' sorts by the RGB distance to the specified color.
@@ -637,8 +637,8 @@ color.  The function should accept a single argument, the color name."
 (defun list-colors-duplicates (&optional list)
   "Return a list of colors with grouped duplicate colors.
 If a color has no duplicates, then the element of the returned list
-has the form '(COLOR-NAME).  The element of the returned list with
-duplicate colors has the form '(COLOR-NAME DUPLICATE-COLOR-NAME ...).
+has the form (COLOR-NAME).  The element of the returned list with
+duplicate colors has the form (COLOR-NAME DUPLICATE-COLOR-NAME ...).
 This function uses the predicate `facemenu-color-equal' to compare
 color names.  If the optional argument LIST is non-nil, it should
 be a list of colors to display.  Otherwise, this function uses

@@ -1,6 +1,6 @@
 ;;; org-ctags.el - Integrate Emacs "tags" facility with org mode.
 ;;
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Paul Sexton <eeeickythump@gmail.com>
 
@@ -394,7 +394,8 @@ the new file."
       (org-open-file filename t))
      ((or (eql create t)
           (and (eql create 'ask)
-               (y-or-n-p (format "File `%s.org' not found; create?" name))))
+               (y-or-n-p (format-message
+			  "File `%s.org' not found; create?" name))))
       (org-ctags-open-file filename name))
      (t ;; File does not exist, and we don't want to create it.
       nil))))
@@ -433,8 +434,8 @@ the heading a destination for the tag `NAME'."
   "This function is intended to be used in ORG-OPEN-LINK-FUNCTIONS.
 Wrapper for org-ctags-append-topic, which first asks the user if they want
 to append a new topic."
-  (if (y-or-n-p (format "Topic `%s' not found; append to end of buffer?"
-                        name))
+  (if (y-or-n-p (format-message
+		 "Topic `%s' not found; append to end of buffer?" name))
       (org-ctags-append-topic name narrowp)
     nil))
 
@@ -455,7 +456,7 @@ to rebuild (update) the TAGS file."
 Wrapper for org-ctags-rebuild-tags-file-then-find-tag."
   (if (and (buffer-file-name)
 	   (y-or-n-p
-	    (format
+	    (format-message
 	     "Tag `%s' not found.  Rebuild table `%s/TAGS' and look again?"
 	     name
 	     (file-name-directory (buffer-file-name)))))

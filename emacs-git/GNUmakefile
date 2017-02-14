@@ -1,6 +1,6 @@
 # Build Emacs from a fresh tarball or version-control checkout.
 
-# Copyright (C) 2011-2015 Free Software Foundation, Inc.
+# Copyright (C) 2011-2017 Free Software Foundation, Inc.
 #
 # This file is part of GNU Emacs.
 #
@@ -62,10 +62,13 @@ default $(ORDINARY_GOALS): Makefile
 # Execute in sequence, so that multiple user goals don't conflict.
 .NOTPARALLEL:
 
+# 'all' if a .git subdirectory is present, empty otherwise.
+ALL_IF_GIT = $(subst .git,all,$(wildcard .git))
+
 configure:
 	@echo >&2 'There seems to be no "configure" file in this directory.'
-	@echo >&2 'Running ./autogen.sh ...'
-	./autogen.sh
+	@echo >&2 Running ./autogen.sh $(ALL_IF_GIT) ...
+	./autogen.sh $(ALL_IF_GIT)
 	@echo >&2 '"configure" file built.'
 
 Makefile: configure

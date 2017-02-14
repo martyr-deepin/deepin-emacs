@@ -1,6 +1,6 @@
-;;; icalendar.el --- iCalendar implementation -*-coding: utf-8 -*-
+;;; icalendar.el --- iCalendar implementation -*- lexical-binding: t -*-
 
-;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2017 Free Software Foundation, Inc.
 
 ;; Author:         Ulf Jasper <ulf.jasper@web.de>
 ;; Created:        August 2002
@@ -261,7 +261,7 @@ If non-nil all sexp diary entries are enumerated for
 `icalendar-export-sexp-enumeration-days' days instead of
 translating into an icalendar equivalent.  This affects the
 following sexp diary entries: `diary-anniversary',
-`diary-cyclic', `diary-date', `diary-float',`diary-block'.  All
+`diary-cyclic', `diary-date', `diary-float', `diary-block'.  All
 other sexp entries are enumerated in any case."
   :version "25.1"
   :type 'boolean
@@ -321,17 +321,28 @@ other sexp entries are enumerated in any case."
   "Return a new buffer containing the unfolded contents of a buffer.
 Folding is the iCalendar way of wrapping long lines.  In the
 created buffer all occurrences of CR LF BLANK are replaced by the
-empty string.  Argument FOLDED-ICAL-BUFFER is the unfolded input
+empty string.  Argument FOLDED-ICAL-BUFFER is the folded input
 buffer."
   (let ((unfolded-buffer (get-buffer-create " *icalendar-work*")))
     (save-current-buffer
       (set-buffer unfolded-buffer)
       (erase-buffer)
       (insert-buffer-substring folded-ical-buffer)
+      (icalendar--clean-up-line-endings)
       (goto-char (point-min))
       (while (re-search-forward "\r?\n[ \t]" nil t)
         (replace-match "" nil nil)))
     unfolded-buffer))
+
+(defun icalendar--clean-up-line-endings ()
+  "Replace DOS- and MAC-like line endings with unix line endings.
+All occurrences of (CR LF) and (LF CF) are replaced with LF in
+the current buffer.  This is necessary in buffers which contain a
+mix of different line endings."
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward "\r\n\\|\n\r" nil t)
+      (replace-match "\n" nil nil))))
 
 (defsubst icalendar--rris (regexp rep string &optional fixedcase literal)
   "Replace regular expression in string.
@@ -350,7 +361,8 @@ Pass arguments REGEXP REP STRING FIXEDCASE LITERAL to
 INVALUE gives the current iCalendar element we are reading.
 INPARAMS gives the current parameters.....
 This function calls itself recursively for each nested calendar element
-it finds."
+it finds.  The current buffer should be an unfolded buffer as returned
+from `icalendar--get-unfolded-buffer'."
   (let (element children line name params param param-name param-value
                 value
                 (continue t))
@@ -380,8 +392,9 @@ it finds."
       (unless (looking-at ":")
         (error "Oops"))
       (forward-char 1)
-      (re-search-forward  "\\(.*\\)\\(\r?\n[ \t].*\\)*" nil t)
-      (setq value (icalendar--rris "\r?\n[ \t]" "" (match-string 0)))
+      (let ((start (point)))
+        (end-of-line)
+        (setq value (buffer-substring start (point))))
       (setq line (list name params value))
       (cond ((eq name 'BEGIN)
              (setq children
@@ -482,7 +495,7 @@ children."
     result))
 
 (defun icalendar--split-value (value-string)
-  "Split VALUE-STRING at ';='."
+  "Split VALUE-STRING at `;='."
   (let ((result '())
         param-name param-value)
     (when value-string
@@ -618,13 +631,7 @@ FIXME: multiple comma-separated values should be allowed!"
         (when (and (> (length isodatetimestring) 15)
                    ;; UTC specifier present
                    (char-equal ?Z (aref isodatetimestring 15)))
-          ;; if not UTC add current-time-zone offset
-          ;; current-time-zone should be called with actual UTC time
-          ;; (daylight saving at that time may differ to current one)
-          (setq second (+ (car (current-time-zone
-                                (encode-time second minute hour day month year
-                                             0)))
-                          second)))
+          (setq zone t))
         ;; shift if necessary
         (if day-shift
             (let ((mdy (calendar-gregorian-from-absolute
@@ -1124,10 +1131,10 @@ FExport diary data into iCalendar file: ")
            (setq found-error t)
            (save-current-buffer
              (set-buffer (get-buffer-create "*icalendar-errors*"))
-             (insert (format "Error in line %d -- %s: `%s'\n"
-                             (count-lines (point-min) (point))
-                             error-val
-                             entry-main))))))
+             (insert (format-message "Error in line %d -- %s: `%s'\n"
+                                     (count-lines (point-min) (point))
+                                     error-val
+                                     entry-main))))))
 
       ;; we're done, insert everything into the file
       (save-current-buffer
@@ -1302,8 +1309,8 @@ Returns an alist."
   "Return a VALARM block.
 Argument ADVANCE-TIME is a number giving the time when the alarm
 fires (minutes before the respective event).  Argument ALARM-SPEC
-is a list which must be one of '(audio), '(display) or
-'(email (ADDRESS1 ...)), see `icalendar-export-alarms'.  Argument
+is a list which must be one of (audio), (display) or
+(email (ADDRESS1 ...)), see `icalendar-export-alarms'.  Argument
 SUMMARY is a string which contains a short description for the
 alarm."
   (let* ((action (car alarm-spec))
@@ -1635,8 +1642,8 @@ enumeration, given as a time value, in same format as returned by
                                  (icalendar--convert-ordinary-to-ical
                                   nonmarker (format "%4d/%02d/%02d %s" y m d see))))
                              (;TODO:
-                              (error (format "Unsupported Sexp-entry: %s"
-                                             entry-main))))))
+                              (error "Unsupported Sexp-entry: %s"
+                                     entry-main)))))
                     (number-sequence
                      0 (- icalendar-export-sexp-enumeration-days 1))))))
         (t
@@ -2382,22 +2389,43 @@ END-T is the event's end time in diary format."
           ;; monthly
           ((string-equal frequency "MONTHLY")
            (icalendar--dmsg "monthly")
-           (setq result
-                 (format
-                  "%%%%(and (diary-date %s) (diary-block %s %s)) %s%s%s"
-                  (let ((day (nth 3 dtstart-dec)))
-                    (cond ((eq calendar-date-style 'iso)
-                           (format "t t %d" day))
-                          ((eq calendar-date-style 'european)
-                           (format "%d t t" day))
-                          ((eq calendar-date-style 'american)
-                           (format "t %d t" day))))
-                  dtstart-conv
-                  (if until
-                      until-conv
-                    (if (eq calendar-date-style 'iso) "9999 1 1" "1 1 9999")) ;; FIXME: should be unlimited
-                  (or start-t "")
-                  (if end-t "-" "") (or end-t ""))))
+	   (let* ((byday (cadr (assoc 'BYDAY rrule-props)))
+                  (count-weekday
+                   (and byday
+                        (save-match-data
+                          (when (string-match "\\(-?[0-9]+\\)\\([A-Z][A-Z]\\)"
+                                              byday)
+                            (cons (substring byday
+                                             (match-beginning 1)
+                                             (match-end 1))
+                                  (substring byday
+                                             (match-beginning 2)
+                                             (match-end 2)))))))
+                  (rule-part
+                   (if count-weekday
+                       (let ((count (car count-weekday))
+                             (weekdaynum (icalendar--get-weekday-number
+                                          (cdr count-weekday))))
+                         ;; FIXME: this is valid only for interval==1
+                         (format "(diary-float t %s %s)" weekdaynum count))
+                     (format "(diary-date %s)"
+                             (let ((day (nth 3 dtstart-dec)))
+                               (cond ((eq calendar-date-style 'iso)
+                                      (format "t t %d" day))
+                                     ((eq calendar-date-style 'european)
+                                      (format "%d t t" day))
+                                     ((eq calendar-date-style 'american)
+                                      (format "t %d t" day))))))))
+             (setq result
+                   (format
+                    "%%%%(and %s (diary-block %s %s)) %s%s%s"
+                    rule-part
+                    dtstart-conv
+                    (if until
+                        until-conv
+                      (if (eq calendar-date-style 'iso) "9999 1 1" "1 1 9999")) ;; FIXME: should be unlimited
+                    (or start-t "")
+                    (if end-t "-" "") (or end-t "")))))
           ;; daily
           ((and (string-equal frequency "DAILY"))
            (if until
@@ -2479,8 +2507,8 @@ SUMMARY is not nil it must be a string that gives the summary of the
 entry.  In this case the user will be asked whether he wants to insert
 the entry."
   (when (or (not summary)
-            (y-or-n-p (format "Add appointment for `%s' to diary? "
-                              summary)))
+            (y-or-n-p (format-message "Add appointment for `%s' to diary? "
+                                      summary)))
     (when summary
       (setq non-marking
             (y-or-n-p (format "Make appointment non-marking? "))))
@@ -2506,8 +2534,8 @@ the entry."
 ;; ======================================================================
 (defun icalendar-import-format-sample (event)
   "Example function for formatting an iCalendar EVENT."
-  (format (concat "SUMMARY=`%s' DESCRIPTION=`%s' LOCATION=`%s' ORGANIZER=`%s' "
-                  "STATUS=`%s' URL=`%s' CLASS=`%s'")
+  (format (concat "SUMMARY='%s' DESCRIPTION='%s' LOCATION='%s' ORGANIZER='%s' "
+                  "STATUS='%s' URL='%s' CLASS='%s'")
           (or (icalendar--get-event-property event 'SUMMARY) "")
           (or (icalendar--get-event-property event 'DESCRIPTION) "")
           (or (icalendar--get-event-property event 'LOCATION) "")

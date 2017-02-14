@@ -1,6 +1,6 @@
 ;;; lisp-mnt.el --- utility functions for Emacs Lisp maintainers
 
-;; Copyright (C) 1992, 1994, 1997, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1992, 1994, 1997, 2000-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
@@ -551,11 +551,11 @@ copyright notice is allowed."
 	       ((not (lm-keywords-finder-p))
 		"`Keywords:' has no valid finder keywords (see `finder-known-keywords')")
 	       ((not (lm-commentary-mark))
-		"Can't find a 'Commentary' section marker")
+		"Can't find a `Commentary' section marker")
 	       ((not (lm-history-mark))
-		"Can't find a 'History' section marker")
+		"Can't find a `History' section marker")
 	       ((not (lm-code-mark))
-		"Can't find a 'Code' section marker")
+		"Can't find a `Code' section marker")
 	       ((progn
 		  (goto-char (point-max))
 		  (not

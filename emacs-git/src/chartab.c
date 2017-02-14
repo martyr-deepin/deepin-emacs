@@ -7,8 +7,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +23,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "character.h"
 #include "charset.h"
-#include "ccl.h"
 
 /* 64/16/32/128 */
 
@@ -493,7 +492,7 @@ char_table_set_range (Lisp_Object table, int from, int to, Lisp_Object val)
       int lim = CHARTAB_IDX (to, 0, 0);
       int i, c;
 
-      for (i = CHARTAB_IDX (from, 0, 0), c = 0; i <= lim;
+      for (i = CHARTAB_IDX (from, 0, 0), c = i * chartab_chars[0]; i <= lim;
 	   i++, c += chartab_chars[0])
 	{
 	  if (c > to)
@@ -863,13 +862,11 @@ map_char_table (void (*c_function) (Lisp_Object, Lisp_Object, Lisp_Object),
 		Lisp_Object function, Lisp_Object table, Lisp_Object arg)
 {
   Lisp_Object range, val, parent;
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
   uniprop_decoder_t decoder = UNIPROP_GET_DECODER (table);
 
   range = Fcons (make_number (0), make_number (MAX_CHAR));
   parent = XCHAR_TABLE (table)->parent;
 
-  GCPRO4 (table, arg, range, parent);
   val = XCHAR_TABLE (table)->ascii;
   if (SUB_CHAR_TABLE_P (val))
     val = XSUB_CHAR_TABLE (val)->contents[0];
@@ -920,8 +917,6 @@ map_char_table (void (*c_function) (Lisp_Object, Lisp_Object, Lisp_Object),
 	    }
 	}
     }
-
-  UNGCPRO;
 }
 
 DEFUN ("map-char-table", Fmap_char_table, Smap_char_table,
@@ -1031,10 +1026,8 @@ map_char_table_for_charset (void (*c_function) (Lisp_Object, Lisp_Object),
 {
   Lisp_Object range;
   int c, i;
-  struct gcpro gcpro1;
 
   range = Fcons (Qnil, Qnil);
-  GCPRO1 (range);
 
   for (i = 0, c = 0; i < chartab_size[0]; i++, c += chartab_chars[0])
     {
@@ -1065,8 +1058,6 @@ map_char_table_for_charset (void (*c_function) (Lisp_Object, Lisp_Object),
       else
 	call2 (function, range, arg);
     }
-
-  UNGCPRO;
 }
 
 
@@ -1299,11 +1290,8 @@ uniprop_table (Lisp_Object prop)
   table = XCDR (val);
   if (STRINGP (table))
     {
-      struct gcpro gcpro1;
-      GCPRO1 (val);
       AUTO_STRING (intl, "international/");
       result = Fload (concat2 (intl, table), Qt, Qt, Qt, Qt);
-      UNGCPRO;
       if (NILP (result))
 	return Qnil;
       table = XCDR (val);

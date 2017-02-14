@@ -1,6 +1,6 @@
-;;; nxml-parse.el --- XML parser, sharing infrastructure with nxml-mode
+;;; nxml-parse.el --- XML parser, sharing infrastructure with nxml-mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: James Clark
 ;; Keywords: wp, hypermedia, languages, XML
@@ -304,7 +304,7 @@ same way as well-formedness error."
 (defun nxml-parse-error (position &rest args)
   (nxml-signal-file-parse-error nxml-parse-file-name
 				(or position xmltok-start)
-				(apply 'format args)))
+				(apply #'format-message args)))
 
 (defun nxml-check-xmltok-errors ()
   (when xmltok-errors

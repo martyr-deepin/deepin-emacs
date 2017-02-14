@@ -1,6 +1,6 @@
 ;; erc-goodies.el --- Collection of ERC modules
 
-;; Copyright (C) 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Jorgen Schaefer <forcer@forcix.cx>
 ;; Maintainer: emacs-devel@gnu.org
@@ -475,7 +475,7 @@ to a region in the current buffer."
   (font-lock-prepend-text-property
    from
    to
-   'face
+   'font-lock-face
    (append (if boldp
                '(erc-bold-face)
              nil)

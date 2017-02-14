@@ -1,6 +1,6 @@
 ;;; cl-indent.el --- enhanced lisp-indent mode
 
-;; Copyright (C) 1987, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1987, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Richard Mlynarik <mly@eddie.mit.edu>
 ;; Created: July 1987
@@ -140,13 +140,13 @@ If non-nil, alignment is done with the first parameter
 
 (defcustom lisp-indent-backquote-substitution-mode t
   "How to indent substitutions in backquotes.
-If `t', the default, indent substituted forms normally.
-If `nil', do not apply special indentation rule to substituted
+If t, the default, indent substituted forms normally.
+If nil, do not apply special indentation rule to substituted
 forms.  If `corrected', subtract the `,' or `,@' from the form
 column, indenting as if this character sequence were not present.
 In any case, do not backtrack beyond a backquote substitution.
 
-Until Emacs 25.1, the `nil' behavior was hard-wired."
+Until Emacs 25.1, the nil behavior was hard-wired."
   :version "25.1"
   :type '(choice (const corrected) (const nil) (const t))
   :group 'lisp-indent)
@@ -839,6 +839,7 @@ optional\\|rest\\|key\\|allow-other-keys\\|aux\\|whole\\|body\\|environment\
 ;; In elisp, the else part of `if' is in an implicit progn, so indent
 ;; it more.
 (put 'if 'common-lisp-indent-function-for-elisp 2)
+(put 'with-output-to-string 'common-lisp-indent-function-for-elisp 0)
 
 
 ;(defun foo (x)

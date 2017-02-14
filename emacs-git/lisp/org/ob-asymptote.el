@@ -1,6 +1,6 @@
 ;;; ob-asymptote.el --- org-babel functions for asymptote evaluation
 
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -45,7 +45,8 @@
 (require 'ob)
 (eval-when-compile (require 'cl))
 
-(declare-function orgtbl-to-generic "org-table" (table params))
+(declare-function orgtbl-to-generic "org-table"
+                  (table params &optional backend))
 (declare-function org-combine-plists "org" (&rest plists))
 
 (defvar org-babel-tangle-lang-exts)

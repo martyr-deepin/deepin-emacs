@@ -1,6 +1,6 @@
 ;;; strokes.el --- control Emacs through mouse strokes
 
-;; Copyright (C) 1997, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: David Bakhash <cadet@alum.mit.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -423,8 +423,9 @@ or for window START-WINDOW if that is specified."
   (interactive)
   (let ((command (cdar strokes-global-map)))
     (if (y-or-n-p
-	 (format "Really delete last stroke definition, defined to `%s'? "
-		 command))
+	 (format-message
+	  "Really delete last stroke definition, defined to `%s'? "
+	  command))
 	(progn
 	  (setq strokes-global-map (cdr strokes-global-map))
 	  (message "That stroke has been deleted"))
@@ -857,7 +858,7 @@ The command will be executed provided one exists for that stroke,
 based on the variable `strokes-minimum-match-score'.
 If no stroke matches, nothing is done and return value is nil."
   ;; FIXME: Undocument return value.  It is not documented for all cases,
-  ;; and doesn't allow to difference between no stroke matches and
+  ;; and doesn't allow differentiating between no stroke matches and
   ;; command-execute returning nil, anyway.
   (let* ((match (strokes-match-stroke stroke strokes-global-map))
 	 (command (car match))
@@ -868,8 +869,8 @@ If no stroke matches, nothing is done and return value is nil."
 	  ((null strokes-global-map)
 	   (if (file-exists-p strokes-file)
 	       (and (y-or-n-p
-		     (format "No strokes loaded.  Load `%s'? "
-			     strokes-file))
+		     (format-message "No strokes loaded.  Load `%s'? "
+				     strokes-file))
 		    (strokes-load-user-strokes))
 	     (error "No strokes defined; use `strokes-global-set-stroke'")))
 	  (t

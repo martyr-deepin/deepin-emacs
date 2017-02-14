@@ -1,6 +1,6 @@
 ;;; cc-defs.el --- compile time definitions for CC Mode
 
-;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2017 Free Software Foundation, Inc.
 
 ;; Authors:    2003- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -43,7 +43,23 @@
 	   load-path)))
     (load "cc-bytecomp" nil t)))
 
-(eval-when-compile (require 'cl)) ; was (cc-external-require 'cl).  ACM 2005/11/29.
+(eval-and-compile
+  (defvar c--mapcan-status
+    (cond ((and (fboundp 'mapcan)
+		(subrp (symbol-function 'mapcan)))
+	   ;; XEmacs
+	   'mapcan)
+	  ((locate-file "cl-lib.elc" load-path)
+	   ;; Emacs >= 24.3
+	   'cl-mapcan)
+	  (t
+	   ;; Emacs <= 24.2
+	   nil))))
+
+(cc-external-require (if (eq c--mapcan-status 'cl-mapcan) 'cl-lib 'cl))
+; was (cc-external-require 'cl).  ACM 2005/11/29.
+; Changed from (eval-when-compile (require 'cl)) back to
+; cc-external-require, 2015-08-12.
 (cc-external-require 'regexp-opt)
 
 ;; Silence the compiler.
@@ -59,41 +75,26 @@
 
 ;; cc-fix.el contains compatibility macros that should be used if
 ;; needed.
-(eval-and-compile
-  (if (or (/= (regexp-opt-depth "\\(\\(\\)\\)") 2)
-	  (not (fboundp 'push)))
-      (cc-load "cc-fix")))
+(cc-conditional-require
+ 'cc-fix (or (/= (regexp-opt-depth "\\(\\(\\)\\)") 2)
+	     (not (fboundp 'push))
+	     ;; XEmacs 21.4 doesn't have `delete-dups'.
+	     (not (fboundp 'delete-dups))))
 
-(when (featurep 'xemacs) ; There is now (2005/12) code in GNU Emacs CVS
-			 ; to make the call to f-l-c-k throw an error.
-  (eval-after-load "font-lock"
-    '(if (and (not (featurep 'cc-fix))	; only load the file once.
-	      (let (font-lock-keywords)
-		(font-lock-compile-keywords '("\\<\\>"))
-		font-lock-keywords)) ; did the previous call foul this up?
-         (load "cc-fix"))))
+(cc-conditional-require-after-load
+ 'cc-fix "font-lock"
+ (and
+  (featurep 'xemacs)
+  (progn
+    (require 'font-lock)
+    (let (font-lock-keywords)
+      (font-lock-compile-keywords '("\\<\\>"))
+      font-lock-keywords))))
 
-;; The above takes care of the delayed loading, but this is necessary
-;; to ensure correct byte compilation.
-(eval-when-compile
-  (if (and (featurep 'xemacs)
-	   (not (featurep 'cc-fix))
-	   (progn
-	     (require 'font-lock)
-	     (let (font-lock-keywords)
-	       (font-lock-compile-keywords '("\\<\\>"))
-	       font-lock-keywords)))
-      (cc-load "cc-fix")))
-
-;; XEmacs 21.4 doesn't have `delete-dups'.
-(eval-and-compile
-  (if (and (not (fboundp 'delete-dups))
-	   (not (featurep 'cc-fix)))
-      (cc-load "cc-fix")))
 
 ;;; Variables also used at compile time.
 
-(defconst c-version "5.33"
+(defconst c-version "5.32.99"
   "CC Mode version number.")
 
 (defconst c-version-sym (intern c-version))
@@ -173,12 +174,47 @@ This variant works around bugs in `eval-when-compile' in various
 
   (put 'cc-eval-when-compile 'lisp-indent-hook 0))
 
-(eval-and-compile
-  (defalias 'c--macroexpand-all
-    (if (fboundp 'macroexpand-all)
-        'macroexpand-all 'cl-macroexpand-all)))
 
 ;;; Macros.
+(defmacro c--mapcan (fun liszt)
+  ;; CC Mode equivalent of `mapcan' which bridges the difference
+  ;; between the host [X]Emacsen."
+  ;; The motivation for this macro is to avoid the irritating message
+  ;; "function `mapcan' from cl package called at runtime" produced by Emacs.
+  (cond
+   ((eq c--mapcan-status 'mapcan)
+    `(mapcan ,fun ,liszt))
+   ((eq c--mapcan-status 'cl-mapcan)
+    `(cl-mapcan ,fun ,liszt))
+   (t
+    ;; Emacs <= 24.2.  It would be nice to be able to distinguish between
+    ;; compile-time and run-time use here.
+    `(apply 'nconc (mapcar ,fun ,liszt)))))
+
+(defmacro c--set-difference (liszt1 liszt2 &rest other-args)
+  ;; Macro to smooth out the renaming of `set-difference' in Emacs 24.3.
+  (if (eq c--mapcan-status 'cl-mapcan)
+      `(cl-set-difference ,liszt1 ,liszt2 ,@other-args)
+    `(set-difference ,liszt1 ,liszt2 ,@other-args)))
+
+(defmacro c--intersection (liszt1 liszt2 &rest other-args)
+  ;; Macro to smooth out the renaming of `intersection' in Emacs 24.3.
+  (if (eq c--mapcan-status 'cl-mapcan)
+      `(cl-intersection ,liszt1 ,liszt2 ,@other-args)
+    `(intersection ,liszt1 ,liszt2 ,@other-args)))
+
+(eval-and-compile
+  (defmacro c--macroexpand-all (form &optional environment)
+    ;; Macro to smooth out the renaming of `cl-macroexpand-all' in Emacs 24.3.
+    (if (fboundp 'macroexpand-all)
+	`(macroexpand-all ,form ,environment)
+      `(cl-macroexpand-all ,form ,environment)))
+
+  (defmacro c--delete-duplicates (cl-seq &rest cl-keys)
+    ;; Macro to smooth out the renaming of `delete-duplicates' in Emacs 24.3.
+    (if (eq c--mapcan-status 'cl-mapcan)
+	`(cl-delete-duplicates ,cl-seq ,@cl-keys)
+      `(delete-duplicates ,cl-seq ,@cl-keys))))
 
 (defmacro c-point (position &optional point)
   "Return the value of certain commonly referenced POSITIONs relative to POINT.
@@ -449,27 +485,29 @@ even if the user undoes the command which set them.
 
 This macro should ALWAYS be placed around \"temporary\" internal buffer
 changes \(like adding a newline to calculate a text-property then
-deleting it again\), so that the user never sees them on his
+deleting it again), so that the user never sees them on his
 `buffer-undo-list'.  See also `c-tentative-buffer-changes'.
 
-However, any user-visible changes to the buffer \(like auto-newlines\)
+However, any user-visible changes to the buffer \(like auto-newlines)
 must not be within a `c-save-buffer-state', since the user then
 wouldn't be able to undo them.
 
 The return value is the value of the last form in BODY."
-  `(let* ((modified (buffer-modified-p)) (buffer-undo-list t)
-	  (inhibit-read-only t) (inhibit-point-motion-hooks t)
-	  before-change-functions after-change-functions
-	  deactivate-mark
-	  buffer-file-name buffer-file-truename ; Prevent primitives checking
-						; for file modification
-	  ,@varlist)
-     (unwind-protect
-	 (progn ,@body)
-       (and (not modified)
-	    (buffer-modified-p)
-	    (set-buffer-modified-p nil)))))
-(put 'c-save-buffer-state 'lisp-indent-function 1)
+  (declare (debug t) (indent 1))
+  (if (fboundp 'with-silent-modifications)
+      `(with-silent-modifications (let* ,varlist ,@body))
+    `(let* ((modified (buffer-modified-p)) (buffer-undo-list t)
+	    (inhibit-read-only t) (inhibit-point-motion-hooks t)
+	    before-change-functions after-change-functions
+	    deactivate-mark
+	    buffer-file-name buffer-file-truename ; Prevent primitives checking
+						  ; for file modification
+	    ,@varlist)
+       (unwind-protect
+	   (progn ,@body)
+	 (and (not modified)
+	      (buffer-modified-p)
+	      (set-buffer-modified-p nil))))))
 
 (defmacro c-tentative-buffer-changes (&rest body)
   "Eval BODY and optionally restore the buffer contents to the state it
@@ -604,13 +642,14 @@ right side of it."
 	       `(c-safe (scan-lists ,from ,count ,depth)))))
     (if limit
 	`(save-restriction
-	   ,(if (numberp count)
-		(if (< count 0)
-		    `(narrow-to-region ,limit (point-max))
-		  `(narrow-to-region (point-min) ,limit))
-	      `(if (< ,count 0)
-		   (narrow-to-region ,limit (point-max))
-		 (narrow-to-region (point-min) ,limit)))
+	   (when ,limit
+	     ,(if (numberp count)
+		  (if (< count 0)
+		      `(narrow-to-region ,limit (point-max))
+		    `(narrow-to-region (point-min) ,limit))
+		`(if (< ,count 0)
+		     (narrow-to-region ,limit (point-max))
+		   (narrow-to-region (point-min) ,limit))))
 	   ,res)
       res)))
 
@@ -618,23 +657,25 @@ right side of it."
 ;; Wrappers for common scan-lists cases, mainly because it's almost
 ;; impossible to get a feel for how that function works.
 
-(defmacro c-go-list-forward ()
-  "Move backward across one balanced group of parentheses.
+(defmacro c-go-list-forward (&optional pos limit)
+  "Move forward across one balanced group of parentheses starting at POS or
+point.  Return POINT when we succeed, NIL when we fail.  In the latter case,
+leave point unmoved.
 
-Return POINT when we succeed, NIL when we fail.  In the latter case, leave
-point unmoved."
-  `(c-safe (let ((endpos (scan-lists (point) 1 0)))
-	     (goto-char endpos)
-	     endpos)))
+A LIMIT for the search may be given.  The start position is assumed to be
+before it."
+  `(let ((dest (c-safe-scan-lists ,(or pos `(point)) 1 0 ,limit)))
+     (when dest (goto-char dest) dest)))
 
-(defmacro c-go-list-backward ()
-  "Move backward across one balanced group of parentheses.
+(defmacro c-go-list-backward (&optional pos limit)
+  "Move backward across one balanced group of parentheses starting at POS or
+point.  Return POINT when we succeed, NIL when we fail.  In the latter case,
+leave point unmoved.
 
-Return POINT when we succeed, NIL when we fail.  In the latter case, leave
-point unmoved."
-  `(c-safe (let ((endpos (scan-lists (point) -1 0)))
-	     (goto-char endpos)
-	     endpos)))
+A LIMIT for the search may be given.  The start position is assumed to be
+after it."
+  `(let ((dest (c-safe-scan-lists ,(or pos `(point)) -1 0 ,limit)))
+     (when dest (goto-char dest) dest)))
 
 (defmacro c-up-list-forward (&optional pos limit)
   "Return the first position after the list sexp containing POS,
@@ -675,12 +716,8 @@ position exists, otherwise nil is returned and the point isn't moved.
 
 A limit for the search may be given.  The start position is assumed to
 be before it."
-  (let ((res `(c-safe (goto-char (scan-lists ,(or pos `(point)) 1 1)) t)))
-    (if limit
-	`(save-restriction
-	   (narrow-to-region (point-min) ,limit)
-	   ,res)
-      res)))
+  `(let ((dest (c-up-list-forward ,pos ,limit)))
+     (when dest (goto-char dest) t)))
 
 (defmacro c-go-up-list-backward (&optional pos limit)
   "Move the point to the position of the start of the list sexp containing POS,
@@ -689,12 +726,8 @@ position exists, otherwise nil is returned and the point isn't moved.
 
 A limit for the search may be given.  The start position is assumed to
 be after it."
-  (let ((res `(c-safe (goto-char (scan-lists ,(or pos `(point)) -1 1)) t)))
-    (if limit
-	`(save-restriction
-	   (narrow-to-region ,limit (point-max))
-	   ,res)
-      res)))
+  `(let ((dest (c-up-list-backward ,pos ,limit)))
+     (when dest (goto-char dest) t)))
 
 (defmacro c-go-down-list-forward (&optional pos limit)
   "Move the point to the first position inside the first list sexp after POS,
@@ -703,12 +736,8 @@ exists, otherwise nil is returned and the point isn't moved.
 
 A limit for the search may be given.  The start position is assumed to
 be before it."
-  (let ((res `(c-safe (goto-char (scan-lists ,(or pos `(point)) 1 -1)) t)))
-    (if limit
-	`(save-restriction
-	   (narrow-to-region (point-min) ,limit)
-	   ,res)
-      res)))
+  `(let ((dest (c-down-list-forward ,pos ,limit)))
+     (when dest (goto-char dest) t)))
 
 (defmacro c-go-down-list-backward (&optional pos limit)
   "Move the point to the last position inside the last list sexp before POS,
@@ -717,13 +746,8 @@ exists, otherwise nil is returned and the point isn't moved.
 
 A limit for the search may be given.  The start position is assumed to
 be after it."
-  (let ((res `(c-safe (goto-char (scan-lists ,(or pos `(point)) -1 -1)) t)))
-    (if limit
-	`(save-restriction
-	   (narrow-to-region ,limit (point-max))
-	   ,res)
-      res)))
-
+  `(let ((dest (c-down-list-backward ,pos ,limit)))
+     (when dest (goto-char dest) t)))
 
 (defmacro c-beginning-of-defun-1 ()
   ;; Wrapper around beginning-of-defun.
@@ -1210,7 +1234,8 @@ been put there by c-put-char-property.  POINT remains unchanged."
 (def-edebug-spec c-clear-char-property t)
 (def-edebug-spec c-clear-char-properties t)
 (def-edebug-spec c-put-overlay t)
-(def-edebug-spec c-delete-overlay t) ;))
+(def-edebug-spec c-delete-overlay t)
+(def-edebug-spec c-self-bind-state-cache t);))
 
 
 ;;; Functions.
@@ -1349,7 +1374,43 @@ been put there by c-put-char-property.  POINT remains unchanged."
        (save-restriction
 	 (widen)
 	 (c-set-cpp-delimiters ,beg ,end)))))
-
+
+(defmacro c-self-bind-state-cache (&rest forms)
+  ;; Bind the state cache to itself and execute the FORMS.  Return the result
+  ;; of the last FORM executed.  It is assumed that no buffer changes will
+  ;; happen in FORMS, and no hidden buffer changes which could affect the
+  ;; parsing will be made by FORMS.
+  `(let* ((c-state-cache (copy-tree c-state-cache))
+	  (c-state-cache-good-pos c-state-cache-good-pos)
+	  ;(c-state-nonlit-pos-cache (copy-tree c-state-nonlit-pos-cache))
+          ;(c-state-nonlit-pos-cache-limit c-state-nonlit-pos-cache-limit)
+          ;(c-state-semi-nonlit-pos-cache (copy-tree c-state-semi-nonlit-pos-cache))
+          ;(c-state-semi-nonlit-pos-cache-limit c-state-semi-nonlit-pos-cache)
+	  (c-state-brace-pair-desert (copy-tree c-state-brace-pair-desert))
+	  (c-state-point-min c-state-point-min)
+	  (c-state-point-min-lit-type c-state-point-min-lit-type)
+	  (c-state-point-min-lit-start c-state-point-min-lit-start)
+	  (c-state-min-scan-pos c-state-min-scan-pos)
+	  (c-state-old-cpp-beg-marker (if (markerp c-state-old-cpp-beg-marker)
+					  (copy-marker c-state-old-cpp-beg-marker)
+					c-state-old-cpp-beg-marker))
+	  (c-state-old-cpp-beg (if (markerp c-state-old-cpp-beg)
+				   c-state-old-cpp-beg-marker
+				 c-state-old-cpp-beg))
+	  (c-state-old-cpp-end-marker (if (markerp c-state-old-cpp-end-marker)
+					  (copy-marker c-state-old-cpp-end-marker)
+					c-state-old-cpp-end-marker))
+	  (c-state-old-cpp-end (if (markerp c-state-old-cpp-end)
+				   c-state-old-cpp-end-marker
+				 c-state-old-cpp-end))
+	  (c-parse-state-state c-parse-state-state))
+     (prog1
+	 (progn ,@forms)
+       (if (markerp c-state-old-cpp-beg-marker)
+	   (move-marker c-state-old-cpp-beg-marker nil))
+       (if (markerp c-state-old-cpp-end-marker)
+	   (move-marker c-state-old-cpp-end-marker nil)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; The following macros are to be used only in `c-parse-state' and its
 ;; subroutines.  Their main purpose is to simplify the handling of C++/Java
@@ -1591,11 +1652,11 @@ surrounds the matched alternative, and the regexp will also not match
 a prefix of any identifier.  Adorned regexps cannot be appended.  The
 language variable `c-nonsymbol-key' is used to make the adornment.
 
-A value 'appendable for ADORN is like above, but all alternatives in
+A value `appendable' for ADORN is like above, but all alternatives in
 the list that end with a word constituent char will have \\> appended
 instead, so that the regexp remains appendable.  Note that this
 variant doesn't always guarantee that an identifier prefix isn't
-matched since the symbol constituent '_' is normally considered a
+matched since the symbol constituent `_' is normally considered a
 nonword token by \\>.
 
 The optional MODE specifies the language to get `c-nonsymbol-key' from
@@ -1869,30 +1930,30 @@ There are many flavors of Emacs out there, each with different
 features supporting those needed by CC Mode.  The following values
 might be present:
 
-'8-bit              8 bit syntax entry flags (XEmacs style).
-'1-bit              1 bit syntax entry flags (Emacs style).
-'argumentative-bod-function	    beginning-of-defun and end-of-defun pass
+`8-bit'             8 bit syntax entry flags (XEmacs style).
+`1-bit'             1 bit syntax entry flags (Emacs style).
+`argumentative-bod-function'    beginning-of-defun and end-of-defun pass
 		    ARG through to beginning/end-of-defun-function.
-'syntax-properties  It works to override the syntax for specific characters
-		    in the buffer with the 'syntax-table property.  It's
+`syntax-properties' It works to override the syntax for specific characters
+		    in the buffer with the `syntax-table' property.  It's
 		    always set - CC Mode no longer works in emacsen without
 		    this feature.
-'category-properties Syntax routines can add a level of indirection to text
-		    properties using the 'category property.
-'gen-comment-delim  Generic comment delimiters work
+`category-properties' Syntax routines can add a level of indirection to text
+		    properties using the `category' property.
+`gen-comment-delim' Generic comment delimiters work
 		    (i.e. the syntax class `!').
-'gen-string-delim   Generic string delimiters work
+`gen-string-delim'  Generic string delimiters work
 		    (i.e. the syntax class `|').
-'pps-extended-state `parse-partial-sexp' returns a list with at least 10
+`pps-extended-state' `parse-partial-sexp' returns a list with at least 10
 		    elements, i.e. it contains the position of the start of
 		    the last comment or string.  It's always set - CC Mode
                     no longer works in emacsen without this feature.
-'posix-char-classes The regexp engine understands POSIX character classes.
-'col-0-paren        It's possible to turn off the ad-hoc rule that a paren
+`posix-char-classes' The regexp engine understands POSIX character classes.
+`col-0-paren'       It's possible to turn off the ad-hoc rule that a paren
 		    in column zero is the start of a defun.
-'infodock           This is Infodock (based on XEmacs).
+`infodock'           This is Infodock (based on XEmacs).
 
-'8-bit and '1-bit are mutually exclusive.")
+`8-bit' and `1-bit' are mutually exclusive.")
 
 
 ;;; Some helper constants.
@@ -1983,7 +2044,7 @@ system."
 
 (defvar c-lang-const-expansion nil)
 
-;; Ugly hack to pull in the definition of `cc-bytecomp-compiling-or-loading`
+;; Ugly hack to pull in the definition of `cc-bytecomp-compiling-or-loading'
 ;; from cc-bytecomp to make it available at loadtime.  This is the same
 ;; mechanism used in cc-mode.el for `c-populate-syntax-table'.
 (defalias 'cc-bytecomp-compiling-or-loading
@@ -2017,10 +2078,10 @@ The second argument can optionally be a docstring.  The rest of the
 arguments are one or more repetitions of LANG VAL where LANG specifies
 the language(s) that VAL applies to.  LANG is the name of the
 language, i.e. the mode name without the \"-mode\" suffix, or a list
-of such language names, or `t' for all languages.  VAL is a form to
+of such language names, or t for all languages.  VAL is a form to
 evaluate to get the value.
 
-If LANG isn't `t' or one of the core languages in CC Mode, it must
+If LANG isn't t or one of the core languages in CC Mode, it must
 have been declared with `c-add-language'.
 
 Neither NAME, LANG nor VAL are evaluated directly - they should not be
@@ -2030,7 +2091,7 @@ VAL to evaluate parts of it directly.
 When VAL is evaluated for some language, that language is temporarily
 made current so that `c-lang-const' without an explicit language can
 be used inside VAL to refer to the value of a language constant in the
-same language.  That is particularly useful if LANG is `t'.
+same language.  That is particularly useful if LANG is t.
 
 VAL is not evaluated right away but rather when the value is requested
 with `c-lang-const'.  Thus it's possible to use `c-lang-const' inside
@@ -2228,12 +2289,12 @@ quoted."
                ;; are no file dependencies needed.
                (nreverse
                 ;; Reverse to get the right load order.
-                (apply 'nconc
-                       (mapcar (lambda (elem)
-                                 (if (eq file (car elem))
-                                     nil ; Exclude our own file.
-                                   (list (car elem))))
-                               (get sym 'source))))))
+		(c--mapcan (lambda (elem)
+			     (if (eq file (car elem))
+				 nil	; Exclude our own file.
+			       (list (car elem))))
+			   (get sym 'source)))))
+
             ;; Make some effort to do a compact call to
             ;; `c-get-lang-constant' since it will be compiled in.
             (args (and mode `(',mode))))
@@ -2365,7 +2426,7 @@ fallback definition for all modes, to break the cycle).")
 
 (defun c-find-assignment-for-mode (source-pos mode match-any-lang _name)
   ;; Find the first assignment entry that applies to MODE at or after
-  ;; SOURCE-POS.  If MATCH-ANY-LANG is non-nil, entries with `t' as
+  ;; SOURCE-POS.  If MATCH-ANY-LANG is non-nil, entries with t as
   ;; the language list are considered to match, otherwise they don't.
   ;; On return SOURCE-POS is updated to point to the next assignment
   ;; after the returned one.  If no assignment is found,
@@ -2446,8 +2507,8 @@ fallback definition for all modes, to break the cycle).")
 
 (cc-provide 'cc-defs)
 
-;;; Local Variables:
-;;; indent-tabs-mode: t
-;;; tab-width: 8
-;;; End:
+;; Local Variables:
+;; indent-tabs-mode: t
+;; tab-width: 8
+;; End:
 ;;; cc-defs.el ends here

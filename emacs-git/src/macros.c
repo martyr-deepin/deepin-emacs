@@ -1,13 +1,13 @@
 /* Keyboard macros.
 
-Copyright (C) 1985-1986, 1993, 2000-2015 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993, 2000-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,9 +22,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "lisp.h"
 #include "macros.h"
-#include "commands.h"
-#include "character.h"
-#include "buffer.h"
 #include "window.h"
 #include "keyboard.h"
 
@@ -187,16 +184,11 @@ store_kbd_macro_char (Lisp_Object c)
     {
       if (kb->kbd_macro_ptr - kb->kbd_macro_buffer == kb->kbd_macro_bufsize)
 	{
-	  ptrdiff_t ptr_offset, end_offset, nbytes;
-
-	  ptr_offset = kb->kbd_macro_ptr - kb->kbd_macro_buffer;
-	  end_offset = kb->kbd_macro_end - kb->kbd_macro_buffer;
-	  if (min (PTRDIFF_MAX, SIZE_MAX) / sizeof *kb->kbd_macro_buffer / 2
-	      < kb->kbd_macro_bufsize)
-	    memory_full (SIZE_MAX);
-	  nbytes = kb->kbd_macro_bufsize * (2 * sizeof *kb->kbd_macro_buffer);
-	  kb->kbd_macro_buffer = xrealloc (kb->kbd_macro_buffer, nbytes);
-	  kb->kbd_macro_bufsize *= 2;
+	  ptrdiff_t ptr_offset = kb->kbd_macro_ptr - kb->kbd_macro_buffer;
+	  ptrdiff_t end_offset = kb->kbd_macro_end - kb->kbd_macro_buffer;
+	  kb->kbd_macro_buffer = xpalloc (kb->kbd_macro_buffer,
+					  &kb->kbd_macro_bufsize,
+					  1, -1, sizeof *kb->kbd_macro_buffer);
 	  kb->kbd_macro_ptr = kb->kbd_macro_buffer + ptr_offset;
 	  kb->kbd_macro_end = kb->kbd_macro_buffer + end_offset;
 	}
@@ -294,7 +286,6 @@ each iteration of the macro.  Iteration stops if LOOPFUNC returns nil.  */)
   Lisp_Object tem;
   ptrdiff_t pdlcount = SPECPDL_INDEX ();
   EMACS_INT repeat = 1;
-  struct gcpro gcpro1, gcpro2;
   EMACS_INT success_count = 0;
 
   executing_kbd_macro_iterations = 0;
@@ -314,7 +305,6 @@ each iteration of the macro.  Iteration stops if LOOPFUNC returns nil.  */)
 		      Vreal_this_command));
   record_unwind_protect (pop_kbd_macro, tem);
 
-  GCPRO2 (final, loopfunc);
   do
     {
       Vexecuting_kbd_macro = final;
@@ -335,7 +325,7 @@ each iteration of the macro.  Iteration stops if LOOPFUNC returns nil.  */)
 
       executing_kbd_macro_iterations = ++success_count;
 
-      QUIT;
+      maybe_quit ();
     }
   while (--repeat
 	 && (STRINGP (Vexecuting_kbd_macro) || VECTORP (Vexecuting_kbd_macro)));
@@ -344,7 +334,6 @@ each iteration of the macro.  Iteration stops if LOOPFUNC returns nil.  */)
 
   Vreal_this_command = Vexecuting_kbd_macro;
 
-  UNGCPRO;
   return unbind_to (pdlcount, Qnil);
 }
 
@@ -358,8 +347,6 @@ init_macros (void)
 void
 syms_of_macros (void)
 {
-  DEFSYM (Qexecute_kbd_macro, "execute-kbd-macro");
-
   DEFVAR_LISP ("kbd-macro-termination-hook", Vkbd_macro_termination_hook,
                doc: /* Normal hook run whenever a keyboard macro terminates.
 This is run whether the macro ends normally or prematurely due to an error.  */);

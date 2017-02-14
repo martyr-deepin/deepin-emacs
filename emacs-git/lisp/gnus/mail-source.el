@@ -1,6 +1,6 @@
 ;;; mail-source.el --- functions for fetching mail
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news, mail
@@ -66,7 +66,7 @@ See Info node `(gnus)Mail Source Specifiers'."
 	  (repeat :tag "List"
 	   (choice :format "%[Value Menu%] %v"
 		   :value (file)
-		   (cons :tag "Group parameter `mail-source'"
+		   (list :tag "Group parameter `mail-source'"
 			 (const :format "" group))
 		   (cons :tag "Spool file"
 			 (const :format "" file)
@@ -228,7 +228,7 @@ Leave mails for this many days" :value 14)))))
 					   (boolean :tag "Plugged"))))))))
 
 (defcustom mail-source-ignore-errors nil
-  "*Ignore errors when querying mail sources.
+  "Ignore errors when querying mail sources.
 If nil, the user will be prompted when an error occurs.  If non-nil,
 the error will be ignored."
   :version "22.1"
@@ -236,13 +236,13 @@ the error will be ignored."
   :type 'boolean)
 
 (defcustom mail-source-primary-source nil
-  "*Primary source for incoming mail.
+  "Primary source for incoming mail.
 If non-nil, this maildrop will be checked periodically for new mail."
   :group 'mail-source
   :type 'sexp)
 
 (defcustom mail-source-flash t
-  "*If non-nil, flash periodically when mail is available."
+  "If non-nil, flash periodically when mail is available."
   :group 'mail-source
   :type 'boolean)
 
@@ -603,8 +603,8 @@ If CONFIRM is non-nil, ask for confirmation before removing a file."
 	  currday (+ currday (* low2days (nth 1 (current-time)))))
     (while files
       (let* ((ffile (car files))
-	     (bfile (gnus-replace-in-string
-		     ffile "\\`.*/\\([^/]+\\)\\'" "\\1"))
+	     (bfile (replace-regexp-in-string "\\`.*/\\([^/]+\\)\\'" "\\1"
+					      ffile))
 	     (filetime (nth 5 (file-attributes ffile)))
 	     (fileday (* (car filetime) high2days))
 	     (fileday (+ fileday (* low2days (nth 1 filetime)))))
@@ -612,7 +612,7 @@ If CONFIRM is non-nil, ask for confirmation before removing a file."
 	(when (and (> (- currday fileday) diff)
 		   (if confirm
 		       (y-or-n-p
-			(format "\
+			(format-message "\
 Delete old (> %s day(s)) incoming mail file `%s'? " diff bfile))
 		     (gnus-message 8 "\
 Deleting old (> %s day(s)) incoming mail file `%s'." diff bfile)
@@ -629,8 +629,6 @@ Deleting old (> %s day(s)) incoming mail file `%s'." diff bfile)
 	0)
     (funcall callback mail-source-crash-box info)))
 
-(autoload 'gnus-float-time "gnus-util")
-
 (defvar mail-source-incoming-last-checked-time nil)
 
 (defun mail-source-delete-crash-box ()
@@ -639,7 +637,7 @@ Deleting old (> %s day(s)) incoming mail file `%s'." diff bfile)
     (if (eq mail-source-delete-incoming t)
 	(delete-file mail-source-crash-box)
       (let ((incoming
-	     (mm-make-temp-file
+	     (make-temp-file
 	      (expand-file-name
 	       mail-source-incoming-file-prefix
 	       mail-source-directory))))
@@ -651,7 +649,7 @@ Deleting old (> %s day(s)) incoming mail file `%s'." diff bfile)
 	  ;; Don't check for old incoming files more than once per day to
 	  ;; save a lot of file accesses.
 	  (when (or (null mail-source-incoming-last-checked-time)
-		    (> (gnus-float-time
+		    (> (float-time
 			(time-since mail-source-incoming-last-checked-time))
 		       (* 24 60 60)))
 	    (setq mail-source-incoming-last-checked-time (current-time))
@@ -934,7 +932,7 @@ authentication.  To do that, you need to set the
 `message-send-mail-function' variable as `message-smtpmail-send-it'
 and put the following line in your ~/.gnus.el file:
 
-\(add-hook 'message-send-mail-hook 'mail-source-touch-pop)
+\(add-hook \\='message-send-mail-hook \\='mail-source-touch-pop)
 
 See the Gnus manual for details."
   (let ((sources (if mail-source-primary-source
@@ -997,7 +995,6 @@ This only works when `display-time' is enabled."
     (if on
 	(progn
 	  (require 'time)
-	  ;; display-time-mail-function is an Emacs feature.
 	  (setq display-time-mail-function #'mail-source-new-mail-p)
 	  ;; Set up the main timer.
 	  (setq mail-source-report-new-mail-timer
@@ -1090,10 +1087,13 @@ This only works when `display-time' is enabled."
       (if (and (imap-open server port stream authentication buf)
 	       (imap-authenticate
 		user (or (cdr (assoc from mail-source-password-cache))
-			 password) buf)
-	       (imap-mailbox-select mailbox nil buf))
+                         password) buf))
+          (let ((mailbox-list (if (listp mailbox) mailbox (list mailbox))))
+            (dolist (mailbox mailbox-list)
+              (when (imap-mailbox-select mailbox nil buf)
 	  (let ((coding-system-for-write mail-source-imap-file-coding-system)
 		str)
+            (message "Fetching from %s..." mailbox)
 	    (with-temp-file mail-source-crash-box
 	      ;; Avoid converting 8-bit chars from inserted strings to
 	      ;; multibyte.
@@ -1128,8 +1128,8 @@ This only works when `display-time' is enabled."
 	       fetchflag nil buf))
 	    (if dontexpunge
 		(imap-mailbox-unselect buf)
-	      (imap-mailbox-close nil buf))
-	    (imap-close buf))
+              (imap-mailbox-close nil buf)))))
+            (imap-close buf))
 	(imap-close buf)
 	;; We nix out the password in case the error
 	;; was because of a wrong password being given.

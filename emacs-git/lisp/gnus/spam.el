@@ -1,6 +1,6 @@
 ;;; spam.el --- Identifying spam
 
-;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Maintainer: Ted Zlatanov <tzz@lifelogs.com>
@@ -1199,19 +1199,19 @@ Note this has to be fast."
     (if header-content
         (cond
          ((eq header 'X-Spam-Status)
-          (string-to-number (gnus-replace-in-string
-                             header-content
+          (string-to-number (replace-regexp-in-string
                              spam-spamassassin-score-regexp
-                             "\\1")))
+                             "\\1"
+                             header-content)))
          ;; for CRM checking, it's probably faster to just do the string match
          ((string-match "( pR: \\([0-9.-]+\\)" header-content)
           (- (string-to-number (match-string 1 header-content))))
          ((eq header 'X-Bogosity)
-          (string-to-number (gnus-replace-in-string
-                             (gnus-replace-in-string
-                              header-content
-                              ".*spamicity=" "")
-                             ",.*" "")))
+          (string-to-number (replace-regexp-in-string
+                             ",.*" ""
+                             (replace-regexp-in-string
+                              ".*spamicity=" ""
+                              header-content))))
          (t nil))
       nil)))
 
@@ -2054,7 +2054,7 @@ See the Info node `(gnus)Fancy Mail Splitting' for more details."
                 (if spam-use-dig
                     (let ((query-result (query-dig query-string)))
                       (when query-result
-                        (gnus-message 6 "(DIG): positive blackhole check '%s'"
+                        (gnus-message 6 "(DIG): positive blackhole check `%s'"
                                       query-result)
                         (push (list ip server query-result)
                               matches)))

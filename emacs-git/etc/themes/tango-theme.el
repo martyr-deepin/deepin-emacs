@@ -1,6 +1,6 @@
 ;;; tango-theme.el --- Tango-based custom theme for faces
 
-;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2017 Free Software Foundation, Inc.
 
 ;; Authors: Chong Yidong <cyd@stupidchicken>
 ;;          Jan Moringen <jan.moringen@uni-bielefeld.de>
@@ -66,6 +66,7 @@ Semantic, and Ansi-Color faces are included.")
    ;; Escape and prompt faces
    `(minibuffer-prompt ((,class (:weight bold :foreground ,blue-3))))
    `(escape-glyph ((,class (:foreground ,red-3))))
+   `(homoglyph ((,class (:foreground ,red-3))))
    `(error ((,class (:foreground ,red-3))))
    `(warning ((,class (:foreground ,orange-3))))
    `(success ((,class (:foreground ,cham-3))))

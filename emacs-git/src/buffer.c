@@ -1,14 +1,14 @@
 /* Buffer manipulation primitives for GNU Emacs.
 
-Copyright (C) 1985-1989, 1993-1995, 1997-2015 Free Software Foundation,
+Copyright (C) 1985-1989, 1993-1995, 1997-2017 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,12 +25,15 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <sys/param.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include <verify.h>
 
 #include "lisp.h"
 #include "intervals.h"
+#include "process.h"
+#include "systime.h"
 #include "window.h"
 #include "commands.h"
 #include "character.h"
@@ -38,15 +41,13 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "region-cache.h"
 #include "indent.h"
 #include "blockinput.h"
-#include "keyboard.h"
 #include "keymap.h"
 #include "frame.h"
+#include "xwidget.h"
 
 #ifdef WINDOWSNT
 #include "w32heap.h"		/* for mmap_* */
 #endif
-
-struct buffer *current_buffer;		/* The current buffer.  */
 
 /* First buffer in chain of all buffers (in reverse order of creation).
    Threaded through ->header.next.buffer.  */
@@ -414,19 +415,16 @@ followed by the rest of the buffers.  */)
 }
 
 /* Like Fassoc, but use Fstring_equal to compare
-   (which ignores text properties),
-   and don't ever QUIT.  */
+   (which ignores text properties), and don't ever quit.  */
 
 static Lisp_Object
-assoc_ignore_text_properties (register Lisp_Object key, Lisp_Object list)
+assoc_ignore_text_properties (Lisp_Object key, Lisp_Object list)
 {
-  register Lisp_Object tail;
+  Lisp_Object tail;
   for (tail = list; CONSP (tail); tail = XCDR (tail))
     {
-      register Lisp_Object elt, tem;
-      elt = XCAR (tail);
-      tem = Fstring_equal (Fcar (elt), key);
-      if (!NILP (tem))
+      Lisp_Object elt = XCAR (tail);
+      if (!NILP (Fstring_equal (Fcar (elt), key)))
 	return elt;
     }
   return Qnil;
@@ -982,40 +980,54 @@ reset_buffer_local_variables (struct buffer *b, bool permanent_too)
     bset_local_var_alist (b, Qnil);
   else
     {
-      Lisp_Object tmp, prop, last = Qnil;
+      Lisp_Object tmp, last = Qnil;
       for (tmp = BVAR (b, local_var_alist); CONSP (tmp); tmp = XCDR (tmp))
-	if (!NILP (prop = Fget (XCAR (XCAR (tmp)), Qpermanent_local)))
-	  {
-	    /* If permanent-local, keep it.  */
-	    last = tmp;
-	    if (EQ (prop, Qpermanent_local_hook))
-	      {
-		/* This is a partially permanent hook variable.
-		   Preserve only the elements that want to be preserved.  */
-		Lisp_Object list, newlist;
-		list = XCDR (XCAR (tmp));
-		if (!CONSP (list))
-		  newlist = list;
-		else
-		  for (newlist = Qnil; CONSP (list); list = XCDR (list))
-		    {
-		      Lisp_Object elt = XCAR (list);
-		      /* Preserve element ELT if it's t,
-			 if it is a function with a `permanent-local-hook' property,
-			 or if it's not a symbol.  */
-		      if (! SYMBOLP (elt)
-			  || EQ (elt, Qt)
-			  || !NILP (Fget (elt, Qpermanent_local_hook)))
-			newlist = Fcons (elt, newlist);
-		    }
-		XSETCDR (XCAR (tmp), Fnreverse (newlist));
-	      }
-	  }
-	/* Delete this local variable.  */
-	else if (NILP (last))
-	  bset_local_var_alist (b, XCDR (tmp));
-	else
-	  XSETCDR (last, XCDR (tmp));
+        {
+          Lisp_Object local_var = XCAR (XCAR (tmp));
+          Lisp_Object prop = Fget (local_var, Qpermanent_local);
+
+          if (!NILP (prop))
+            {
+              /* If permanent-local, keep it.  */
+              last = tmp;
+              if (EQ (prop, Qpermanent_local_hook))
+                {
+                  /* This is a partially permanent hook variable.
+                     Preserve only the elements that want to be preserved.  */
+                  Lisp_Object list, newlist;
+                  list = XCDR (XCAR (tmp));
+                  if (!CONSP (list))
+                    newlist = list;
+                  else
+                    for (newlist = Qnil; CONSP (list); list = XCDR (list))
+                      {
+                        Lisp_Object elt = XCAR (list);
+                        /* Preserve element ELT if it's t,
+                           if it is a function with a `permanent-local-hook' property,
+                           or if it's not a symbol.  */
+                        if (! SYMBOLP (elt)
+                            || EQ (elt, Qt)
+                            || !NILP (Fget (elt, Qpermanent_local_hook)))
+                          newlist = Fcons (elt, newlist);
+                      }
+                  newlist = Fnreverse (newlist);
+                  if (XSYMBOL (local_var)->trapped_write == SYMBOL_TRAPPED_WRITE)
+                    notify_variable_watchers (local_var, newlist,
+                                              Qmakunbound, Fcurrent_buffer ());
+                  XSETCDR (XCAR (tmp), newlist);
+                  continue; /* Don't do variable write trapping twice.  */
+                }
+            }
+          /* Delete this local variable.  */
+          else if (NILP (last))
+            bset_local_var_alist (b, XCDR (tmp));
+          else
+            XSETCDR (last, XCDR (tmp));
+
+          if (XSYMBOL (local_var)->trapped_write == SYMBOL_TRAPPED_WRITE)
+            notify_variable_watchers (local_var, Qnil,
+                                      Qmakunbound, Fcurrent_buffer ());
+        }
     }
 
   for (i = 0; i < last_per_buffer_idx; ++i)
@@ -1049,44 +1061,36 @@ it is in the sequence to be tried) even if a buffer with that name exists.
 If NAME begins with a space (i.e., a buffer that is not normally
 visible to users), then if buffer NAME already exists a random number
 is first appended to NAME, to speed up finding a non-existent buffer.  */)
-  (register Lisp_Object name, Lisp_Object ignore)
+  (Lisp_Object name, Lisp_Object ignore)
 {
-  register Lisp_Object gentemp, tem, tem2;
-  ptrdiff_t count;
-  char number[INT_BUFSIZE_BOUND (ptrdiff_t) + sizeof "<>"];
+  Lisp_Object genbase;
 
   CHECK_STRING (name);
 
-  tem = Fstring_equal (name, ignore);
-  if (!NILP (tem))
-    return name;
-  tem = Fget_buffer (name);
-  if (NILP (tem))
+  if (!NILP (Fstring_equal (name, ignore)) || NILP (Fget_buffer (name)))
     return name;
 
-  if (!strncmp (SSDATA (name), " ", 1)) /* see bug#1229 */
+  if (SREF (name, 0) != ' ') /* See bug#1229.  */
+    genbase = name;
+  else
     {
       /* Note fileio.c:make_temp_name does random differently.  */
-      tem2 = concat2 (name, make_formatted_string
-		      (number, "-%"pI"d",
-		       XFASTINT (Frandom (make_number (999999)))));
-      tem = Fget_buffer (tem2);
-      if (NILP (tem))
-	return tem2;
+      char number[sizeof "-999999"];
+      int i = XFASTINT (Frandom (make_number (999999)));
+      AUTO_STRING_WITH_LEN (lnumber, number, sprintf (number, "-%d", i));
+      genbase = concat2 (name, lnumber);
+      if (NILP (Fget_buffer (genbase)))
+	return genbase;
     }
-  else
-    tem2 = name;
 
-  count = 1;
-  while (1)
+  for (ptrdiff_t count = 2; ; count++)
     {
-      gentemp = concat2 (tem2, make_formatted_string
-			 (number, "<%"pD"d>", ++count));
-      tem = Fstring_equal (gentemp, ignore);
-      if (!NILP (tem))
-	return gentemp;
-      tem = Fget_buffer (gentemp);
-      if (NILP (tem))
+      char number[INT_BUFSIZE_BOUND (ptrdiff_t) + sizeof "<>"];
+      AUTO_STRING_WITH_LEN (lnumber, number,
+			    sprintf (number, "<%"pD"d>", count));
+      Lisp_Object gentemp = concat2 (genbase, lnumber);
+      if (!NILP (Fstring_equal (gentemp, ignore))
+	  || NILP (Fget_buffer (gentemp)))
 	return gentemp;
     }
 }
@@ -1385,7 +1389,7 @@ DEFUN ("buffer-chars-modified-tick", Fbuffer_chars_modified_tick,
        Sbuffer_chars_modified_tick, 0, 1, 0,
        doc: /* Return BUFFER's character-change tick counter.
 Each buffer has a character-change tick counter, which is set to the
-value of the buffer's tick counter \(see `buffer-modified-tick'), each
+value of the buffer's tick counter (see `buffer-modified-tick'), each
 time text in that buffer is inserted or deleted.  By comparing the
 values returned by two individual calls of `buffer-chars-modified-tick',
 you can tell whether a character change occurred in that buffer in
@@ -1467,15 +1471,15 @@ DEFUN ("other-buffer", Fother_buffer, Sother_buffer, 0, 3, 0,
 Buffers not visible in windows are preferred to visible buffers, unless
 optional second argument VISIBLE-OK is non-nil.  Ignore the argument
 BUFFER unless it denotes a live buffer.  If the optional third argument
-FRAME is non-nil, use that frame's buffer list instead of the selected
-frame's buffer list.
+FRAME specifies a live frame, then use that frame's buffer list instead
+of the selected frame's buffer list.
 
 The buffer is found by scanning the selected or specified frame's buffer
 list first, followed by the list of all buffers.  If no other buffer
 exists, return the buffer `*scratch*' (creating it if necessary).  */)
   (Lisp_Object buffer, Lisp_Object visible_ok, Lisp_Object frame)
 {
-  struct frame *f = decode_any_frame (frame);
+  struct frame *f = decode_live_frame (frame);
   Lisp_Object tail = f->buffer_list, pred = f->buffer_predicate;
   Lisp_Object buf, notsogood = Qnil;
 
@@ -1629,10 +1633,9 @@ cleaning up all windows currently displaying the buffer to be killed. */)
   (Lisp_Object buffer_or_name)
 {
   Lisp_Object buffer;
-  register struct buffer *b;
-  register Lisp_Object tem;
-  register struct Lisp_Marker *m;
-  struct gcpro gcpro1;
+  struct buffer *b;
+  Lisp_Object tem;
+  struct Lisp_Marker *m;
 
   if (NILP (buffer_or_name))
     buffer = Fcurrent_buffer ();
@@ -1645,6 +1648,9 @@ cleaning up all windows currently displaying the buffer to be killed. */)
 
   /* Avoid trouble for buffer already dead.  */
   if (!BUFFER_LIVE_P (b))
+    return Qnil;
+
+  if (thread_check_current_buffer (b))
     return Qnil;
 
   /* Run hooks with the buffer to be killed the current buffer.  */
@@ -1665,10 +1671,8 @@ cleaning up all windows currently displaying the buffer to be killed. */)
     if (INTERACTIVE && !NILP (BVAR (b, filename))
 	&& BUF_MODIFF (b) > BUF_SAVE_MODIFF (b))
       {
-        GCPRO1 (buffer);
-        tem = do_yes_or_no_p (format2 ("Buffer %s modified; kill anyway? ",
-				       BVAR (b, name), make_number (0)));
-	UNGCPRO;
+	AUTO_STRING (format, "Buffer %s modified; kill anyway? ");
+	tem = do_yes_or_no_p (CALLN (Fformat, format, BVAR (b, name)));
 	if (NILP (tem))
 	  return unbind_to (count, Qnil);
       }
@@ -1702,8 +1706,6 @@ cleaning up all windows currently displaying the buffer to be killed. */)
     {
       struct buffer *other;
 
-      GCPRO1 (buffer);
-
       FOR_EACH_BUFFER (other)
 	if (other->base_buffer == b)
 	  {
@@ -1711,8 +1713,6 @@ cleaning up all windows currently displaying the buffer to be killed. */)
 	    XSETBUFFER (buf, other);
 	    Fkill_buffer (buf);
 	  }
-
-      UNGCPRO;
 
       /* Exit if we now have killed the base buffer (Bug#11665).  */
       if (!BUFFER_LIVE_P (b))
@@ -1751,9 +1751,8 @@ cleaning up all windows currently displaying the buffer to be killed. */)
   /* Unlock this buffer's file, if it is locked.  */
   unlock_buffer (b);
 
-  GCPRO1 (buffer);
   kill_buffer_processes (buffer);
-  UNGCPRO;
+  kill_buffer_xwidgets (buffer);
 
   /* Killing buffer processes may run sentinels which may have killed
      our buffer.  */
@@ -1999,7 +1998,9 @@ the current buffer's major mode.  */)
 	function = BVAR (current_buffer, major_mode);
     }
 
-  if (NILP (function) || EQ (function, Qfundamental_mode))
+  if (NILP (function)) /* If function is `fundamental-mode', allow it to run
+                          so that `run-mode-hooks' and thus
+                          `hack-local-variables' get run. */
     return Qnil;
 
   count = SPECPDL_INDEX ();
@@ -2007,7 +2008,7 @@ the current buffer's major mode.  */)
   /* To select a nonfundamental mode,
      select the buffer temporarily and then call the mode function.  */
 
-  record_unwind_protect (save_excursion_restore, save_excursion_save ());
+  record_unwind_current_buffer ();
 
   Fset_buffer (buffer);
   call0 (function);
@@ -2030,9 +2031,6 @@ DEFUN ("current-buffer", Fcurrent_buffer, Scurrent_buffer, 0, 0, 0,
 void
 set_buffer_internal_1 (register struct buffer *b)
 {
-  register struct buffer *old_buf;
-  register Lisp_Object tail;
-
 #ifdef USE_MMAP_FOR_BUFFERS
   if (b->text->beg == NULL)
     enlarge_buffer_text (b, 0);
@@ -2040,6 +2038,17 @@ set_buffer_internal_1 (register struct buffer *b)
 
   if (current_buffer == b)
     return;
+
+  set_buffer_internal_2 (b);
+}
+
+/* Like set_buffer_internal_1, but doesn't check whether B is already
+   the current buffer.  Called upon switch of the current thread, see
+   post_acquire_global_lock.  */
+void set_buffer_internal_2 (register struct buffer *b)
+{
+  register struct buffer *old_buf;
+  register Lisp_Object tail;
 
   BUFFER_CHECK_INDIRECTION (b);
 
@@ -2151,16 +2160,16 @@ DEFUN ("barf-if-buffer-read-only", Fbarf_if_buffer_read_only,
        doc: /* Signal a `buffer-read-only' error if the current buffer is read-only.
 If the text under POSITION (which defaults to point) has the
 `inhibit-read-only' text property set, the error will not be raised.  */)
-  (Lisp_Object pos)
+  (Lisp_Object position)
 {
-  if (NILP (pos))
-    XSETFASTINT (pos, PT);
+  if (NILP (position))
+    XSETFASTINT (position, PT);
   else
-    CHECK_NUMBER (pos);
+    CHECK_NUMBER (position);
 
   if (!NILP (BVAR (current_buffer, read_only))
       && NILP (Vinhibit_read_only)
-      && NILP (Fget_text_property (pos, Qinhibit_read_only, Qnil)))
+      && NILP (Fget_text_property (position, Qinhibit_read_only, Qnil)))
     xsignal1 (Qbuffer_read_only, Fcurrent_buffer ());
   return Qnil;
 }
@@ -2237,7 +2246,9 @@ advance_to_char_boundary (ptrdiff_t byte_pos)
 
 DEFUN ("buffer-swap-text", Fbuffer_swap_text, Sbuffer_swap_text,
        1, 1, 0,
-       doc: /* Swap the text between current buffer and BUFFER.  */)
+       doc: /* Swap the text between current buffer and BUFFER.
+Using this function from `save-excursion' might produce surprising
+results, see Info node `(elisp)Swapping Text'.  */)
   (Lisp_Object buffer)
 {
   struct buffer *other_buffer;
@@ -2409,7 +2420,6 @@ current buffer is cleared.  */)
   bool narrowed = (BEG != BEGV || Z != ZV);
   bool modified_p = !NILP (Fbuffer_modified_p (Qnil));
   Lisp_Object old_undo = BVAR (current_buffer, undo_list);
-  struct gcpro gcpro1;
 
   if (current_buffer->base_buffer)
     error ("Cannot do `set-buffer-multibyte' on an indirect buffer");
@@ -2417,8 +2427,6 @@ current buffer is cleared.  */)
   /* Do nothing if nothing actually changes.  */
   if (NILP (flag) == NILP (BVAR (current_buffer, enable_multibyte_characters)))
     return flag;
-
-  GCPRO1 (old_undo);
 
   /* Don't record these buffer changes.  We will put a special undo entry
      instead.  */
@@ -2648,8 +2656,6 @@ current buffer is cleared.  */)
 				    NILP (flag) ? Qt : Qnil),
 			     old_undo));
     }
-
-  UNGCPRO;
 
   current_buffer->prevent_redisplay_optimizations_p = 1;
 
@@ -3258,9 +3264,9 @@ record_overlay_string (struct sortstrlist *ssl, Lisp_Object str,
   else
     nbytes = SBYTES (str);
 
-  if (INT_ADD_OVERFLOW (ssl->bytes, nbytes))
+  if (INT_ADD_WRAPV (ssl->bytes, nbytes, &nbytes))
     memory_full (SIZE_MAX);
-  ssl->bytes += nbytes;
+  ssl->bytes = nbytes;
 
   if (STRINGP (str2))
     {
@@ -3272,9 +3278,9 @@ record_overlay_string (struct sortstrlist *ssl, Lisp_Object str,
       else
 	nbytes = SBYTES (str2);
 
-      if (INT_ADD_OVERFLOW (ssl->bytes, nbytes))
+      if (INT_ADD_WRAPV (ssl->bytes, nbytes, &nbytes))
 	memory_full (SIZE_MAX);
-      ssl->bytes += nbytes;
+      ssl->bytes = nbytes;
     }
 }
 
@@ -3370,9 +3376,8 @@ overlay_strings (ptrdiff_t pos, struct window *w, unsigned char **pstr)
       unsigned char *p;
       ptrdiff_t total;
 
-      if (INT_ADD_OVERFLOW (overlay_heads.bytes, overlay_tails.bytes))
+      if (INT_ADD_WRAPV (overlay_heads.bytes, overlay_tails.bytes, &total))
 	memory_full (SIZE_MAX);
-      total = overlay_heads.bytes + overlay_tails.bytes;
       if (total > overlay_str_len)
 	overlay_str_buf = xpalloc (overlay_str_buf, &overlay_str_len,
 				   total - overlay_str_len, -1, 1);
@@ -3572,8 +3577,8 @@ void
 fix_start_end_in_overlays (register ptrdiff_t start, register ptrdiff_t end)
 {
   Lisp_Object overlay;
-  struct Lisp_Overlay *before_list IF_LINT (= NULL);
-  struct Lisp_Overlay *after_list IF_LINT (= NULL);
+  struct Lisp_Overlay *before_list;
+  struct Lisp_Overlay *after_list;
   /* These are either nil, indicating that before_list or after_list
      should be assigned, or the cons cell the cdr of which should be
      assigned.  */
@@ -3720,7 +3725,7 @@ fix_overlays_before (struct buffer *bp, ptrdiff_t prev, ptrdiff_t pos)
   /* If parent is nil, replace overlays_before; otherwise, parent->next.  */
   struct Lisp_Overlay *tail = bp->overlays_before, *parent = NULL, *right_pair;
   Lisp_Object tem;
-  ptrdiff_t end IF_LINT (= 0);
+  ptrdiff_t end;
 
   /* After the insertion, the several overlays may be in incorrect
      order.  The possibility is that, in the list `overlays_before',
@@ -3927,7 +3932,8 @@ buffer.  */)
   struct buffer *b, *ob = 0;
   Lisp_Object obuffer;
   ptrdiff_t count = SPECPDL_INDEX ();
-  ptrdiff_t n_beg, n_end, o_beg IF_LINT (= 0), o_end IF_LINT (= 0);
+  ptrdiff_t n_beg, n_end;
+  ptrdiff_t o_beg UNINIT, o_end UNINIT;
 
   CHECK_OVERLAY (overlay);
   if (NILP (buffer))
@@ -4394,7 +4400,6 @@ report_overlay_modification (Lisp_Object start, Lisp_Object end, bool after,
   struct Lisp_Overlay *tail;
   /* True if this change is an insertion.  */
   bool insertion = (after ? XFASTINT (arg3) == 0 : EQ (start, end));
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
 
   overlay = Qnil;
   tail = NULL;
@@ -4487,7 +4492,6 @@ report_overlay_modification (Lisp_Object start, Lisp_Object end, bool after,
 	}
     }
 
-  GCPRO4 (overlay, arg1, arg2, arg3);
   {
     /* Call the functions recorded in last_overlay_modification_hooks.
        First copy the vector contents, in case some of these hooks
@@ -4495,6 +4499,23 @@ report_overlay_modification (Lisp_Object start, Lisp_Object end, bool after,
     ptrdiff_t size = last_overlay_modification_hooks_used;
     Lisp_Object *copy;
     ptrdiff_t i;
+
+    if (size)
+      {
+	Lisp_Object ovl
+	  = XVECTOR (last_overlay_modification_hooks)->contents[1];
+
+	/* If the buffer of the first overlay in the array doesn't
+	   match the current buffer, then these modification hooks
+	   should not be run in this buffer.  This could happen when
+	   some code calls some insdel functions, such as del_range_1,
+	   with the PREPARE argument false -- in that case this
+	   function is never called to record the overlay modification
+	   hook functions in the last_overlay_modification_hooks
+	   array, so anything we find there is not ours.  */
+	if (XMARKER (OVERLAY_START (ovl))->buffer != current_buffer)
+	  return;
+      }
 
     USE_SAFE_ALLOCA;
     SAFE_ALLOCA_LISP (copy, size);
@@ -4511,17 +4532,12 @@ report_overlay_modification (Lisp_Object start, Lisp_Object end, bool after,
 
     SAFE_FREE ();
   }
-  UNGCPRO;
 }
 
 static void
 call_overlay_mod_hooks (Lisp_Object list, Lisp_Object overlay, bool after,
 			Lisp_Object arg1, Lisp_Object arg2, Lisp_Object arg3)
 {
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
-
-  GCPRO4 (list, arg1, arg2, arg3);
-
   while (CONSP (list))
     {
       if (NILP (arg3))
@@ -4530,7 +4546,6 @@ call_overlay_mod_hooks (Lisp_Object list, Lisp_Object overlay, bool after,
 	call5 (XCAR (list), overlay, after ? Qt : Qnil, arg1, arg2, arg3);
       list = XCDR (list);
     }
-  UNGCPRO;
 }
 
 /* Delete any zero-sized overlays at position POS, if the `evaporate'
@@ -4594,8 +4609,6 @@ evaporate_overlays (ptrdiff_t pos)
 #if MAP_ANON == 0
 #include <fcntl.h>
 #endif
-
-#include "coding.h"
 
 
 /* Memory is allocated in regions which are mapped using mmap(2).
@@ -5282,44 +5295,50 @@ init_buffer (int initialized)
   if (NILP (BVAR (&buffer_defaults, enable_multibyte_characters)))
     Fset_buffer_multibyte (Qnil);
 
-  pwd = get_current_dir_name ();
+  pwd = emacs_get_current_dir_name ();
 
   if (!pwd)
-    fatal ("`get_current_dir_name' failed: %s\n", strerror (errno));
-
-  /* Maybe this should really use some standard subroutine
-     whose definition is filename syntax dependent.  */
-  len = strlen (pwd);
-  if (!(IS_DIRECTORY_SEP (pwd[len - 1])))
     {
-      /* Grow buffer to add directory separator and '\0'.  */
-      pwd = realloc (pwd, len + 2);
-      if (!pwd)
-	fatal ("`get_current_dir_name' failed: %s\n", strerror (errno));
-      pwd[len] = DIRECTORY_SEP;
-      pwd[len + 1] = '\0';
-      len++;
+      fprintf (stderr, "Error getting directory: %s\n",
+               emacs_strerror (errno));
+      bset_directory (current_buffer, Qnil);
     }
-
-  /* At this moment, we still don't know how to decode the directory
-     name.  So, we keep the bytes in unibyte form so that file I/O
-     routines correctly get the original bytes.  */
-  bset_directory (current_buffer, make_unibyte_string (pwd, len));
-
-  /* Add /: to the front of the name
-     if it would otherwise be treated as magic.  */
-  temp = Ffind_file_name_handler (BVAR (current_buffer, directory), Qt);
-  if (! NILP (temp)
-      /* If the default dir is just /, TEMP is non-nil
-	 because of the ange-ftp completion handler.
-	 However, it is not necessary to turn / into /:/.
-	 So avoid doing that.  */
-      && strcmp ("/", SSDATA (BVAR (current_buffer, directory))))
+  else
     {
-      AUTO_STRING (slash_colon, "/:");
-      bset_directory (current_buffer,
-		      concat2 (slash_colon,
-			       BVAR (current_buffer, directory)));
+      /* Maybe this should really use some standard subroutine
+         whose definition is filename syntax dependent.  */
+      len = strlen (pwd);
+      if (!(IS_DIRECTORY_SEP (pwd[len - 1])))
+        {
+          /* Grow buffer to add directory separator and '\0'.  */
+          pwd = realloc (pwd, len + 2);
+          if (!pwd)
+            fatal ("get_current_dir_name: %s\n", strerror (errno));
+          pwd[len] = DIRECTORY_SEP;
+          pwd[len + 1] = '\0';
+          len++;
+        }
+
+      /* At this moment, we still don't know how to decode the directory
+         name.  So, we keep the bytes in unibyte form so that file I/O
+         routines correctly get the original bytes.  */
+      bset_directory (current_buffer, make_unibyte_string (pwd, len));
+
+      /* Add /: to the front of the name
+         if it would otherwise be treated as magic.  */
+      temp = Ffind_file_name_handler (BVAR (current_buffer, directory), Qt);
+      if (! NILP (temp)
+          /* If the default dir is just /, TEMP is non-nil
+             because of the ange-ftp completion handler.
+             However, it is not necessary to turn / into /:/.
+             So avoid doing that.  */
+          && strcmp ("/", SSDATA (BVAR (current_buffer, directory))))
+        {
+          AUTO_STRING (slash_colon, "/:");
+          bset_directory (current_buffer,
+                          concat2 (slash_colon,
+                                   BVAR (current_buffer, directory)));
+        }
     }
 
   temp = get_minibuffer (0);
@@ -5415,144 +5434,6 @@ syms_of_buffer (void)
   Fput (Qprotected_field, Qerror_message,
 	build_pure_c_string ("Attempt to modify a protected field"));
 
-  DEFVAR_BUFFER_DEFAULTS ("default-mode-line-format",
-			  mode_line_format,
-			  doc: /* Default value of `mode-line-format' for buffers that don't override it.
-This is the same as (default-value 'mode-line-format).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-header-line-format",
-			  header_line_format,
-			  doc: /* Default value of `header-line-format' for buffers that don't override it.
-This is the same as (default-value 'header-line-format).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-cursor-type", cursor_type,
-			  doc: /* Default value of `cursor-type' for buffers that don't override it.
-This is the same as (default-value 'cursor-type).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-line-spacing",
-			  extra_line_spacing,
-			  doc: /* Default value of `line-spacing' for buffers that don't override it.
-This is the same as (default-value 'line-spacing).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-cursor-in-non-selected-windows",
-			  cursor_in_non_selected_windows,
-			  doc: /* Default value of `cursor-in-non-selected-windows'.
-This is the same as (default-value 'cursor-in-non-selected-windows).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-abbrev-mode",
-			  abbrev_mode,
-			  doc: /* Default value of `abbrev-mode' for buffers that do not override it.
-This is the same as (default-value 'abbrev-mode).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-ctl-arrow",
-			  ctl_arrow,
-			  doc: /* Default value of `ctl-arrow' for buffers that do not override it.
-This is the same as (default-value 'ctl-arrow).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-enable-multibyte-characters",
-			  enable_multibyte_characters,
-			  doc: /* Default value of `enable-multibyte-characters' for buffers not overriding it.
-This is the same as (default-value 'enable-multibyte-characters).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-buffer-file-coding-system",
-			  buffer_file_coding_system,
-			  doc: /* Default value of `buffer-file-coding-system' for buffers not overriding it.
-This is the same as (default-value 'buffer-file-coding-system).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-truncate-lines",
-			  truncate_lines,
-			  doc: /* Default value of `truncate-lines' for buffers that do not override it.
-This is the same as (default-value 'truncate-lines).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-fill-column",
-			  fill_column,
-			  doc: /* Default value of `fill-column' for buffers that do not override it.
-This is the same as (default-value 'fill-column).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-left-margin",
-			  left_margin,
-			  doc: /* Default value of `left-margin' for buffers that do not override it.
-This is the same as (default-value 'left-margin).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-tab-width",
-			  tab_width,
-			  doc: /* Default value of `tab-width' for buffers that do not override it.
-NOTE: This controls the display width of a TAB character, and not
-the size of an indentation step.
-This is the same as (default-value 'tab-width).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-case-fold-search",
-			  case_fold_search,
-			  doc: /* Default value of `case-fold-search' for buffers that don't override it.
-This is the same as (default-value 'case-fold-search).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-left-margin-width",
-			  left_margin_cols,
-			  doc: /* Default value of `left-margin-width' for buffers that don't override it.
-This is the same as (default-value 'left-margin-width).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-right-margin-width",
-			  right_margin_cols,
-			  doc: /* Default value of `right-margin-width' for buffers that don't override it.
-This is the same as (default-value 'right-margin-width).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-left-fringe-width",
-			  left_fringe_width,
-			  doc: /* Default value of `left-fringe-width' for buffers that don't override it.
-This is the same as (default-value 'left-fringe-width).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-right-fringe-width",
-			  right_fringe_width,
-			  doc: /* Default value of `right-fringe-width' for buffers that don't override it.
-This is the same as (default-value 'right-fringe-width).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-fringes-outside-margins",
-			  fringes_outside_margins,
-			  doc: /* Default value of `fringes-outside-margins' for buffers that don't override it.
-This is the same as (default-value 'fringes-outside-margins).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-scroll-bar-width",
-			  scroll_bar_width,
-			  doc: /* Default value of `scroll-bar-width' for buffers that don't override it.
-This is the same as (default-value 'scroll-bar-width).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-vertical-scroll-bar",
-			  vertical_scroll_bar_type,
-			  doc: /* Default value of `vertical-scroll-bar' for buffers that don't override it.
-This is the same as (default-value 'vertical-scroll-bar).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-indicate-empty-lines",
-			  indicate_empty_lines,
-			  doc: /* Default value of `indicate-empty-lines' for buffers that don't override it.
-This is the same as (default-value 'indicate-empty-lines).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-indicate-buffer-boundaries",
-			  indicate_buffer_boundaries,
-			  doc: /* Default value of `indicate-buffer-boundaries' for buffers that don't override it.
-This is the same as (default-value 'indicate-buffer-boundaries).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-fringe-indicator-alist",
-			  fringe_indicator_alist,
-			  doc: /* Default value of `fringe-indicator-alist' for buffers that don't override it.
-This is the same as (default-value 'fringe-indicator-alist').  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-fringe-cursor-alist",
-			  fringe_cursor_alist,
-			  doc: /* Default value of `fringe-cursor-alist' for buffers that don't override it.
-This is the same as (default-value 'fringe-cursor-alist').  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-scroll-up-aggressively",
-			  scroll_up_aggressively,
-			  doc: /* Default value of `scroll-up-aggressively'.
-This value applies in buffers that don't have their own local values.
-This is the same as (default-value 'scroll-up-aggressively).  */);
-
-  DEFVAR_BUFFER_DEFAULTS ("default-scroll-down-aggressively",
-			  scroll_down_aggressively,
-			  doc: /* Default value of `scroll-down-aggressively'.
-This value applies in buffers that don't have their own local values.
-This is the same as (default-value 'scroll-down-aggressively).  */);
-
   DEFVAR_PER_BUFFER ("header-line-format",
 		     &BVAR (current_buffer, header_line_format),
 		     Qnil,
@@ -5623,21 +5504,12 @@ A string is printed verbatim in the mode line except for %-constructs:
   %% -- print %.   %- -- print infinitely many dashes.
 Decimal digits after the % specify field width to which to pad.  */);
 
-  DEFVAR_BUFFER_DEFAULTS ("default-major-mode", major_mode,
-			  doc: /* Value of `major-mode' for new buffers.  */);
-
   DEFVAR_PER_BUFFER ("major-mode", &BVAR (current_buffer, major_mode),
 		     Qsymbolp,
 		     doc: /* Symbol for current buffer's major mode.
 The default value (normally `fundamental-mode') affects new buffers.
 A value of nil means to use the current buffer's major mode, provided
-it is not marked as "special".
-
-When a mode is used by default, `find-file' switches to it before it
-reads the contents into the buffer and before it finishes setting up
-the buffer.  Thus, the mode and its hooks should not expect certain
-variables such as `buffer-read-only' and `buffer-file-coding-system'
-to be set up.  */);
+it is not marked as "special".  */);
 
   DEFVAR_PER_BUFFER ("mode-name", &BVAR (current_buffer, mode_name),
                      Qnil,
@@ -5690,7 +5562,7 @@ file I/O and the behavior of various editing commands.
 This variable is buffer-local but you cannot set it directly;
 use the function `set-buffer-multibyte' to change a buffer's representation.
 See also Info node `(elisp)Text Representations'.  */);
-  XSYMBOL (intern_c_string ("enable-multibyte-characters"))->constant = 1;
+  make_symbol_constant (intern_c_string ("enable-multibyte-characters"));
 
   DEFVAR_PER_BUFFER ("buffer-file-coding-system",
 		     &BVAR (current_buffer, buffer_file_coding_system), Qnil,
@@ -5724,7 +5596,7 @@ The values of `right-to-left' and `left-to-right' override that.
 Any other value is treated as nil.
 
 This variable has no effect unless the buffer's value of
-\`bidi-display-reordering' is non-nil.  */);
+`bidi-display-reordering' is non-nil.  */);
 
  DEFVAR_PER_BUFFER ("truncate-lines", &BVAR (current_buffer, truncate_lines), Qnil,
 		     doc: /* Non-nil means do not display continuation lines.
@@ -5756,7 +5628,7 @@ visual lines rather than logical lines.  See the documentation of
 
   DEFVAR_PER_BUFFER ("default-directory", &BVAR (current_buffer, directory),
 		     Qstringp,
-		     doc: /* Name of default directory of current buffer.  Should end with slash.
+		     doc: /* Name of default directory of current buffer.
 To interactively change the default directory, use command `cd'.  */);
 
   DEFVAR_PER_BUFFER ("auto-fill-function", &BVAR (current_buffer, auto_fill_function),
@@ -5804,11 +5676,14 @@ you probably should set this to -2 in that buffer.  */);
   DEFVAR_PER_BUFFER ("selective-display", &BVAR (current_buffer, selective_display),
 		     Qnil,
 		     doc: /* Non-nil enables selective display.
+
 An integer N as value means display only lines
 that start with less than N columns of space.
+
 A value of t means that the character ^M makes itself and
 all the rest of the line invisible; also, when saving the buffer
-in a file, save the ^M as a newline.  */);
+in a file, save the ^M as a newline.  This usage is obsolete; use
+overlays or text properties instead.  */);
 
   DEFVAR_PER_BUFFER ("selective-display-ellipses",
 		     &BVAR (current_buffer, selective_display_ellipses),
@@ -6106,7 +5981,7 @@ An entry of the form POSITION indicates that point was at the buffer
 location given by the integer.  Undoing an entry of this form places
 point at POSITION.
 
-Entries with value `nil' mark undo boundaries.  The undo command treats
+Entries with value nil mark undo boundaries.  The undo command treats
 the changes between two undo boundaries as a single step to be undone.
 
 If the value of the variable is t, undo information is not recorded.  */);
@@ -6202,11 +6077,11 @@ all windows or just the selected window.
 
 Lisp programs may give this variable certain special values:
 
-- A value of `lambda' enables Transient Mark mode temporarily.
-  It is disabled again after any subsequent action that would
+- The symbol `lambda' enables Transient Mark mode temporarily.
+  The mode is disabled again after any subsequent action that would
   normally deactivate the mark (e.g. buffer modification).
 
-- A value of (only . OLDVAL) enables Transient Mark mode
+- The pair (only . OLDVAL) enables Transient Mark mode
   temporarily.  After any subsequent point motion command that is
   not shift-translated, or any other action that would normally
   deactivate the mark (e.g. buffer modification), the value of
@@ -6235,6 +6110,8 @@ Values are interpreted as follows:
   (hbar . HEIGHT) display a horizontal bar cursor with height HEIGHT
   ANYTHING ELSE   display a hollow box cursor
 
+WIDTH and HEIGHT can't exceed the frame's canonical character size.
+
 When the buffer is displayed in a non-selected window, the
 cursor's appearance is instead controlled by the variable
 `cursor-in-non-selected-windows'.  */);
@@ -6254,7 +6131,7 @@ If nil, only shows a cursor in the selected window.
 If t, displays a cursor related to the usual cursor type
 \(a solid box becomes hollow, a bar becomes a narrower bar).
 You can also specify the cursor type as in the `cursor-type' variable.
-Use Custom to set this variable and update the display."  */);
+Use Custom to set this variable and update the display.  */);
 
   DEFVAR_LISP ("kill-buffer-query-functions", Vkill_buffer_query_functions,
 	       doc: /* List of functions called with no args to query before killing a buffer.

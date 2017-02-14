@@ -1,6 +1,6 @@
-@c -*-texinfo-*-
+@c -*- mode: texinfo; coding: utf-8 -*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1993, 1995, 1998-1999, 2001-2015 Free Software
+@c Copyright (C) 1990-1993, 1995, 1998-1999, 2001-2017 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Tips
@@ -14,11 +14,17 @@ it gives advice on making effective use of the features described in the
 previous chapters, and describes conventions Emacs Lisp programmers
 should follow.
 
+@findex checkdoc
+@findex checkdoc-current-buffer
+@findex checkdoc-file
   You can automatically check some of the conventions described below by
 running the command @kbd{M-x checkdoc RET} when visiting a Lisp file.
 It cannot check all of the conventions, and not all the warnings it
 gives necessarily correspond to problems, but it is worth examining them
-all.
+all.  Alternatively, use the command @kbd{M-x checkdoc-current-buffer RET}
+to check the conventions in the current buffer, or @code{checkdoc-file}
+when you want to check a file in batch mode, e.g., with a command run by
+@kbd{@w{M-x compile RET}}.
 
 @menu
 * Coding Conventions::        Conventions for clean and robust programs.
@@ -159,10 +165,10 @@ follow the naming conventions for hooks.  @xref{Hooks}.
 @item
 @cindex unloading packages, preparing for
 If loading the file adds functions to hooks, define a function
-@code{@var{feature}-unload-hook}, where @var{feature} is the name of
-the feature the package provides, and make it undo any such changes.
-Using @code{unload-feature} to unload the file will run this function.
-@xref{Unloading}.
+@code{@var{feature}-unload-function}, where @var{feature} is the name
+of the feature the package provides, and make it undo any such
+changes.  Using @code{unload-feature} to unload the file will run this
+function.  @xref{Unloading}.
 
 @item
 It is a bad idea to define aliases for the Emacs primitives.  Normally
@@ -194,12 +200,12 @@ It is likewise a bad idea for one Lisp package to advise a function in
 another Lisp package (@pxref{Advising Functions}).
 
 @item
-Avoid using @code{eval-after-load} in libraries and packages
-(@pxref{Hooks for Loading}).  This feature is meant for personal
-customizations; using it in a Lisp program is unclean, because it
-modifies the behavior of another Lisp file in a way that's not visible
-in that file.  This is an obstacle for debugging, much like advising a
-function in the other package.
+Avoid using @code{eval-after-load} and @code{with-eval-after-load} in
+libraries and packages (@pxref{Hooks for Loading}).  This feature is
+meant for personal customizations; using it in a Lisp program is
+unclean, because it modifies the behavior of another Lisp file in a
+way that's not visible in that file.  This is an obstacle for
+debugging, much like advising a function in the other package.
 
 @item
 If a file does replace any of the standard functions or library
@@ -284,10 +290,11 @@ Sequences consisting of @kbd{C-c} followed by @kbd{@{}, @kbd{@}},
 @kbd{<}, @kbd{>}, @kbd{:} or @kbd{;} are also reserved for major modes.
 
 @item
-Sequences consisting of @kbd{C-c} followed by any other punctuation
-character are allocated for minor modes.  Using them in a major mode is
-not absolutely prohibited, but if you do that, the major mode binding
-may be shadowed from time to time by minor modes.
+Sequences consisting of @kbd{C-c} followed by any other
+@acronym{ASCII} punctuation or symbol character are allocated for
+minor modes.  Using them in a major mode is not absolutely prohibited,
+but if you do that, the major mode binding may be shadowed from time
+to time by minor modes.
 
 @item
 Don't bind @kbd{C-h} following any prefix character (including
@@ -398,7 +405,7 @@ Enter the answer (default 42):
 
 @item
 In @code{interactive}, if you use a Lisp expression to produce a list
-of arguments, don't try to provide the ``correct'' default values for
+of arguments, don't try to provide the correct default values for
 region or position arguments.  Instead, provide @code{nil} for those
 arguments if they were not specified, and have the function body
 compute the default value when the argument is @code{nil}.  For
@@ -657,18 +664,28 @@ starting double-quote is not part of the string!
 
 @anchor{Docstring hyperlinks}
 @item
+@cindex curly quotes
+@cindex curved quotes
 When a documentation string refers to a Lisp symbol, write it as it
-would be printed (which usually means in lower case), with a grave
-accent @samp{`} before and apostrophe @samp{'} after it.  There are
+would be printed (which usually means in lower case), surrounding
+it with curved single quotes (@t{‘} and @t{’}).  There are
 two exceptions: write @code{t} and @code{nil} without surrounding
-punctuation.  For example: @samp{CODE can be `lambda', nil, or t.}
-(In this manual, we use a different convention, with single-quotes
-around symbols.)
+punctuation.  For example: @samp{CODE can be ‘lambda’, nil, or t}.
+@xref{Quotation Marks,,, emacs, The GNU Emacs Manual}, for how to
+enter curved single quotes.
+
+Documentation strings can also use an older single-quoting convention,
+which quotes symbols with grave accent @t{`} and apostrophe
+@t{'}: @t{`like-this'} rather than @t{‘like-this’}.  This
+older convention was designed for now-obsolete displays in which grave
+accent and apostrophe were mirror images.
+Documentation using this convention is converted to the user's
+preferred format when it is copied into a help buffer.  @xref{Keys in
+Documentation}.
 
 @cindex hyperlinks in documentation strings
 Help mode automatically creates a hyperlink when a documentation string
-uses a symbol name between grave accent and apostrophe, if the symbol
-has either a
+uses a single-quoted symbol name, if the symbol has either a
 function or a variable definition.  You do not need to do anything
 special to make use of this feature.  However, when a symbol has both a
 function definition and a variable definition, and you want to refer to
@@ -710,8 +727,8 @@ followed by the word @samp{face}.  In that case, only the face
 documentation will be shown, even if the symbol is also defined as a
 variable or as a function.
 
-To make a hyperlink to Info documentation, write the name of the Info
-node (or anchor) between grave accent and apostrophe, preceded by
+To make a hyperlink to Info documentation, write the single-quoted
+name of the Info node (or anchor), preceded by
 @samp{info node}, @samp{Info node}, @samp{info anchor} or @samp{Info
 anchor}.  The Info file name defaults to @samp{emacs}.  For example,
 
@@ -719,8 +736,8 @@ anchor}.  The Info file name defaults to @samp{emacs}.  For example,
 See Info node `Font Lock' and Info node `(elisp)Font Lock Basics'.
 @end smallexample
 
-Finally, to create a hyperlink to URLs, write the URL between grave
-accent and apostrophe, preceded by @samp{URL}. For example,
+Finally, to create a hyperlink to URLs, write the single-quoted URL,
+preceded by @samp{URL}.  For example,
 
 @smallexample
 The home page for the GNU project has more information (see URL
@@ -761,7 +778,7 @@ is indicative and has a proper subject.
 @item
 The documentation string for a function that is a yes-or-no predicate
 should start with words such as ``Return t if'', to indicate
-explicitly what constitutes ``truth''.  The word ``return'' avoids
+explicitly what constitutes truth.  The word ``return'' avoids
 starting the sentence with lower-case ``t'', which could be somewhat
 distracting.
 
@@ -872,7 +889,7 @@ strings, though.
 Comments that start with three semicolons, @samp{;;;}, should start at
 the left margin.  We use them
 for comments which should be considered a
-``heading'' by Outline minor mode.  By default, comments starting with
+heading by Outline minor mode.  By default, comments starting with
 at least three semicolons (followed by a single space and a
 non-whitespace character) are considered headings, comments starting
 with two or fewer are not.  Historically, triple-semicolon comments have
@@ -913,7 +930,7 @@ explains these conventions, starting with an example:
 @group
 ;;; foo.el --- Support for the Foo programming language
 
-;; Copyright (C) 2010-2015 Your Name
+;; Copyright (C) 2010-2017 Your Name
 @end group
 
 ;; Author: Your Name <yourname@@example.com>
@@ -996,8 +1013,14 @@ of multiple files, we recommend not writing the version in every file,
 but only the main one.
 
 @item Keywords
+@vindex checkdoc-package-keywords-flag
+@findex checkdoc-package-keywords
 This line lists keywords for the @code{finder-by-keyword} help command.
-Please use that command to see a list of the meaningful keywords.
+Please use that command to see a list of the meaningful keywords.  The
+command @kbd{M-x checkdoc-package-keywords RET} will find and display
+any keywords that are not in @code{finder-known-keywords}.  If you set
+the variable @code{checkdoc-package-keywords-flag} non-@code{nil},
+checkdoc commands will include the keyword verification in its checks.
 
 This field is how people will find your package when they're looking
 for things by topic.  To separate the keywords, you can use spaces,

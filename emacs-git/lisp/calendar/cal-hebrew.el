@@ -1,6 +1,6 @@
 ;;; cal-hebrew.el --- calendar functions for the Hebrew calendar
 
-;; Copyright (C) 1995, 1997, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 1997, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Nachum Dershowitz <nachum@cs.uiuc.edu>
 ;;         Edward M. Reingold <reingold@cs.uiuc.edu>
@@ -595,7 +595,7 @@ Hebrew date diary entries must be prefaced by `diary-hebrew-entry-symbol'
 of the Hebrew calendar entries, except that the Hebrew month
 names cannot be abbreviated.  The Hebrew months are numbered
 from 1 to 13 with Nisan being 1, 12 being Adar I and 13 being
-Adar II; you must use `Adar I' if you want Adar of a common
+Adar II; you must use \"Adar I\" if you want Adar of a common
 Hebrew year.  If a Hebrew date diary entry begins with
 `diary-nonmarking-symbol', the entry will appear in the diary
 listing, but will not be marked in the calendar.  This function
@@ -611,7 +611,7 @@ is provided for use with `diary-nongregorian-listing-hook'."
   "Mark dates in calendar window that conform to Hebrew date MONTH/DAY/YEAR.
 A value of 0 in any position is a wildcard.  Optional argument COLOR is
 passed to `calendar-mark-visible-date' as MARK."
-  ;; FIXME not the same as the Bahai and Islamic cases, so can't use
+  ;; FIXME not the same as the Bahá’í and Islamic cases, so can't use
   ;; calendar-mark-1.
   (with-current-buffer calendar-buffer
     (if (and (not (zerop month)) (not (zerop day)))

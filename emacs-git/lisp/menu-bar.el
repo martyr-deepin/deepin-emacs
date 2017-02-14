@@ -1,6 +1,6 @@
 ;;; menu-bar.el --- define a default menu bar
 
-;; Copyright (C) 1993-1995, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Richard M. Stallman
 ;; Maintainer: emacs-devel@gnu.org
@@ -218,7 +218,7 @@
   (cond
    ((and (eq menu-bar-last-search-type 'string)
 	 search-ring)
-    (search-forward (car search-ring)))
+    (nonincremental-search-forward))
    ((and (eq menu-bar-last-search-type 'regexp)
 	 regexp-search-ring)
     (re-search-forward (car regexp-search-ring)))
@@ -231,30 +231,30 @@
   (cond
    ((and (eq menu-bar-last-search-type 'string)
 	 search-ring)
-    (search-backward (car search-ring)))
+    (nonincremental-search-backward))
    ((and (eq menu-bar-last-search-type 'regexp)
 	 regexp-search-ring)
     (re-search-backward (car regexp-search-ring)))
    (t
     (error "No previous search"))))
 
-(defun nonincremental-search-forward (string)
+(defun nonincremental-search-forward (&optional string backward)
   "Read a string and search for it nonincrementally."
   (interactive "sSearch for string: ")
   (setq menu-bar-last-search-type 'string)
-  (if (equal string "")
-      (search-forward (car search-ring))
-    (isearch-update-ring string nil)
-    (search-forward string)))
+  ;; Ideally, this whole command would be equivalent to `C-s RET'.
+  (let ((isearch-forward (not backward))
+        (isearch-regexp-function search-default-mode)
+        (isearch-regexp nil))
+    (if (or (equal string "") (not string))
+        (funcall (isearch-search-fun-default) (car search-ring))
+      (isearch-update-ring string nil)
+      (funcall (isearch-search-fun-default) string))))
 
-(defun nonincremental-search-backward (string)
+(defun nonincremental-search-backward (&optional string)
   "Read a string and search backward for it nonincrementally."
-  (interactive "sSearch for string: ")
-  (setq menu-bar-last-search-type 'string)
-  (if (equal string "")
-      (search-backward (car search-ring))
-    (isearch-update-ring string nil)
-    (search-backward string)))
+  (interactive "sSearch backwards for string: ")
+  (nonincremental-search-forward string 'backward))
 
 (defun nonincremental-re-search-forward (string)
   "Read a regular expression and search for it nonincrementally."
@@ -413,8 +413,8 @@
     menu))
 
 (defun menu-bar-goto-uses-etags-p ()
-  (or (not (boundp 'xref-find-function))
-      (eq xref-find-function 'etags-xref-find)))
+  (or (not (boundp 'xref-backend-functions))
+      (eq (car xref-backend-functions) 'etags--xref-backend)))
 
 (defvar yank-menu (cons (purecopy "Select Yank") nil))
 (fset 'yank-menu (cons 'keymap yank-menu))
@@ -474,13 +474,15 @@
                   :enable (and (cdr yank-menu) (not buffer-read-only))
                   :help "Choose a string from the kill ring and paste it"))
     (bindings--define-key menu [paste]
-      '(menu-item "Paste" yank
-                  :enable (and (or
-                                (gui-call gui-selection-exists-p 'CLIPBOARD)
-                                (if (featurep 'ns) ; like paste-from-menu
-                                    (cdr yank-menu)
-                                  kill-ring))
-                               (not buffer-read-only))
+      `(menu-item "Paste" yank
+                  :enable (funcall
+                           ',(lambda ()
+                               (and (or
+                                     (gui-backend-selection-exists-p 'CLIPBOARD)
+                                     (if (featurep 'ns) ; like paste-from-menu
+                                         (cdr yank-menu)
+                                       kill-ring))
+                                    (not buffer-read-only))))
                   :help "Paste (yank) text most recently cut/copied"))
     (bindings--define-key menu [copy]
       ;; ns-win.el said: Substitute a Copy function that works better
@@ -523,26 +525,31 @@
      '(and mark-active (not buffer-read-only)))
 (put 'clipboard-kill-ring-save 'menu-enable 'mark-active)
 (put 'clipboard-yank 'menu-enable
-     '(and (or (gui-call gui-selection-exists-p 'PRIMARY)
-	       (gui-call gui-selection-exists-p 'CLIPBOARD))
- 	   (not buffer-read-only)))
+     `(funcall ',(lambda ()
+                   (and (or (gui-backend-selection-exists-p 'PRIMARY)
+                            (gui-backend-selection-exists-p 'CLIPBOARD))
+                        (not buffer-read-only)))))
 
 (defun clipboard-yank ()
   "Insert the clipboard contents, or the last stretch of killed text."
   (interactive "*")
-  (let ((gui-select-enable-clipboard t))
+  (let ((select-enable-clipboard t))
     (yank)))
 
 (defun clipboard-kill-ring-save (beg end &optional region)
-  "Copy region to kill ring, and save in the GUI's clipboard."
+  "Copy region to kill ring, and save in the GUI's clipboard.
+If the optional argument REGION is non-nil, the function ignores
+BEG and END, and saves the current region instead."
   (interactive "r\np")
-  (let ((gui-select-enable-clipboard t))
+  (let ((select-enable-clipboard t))
     (kill-ring-save beg end region)))
 
 (defun clipboard-kill-region (beg end &optional region)
-  "Kill the region, and save it in the GUI's clipboard."
+  "Kill the region, and save it in the GUI's clipboard.
+If the optional argument REGION is non-nil, the function ignores
+BEG and END, and kills the current region instead."
   (interactive "r\np")
-  (let ((gui-select-enable-clipboard t))
+  (let ((select-enable-clipboard t))
     (kill-region beg end region)))
 
 (defun menu-bar-enable-clipboard ()
@@ -647,7 +654,9 @@ by \"Save Options\" in Custom buffers.")
 ;; Function for setting/saving default font.
 
 (defun menu-set-font ()
-  "Interactively select a font and make it the default on all existing frames."
+  "Interactively select a font and make it the default on all frames.
+
+The selected font will be the default on both the existing and future frames."
   (interactive)
   (set-frame-font (if (fboundp 'x-select-font)
 		      (x-select-font)
@@ -678,7 +687,7 @@ by \"Save Options\" in Custom buffers.")
     (dolist (elt '(scroll-bar-mode
 		   debug-on-quit debug-on-error
 		   ;; Somehow this works, when tool-bar and menu-bar don't.
-		   tooltip-mode
+		   tooltip-mode window-divider-mode
 		   save-place uniquify-buffer-name-style fringe-mode
 		   indicate-empty-lines indicate-buffer-boundaries
 		   case-fold-search font-use-system-font
@@ -705,6 +714,95 @@ by \"Save Options\" in Custom buffers.")
 ;;; Assemble all the top-level items of the "Options" menu
 
 ;; The "Show/Hide" submenu of menu "Options"
+
+(defun menu-bar-window-divider-customize ()
+  "Show customization buffer for `window-divider' group."
+  (interactive)
+  (customize-group 'window-divider))
+
+(defun menu-bar-bottom-and-right-window-divider ()
+  "Display dividers on the bottom and right of each window."
+  (interactive)
+  (customize-set-variable 'window-divider-default-places t)
+  (window-divider-mode 1))
+
+(defun menu-bar-right-window-divider ()
+  "Display dividers only on the right of each window."
+  (interactive)
+  (customize-set-variable 'window-divider-default-places 'right-only)
+  (window-divider-mode 1))
+
+(defun menu-bar-bottom-window-divider ()
+  "Display dividers only at the bottom of each window."
+  (interactive)
+  (customize-set-variable 'window-divider-default-places 'bottom-only)
+  (window-divider-mode 1))
+
+(defun menu-bar-no-window-divider ()
+  "Do not display window dividers."
+  (interactive)
+  (window-divider-mode -1))
+
+;; For the radio buttons below we check whether the respective dividers
+;; are displayed on the selected frame.  This is not fully congruent
+;; with `window-divider-mode' but makes the menu entries work also when
+;; dividers are displayed by manipulating frame parameters directly.
+(defvar menu-bar-showhide-window-divider-menu
+  (let ((menu (make-sparse-keymap "Window Divider")))
+    (bindings--define-key menu [customize]
+      '(menu-item "Customize" menu-bar-window-divider-customize
+                  :help "Customize window dividers"
+                  :visible (memq (window-system) '(x w32))))
+
+    (bindings--define-key menu [bottom-and-right]
+      '(menu-item "Bottom and Right"
+                  menu-bar-bottom-and-right-window-divider
+                  :help "Display window divider on the bottom and right of each window"
+                  :visible (memq (window-system) '(x w32))
+                  :button (:radio
+			   . (and (window-divider-width-valid-p
+				   (cdr (assq 'bottom-divider-width
+					      (frame-parameters))))
+				  (window-divider-width-valid-p
+				   (cdr (assq 'right-divider-width
+					      (frame-parameters))))))))
+    (bindings--define-key menu [right-only]
+      '(menu-item "Right Only"
+                  menu-bar-right-window-divider
+                  :help "Display window divider on the right of each window only"
+                  :visible (memq (window-system) '(x w32))
+                  :button (:radio
+			   . (and (not (window-divider-width-valid-p
+					(cdr (assq 'bottom-divider-width
+						   (frame-parameters)))))
+				  (window-divider-width-valid-p
+				   (cdr (assq 'right-divider-width
+						     (frame-parameters))))))))
+    (bindings--define-key menu [bottom-only]
+      '(menu-item "Bottom Only"
+                  menu-bar-bottom-window-divider
+                  :help "Display window divider on the bottom of each window only"
+                  :visible (memq (window-system) '(x w32))
+                  :button (:radio
+			   . (and (window-divider-width-valid-p
+				   (cdr (assq 'bottom-divider-width
+					      (frame-parameters))))
+				  (not (window-divider-width-valid-p
+					(cdr (assq 'right-divider-width
+						   (frame-parameters)))))))))
+    (bindings--define-key menu [no-divider]
+      '(menu-item "None"
+                  menu-bar-no-window-divider
+                  :help "Do not display window dividers"
+                  :visible (memq (window-system) '(x w32))
+                  :button (:radio
+			   . (and (not (window-divider-width-valid-p
+					(cdr (assq 'bottom-divider-width
+						   (frame-parameters)))))
+				  (not (window-divider-width-valid-p
+					(cdr (assq 'right-divider-width
+						   (frame-parameters)))))))))
+    menu))
 
 (defun menu-bar-showhide-fringe-ind-customize ()
   "Show customization buffer for `indicate-buffer-boundaries'."
@@ -883,49 +981,43 @@ by \"Save Options\" in Custom buffers.")
   (customize-set-variable 'horizontal-scroll-bar-mode nil))
 
 (defvar menu-bar-showhide-scroll-bar-menu
-  (let ((menu (make-sparse-keymap "Scroll-bar")))
+  (let ((menu (make-sparse-keymap "Scroll-bar"))
+        (vsb (frame-parameter nil 'vertical-scroll-bars))
+        (hsb (frame-parameter nil 'horizontal-scroll-bars)))
     (bindings--define-key menu [horizontal]
-      '(menu-item "Horizontal"
+      `(menu-item "Horizontal"
                   menu-bar-horizontal-scroll-bar
                   :help "Horizontal scroll bar"
                   :visible (horizontal-scroll-bars-available-p)
-                  :button (:radio . (cdr (assq 'horizontal-scroll-bars
-					       (frame-parameters))))))
+                  :button (:radio . ,hsb)))
 
     (bindings--define-key menu [none-horizontal]
-      '(menu-item "None-horizontal"
+      `(menu-item "None-horizontal"
                   menu-bar-no-horizontal-scroll-bar
                   :help "Turn off horizontal scroll bars"
                   :visible (horizontal-scroll-bars-available-p)
-                  :button (:radio . (not (cdr (assq 'horizontal-scroll-bars
-                                                   (frame-parameters)))))))
+                  :button (:radio . (not ,hsb))))
 
     (bindings--define-key menu [right]
-      '(menu-item "On the Right"
+      `(menu-item "On the Right"
                   menu-bar-right-scroll-bar
                   :help "Scroll-bar on the right side"
                   :visible (display-graphic-p)
-                  :button (:radio . (eq (cdr (assq 'vertical-scroll-bars
-                                                   (frame-parameters)))
-					'right))))
+                  :button (:radio . (eq ,vsb 'right))))
 
     (bindings--define-key menu [left]
-      '(menu-item "On the Left"
+      `(menu-item "On the Left"
                   menu-bar-left-scroll-bar
                   :help "Scroll-bar on the left side"
                   :visible (display-graphic-p)
-                  :button (:radio . (eq (cdr (assq 'vertical-scroll-bars
-                                                   (frame-parameters)))
-					'left))))
+                  :button (:radio . (eq ,vsb 'left))))
 
     (bindings--define-key menu [none]
-      '(menu-item "None"
+      `(menu-item "None"
                   menu-bar-no-scroll-bar
                   :help "Turn off scroll-bar"
                   :visible (display-graphic-p)
-                  :button (:radio . (eq (cdr (assq 'vertical-scroll-bars
-                                                   (frame-parameters)))
-					nil))))
+                  :button (:radio . (not ,vsb))))
     menu))
 
 (defun menu-bar-frame-for-menubar ()
@@ -1067,6 +1159,10 @@ mail status in mode line"))
                                   (frame-visible-p
                                    (symbol-value 'speedbar-frame))))))
 
+    (bindings--define-key menu [showhide-window-divider]
+      `(menu-item "Window Divider" ,menu-bar-showhide-window-divider-menu
+                  :visible (memq (window-system) '(x w32))))
+
     (bindings--define-key menu [showhide-fringe]
       `(menu-item "Fringe" ,menu-bar-showhide-fringe-menu
                   :visible (display-graphic-p)))
@@ -1148,6 +1244,52 @@ mail status in mode line"))
                                   (not word-wrap)))
                   :visible (menu-bar-menu-frame-live-and-visible-p)
                   :enable (not (truncated-partial-width-window-p))))
+    menu))
+
+(defvar menu-bar-search-options-menu
+  (let ((menu (make-sparse-keymap "Search Options")))
+
+    (dolist (x '((char-fold-to-regexp "Fold Characters" "Character folding")
+                 (isearch-symbol-regexp "Whole Symbols" "Whole symbol")
+                 (word-search-regexp "Whole Words" "Whole word")))
+      (bindings--define-key menu (vector (nth 0 x))
+        `(menu-item ,(nth 1 x)
+                    (lambda ()
+                      (interactive)
+                      (setq search-default-mode #',(nth 0 x))
+                      (message ,(format "%s search enabled" (nth 2 x))))
+                    :help ,(format "Enable %s search" (downcase (nth 2 x)))
+                    :button (:radio . (eq search-default-mode #',(nth 0 x))))))
+
+    (bindings--define-key menu [regexp-search]
+      '(menu-item "Regular Expression"
+                  (lambda ()
+                    (interactive)
+                    (setq search-default-mode t)
+                    (message "Regular-expression search enabled"))
+                  :help "Enable regular-expression search"
+                  :button (:radio . (eq search-default-mode t))))
+
+    (bindings--define-key menu [regular-search]
+      '(menu-item "Literal Search"
+                  (lambda ()
+                    (interactive)
+                    (when search-default-mode
+                      (setq search-default-mode nil)
+                      (when (symbolp search-default-mode)
+                        (message "Literal search enabled"))))
+                  :help "Disable special search modes"
+                  :button (:radio . (not search-default-mode))))
+
+    (bindings--define-key menu [custom-separator]
+      menu-bar-separator)
+    (bindings--define-key menu [case-fold-search]
+      (menu-bar-make-toggle
+       toggle-case-fold-search case-fold-search
+       "Ignore Case"
+       "Case-Insensitive Search %s"
+       "Ignore letter-case in search commands"))
+
     menu))
 
 (defvar menu-bar-options-menu
@@ -1261,12 +1403,9 @@ mail status in mode line"))
        (:visible (and (boundp 'cua-enable-cua-keys)
 		      (not cua-enable-cua-keys)))))
 
-    (bindings--define-key menu [case-fold-search]
-      (menu-bar-make-toggle
-       toggle-case-fold-search case-fold-search
-       "Ignore Case for Search"
-       "Case-Insensitive Search %s"
-       "Ignore letter-case in search commands"))
+    (bindings--define-key menu [search-options]
+      `(menu-item "Default Search Options"
+		  ,menu-bar-search-options-menu))
 
     (bindings--define-key menu [line-wrapping]
       `(menu-item "Line Wrapping in This Buffer"
@@ -1434,7 +1573,7 @@ mail status in mode line"))
     (bindings--define-key menu [browse-web]
       '(menu-item "Browse the Web..." browse-web))
     (bindings--define-key menu [directory-search]
-      '(menu-item "Directory Search" eudc-tools-menu))
+      '(menu-item "Directory Servers" eudc-tools-menu))
     (bindings--define-key menu [compose-mail]
       '(menu-item "Compose New Mail" compose-mail
                   :visible (and mail-user-agent (not (eq mail-user-agent 'ignore)))
@@ -1718,7 +1857,7 @@ key, a click, or a menu-item"))
       '(menu-item "Emacs Tutorial" help-with-tutorial
                   :help "Learn how to use Emacs"))
 
-    ;; In OS X it's in the app menu already.
+    ;; In macOS it's in the app menu already.
     ;; FIXME? There already is an "About Emacs" (sans ...) entry in the Help menu.
     (and (featurep 'ns)
          (not (eq system-type 'darwin))
@@ -2167,8 +2306,8 @@ See `menu-bar-mode' for more information."
   "Popup the given menu and call the selected option.
 MENU can be a keymap, an easymenu-style menu or a list of keymaps as for
 `x-popup-menu'.
-The menu is shown at the place where POSITION specifies. About
-the form of POSITION, see `popup-menu-normalize-position'.
+The menu is shown at the place where POSITION specifies.
+For the form of POSITION, see `popup-menu-normalize-position'.
 PREFIX is the prefix argument (if any) to pass to the command.
 FROM-MENU-BAR, if non-nil, means we are dropping one of menu-bar's menus."
   (let* ((map (cond
@@ -2237,9 +2376,9 @@ FROM-MENU-BAR, if non-nil, means we are dropping one of menu-bar's menus."
 
 (defun popup-menu-normalize-position (position)
   "Convert the POSITION to the form which `popup-menu' expects internally.
-POSITION can an event, a posn- value, a value having
+POSITION can be an event, a posn- value, a value having the
 form ((XOFFSET YOFFSET) WINDOW), or nil.
-If nil, the current mouse position is used."
+If nil, the current mouse position is used, or nil if there is no mouse."
   (pcase position
     ;; nil -> mouse cursor position
     (`nil
@@ -2253,7 +2392,7 @@ If nil, the current mouse position is used."
     ;; Event.
     ((pred eventp)
      (popup-menu-normalize-position (event-end position)))
-    (t position)))
+    (_ position)))
 
 (defcustom tty-menu-open-use-tmm nil
   "If non-nil, \\[menu-bar-open] on a TTY will invoke `tmm-menubar'.
@@ -2278,7 +2417,7 @@ This function decides which method to use to access the menu
 depending on FRAME's terminal device.  On X displays, it calls
 `x-menu-bar-open'; on Windows, `w32-menu-bar-open'; otherwise it
 calls either `popup-menu' or `tmm-menubar' depending on whether
-\`tty-menu-open-use-tmm' is nil or not.
+`tty-menu-open-use-tmm' is nil or not.
 
 If FRAME is nil or not given, use the selected frame."
   (interactive)

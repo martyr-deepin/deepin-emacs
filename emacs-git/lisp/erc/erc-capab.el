@@ -1,6 +1,6 @@
 ;;; erc-capab.el --- support for dancer-ircd and hyperion's CAPAB
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2017 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 
@@ -191,7 +191,8 @@ PARSED is an `erc-parsed' response struct."
                  (re-search-forward (regexp-quote nickname) nil t))
         (goto-char (match-beginning 0))
         (insert (erc-propertize erc-capab-identify-prefix
-                                'face 'erc-capab-identify-unidentified))))))
+                                'font-lock-face
+                                'erc-capab-identify-unidentified))))))
 
 (defun erc-capab-identify-get-unidentified-nickname (parsed)
   "Return the nickname of the user if unidentified.

@@ -1,6 +1,6 @@
 ;;; pascal.el --- major mode for editing pascal source in Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2017 Free Software Foundation, Inc.
 
 ;; Author: Espen Skoglund <esk@gnu.org>
 ;; Keywords: languages
@@ -234,10 +234,10 @@ The name of the function or case is included between the braces."
 
 (defcustom pascal-auto-lineup '(all)
   "List of contexts where auto lineup of :'s or ='s should be done.
-Elements can be of type: 'paramlist', 'declaration' or 'case', which will
+Elements can be of type: `paramlist', `declaration' or `case', which will
 do auto lineup in parameterlist, declarations or case-statements
-respectively.  The word 'all' will do all lineups.  '(case paramlist) for
-instance will do lineup in case-statements and parameterlist, while '(all)
+respectively.  The word `all' will do all lineups.  (case paramlist) for
+instance will do lineup in case-statements and parameterlist, while (all)
 will do all lineups."
   :type '(set :extra-offset 8
 	      (const :tag "Everything" all)
@@ -1023,7 +1023,7 @@ indent of the current line in parameterlist."
       (let ((lineup (if (or (looking-at "\\<var\\>\\|\\<record\\>") arg start)
 			":" "="))
 	    (stpos (if start start
-		       (forward-word 2) (backward-word 1) (point)))
+		       (forward-word-strictly 2) (backward-word 1) (point)))
 	    (edpos (set-marker (make-marker)
 			       (if end end
 				 (max (progn (pascal-declaration-end)

@@ -1,6 +1,6 @@
 ;;; log-view.el --- Major mode for browsing revision log histories -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: tools, vc
@@ -200,8 +200,6 @@ If it is nil, `log-view-toggle-entry-display' does nothing.")
     (t (:weight bold)))
   "Face for the file header line in `log-view-mode'."
   :group 'log-view)
-(define-obsolete-face-alias 'log-view-file-face 'log-view-file "22.1")
-(defvar log-view-file-face 'log-view-file)
 
 (defface log-view-message
   '((((class color) (background light))
@@ -209,9 +207,6 @@ If it is nil, `log-view-toggle-entry-display' does nothing.")
     (t (:weight bold)))
   "Face for the message header line in `log-view-mode'."
   :group 'log-view)
-;; backward-compatibility alias
-(define-obsolete-face-alias 'log-view-message-face 'log-view-message "22.1")
-(defvar log-view-message-face 'log-view-message)
 
 (defvar log-view-file-re
   (concat "^\\(?:Working file: \\(?1:.+\\)"                ;RCS and CVS.
@@ -246,8 +241,8 @@ The match group number 1 should match the revision number itself.")
   ;; and log-view-message-re, if applicable.
   '((eval . `(,log-view-file-re
               (1 (if (boundp 'cvs-filename-face) cvs-filename-face))
-              (0 log-view-file-face append)))
-    (eval . `(,log-view-message-re . log-view-message-face))))
+              (0 'log-view-file append)))
+    (eval . `(,log-view-message-re . 'log-view-message))))
 
 (defconst log-view-font-lock-defaults
   '(log-view-font-lock-keywords t nil nil nil))
@@ -404,7 +399,9 @@ This calls `log-view-expanded-log-entry-function' to do the work."
 	      (unless (and pos (log-view-inside-comment-p pos))
 		(error "Broken markup in `log-view-toggle-entry-display'"))
 	      (delete-region pos
-			     (next-single-property-change pos 'log-view-comment))
+                             (or
+                              (next-single-property-change pos 'log-view-comment)
+                              (point-max)))
 	      (put-text-property beg (1+ beg) 'log-view-entry-expanded nil)
 	      (if (< opoint pos)
 		  (goto-char opoint)))
@@ -469,7 +466,10 @@ It assumes that a log entry starts with a line matching
        ((looking-back "Show 2X entries    Show unlimited entries"
                       (line-beginning-position))
 	(setq looping nil)
-	(forward-line -1))))))
+	(forward-line -1))
+       ;; There are no buttons if we've turned on unlimited entries.
+       ((eobp)
+        (setq looping nil))))))
 
 (defun log-view-end-of-defun (&optional arg)
   "Move forward to the next Log View entry.
@@ -537,7 +537,7 @@ If called interactively, visit the version at point."
       (setq en (point))
       (or (log-view-current-entry nil t)
           (throw 'beginning-of-buffer nil))
-      (cond ((memq backend '(SCCS RCS CVS MCVS SVN))
+      (cond ((memq backend '(SCCS RCS CVS SVN))
 	     (forward-line 2))
 	    ((eq backend 'Hg)
 	     (forward-line 4)
@@ -602,13 +602,12 @@ considered file(s)."
   (interactive
    (list (if (use-region-p) (region-beginning) (point))
          (if (use-region-p) (region-end) (point))))
-  (log-view-diff-common beg end t))
+  (when (eq (vc-call-backend log-view-vc-backend 'revision-granularity) 'file)
+    (error "The %s backend does not support changeset diffs" log-view-vc-backend))
+  (let ((default-directory (vc-root-dir)))
+    (log-view-diff-common beg end t)))
 
 (defun log-view-diff-common (beg end &optional whole-changeset)
-  (when (and whole-changeset
-             (eq (vc-call-backend log-view-vc-backend 'revision-granularity)
-                 'file))
-    (error "The %s backend does not support changeset diffs" log-view-vc-backend))
   (let ((to (log-view-current-tag beg))
         (fr (log-view-current-tag end)))
     (when (string-equal fr to)

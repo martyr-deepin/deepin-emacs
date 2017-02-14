@@ -1,6 +1,6 @@
 ;;; ox-icalendar.el --- iCalendar Back-End for Org Export Engine
 
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;      Nicolas Goaziou <n dot goaziou at gmail dot com>
@@ -76,7 +76,7 @@ for timed events.  If non-zero, alarms are created.
 
 (defcustom org-icalendar-exclude-tags nil
   "Tags that exclude a tree from export.
-This variable allows to specify different exclude tags from other
+This variable allows specifying different exclude tags from other
 back-ends.  It can also be set with the ICAL_EXCLUDE_TAGS
 keyword."
   :group 'org-export-icalendar
@@ -393,7 +393,8 @@ Universal Time, ignoring `org-icalendar-date-time-format'."
       ;; Convert timestamp into internal time in order to use
       ;; `format-time-string' and fix any mistake (i.e. MI >= 60).
       (encode-time 0 mi h d m y)
-      (or utc (and with-time-p (org-icalendar-use-UTC-date-time-p)))))))
+      (not (not (or utc (and with-time-p
+                             (org-icalendar-use-UTC-date-time-p)))))))))
 
 (defun org-icalendar-dtstamp ()
   "Return DTSTAMP property, as a string."
@@ -447,7 +448,7 @@ or subject for the event."
     ;; characters with literal \n.
     (replace-regexp-in-string
      "[ \t]*\n" "\\n"
-     (replace-regexp-in-string "[\\,;]" "\\\&" s)
+     (replace-regexp-in-string "[\\,;]" "\\\\\\&" s)
      nil t)))
 
 (defun org-icalendar-fold-string (s)

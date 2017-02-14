@@ -1,6 +1,6 @@
 ;;; ob-comint.el --- org-babel functions for interaction with comint buffers
 
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research, comint
@@ -34,8 +34,9 @@
 (require 'org-compat)
 (require 'comint)
 (eval-when-compile (require 'cl))
-(declare-function with-parsed-tramp-file-name "tramp" (filename var &rest body))
-(declare-function tramp-flush-directory-property "tramp" (vec directory))
+(declare-function with-parsed-tramp-file-name "tramp"
+                  (filename var &rest body) t)
+(declare-function tramp-flush-directory-property "tramp-cache" (key directory))
 
 (defun org-babel-comint-buffer-livep (buffer)
   "Check if BUFFER is a comint buffer with a live process."

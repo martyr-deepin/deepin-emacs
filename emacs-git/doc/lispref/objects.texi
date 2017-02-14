@@ -1,6 +1,6 @@
 @c -*- mode: texinfo; coding: utf-8 -*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2015 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2017 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Lisp Data Types
@@ -18,7 +18,7 @@ possible objects.
 have similar structures and may usually be used in the same contexts.
 Types can overlap, and objects can belong to two or more types.
 Consequently, we can ask whether an object belongs to a particular type,
-but not for ``the'' type of an object.
+but not for @emph{the} type of an object.
 
 @cindex primitive type
   A few fundamental object types are built into Emacs.  These, from
@@ -310,7 +310,7 @@ vertical tab, formfeed, space, return, del, and escape as @samp{?\a},
 @samp{?\b}, @samp{?\t}, @samp{?\n}, @samp{?\v}, @samp{?\f},
 @samp{?\s}, @samp{?\r}, @samp{?\d}, and @samp{?\e}, respectively.
 (@samp{?\s} followed by a dash has a different meaning---it applies
-the ``super'' modifier to the following character.)  Thus,
+the Super modifier to the following character.)  Thus,
 
 @example
 ?\a @result{} 7                 ; @r{control-g, @kbd{C-g}}
@@ -329,7 +329,7 @@ the ``super'' modifier to the following character.)  Thus,
 @cindex escape sequence
   These sequences which start with backslash are also known as
 @dfn{escape sequences}, because backslash plays the role of an
-``escape character''; this terminology has nothing to do with the
+escape character; this has nothing to do with the
 character @key{ESC}.  @samp{\s} is meant for use in character
 constants; in string constants, just write the space.
 
@@ -353,25 +353,32 @@ following text.)
 control characters, Emacs provides several types of escape syntax that
 you can use to specify non-@acronym{ASCII} text characters.
 
+@enumerate
+@item
 @cindex @samp{\} in character constant
 @cindex backslash in character constants
 @cindex unicode character escape
-  Firstly, you can specify characters by their Unicode values.
-@code{?\u@var{nnnn}} represents a character with Unicode code point
-@samp{U+@var{nnnn}}, where @var{nnnn} is (by convention) a hexadecimal
-number with exactly four digits.  The backslash indicates that the
-subsequent characters form an escape sequence, and the @samp{u}
-specifies a Unicode escape sequence.
+You can specify characters by their Unicode names, if any.
+@code{?\N@{@var{NAME}@}} represents the Unicode character named
+@var{NAME}.  Thus, @samp{?\N@{LATIN SMALL LETTER A WITH GRAVE@}} is
+equivalent to @code{?à} and denotes the Unicode character U+00E0.  To
+simplify entering multi-line strings, you can replace spaces in the
+names by non-empty sequences of whitespace (e.g., newlines).
 
-  There is a slightly different syntax for specifying Unicode
-characters with code points higher than @code{U+@var{ffff}}:
-@code{?\U00@var{nnnnnn}} represents the character with code point
-@samp{U+@var{nnnnnn}}, where @var{nnnnnn} is a six-digit hexadecimal
-number.  The Unicode Standard only defines code points up to
-@samp{U+@var{10ffff}}, so if you specify a code point higher than
-that, Emacs signals an error.
+@item
+You can specify characters by their Unicode values.
+@code{?\N@{U+@var{X}@}} represents a character with Unicode code point
+@var{X}, where @var{X} is a hexadecimal number.  Also,
+@code{?\u@var{xxxx}} and @code{?\U@var{xxxxxxxx}} represent code
+points @var{xxxx} and @var{xxxxxxxx}, respectively, where each @var{x}
+is a single hexadecimal digit.  For example, @code{?\N@{U+E0@}},
+@code{?\u00e0} and @code{?\U000000E0} are all equivalent to @code{?à}
+and to @samp{?\N@{LATIN SMALL LETTER A WITH GRAVE@}}.  The Unicode
+Standard defines code points only up to @samp{U+@var{10ffff}}, so if
+you specify a code point higher than that, Emacs signals an error.
 
-  Secondly, you can specify characters by their hexadecimal character
+@item
+You can specify characters by their hexadecimal character
 codes.  A hexadecimal escape sequence consists of a backslash,
 @samp{x}, and the hexadecimal character code.  Thus, @samp{?\x41} is
 the character @kbd{A}, @samp{?\x1} is the character @kbd{C-a}, and
@@ -379,13 +386,16 @@ the character @kbd{A}, @samp{?\x1} is the character @kbd{C-a}, and
 You can use any number of hex digits, so you can represent any
 character code in this way.
 
+@item
 @cindex octal character code
-  Thirdly, you can specify characters by their character code in
+You can specify characters by their character code in
 octal.  An octal escape sequence consists of a backslash followed by
 up to three octal digits; thus, @samp{?\101} for the character
 @kbd{A}, @samp{?\001} for the character @kbd{C-a}, and @code{?\002}
 for the character @kbd{C-b}.  Only characters up to octal code 777 can
 be specified this way.
+
+@end enumerate
 
   These escape sequences may also be used in strings.  @xref{Non-ASCII
 in Strings}.
@@ -556,7 +566,7 @@ do such a thing.
 @cindex CL note---case of letters
 @quotation
 @b{Common Lisp note:} In Common Lisp, lower case letters are always
-``folded'' to upper case, unless they are explicitly escaped.  In Emacs
+folded to upper case, unless they are explicitly escaped.  In Emacs
 Lisp, upper case and lower case letters are distinct.
 @end quotation
 
@@ -644,7 +654,7 @@ same object, @code{nil}.
 
   A @dfn{cons cell} is an object that consists of two slots, called
 the @sc{car} slot and the @sc{cdr} slot.  Each slot can @dfn{hold} any
-Lisp object.  We also say that ``the @sc{car} of this cons cell is''
+Lisp object.  We also say that the @sc{car} of this cons cell is
 whatever object its @sc{car} slot currently holds, and likewise for
 the @sc{cdr}.
 
@@ -660,13 +670,13 @@ of lists, we refer to any structure made out of cons cells as a
 @quotation
 A note to C programmers: a Lisp list thus works as a @dfn{linked list}
 built up of cons cells.  Because pointers in Lisp are implicit, we do
-not distinguish between a cons cell slot ``holding'' a value versus
-``pointing to'' the value.
+not distinguish between a cons cell slot holding a value versus
+pointing to the value.
 @end quotation
 
 @cindex atoms
   Because cons cells are so central to Lisp, we also have a word for
-``an object which is not a cons cell''.  These objects are called
+an object which is not a cons cell.  These objects are called
 @dfn{atoms}.
 
 @cindex parenthesis
@@ -695,10 +705,10 @@ hold @code{nil}.
 
   The names @sc{car} and @sc{cdr} derive from the history of Lisp.  The
 original Lisp implementation ran on an @w{IBM 704} computer which
-divided words into two parts, called the ``address'' part and the
-``decrement''; @sc{car} was an instruction to extract the contents of
+divided words into two parts, the address and the
+decrement; @sc{car} was an instruction to extract the contents of
 the address part of a register, and @sc{cdr} an instruction to extract
-the contents of the decrement.  By contrast, ``cons cells'' are named
+the contents of the decrement.  By contrast, cons cells are named
 for the function @code{cons} that creates them, which in turn was named
 for its purpose, the construction of cells.
 
@@ -737,7 +747,7 @@ represents a reference to a Lisp object, either an atom or another cons
 cell.
 
   In this example, the first box, which holds the @sc{car} of the first
-cons cell, refers to or ``holds'' @code{rose} (a symbol).  The second
+cons cell, refers to or holds @code{rose} (a symbol).  The second
 box, holding the @sc{cdr} of the first cons cell, refers to the next
 pair of boxes, the second cons cell.  The @sc{car} of the second cons
 cell is @code{violet}, and its @sc{cdr} is the third cons cell.  The
@@ -1176,7 +1186,7 @@ a whole character set.
 @cindex @samp{#^} read syntax
   The printed representation of a char-table is like a vector
 except that there is an extra @samp{#^} at the beginning.@footnote{You
-may also encounter @samp{#^^}, used for ``sub-char-tables''.}
+may also encounter @samp{#^^}, used for sub-char-tables.}
 
   @xref{Char-Tables}, for special functions to operate on char-tables.
 Uses of char-tables include:
@@ -1204,7 +1214,7 @@ be @code{t} or @code{nil}.
   The printed representation of a bool-vector is like a string, except
 that it begins with @samp{#&} followed by the length.  The string
 constant that follows actually specifies the contents of the bool-vector
-as a bitmap---each ``character'' in the string contains 8 bits, which
+as a bitmap---each character in the string contains 8 bits, which
 specify the next 8 elements of the bool-vector (1 stands for @code{t},
 and 0 for @code{nil}).  The least significant bits of the character
 correspond to the lowest indices in the bool-vector.
@@ -1279,8 +1289,8 @@ list whose first element is the symbol @code{macro} and whose @sc{cdr}
 is a Lisp function object, including the @code{lambda} symbol.
 
   Lisp macro objects are usually defined with the built-in
-@code{defmacro} function, but any list that begins with @code{macro} is
-a macro as far as Emacs is concerned.  @xref{Macros}, for an explanation
+@code{defmacro} macro, but any list that begins with @code{macro} is a
+macro as far as Emacs is concerned.  @xref{Macros}, for an explanation
 of how to write a macro.
 
   @strong{Warning}: Lisp macros and keyboard macros (@pxref{Keyboard
@@ -1400,6 +1410,9 @@ editing.
 * Window Configuration Type::   Recording the way a frame is subdivided.
 * Frame Configuration Type::    Recording the status of all frames.
 * Process Type::        A subprocess of Emacs running on the underlying OS.
+* Thread Type::         A thread of Emacs Lisp execution.
+* Mutex Type::          An exclusive lock for thread synchronization.
+* Condition Variable Type::     Condition variable for thread synchronization.
 * Stream Type::         Receive or send characters.
 * Keymap Type::         What function a keystroke invokes.
 * Overlay Type::        How an overlay is represented.
@@ -1423,7 +1436,7 @@ buffer}.
   The contents of a buffer are much like a string, but buffers are not
 used like strings in Emacs Lisp, and the available operations are
 different.  For example, you can insert text efficiently into an
-existing buffer, altering the buffer's contents, whereas ``inserting''
+existing buffer, altering the buffer's contents, whereas inserting
 text into a string requires concatenating substrings, and the result
 is an entirely new string object.
 
@@ -1502,8 +1515,8 @@ in one window, no window, or several windows.
   Though many windows may exist simultaneously, at any time one window
 is designated the @dfn{selected window}.  This is the window where the
 cursor is (usually) displayed when Emacs is ready for a command.  The
-selected window usually displays the current buffer, but this is not
-necessarily the case.
+selected window usually displays the current buffer (@pxref{Current
+Buffer}), but this is not necessarily the case.
 
   Windows are grouped on the screen into frames; each window belongs to
 one and only one frame.  @xref{Frame Type}.
@@ -1615,6 +1628,63 @@ giving the name of the process:
 return information about, send input or signals to, and receive output
 from processes.
 
+@node Thread Type
+@subsection Thread Type
+
+  A @dfn{thread} in Emacs represents a separate thread of Emacs Lisp
+execution.  It runs its own Lisp program, has its own current buffer,
+and can have subprocesses locked to it, i.e.@: subprocesses whose
+output only this thread can accept.  @xref{Threads}.
+
+  Thread objects have no read syntax.  They print in hash notation,
+giving the name of the thread (if it has been given a name) or its
+address in core:
+
+@example
+@group
+(all-threads)
+    @result{} (#<thread 0176fc40>)
+@end group
+@end example
+
+@node Mutex Type
+@subsection Mutex Type
+
+  A @dfn{mutex} is an exclusive lock that threads can own and disown,
+in order to synchronize between them.  @xref{Mutexes}.
+
+  Mutex objects have no read syntax.  They print in hash notation,
+giving the name of the mutex (if it has been given a name) or its
+address in core:
+
+@example
+@group
+(make-mutex "my-mutex")
+    @result{} #<mutex my-mutex>
+(make-mutex)
+    @result{} #<mutex 01c7e4e0>
+@end group
+@end example
+
+@node Condition Variable Type
+@subsection Condition Variable Type
+
+  A @dfn{condition variable} is a device for a more complex thread
+synchronization than the one supported by a mutex.  A thread can wait
+on a condition variable, to be woken up when some other thread
+notifies the condition.
+
+  Condition variable objects have no read syntax.  They print in hash
+notation, giving the name of the condition variable (if it has been
+given a name) or its address in core:
+
+@example
+@group
+(make-condition-variable (make-mutex))
+    @result{} #<condvar 01c45ae8>
+@end group
+@end example
+
 @node Stream Type
 @subsection Stream Type
 
@@ -1715,7 +1785,7 @@ look alike but are not the same Lisp object.  This shows the difference:
 @end example
 
   You can also use the same syntax to make a circular structure, which
-appears as an ``element'' within itself.  Here is an example:
+appears as an element within itself.  Here is an example:
 
 @example
 #1=(a #1#)
@@ -1820,6 +1890,9 @@ with references to further information.
 @item commandp
 @xref{Interactive Call, commandp}.
 
+@item condition-variable-p
+@xref{Condition Variables, condition-variable-p}.
+
 @item consp
 @xref{List-related Predicates, consp}.
 
@@ -1865,6 +1938,9 @@ with references to further information.
 @item markerp
 @xref{Predicates on Markers, markerp}.
 
+@item mutexp
+@xref{Mutexes, mutexp}.
+
 @item wholenump
 @xref{Predicates on Numbers, wholenump}.
 
@@ -1898,6 +1974,9 @@ with references to further information.
 @item syntax-table-p
 @xref{Syntax Tables, syntax-table-p}.
 
+@item threadp
+@xref{Basic Thread Functions, threadp}.
+
 @item vectorp
 @xref{Vectors, vectorp}.
 
@@ -1915,6 +1994,15 @@ with references to further information.
 
 @item string-or-null-p
 @xref{Predicates for Strings, string-or-null-p}.
+
+@item threadp
+@xref{Basic Thread Functions, threadp}.
+
+@item mutexp
+@xref{Mutexes, mutexp}.
+
+@item condition-variable-p
+@xref{Condition Variables, condition-variable-p}.
 @end table
 
   The most general way to check the type of an object is to call the
@@ -1928,11 +2016,12 @@ types.  In most cases, it is more convenient to use type predicates than
 This function returns a symbol naming the primitive type of
 @var{object}.  The value is one of the symbols @code{bool-vector},
 @code{buffer}, @code{char-table}, @code{compiled-function},
-@code{cons}, @code{finalizer}, @code{float}, @code{font-entity},
-@code{font-object}, @code{font-spec}, @code{frame}, @code{hash-table},
-@code{integer}, @code{marker}, @code{overlay}, @code{process},
-@code{string}, @code{subr}, @code{symbol}, @code{vector},
-@code{window}, or @code{window-configuration}.
+@code{condition-variable}, @code{cons}, @code{finalizer},
+@code{float}, @code{font-entity}, @code{font-object},
+@code{font-spec}, @code{frame}, @code{hash-table}, @code{integer},
+@code{marker}, @code{mutex}, @code{overlay}, @code{process},
+@code{string}, @code{subr}, @code{symbol}, @code{thread},
+@code{vector}, @code{window}, or @code{window-configuration}.
 
 @example
 (type-of 1)

@@ -1,13 +1,13 @@
 /* Cursor motion subroutines for GNU Emacs.
-   Copyright (C) 1985, 1995, 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 1985, 1995, 2001-2017 Free Software Foundation, Inc.
     based primarily on public domain code written by Chris Torek
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,9 +22,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <stdio.h>
 
 #include "lisp.h"
-#include "frame.h"
 #include "cm.h"
-#include "termhooks.h"
 #include "termchar.h"
 #include "tparam.h"
 
@@ -323,7 +321,7 @@ cmgoto (struct tty_display_info *tty, int row, int col)
             llcost,
             relcost,
             directcost;
-    int     use IF_LINT (= 0);
+    int use UNINIT;
     char *p;
     const char *dcm;
 

@@ -1,6 +1,6 @@
 ;;; mwheel.el --- Wheel mouse support
 
-;; Copyright (C) 1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998, 2000-2017 Free Software Foundation, Inc.
 ;; Maintainer: William M. Perry <wmperry@gnu.org>
 ;; Keywords: mouse
 ;; Package: emacs
@@ -187,7 +187,8 @@ This can be slightly disconcerting, but some people prefer it."
 
 (defun mwheel-scroll (event)
   "Scroll up or down according to the EVENT.
-This should only be bound to mouse buttons 4 and 5."
+This should be bound only to mouse buttons 4 and 5 on non-Windows
+systems."
   (interactive (list last-input-event))
   (let* ((curwin (if mouse-wheel-follow-mouse
                      (prog1

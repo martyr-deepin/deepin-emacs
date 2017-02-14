@@ -1,14 +1,14 @@
 /* GNU Emacs case conversion functions.
 
-Copyright (C) 1985, 1994, 1997-1999, 2001-2015 Free Software Foundation,
+Copyright (C) 1985, 1994, 1997-1999, 2001-2017 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -114,15 +114,15 @@ casify_object (enum case_action flag, Lisp_Object obj)
       ptrdiff_t i, i_byte, size = SCHARS (obj);
       int len;
       USE_SAFE_ALLOCA;
-      ptrdiff_t o_size = (size < STRING_BYTES_BOUND / MAX_MULTIBYTE_LENGTH
-			  ? size * MAX_MULTIBYTE_LENGTH
-			  : STRING_BYTES_BOUND);
+      ptrdiff_t o_size;
+      if (INT_MULTIPLY_WRAPV (size, MAX_MULTIBYTE_LENGTH, &o_size))
+	o_size = PTRDIFF_MAX;
       unsigned char *dst = SAFE_ALLOCA (o_size);
       unsigned char *o = dst;
 
       for (i = i_byte = 0; i < size; i++, i_byte += len)
 	{
-	  if (o_size - (o - dst) < MAX_MULTIBYTE_LENGTH)
+	  if (o_size - MAX_MULTIBYTE_LENGTH < o - dst)
 	    string_overflow ();
 	  c = STRING_CHAR_AND_LENGTH (SDATA (obj) + i_byte, len);
 	  if (inword && flag != CASE_CAPITALIZE_UP)
@@ -196,7 +196,7 @@ casify_region (enum case_action flag, Lisp_Object b, Lisp_Object e)
   ptrdiff_t start_byte;
 
   /* Position of first and last changes.  */
-  ptrdiff_t first = -1, last IF_LINT (= 0);
+  ptrdiff_t first = -1, last;
 
   ptrdiff_t opoint = PT;
   ptrdiff_t opoint_byte = PT_BYTE;
@@ -294,26 +294,58 @@ casify_region (enum case_action flag, Lisp_Object b, Lisp_Object e)
     }
 }
 
-DEFUN ("upcase-region", Fupcase_region, Supcase_region, 2, 2, "r",
+DEFUN ("upcase-region", Fupcase_region, Supcase_region, 2, 3,
+       "(list (region-beginning) (region-end) (region-noncontiguous-p))",
        doc: /* Convert the region to upper case.  In programs, wants two arguments.
 These arguments specify the starting and ending character numbers of
 the region to operate on.  When used as a command, the text between
 point and the mark is operated on.
 See also `capitalize-region'.  */)
-  (Lisp_Object beg, Lisp_Object end)
+  (Lisp_Object beg, Lisp_Object end, Lisp_Object region_noncontiguous_p)
 {
-  casify_region (CASE_UP, beg, end);
+  Lisp_Object bounds = Qnil;
+
+  if (!NILP (region_noncontiguous_p))
+    {
+      bounds = call1 (Fsymbol_value (intern ("region-extract-function")),
+		      intern ("bounds"));
+
+      while (CONSP (bounds))
+	{
+	  casify_region (CASE_UP, XCAR (XCAR (bounds)), XCDR (XCAR (bounds)));
+	  bounds = XCDR (bounds);
+	}
+    }
+  else
+    casify_region (CASE_UP, beg, end);
+
   return Qnil;
 }
 
-DEFUN ("downcase-region", Fdowncase_region, Sdowncase_region, 2, 2, "r",
+DEFUN ("downcase-region", Fdowncase_region, Sdowncase_region, 2, 3,
+       "(list (region-beginning) (region-end) (region-noncontiguous-p))",
        doc: /* Convert the region to lower case.  In programs, wants two arguments.
 These arguments specify the starting and ending character numbers of
 the region to operate on.  When used as a command, the text between
 point and the mark is operated on.  */)
-  (Lisp_Object beg, Lisp_Object end)
+  (Lisp_Object beg, Lisp_Object end, Lisp_Object region_noncontiguous_p)
 {
-  casify_region (CASE_DOWN, beg, end);
+  Lisp_Object bounds = Qnil;
+
+  if (!NILP (region_noncontiguous_p))
+    {
+      bounds = call1 (Fsymbol_value (intern ("region-extract-function")),
+		      intern ("bounds"));
+
+      while (CONSP (bounds))
+	{
+	  casify_region (CASE_DOWN, XCAR (XCAR (bounds)), XCDR (XCAR (bounds)));
+	  bounds = XCDR (bounds);
+	}
+    }
+  else
+    casify_region (CASE_DOWN, beg, end);
+
   return Qnil;
 }
 
@@ -344,22 +376,16 @@ character positions to operate on.  */)
 }
 
 static Lisp_Object
-operate_on_word (Lisp_Object arg, ptrdiff_t *newpoint)
+casify_word (enum case_action flag, Lisp_Object arg)
 {
-  Lisp_Object val;
-  ptrdiff_t farend;
-  EMACS_INT iarg;
-
   CHECK_NUMBER (arg);
-  iarg = XINT (arg);
-  farend = scan_words (PT, iarg);
+  ptrdiff_t farend = scan_words (PT, XINT (arg));
   if (!farend)
-    farend = iarg > 0 ? ZV : BEGV;
-
-  *newpoint = PT > farend ? PT : farend;
-  XSETFASTINT (val, farend);
-
-  return val;
+    farend = XINT (arg) <= 0 ? BEGV : ZV;
+  ptrdiff_t newpoint = max (PT, farend);
+  casify_region (flag, make_number (PT), make_number (farend));
+  SET_PT (newpoint);
+  return Qnil;
 }
 
 DEFUN ("upcase-word", Fupcase_word, Supcase_word, 1, 1, "p",
@@ -372,13 +398,7 @@ With negative argument, convert previous words but do not move.
 See also `capitalize-word'.  */)
   (Lisp_Object arg)
 {
-  Lisp_Object beg, end;
-  ptrdiff_t newpoint;
-  XSETFASTINT (beg, PT);
-  end = operate_on_word (arg, &newpoint);
-  casify_region (CASE_UP, beg, end);
-  SET_PT (newpoint);
-  return Qnil;
+  return casify_word (CASE_UP, arg);
 }
 
 DEFUN ("downcase-word", Fdowncase_word, Sdowncase_word, 1, 1, "p",
@@ -390,13 +410,7 @@ is ignored when moving forward.
 With negative argument, convert previous words but do not move.  */)
   (Lisp_Object arg)
 {
-  Lisp_Object beg, end;
-  ptrdiff_t newpoint;
-  XSETFASTINT (beg, PT);
-  end = operate_on_word (arg, &newpoint);
-  casify_region (CASE_DOWN, beg, end);
-  SET_PT (newpoint);
-  return Qnil;
+  return casify_word (CASE_DOWN, arg);
 }
 
 DEFUN ("capitalize-word", Fcapitalize_word, Scapitalize_word, 1, 1, "p",
@@ -411,13 +425,7 @@ is ignored when moving forward.
 With negative argument, capitalize previous words but do not move.  */)
   (Lisp_Object arg)
 {
-  Lisp_Object beg, end;
-  ptrdiff_t newpoint;
-  XSETFASTINT (beg, PT);
-  end = operate_on_word (arg, &newpoint);
-  casify_region (CASE_CAPITALIZE, beg, end);
-  SET_PT (newpoint);
-  return Qnil;
+  return casify_word (CASE_CAPITALIZE, arg);
 }
 
 void

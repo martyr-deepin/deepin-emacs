@@ -1,6 +1,6 @@
 @c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 1997, 1999-2015 Free Software Foundation, Inc.
+@c Copyright (C) 1997, 1999-2017 Free Software Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node International
 @chapter International Character Set Support
@@ -136,8 +136,11 @@ displayed on your terminal, they appear as @samp{?} or as hollow boxes
   Keyboards, even in the countries where these character sets are
 used, generally don't have keys for all the characters in them.  You
 can insert characters that your keyboard does not support, using
-@kbd{C-q} (@code{quoted-insert}) or @kbd{C-x 8 @key{RET}}
-(@code{insert-char}).  @xref{Inserting Text}.  Emacs also supports
+@kbd{C-x 8 @key{RET}} (@code{insert-char}).  @xref{Inserting Text}.
+Shorthands are available for some common characters; for example, you
+can insert a left single quotation mark @t{‘} by typing @kbd{C-x 8
+[}, or in Electric Quote mode often by simply typing @kbd{`}.
+@xref{Quotation Marks}.  Emacs also supports
 various @dfn{input methods}, typically one for each script or
 language, which make it easier to type characters in the script.
 @xref{Input Methods}.
@@ -169,9 +172,9 @@ system encodes the character safely and with a single byte
 one byte, Emacs shows @samp{file ...}.
 
   As a special case, if the character lies in the range 128 (0200
-octal) through 159 (0237 octal), it stands for a ``raw'' byte that
+octal) through 159 (0237 octal), it stands for a raw byte that
 does not correspond to any specific displayable character.  Such a
-``character'' lies within the @code{eight-bit-control} character set,
+character lies within the @code{eight-bit-control} character set,
 and is displayed as an escaped octal character code.  In this case,
 @kbd{C-x =} shows @samp{part of display ...} instead of @samp{file}.
 
@@ -222,11 +225,12 @@ code point in charset: 0xEA
                syntax: w        which means: word
              category: .:Base, L:Left-to-right (strong), c:Chinese,
                        j:Japanese, l:Latin, v:Viet
-             to input: type "C-x 8 RET HEX-CODEPOINT" or "C-x 8 RET NAME"
+             to input: type "C-x 8 RET ea" or
+                       "C-x 8 RET LATIN SMALL LETTER E WITH CIRCUMFLEX"
           buffer code: #xC3 #xAA
             file code: #xC3 #xAA (encoded by coding system utf-8-unix)
               display: by this font (glyph code)
-    xft:-unknown-DejaVu Sans Mono-normal-normal-
+    xft:-PfEd-DejaVu Sans Mono-normal-normal-
         normal-*-15-*-*-*-m-0-iso10646-1 (#xAC)
 
 Character code properties: customize what to show
@@ -495,7 +499,7 @@ the alternative.  Typing a number selects the associated alternative
 of the current row and uses it as input.
 
   @key{TAB} in these Chinese input methods displays a buffer showing
-all the possible characters at once; then clicking @kbd{Mouse-2} on
+all the possible characters at once; then clicking @kbd{mouse-2} on
 one of them selects that alternative.  The keys @kbd{C-f}, @kbd{C-b},
 @kbd{C-n}, @kbd{C-p}, and digits continue to work as usual, but they
 do the highlighting in the buffer showing the possible characters,
@@ -536,6 +540,8 @@ searching for what you have already entered.
   To find out how to input the character after point using the current
 input method, type @kbd{C-u C-x =}.  @xref{Position Info}.
 
+@c TODO: document complex-only/default/t of
+@c @code{input-method-verbose-flag}
 @vindex input-method-verbose-flag
 @vindex input-method-highlight-flag
   The variables @code{input-method-highlight-flag} and
@@ -637,7 +643,7 @@ automatically.  For example:
 @end lisp
 
 @noindent
-This automatically activates the input method ``german-prefix'' in
+This automatically activates the input method @code{german-prefix} in
 Text mode.
 
 @findex quail-set-keyboard-layout
@@ -691,8 +697,8 @@ system; for example, to visit a file encoded in codepage 850, type
   In addition to converting various representations of non-@acronym{ASCII}
 characters, a coding system can perform end-of-line conversion.  Emacs
 handles three different conventions for how to separate lines in a file:
-newline (``unix''), carriage-return linefeed (``dos''), and just
-carriage-return (``mac'').
+newline (Unix), carriage-return linefeed (DOS), and just
+carriage-return (Mac).
 
 @table @kbd
 @item C-h C @var{coding} @key{RET}
@@ -739,7 +745,7 @@ exactly what to do for end-of-line conversion:
 @item @dots{}-unix
 Don't do any end-of-line conversion; assume the file uses
 newline to separate lines.  (This is the convention normally used
-on Unix and GNU systems, and Mac OS X.)
+on Unix and GNU systems, and macOS.)
 
 @item @dots{}-dos
 Assume the file uses carriage-return linefeed to separate lines, and do
@@ -751,8 +757,8 @@ Emacs doesn't support directly.})
 
 @item @dots{}-mac
 Assume the file uses carriage-return to separate lines, and do the
-appropriate conversion.  (This was the convention used on the
-Macintosh system prior to OS X.)
+appropriate conversion.  (This was the convention used in Classic Mac
+OS.)
 @end table
 
   These variant coding systems are omitted from the
@@ -1030,7 +1036,7 @@ decoding it using coding system @var{right} instead.
 the current buffer (i.e., the coding system to use when saving or
 reverting the file).  You specify which coding system using the
 minibuffer.  You can also invoke this command by clicking with
-@kbd{Mouse-3} on the coding system indicator in the mode line
+@kbd{mouse-3} on the coding system indicator in the mode line
 (@pxref{Mode Line}).
 
   If you specify a coding system that cannot handle all the characters
@@ -1164,7 +1170,9 @@ current language environment.
 to use when encoding and decoding system strings such as system error
 messages and @code{format-time-string} formats and time stamps.  That
 coding system is also used for decoding non-@acronym{ASCII} keyboard
-input on the X Window System.  You should choose a coding system that is compatible
+input on the X Window System and for encoding text sent to the
+standard output and error streams when in batch mode.  You should
+choose a coding system that is compatible
 with the underlying system's text representation, which is normally
 specified by one of the environment variables @env{LC_ALL},
 @env{LC_CTYPE}, and @env{LANG}.  (The first one, in the order
@@ -1209,7 +1217,7 @@ using the internal Emacs representation.
   When Emacs runs on MS-Windows versions that are descendants of the
 NT family (Windows 2000, XP, Vista, Windows 7, and Windows 8), the
 value of @code{file-name-coding-system} is largely ignored, as Emacs
-by default uses APIs that allow to pass Unicode file names directly.
+by default uses APIs that allow passing Unicode file names directly.
 By contrast, on Windows 9X, file names are encoded using
 @code{file-name-coding-system}, which should be set to the codepage
 (@pxref{Coding Systems, codepage}) pertinent for the current system
@@ -1361,6 +1369,13 @@ Resources}).
 characters the font does not cover.  The standard fontset is only used if
 explicitly requested, despite its name.
 
+@findex describe-fontset
+  To show the information about a specific fontset, use the
+@w{@kbd{M-x describe-fontset}} command.  It prompts for a fontset
+name, defaulting to the one used by the current frame, and then
+displays all the subranges of characters and the fonts assigned to
+them in that fontset.
+
   A fontset does not necessarily specify a font for every character
 code.  If a fontset specifies no font for a certain character, or if
 it specifies a font that does not exist on your system, then it cannot
@@ -1385,7 +1400,7 @@ of @code{standard-fontset-spec}.  This fontset's name is
 @noindent
 or just @samp{fontset-standard} for short.
 
-  On GNUstep and Mac OS X, the standard fontset is created using the value of
+  On GNUstep and macOS, the standard fontset is created using the value of
 @code{ns-standard-fontset-spec}, and on MS Windows it is
 created using the value of @code{w32-standard-fontset-spec}.
 
@@ -1555,6 +1570,20 @@ used.  Some examples are:
 
 @end example
 
+@cindex ignore font
+@cindex fonts, how to ignore
+@vindex face-ignored-fonts
+  Some fonts installed on your system might be broken, or produce
+unpleasant results for characters for which they are used, and you may
+wish to instruct Emacs to completely ignore them while searching for a
+suitable font required to display a character.  You can do that by
+adding the offending fonts to the value of @code{face-ignored-fonts}
+variable, which is a list.  Here's an example to put in your
+@file{~/.emacs}:
+
+@example
+(add-to-list 'face-ignored-fonts "Some Bad Font")
+@end example
 
 @node Undisplayable Characters
 @section Undisplayable Characters
@@ -1626,7 +1655,7 @@ so far.
 @cindex 8-bit display
   Normally non-ISO-8859 characters (decimal codes between 128 and 159
 inclusive) are displayed as octal escapes.  You can change this for
-non-standard ``extended'' versions of ISO-8859 character sets by using the
+non-standard extended versions of ISO-8859 character sets by using the
 function @code{standard-display-8bit} in the @code{disp-table} library.
 
   There are two ways to input single-byte non-@acronym{ASCII}
@@ -1660,7 +1689,7 @@ characters present directly on the keyboard or using @key{Compose} or
 @cindex compose character
 @cindex dead character
 @item
-You can use the key @kbd{C-x 8} as a ``compose character'' prefix for
+You can use the key @kbd{C-x 8} as a compose-character prefix for
 entry of non-@acronym{ASCII} Latin-1 and a few other printing
 characters.  @kbd{C-x 8} is good for insertion (in the minibuffer as
 well as other buffers), for searching, and in any other context where
@@ -1670,7 +1699,7 @@ a key sequence is allowed.
 library is loaded, the @key{Alt} modifier key, if the keyboard has
 one, serves the same purpose as @kbd{C-x 8}: use @key{Alt} together
 with an accent character to modify the following letter.  In addition,
-if the keyboard has keys for the Latin-1 ``dead accent characters'',
+if the keyboard has keys for the Latin-1 dead accent characters,
 they too are defined to compose with the following character, once
 @code{iso-transl} is loaded.
 
@@ -1688,13 +1717,13 @@ addition to some charsets of its own (such as @code{emacs},
 @code{unicode-bmp}, and @code{eight-bit}).  All supported characters
 belong to one or more charsets.
 
-  Emacs normally ``does the right thing'' with respect to charsets, so
+  Emacs normally does the right thing with respect to charsets, so
 that you don't have to worry about them.  However, it is sometimes
 helpful to know some of the underlying details about charsets.
 
   One example is font selection (@pxref{Fonts}).  Each language
-environment (@pxref{Language Environments}) defines a ``priority
-list'' for the various charsets.  When searching for a font, Emacs
+environment (@pxref{Language Environments}) defines a priority
+list for the various charsets.  When searching for a font, Emacs
 initially attempts to find one that can display the highest-priority
 charsets.  For instance, in the Japanese language environment, the
 charset @code{japanese-jisx0208} has the highest priority, so Emacs
@@ -1714,9 +1743,13 @@ internal representation within Emacs.
 @findex list-character-sets
   @kbd{M-x list-character-sets} displays a list of all supported
 charsets.  The list gives the names of charsets and additional
-information to identity each charset; see the
-@url{http://www.itscj.ipsj.or.jp/ISO-IR/, International Register of
-Coded Character Sets} for more details.  In this list,
+information to identity each charset; for more details, see the
+@url{https://www.itscj.ipsj.or.jp/itscj_english/iso-ir/ISO-IR.pdf,
+ISO International Register of Coded Character Sets to be Used with
+Escape Sequences (ISO-IR)} maintained by
+the @url{https://www.itscj.ipsj.or.jp/itscj_english/,
+Information Processing Society of Japan/Information Technology
+Standards Commission of Japan (IPSJ/ITSCJ)}.  In this list,
 charsets are divided into two categories: @dfn{normal charsets} are
 listed first, followed by @dfn{supplementary charsets}.  A
 supplementary charset is one that is used to define another charset

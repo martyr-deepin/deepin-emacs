@@ -1,6 +1,6 @@
 /* euidaccess -- check if effective user id can access file
 
-   Copyright (C) 1990-1991, 1995, 1998, 2000, 2003-2006, 2008-2015 Free
+   Copyright (C) 1990-1991, 1995, 1998, 2000, 2003-2006, 2008-2017 Free
    Software Foundation, Inc.
 
    This file is part of the GNU C Library.
@@ -197,8 +197,6 @@ weak_alias (__euidaccess, euidaccess)
 # include <stdio.h>
 # include <stdlib.h>
 
-char *program_name;
-
 int
 main (int argc, char **argv)
 {
@@ -206,7 +204,6 @@ main (int argc, char **argv)
   int mode;
   int err;
 
-  program_name = argv[0];
   if (argc < 3)
     abort ();
   file = argv[1];

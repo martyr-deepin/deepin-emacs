@@ -1,6 +1,6 @@
 ;; idlwave.el --- IDL editing mode for GNU Emacs
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Authors: J.D. Smith <jdsmith@as.arizona.edu>
 ;;          Carsten Dominik <dominik@science.uva.nl>
@@ -293,7 +293,7 @@ extends to the end of the match for the regular expression."
 (defcustom idlwave-auto-fill-split-string t
   "If non-nil then auto fill will split strings with the IDL `+' operator.
 When the line end falls within a string, string concatenation with the
-'+' operator will be used to distribute a long string over lines.
+`+' operator will be used to distribute a long string over lines.
 If nil and a string is split then a terminal beep and warning are issued.
 
 This variable is ignored when `idlwave-fill-comment-line-only' is
@@ -376,7 +376,7 @@ The following values are allowed:
 
 nil       Don't scan any buffers.
 t         Scan all `idlwave-mode' buffers in the current editing session.
-current   Scan only the current buffer, but no other buffers."
+`current' Scan only the current buffer, but no other buffers."
   :group 'idlwave-routine-info
   :type '(choice
 	  (const :tag "No buffer" nil)
@@ -420,22 +420,22 @@ A value of t means to show all source files."
   :type 'integer)
 
 (defcustom idlwave-library-path nil
-  "Library path for Windows and MacOS (OS9).  Not needed under UNIX.
+  "Library path for Windows and Mac OS (OS9).  Not needed under UNIX.
 When selecting the directories to scan for IDL user catalog routine
 info, IDLWAVE can, under UNIX, query the shell for the exact search
-path \(the value of !PATH).  However, under Windows and MacOS
-\(pre-OSX), the IDLWAVE shell does not work.  In this case, this
-variable can be set to specify the paths where IDLWAVE can find PRO
-files.  The shell will only be asked for a list of paths when this
-variable is nil.  The value is a list of directories.  A directory
+path (the value of !PATH).  However, under MS-Windows, the
+IDLWAVE shell does not work.  In this case, this variable can be
+set to specify the paths where IDLWAVE can find PRO files.  The
+shell will only be asked for a list of paths when this variable
+is nil.  The value is a list of directories.  A directory
 preceded by a `+' will be searched recursively.  If you set this
-variable on a UNIX system, the shell will not be queried.  See also
-`idlwave-system-directory'."
+variable on a UNIX system, the shell will not be queried.  See
+also `idlwave-system-directory'."
   :group 'idlwave-routine-info
   :type '(repeat (directory)))
 
 (defcustom idlwave-system-directory ""
-  "The IDL system directory for Windows and MacOS.  Not needed under
+  "The IDL system directory for Windows and Mac OS.  Not needed under
 UNIX.  Set this to the value of the `!DIR' system variable in IDL.
 IDLWAVE uses this to find out which of the library routines belong to
 the official system library.  All files inside the `lib' subdirectory
@@ -742,8 +742,8 @@ The actions that can be performed are listed in `idlwave-indent-action-table'."
 
 (defcustom idlwave-abbrev-start-char "\\"
   "A single character string used to start abbreviations in abbrev mode.
-Possible characters to chose from: ~`\%
-or even '?'.  '.' is not a good choice because it can make structure
+Possible characters to choose from: ~\\=`%
+or even `?'.  `.' is not a good choice because it can make structure
 field names act like abbrevs in certain circumstances.
 
 Changes to this in `idlwave-mode-hook' will have no effect.  Instead a user
@@ -768,8 +768,8 @@ Also see help for `idlwave-surround'."
   :type 'boolean)
 
 (defcustom idlwave-pad-keyword t
-  "Non-nil means pad '=' in keywords (routine calls or defs) like assignment.
-Whenever `idlwave-surround' is non-nil then this affects how '=' is
+  "Non-nil means pad `=' in keywords (routine calls or defs) like assignment.
+Whenever `idlwave-surround' is non-nil then this affects how `=' is
 padded for keywords and for variables.  If t, pad the same as for
 assignments.  If nil then spaces are removed.  With any other value,
 spaces are left unchanged."
@@ -808,7 +808,7 @@ See `idlwave-check-abbrev'."
 (defcustom idlwave-abbrev-change-case nil
   "Non-nil means all abbrevs will be forced to either upper or lower case.
 If the value t, all expanded abbrevs will be upper case.
-If the value is 'down then abbrevs will be forced to lower case.
+If the value is `down' then abbrevs will be forced to lower case.
 If nil, the case will not change.
 If `idlwave-reserved-word-upcase' is non-nil, reserved words will always be
 upper case, regardless of this variable."
@@ -963,7 +963,7 @@ a file."
 
 (defcustom idlwave-doc-modifications-keyword "HISTORY"
   "The modifications keyword to use with the log documentation commands.
-A ':' is added to the keyword end.
+A `:' is added to the keyword end.
 Inserted by doc-header and used to position logs by doc-modification.
 If nil it will not be inserted."
   :group 'idlwave-documentation
@@ -999,7 +999,7 @@ it without compromising backwards-compatibility."
 (defcustom idlwave-shell-command-line-options nil
   "A list of command line options for calling the IDL program.
 Since IDL is executed directly without going through a shell like /bin/sh,
-this should be a list of strings like '(\"-rt=file\" \"-nw\") with a separate
+this should be a list of strings like (\"-rt=file\" \"-nw\") with a separate
 string for each argument.  But you may also give a single string which
 contains the options whitespace-separated.  Emacs will be kind enough to
 split it for you."
@@ -1021,7 +1021,7 @@ Obsolete, if the IDL Assistant is being used for help."
 Will be used to bind debugging commands in the shell buffer and in all
 source buffers.  These are additional convenience bindings, the debugging
 commands are always available with the `C-c C-d' prefix.
-If you set this to '(control shift), this means setting a breakpoint will
+If you set this to (control shift), this means setting a breakpoint will
 be on `C-S-b', compiling a source file on `C-S-c' etc.  Possible modifiers
 are `control', `meta', `super', `hyper', `alt', and `shift'."
   :group 'idlwave-shell-general-setup
@@ -1557,25 +1557,25 @@ KEY is a string - same as for the `define-key' function.  CMD is a
 function of no arguments or a list to be evaluated.  CMD is bound to
 KEY in `idlwave-mode-map' by defining an anonymous function calling
 `self-insert-command' followed by CMD.  If KEY contains more than one
-character a binding will only be set if SELECT is 'both.
+character a binding will only be set if SELECT is `both'.
 
-\(KEY . CMD\) is also placed in the `idlwave-indent-expand-table',
+\(KEY . CMD) is also placed in the `idlwave-indent-expand-table',
 replacing any previous value for KEY.  If a binding is not set then it
 will instead be placed in `idlwave-indent-action-table'.
 
 If the optional argument SELECT is nil then an action and binding are
-created.  If SELECT is 'noaction, then a binding is always set and no
-action is created.  If SELECT is 'both then an action and binding
+created.  If SELECT is `noaction', then a binding is always set and no
+action is created.  If SELECT is `both' then an action and binding
 will both be created even if KEY contains more than one character.
 Otherwise, if SELECT is non-nil then only an action is created.
 
 Some examples:
 No spaces before and 1 after a comma
-   (idlwave-action-and-binding \",\"  '(idlwave-surround 0 1))
+   (idlwave-action-and-binding \",\"  \\='(idlwave-surround 0 1))
 A minimum of 1 space before and after `=' (see `idlwave-expand-equal').
-   (idlwave-action-and-binding \"=\"  '(idlwave-expand-equal -1 -1))
+   (idlwave-action-and-binding \"=\"  \\='(idlwave-expand-equal -1 -1))
 Capitalize system variables - action only
-   (idlwave-action-and-binding idlwave-sysvar '(capitalize-word 1) t)"
+   (idlwave-action-and-binding idlwave-sysvar \\='(capitalize-word 1) t)"
   (if (not (equal select 'noaction))
       ;; Add action
       (let* ((table (if select 'idlwave-indent-action-table
@@ -1837,7 +1837,7 @@ The main features of this mode are
 5. Code Templates and Abbreviations
    --------------------------------
    Many Abbreviations are predefined to expand to code fragments and templates.
-   The abbreviations start generally with a `\\`.  Some examples:
+   The abbreviations start generally with a `\\'.  Some examples:
 
    \\pr        PROCEDURE template
    \\fu        FUNCTION template
@@ -2047,7 +2047,7 @@ If optional argument RESERVED is non-nil then the expansion
 consists of reserved words, which will be capitalized if
 `idlwave-reserved-word-upcase' is non-nil.
 Otherwise, the abbrev will be capitalized if `idlwave-abbrev-change-case'
-is non-nil, unless its value is \`down in which case the abbrev will be
+is non-nil, unless its value is `down' in which case the abbrev will be
 made into all lowercase.
 Returns non-nil if abbrev is left expanded."
   (if (idlwave-quoted)
@@ -2118,7 +2118,7 @@ An END token must be preceded by whitespace."
   (if (not (idlwave-quoted))
       (if
 	  (save-excursion
-	    (backward-word 1)
+	    (backward-word-strictly 1)
 	    (backward-char 1)
 	    (looking-at "[ \t\n\f]"))
 	  (idlwave-show-begin))))
@@ -2435,13 +2435,13 @@ If prefix ARG < 0 then move forward to enclosing block end."
   "Go to the beginning of the current block."
   (interactive)
   (idlwave-block-jump-out -1 'nomark)
-  (forward-word 1))
+  (forward-word-strictly 1))
 
 (defun idlwave-end-of-block ()
   "Go to the beginning of the current block."
   (interactive)
   (idlwave-block-jump-out 1 'nomark)
-  (backward-word 1))
+  (backward-word-strictly 1))
 
 (defun idlwave-forward-block (&optional arg)
   "Move across next nested block."
@@ -2690,7 +2690,7 @@ statement."
           (append st (match-end 0))))))
 
 (defun idlwave-expand-equal (&optional before after is-action)
-  "Pad '=' with spaces.
+  "Pad `=' with spaces.
 Two cases: Assignment statement, and keyword assignment.
 Which case is determined using `idlwave-start-of-substatement' and
 `idlwave-statement-type'.  The equal sign will be surrounded by BEFORE
@@ -2835,7 +2835,7 @@ ACTION is a list (REG . FUNC).  REG is a regular expression.  FUNC is
 either a function name to be called with `funcall' or a list to be
 evaluated with `eval'.  The action performed by FUNC should leave
 point after the match for REG - otherwise an infinite loop may be
-entered.  FUNC is always passed a final argument of 'is-action, so it
+entered.  FUNC is always passed a final argument of `is-action', so it
 can discriminate between being run as an action, or a key binding."
   (let ((action-key (car action))
         (action-routine (cdr action)))
@@ -3150,12 +3150,12 @@ possibility of unbalanced blocks."
     (if (>= dir 0) (end-of-line)) ;Make sure we are in current block
     (if (setq found (idlwave-find-key  block-reg dir t unit-limit))
         (while (and found (looking-at block-limit))
-          (if (>= dir 0) (forward-word 1))
+          (if (>= dir 0) (forward-word-strictly 1))
           (idlwave-block-jump-out dir t)
           (setq found (idlwave-find-key block-reg dir t unit-limit))))
     (if (not nomark) (push-mark here))
     (if (not found) (goto-char unit-limit)
-      (if (>= dir 0) (forward-word 1)))))
+      (if (>= dir 0) (forward-word-strictly 1)))))
 
 (defun idlwave-min-current-statement-indent (&optional end-reg)
   "The minimum indent in the current statement."
@@ -4881,7 +4881,7 @@ Cache to disk for quick recovery."
 	      props (car (cdr elem)))
 	(if (= (mod elem-cnt msg-cnt) 0)
 	    (message "Converting XML routine info...%2d%%"
-		     (/ (* elem-cnt 100) nelem)))
+		     (floor (* elem-cnt 100.0) nelem)))
 	(cond
 	 ((eq type 'ROUTINE)
 	  (if (setq alias (assq 'alias_to props))
@@ -5833,15 +5833,15 @@ to override IDLWAVE's idea of what should be completed at point.
 Possible values are:
 
 0  <=>  query for the completion type
-1  <=>  'procedure
-2  <=>  'procedure-keyword
-3  <=>  'function
-4  <=>  'function-keyword
-5  <=>  'procedure-method
-6  <=>  'procedure-method-keyword
-7  <=>  'function-method
-8  <=>  'function-method-keyword
-9  <=>  'class
+1  <=>  `procedure'
+2  <=>  `procedure-keyword'
+3  <=>  `function'
+4  <=>  `function-keyword'
+5  <=>  `procedure-method'
+6  <=>  `procedure-method-keyword'
+7  <=>  `function-method'
+8  <=>  `function-method-keyword'
+9  <=>  `class'
 
 As a special case, the universal argument C-u forces completion of
 function names in places where the default would be a keyword.
@@ -6240,7 +6240,7 @@ If yes, return the index (>=1)."
 
 (defun idlwave-all-method-classes (method &optional type)
   "Return all classes which have a method METHOD.
-TYPE is 'fun or 'pro.
+TYPE is `fun' or `pro'.
 When TYPE is not specified, both procedures and functions will be considered."
   (if (null method)
       (mapcar 'car (idlwave-class-alist))
@@ -6255,7 +6255,7 @@ When TYPE is not specified, both procedures and functions will be considered."
 
 (defun idlwave-all-method-keyword-classes (method keyword &optional type)
   "Return all classes which have a method METHOD with keyword KEYWORD.
-TYPE is 'fun or 'pro.
+TYPE is `fun' or `pro'.
 When TYPE is not specified, both procedures and functions will be considered."
   (if (or (null method)
 	  (null keyword))
@@ -6325,7 +6325,7 @@ Must accept two arguments: `apos' and `info'.")
 	 (is-self
 	  (and arrow
 	       (save-excursion (goto-char apos)
-			       (forward-word -1)
+			       (forward-word-strictly -1)
 			       (let ((case-fold-search t))
 				 (looking-at "self\\>")))))
 	 (force-query idlwave-force-class-query)
@@ -6644,8 +6644,8 @@ This function is not general, can only be used for completion stuff."
 					special-selector)
   "Perform TYPE completion of word before point against LIST.
 SELECTOR is the PREDICATE argument for the completion function.  Show
-PROMPT in echo area.  TYPE is one of the intern types, e.g. 'function,
-'procedure, 'class-tag, 'keyword, 'sysvar, etc.  SPECIAL-SELECTOR is
+PROMPT in echo area.  TYPE is one of the intern types, e.g., `function',
+`procedure', `class-tag', `keyword', `sysvar'.  SPECIAL-SELECTOR is
 used only once, for `all-completions', and can be used to, e.g.,
 accumulate information on matching completions."
   (let* ((completion-ignore-case t)
@@ -8162,7 +8162,7 @@ demand _EXTRA in the keyword list."
 			       class
 			       (idlwave-routines)) 'do-link))))))
 
-    ;; If the class is `t', combine all keywords of all methods NAME
+    ;; If the class is t, combine all keywords of all methods NAME
     (when (eq class t)
       (mapc (lambda (entry)
 	      (and
@@ -8694,7 +8694,7 @@ can be used to detect possible name clashes during this process."
       (erase-buffer)
       (while (setq routine (pop routines))
 	(if (= (mod (setq n (1+ n)) step) 0)
-	    (message "Compiling list...(%2d%%)" (/ (* n 100) nroutines)))
+	    (message "Compiling list...(%2d%%)" (floor (* n 100.0) nroutines)))
 
 	;; Get a list of all twins
 	(setq twins (idlwave-routine-twins routine (or lroutines routines)))

@@ -1,7 +1,7 @@
 /* sha512.c - Functions to compute SHA512 and SHA384 message digest of files or
    memory blocks according to the NIST specification FIPS-180-2.
 
-   Copyright (C) 2005-2006, 2008-2015 Free Software Foundation, Inc.
+   Copyright (C) 2005-2006, 2008-2017 Free Software Foundation, Inc.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -387,7 +387,7 @@ sha512_process_bytes (const void *buffer, size_t len, struct sha512_ctx *ctx)
   /* Process available complete blocks.  */
   if (len >= 128)
     {
-#if !_STRING_ARCH_unaligned
+#if !(_STRING_ARCH_unaligned || _STRING_INLINE_unaligned)
 # define UNALIGNED_P(p) ((uintptr_t) (p) % alignof (u64) != 0)
       if (UNALIGNED_P (buffer))
         while (len > 128)

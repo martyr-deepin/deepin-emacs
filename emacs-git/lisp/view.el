@@ -1,6 +1,6 @@
 ;;; view.el --- peruse file or buffer without editing
 
-;; Copyright (C) 1985, 1989, 1994-1995, 1997, 2000-2015 Free Software
+;; Copyright (C) 1985, 1989, 1994-1995, 1997, 2000-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Author: K. Shane Hartman
@@ -48,7 +48,7 @@
   "Peruse file or buffer without editing."
   :link '(function-link view-mode)
   :link '(custom-manual "(emacs)Misc File Ops")
-  :group 'wp)
+  :group 'text)
 
 (defcustom view-highlight-face 'highlight
    "The face used for highlighting the match found by View mode search."
@@ -429,7 +429,7 @@ x	exchanges point and mark.
 	  Mark ring is pushed at start of every successful search and when
 	  jump to line occurs.  The mark is set on jump to buffer start or end.
 \\[point-to-register]	save current position in character register.
-'	go to position saved in character register.
+\\='	go to position saved in character register.
 s	do forward incremental search.
 r	do reverse incremental search.
 \\[View-search-regexp-forward]	searches forward for regular expression, starting after current page.

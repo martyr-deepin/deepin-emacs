@@ -1,6 +1,6 @@
 ;;; viper-init.el --- some common definitions for Viper
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2017 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Package: viper
@@ -102,7 +102,7 @@ docstring.  The variable becomes buffer-local whenever set."
   (declare (indent defun))
   `(progn
     (defvar ,var ,default-value
-      ,(format "%s\n\(buffer local\)" documentation))
+      ,(format "%s\n(buffer local)" documentation))
     (make-variable-buffer-local ',var)))
 
 ;; (viper-loop COUNT BODY) Execute BODY COUNT times.
@@ -279,7 +279,7 @@ The minor mode viper-vi-diehard-minor-mode is in effect when
 viper-expert-level is 1 or 2 or when viper-want-emacs-keys-in-vi is t.
 The minor mode viper-insert-diehard-minor-mode is in effect when
 viper-expert-level is 1 or 2 or if viper-want-emacs-keys-in-insert is t.
-Use `M-x viper-set-expert-level' to change this.")
+Use `\\[viper-set-expert-level]' to change this.")
 
 ;; Max expert level supported by Viper.  This is NOT a user option.
 ;; It is here to make it hard for the user from resetting it.
@@ -368,15 +368,6 @@ Use `M-x viper-set-expert-level' to change this.")
 
 
 ;; VI-style Undo
-
-;; Used to 'undo' complex commands, such as replace and insert commands.
-(viper-deflocalvar viper-undo-needs-adjustment nil)
-(put 'viper-undo-needs-adjustment 'permanent-local t)
-
-;; A mark that Viper puts on buffer-undo-list.  Marks the beginning of a
-;; complex command that must be undone atomically.  If inserted, it is
-;; erased by viper-change-state-to-vi and viper-repeat.
-(defconst viper-buffer-undo-list-mark 'viper)
 
 (defcustom viper-keep-point-on-undo nil
   "Non-nil means not to move point while undoing commands.
@@ -583,7 +574,7 @@ the Insert state."
 
 (defcustom viper-keep-point-on-repeat t
   "If t, don't move point when repeating previous command.
-This is useful for doing repeated changes with the '.' key.
+This is useful for doing repeated changes with the `.' key.
 The user can change this to nil, if she likes when the cursor moves
 to a new place after repeating previous Vi command."
   :type 'boolean
@@ -778,7 +769,7 @@ Related buffers can be cycled through via :R and :P commands."
 	  "^\\\\[sb][a-z]*{.*}\\s-*$\\|"	    		; latex
 	  "^@node\\|@table\\|^@m?enu\\|^@itemize\\|^@if\\|"	; texinfo
 	  "^.+:-")			                        ; prolog
-  "Regexps for Headings.  Used by \[\[ and \]\].")
+  "Regexps for Headings.  Used by [[ and ]].")
 
 (defvar viper-heading-end
   (concat "^}\\|"						; C/C++
@@ -786,7 +777,7 @@ Related buffers can be cycled through via :R and :P commands."
 	  "^@end \\|"						; texinfo
 	  ")\n\n[ \t\n]*\\|"					; lisp
 	  "\\.\\s-*$")						; prolog
-      "*Regexps to end Headings/Sections.  Used by \[\].")
+  "Regexps to end Headings/Sections.  Used by [].")
 
 
 ;; These two vars control the interaction of jumps performed by ' and `.

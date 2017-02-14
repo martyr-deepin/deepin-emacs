@@ -1,6 +1,6 @@
 ;;; vc-dispatcher.el -- generic command-dispatcher facility.  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author:     FSF (see below for full credits)
 ;; Maintainer: Eric S. Raymond <esr@thyrsus.com>
@@ -171,6 +171,12 @@ Another is that undo information is not kept."
   (let ((camefrom (current-buffer))
 	(olddir default-directory))
     (set-buffer (get-buffer-create buf))
+    (let ((oldproc (get-buffer-process (current-buffer))))
+      ;; If we wanted to wait for oldproc to finish before doing
+      ;; something, we'd have used vc-eval-after.
+      ;; Use `delete-process' rather than `kill-process' because we don't
+      ;; want any of its output to appear from now on.
+      (when oldproc (delete-process oldproc)))
     (kill-all-local-variables)
     (set (make-local-variable 'vc-parent-buffer) camefrom)
     (set (make-local-variable 'vc-parent-buffer-name)
@@ -302,12 +308,6 @@ case, and the process object in the asynchronous case."
 		  (eq buffer (current-buffer)))
 	(vc-setup-buffer buffer))
       ;; If there's some previous async process still running, just kill it.
-      (let ((oldproc (get-buffer-process (current-buffer))))
-        ;; If we wanted to wait for oldproc to finish before doing
-        ;; something, we'd have used vc-eval-after.
-        ;; Use `delete-process' rather than `kill-process' because we don't
-        ;; want any of its output to appear from now on.
-        (when oldproc (delete-process oldproc)))
       (let ((squeezed (remq nil flags))
 	    (inhibit-read-only t)
 	    (status 0))
@@ -580,12 +580,20 @@ editing!"
 (defun vc-buffer-sync (&optional not-urgent)
   "Make sure the current buffer and its working file are in sync.
 NOT-URGENT means it is ok to continue if the user says not to save."
-  (when (buffer-modified-p)
-    (if (or vc-suppress-confirm
-	    (y-or-n-p (format "Buffer %s modified; save it? " (buffer-name))))
-	(save-buffer)
-      (unless not-urgent
-	(error "Aborted")))))
+  (let (missing)
+    (when (cond
+           ((buffer-modified-p))
+           ((not (file-exists-p buffer-file-name))
+            (setq missing t)))
+      (if (or vc-suppress-confirm
+              (y-or-n-p (format "Buffer %s %s; save it? "
+                                (buffer-name)
+                                (if missing
+                                    "is missing on disk"
+                                  "modified"))))
+          (save-buffer)
+        (unless not-urgent
+          (error "Aborted"))))))
 
 ;; Command closures
 
@@ -661,7 +669,7 @@ BACKEND, if non-nil, specifies a VC backend for the Log Edit buffer."
     (make-local-variable 'vc-log-after-operation-hook)
     (when after-hook
       (setq vc-log-after-operation-hook after-hook))
-    (setq vc-log-operation action)
+    (set (make-local-variable 'vc-log-operation) action)
     (when comment
       (erase-buffer)
       (when (stringp comment) (insert comment)))
@@ -703,6 +711,7 @@ the buffer contents as a comment."
       (funcall log-operation
 	       log-fileset
 	       log-entry))
+    (setq vc-log-operation nil)
 
     ;; Quit windows on logbuf.
     (cond

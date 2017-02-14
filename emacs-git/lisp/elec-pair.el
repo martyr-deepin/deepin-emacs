@@ -1,6 +1,6 @@
 ;;; elec-pair.el --- Automatic parenthesis pairing  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2013-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2017 Free Software Foundation, Inc.
 
 ;; Author: João Távora <joaotavora@gmail.com>
 
@@ -28,7 +28,9 @@
 ;;; Electric pairing.
 
 (defcustom electric-pair-pairs
-  '((?\" . ?\"))
+  '((?\" . ?\")
+    ((nth 0 electric-quote-chars) . (nth 1 electric-quote-chars))
+    ((nth 2 electric-quote-chars) . (nth 3 electric-quote-chars)))
   "Alist of pairs that should be used regardless of major mode.
 
 Pairs of delimiters in this list are a fallback in case they have
@@ -42,7 +44,9 @@ See also the variable `electric-pair-text-pairs'."
 
 ;;;###autoload
 (defcustom electric-pair-text-pairs
-  '((?\" . ?\" ))
+  '((?\" . ?\" )
+    ((nth 0 electric-quote-chars) . (nth 1 electric-quote-chars))
+    ((nth 2 electric-quote-chars) . (nth 3 electric-quote-chars)))
   "Alist of pairs that should always be used in comments and strings.
 
 Pairs of delimiters in this list are a fallback in case they have
@@ -499,7 +503,7 @@ happened."
                   (not (funcall electric-pair-inhibit-predicate
                                 last-command-event))))
          (save-excursion (electric-pair--insert pair)))))
-      (t
+      (_
        (when (and (if (functionp electric-pair-open-newline-between-pairs)
                       (funcall electric-pair-open-newline-between-pairs)
                     electric-pair-open-newline-between-pairs)

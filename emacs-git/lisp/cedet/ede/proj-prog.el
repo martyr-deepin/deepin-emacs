@@ -1,6 +1,6 @@
 ;;; ede-proj-prog.el --- EDE Generic Project program support
 
-;; Copyright (C) 1998-2001, 2005, 2008-2015 Free Software Foundation,
+;; Copyright (C) 1998-2001, 2005, 2008-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
@@ -62,7 +62,7 @@ specified with ldlibs.")
 	   "Libraries, such as \"m\" or \"Xt\" which this program depends on.
 The linker flag \"-l\" is automatically prepended.  Do not include a \"lib\"
 prefix, or a \".so\" suffix.
-Use the 'ldflags' slot to specify where in-project libraries might be.
+Use the `ldflags' slot to specify where in-project libraries might be.
 
 Note: Currently only used for Automake projects."
 	   )

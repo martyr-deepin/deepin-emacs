@@ -1,6 +1,6 @@
 ;;; semantic/util-modes.el --- Semantic minor modes
 
-;; Copyright (C) 2000-2005, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2005, 2007-2017 Free Software Foundation, Inc.
 
 ;; Authors: Eric M. Ludlam <zappo@gnu.org>
 ;;          David Ponce <david@dponce.com>
@@ -712,7 +712,7 @@ minor mode is enabled."
 	  ;; Disable minor mode if semantic stuff not available
 	  (setq semantic-stickyfunc-mode nil)
 	  (error "Buffer %s was not set up for parsing" (buffer-name)))
-	(unless (boundp 'default-header-line-format)
+	(unless (boundp 'header-line-format)
 	  ;; Disable if there are no header lines to use.
 	  (setq semantic-stickyfunc-mode nil)
 	  (error "Sticky Function mode requires Emacs"))

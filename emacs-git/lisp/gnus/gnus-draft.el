@@ -1,6 +1,6 @@
 ;;; gnus-draft.el --- draft message support for Gnus
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -31,9 +31,6 @@
 (require 'nndraft)
 (require 'gnus-agent)
 (eval-when-compile (require 'cl))
-(eval-when-compile
-  (when (featurep 'xemacs)
-    (require 'easy-mmode))) ; for `define-minor-mode'
 
 ;;; Draft minor mode
 
@@ -320,7 +317,7 @@ If DONT-POP is nil, display the buffer after setting it up."
 	(let* ((window (get-buffer-window buff t))
 	       (frame (and window (window-frame window))))
 	  (if frame
-	      (gnus-select-frame-set-input-focus frame)
+	      (select-frame-set-input-focus frame)
 	    (pop-to-buffer buff t)))
 	(error "The draft %s is under edit" file)))))
 

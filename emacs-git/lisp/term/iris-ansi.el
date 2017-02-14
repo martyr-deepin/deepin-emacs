@@ -1,6 +1,6 @@
 ;;; iris-ansi.el --- configure Emacs for SGI xwsh and winterm apps
 
-;; Copyright (C) 1997, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Dan Nicolaescu <dann@ics.uci.edu>
 
@@ -326,5 +326,7 @@
   (let ((m (copy-keymap iris-function-map)))
     (set-keymap-parent m (keymap-parent input-decode-map))
     (set-keymap-parent input-decode-map m)))
+
+(provide 'term/iris-ansi)
 
 ;;; iris-ansi.el ends here

@@ -1,6 +1,6 @@
 ;;; nneething.el --- arbitrary file access for Gnus
 
-;; Copyright (C) 1995-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	Masanobu UMEDA <umerin@flab.flab.fujitsu.junet>
@@ -106,7 +106,7 @@ included.")
 	  (and large
 	       (zerop (% count 20))
 	       (nnheader-message 5 "nneething: Receiving headers... %d%%"
-				 (/ (* count 100) number))))
+				 (floor (* count 100.0) number))))
 
 	(when large
 	  (nnheader-message 5 "nneething: Receiving headers...done"))
@@ -284,7 +284,7 @@ included.")
 (defun nneething-encode-file-name (file &optional coding-system)
   "Encode the name of the FILE in CODING-SYSTEM."
   (let ((pos 0) buf)
-    (setq file (mm-encode-coding-string
+    (setq file (encode-coding-string
 		file (or coding-system nnmail-pathname-coding-system)))
     (while (string-match "[^-0-9a-zA-Z_:/.]" file pos)
       (setq buf (cons (format "%%%02x" (aref file (match-beginning 0)))
@@ -300,7 +300,7 @@ included.")
       (setq buf (cons (string (string-to-number (match-string 1 file) 16))
 		      (cons (substring file pos (match-beginning 0)) buf))
 	    pos (match-end 0)))
-    (mm-decode-coding-string
+    (decode-coding-string
      (apply (function concat)
 	    (nreverse (cons (substring file pos) buf)))
      (or coding-system nnmail-pathname-coding-system))))

@@ -1,6 +1,6 @@
-;;; time.el --- display time, load and mail indicator in mode line of Emacs -*-coding: utf-8 -*-
+;;; time.el --- display time, load and mail indicator in mode line of Emacs
 
-;; Copyright (C) 1985-1987, 1993-1994, 1996, 2000-2015 Free Software
+;; Copyright (C) 1985-1987, 1993-1994, 1996, 2000-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -108,7 +108,10 @@ A value of nil means 1 <= hh <= 12, and an AM/PM suffix is used."
   :type 'boolean
   :group 'display-time)
 
-(defvar display-time-string nil)
+(defvar display-time-string nil
+  "String used in mode lines to display a time string.
+It should not be set directly, but is instead updated by the
+`display-time' function.")
 ;;;###autoload(put 'display-time-string 'risky-local-variable t)
 
 (defcustom display-time-hook nil
@@ -160,15 +163,8 @@ LABEL is a string to display as the label of that TIMEZONE's time."
 (defcustom display-time-world-list
   ;; Determine if zoneinfo style timezones are supported by testing that
   ;; America/New York and Europe/London return different timezones.
-  (let ((old-tz (getenv "TZ"))
-	gmt nyt)
-    (unwind-protect
-	(progn
-	  (setenv "TZ" "America/New_York")
-	  (setq nyt (format-time-string "%z"))
-	  (setenv "TZ" "Europe/London")
-	  (setq gmt (format-time-string "%z")))
-      (setenv "TZ" old-tz))
+  (let ((nyt (format-time-string "%z" nil "America/New_York"))
+        (gmt (format-time-string "%z" nil "Europe/London")))
     (if (string-equal nyt gmt)
         legacy-style-world-list
       zoneinfo-style-world-list))
@@ -176,7 +172,7 @@ LABEL is a string to display as the label of that TIMEZONE's time."
 Each element has the form (TIMEZONE LABEL).
 TIMEZONE should be in a format supported by your system.  See the
 documentation of `zoneinfo-style-world-list' and
-\`legacy-style-world-list' for two widely used formats.  LABEL is
+`legacy-style-world-list' for two widely used formats.  LABEL is
 a string to display as the label of that TIMEZONE's time."
   :group 'display-time
   :type '(repeat (list string string))
@@ -310,15 +306,15 @@ This expression is a list of expressions that can involve the keywords
 `seconds', all numbers in string form, and `monthname', `dayname', `am-pm',
 and `time-zone' all alphabetic strings, and `mail' a true/nil value.
 
-For example, the form
+For example:
 
-  '((substring year -2) \"/\" month \"/\" day
+   ((substring year -2) \"/\" month \"/\" day
     \" \" 24-hours \":\" minutes \":\" seconds
     (if time-zone \" (\") time-zone (if time-zone \")\")
     (if mail \" Mail\" \"\"))
 
 would give mode line times like `94/12/30 21:07:48 (UTC)'."
-  :type 'sexp
+  :type '(repeat sexp)
   :group 'display-time)
 
 (defun display-time-event-handler ()
@@ -523,25 +519,24 @@ See `display-time-world'."
   "Replace current buffer text with times in various zones, based on ALIST."
   (let ((inhibit-read-only t)
 	(buffer-undo-list t)
-	(old-tz (getenv "TZ"))
+	(now (current-time))
 	(max-width 0)
 	result fmt)
     (erase-buffer)
-    (unwind-protect
-	(dolist (zone alist)
-	  (let* ((label (cadr zone))
-		 (width (string-width label)))
-	    (setenv "TZ" (car zone))
-	    (push (cons label
-			(format-time-string display-time-world-time-format))
-		  result)
-	    (when (> width max-width)
-	      (setq max-width width))))
-      (setenv "TZ" old-tz))
+    (dolist (zone alist)
+      (let* ((label (cadr zone))
+	     (width (string-width label)))
+	(push (cons label
+		    (format-time-string display-time-world-time-format
+					now (car zone)))
+	      result)
+	(when (> width max-width)
+	  (setq max-width width))))
     (setq fmt (concat "%-" (int-to-string max-width) "s %s\n"))
     (dolist (timedata (nreverse result))
       (insert (format fmt (car timedata) (cdr timedata))))
-    (delete-char -1)))
+    (delete-char -1))
+  (goto-char (point-min)))
 
 ;;;###autoload
 (defun display-time-world ()

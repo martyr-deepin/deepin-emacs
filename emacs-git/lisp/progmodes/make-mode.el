@@ -1,6 +1,6 @@
 ;;; make-mode.el --- makefile editing commands for Emacs -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992, 1994, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 1994, 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Thomas Neumann <tom@smart.bo.open.de>
 ;;	Eric S. Raymond <esr@snark.thyrsus.com>
@@ -103,7 +103,6 @@
     (t (:reverse-video t)))
   "Face to use for highlighting leading spaces in Font-Lock mode."
   :group 'makefile)
-(define-obsolete-face-alias 'makefile-space-face 'makefile-space "22.1")
 
 (defface makefile-targets
   ;; This needs to go along both with foreground and background colors (i.e. shell)
@@ -291,7 +290,7 @@ not be enclosed in { } or ( )."
   ;; (spanning potentially several lines).
   ;; "^ *\\([^ \n\t][^:#= \t\n]*\\)[ \t]*\\(?:!=[ \t]*\\(\\(?:.+\\\\\n\\)*.+\\)\\|[*:+]?[:?]?=[ \t]*\\(\\(?:.*\\\\\n\\)*.*\\)\\)"
   ;; What about the define statement?  What about differentiating this for makepp?
-  "\\(?:^\\|^export\\|^override\\|:\\|: *override\\) *\\([^ \n\t][^:#= \t\n]*\\)[ \t]*\\(?:!=\\|[*:+]?[:?]?=\\)"
+  "\\(?:^\\|^export\\|^override\\|:\\|:[ \t]*override\\)[ \t]*\\([^ \n\t][^:#= \t\n]*\\)[ \t]*\\(?:!=\\|[*:+]?[:?]?=\\)"
   "Regex used to find macro assignment lines in a makefile.")
 
 (defconst makefile-var-use-regex
@@ -1455,7 +1454,7 @@ Fill comments, backslashed lines, and variable definitions specially."
 
 (defun makefile-browser-insert-continuation ()
   "Insert a makefile continuation.
-In the makefile buffer, go to (end-of-line), insert a \'\\\'
+In the makefile buffer, go to (end-of-line), insert a `\\'
 character, insert a new blank line, go to that line and indent by one TAB.
 This is most useful in the process of creating continued lines when copying
 large dependencies from the browser to the client buffer.
@@ -1502,7 +1501,7 @@ Insertion takes place at point."
   (if (zerop (+ (length targets) (length macros)))
       (progn
 	(beep)
-	(message "No macros or targets to browse! Consider running 'makefile-pickup-everything\'"))
+	(message "No macros or targets to browse! Consider running `makefile-pickup-everything'"))
     (let ((browser-buffer (get-buffer-create makefile-browser-buffer-name)))
 	(pop-to-buffer browser-buffer)
 	(makefile-browser-fill targets macros)

@@ -1,6 +1,6 @@
 ;;; sun.el --- keybinding for standard default sunterm keys
 
-;; Copyright (C) 1987, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1987, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Jeff Peck <peck@sun.com>
 ;; Keywords: terminals
@@ -157,5 +157,7 @@
       (while hooks
 	(eval (car hooks))
 	(setq hooks (cdr hooks))))))
+
+(provide 'term/sun)
 
 ;;; sun.el ends here

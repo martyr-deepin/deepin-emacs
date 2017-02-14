@@ -1,6 +1,6 @@
 ;;; semantic/lex.el --- Lexical Analyzer builder
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -739,8 +739,10 @@ a LOCAL option.")
 
 ;; Stack of nested blocks.
 (defvar semantic-lex-block-stack nil)
-;;(defvar semantic-lex-timeout 5
-;;  "*Number of sections of lexing before giving up.")
+;;(defcustom semantic-lex-timeout 5
+;;  "Number of sections of lexing before giving up."
+;;  :type 'integer
+;;  :group 'semantic)
 
 (defsubst semantic-lex-debug-break (token)
   "Break during lexical analysis at TOKEN."
@@ -1815,13 +1817,13 @@ to keep comments as part of the token stream.")
 (make-variable-buffer-local 'semantic-ignore-comments)
 
 (defvar semantic-flex-enable-newlines nil
-  "When flexing, report 'newlines as syntactic elements.
+  "When flexing, report newlines as syntactic elements.
 Useful for languages where the newline is a special case terminator.
 Only set this on a per mode basis, not globally.")
 (make-variable-buffer-local 'semantic-flex-enable-newlines)
 
 (defvar semantic-flex-enable-whitespace nil
-  "When flexing, report 'whitespace as syntactic elements.
+  "When flexing, report whitespace as syntactic elements.
 Useful for languages where the syntax is whitespace dependent.
 Only set this on a per mode basis, not globally.")
 (make-variable-buffer-local 'semantic-flex-enable-whitespace)

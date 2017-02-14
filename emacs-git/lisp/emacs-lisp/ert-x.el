@@ -1,6 +1,6 @@
 ;;; ert-x.el --- Staging area for experimental extensions to ERT  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008, 2010-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008, 2010-2017 Free Software Foundation, Inc.
 
 ;; Author: Lennart Borgman (lennart O borgman A gmail O com)
 ;;         Christian Ohler <ohler@gnu.org>
@@ -97,7 +97,7 @@ To be used in ERT tests.  If BODY finishes successfully, the test
 buffer is killed; if there is an error, the test buffer is kept
 around on error for further inspection.  Its name is derived from
 the name of the test and the result of NAME-FORM."
-  (declare (debug ((form) body))
+  (declare (debug ((":name" form) body))
            (indent 1))
   `(ert--call-with-test-buffer ,name-form (lambda () ,@body)))
 
@@ -137,7 +137,7 @@ the name of the test and the result of NAME-FORM."
 
 This effectively executes
 
-  \(apply (car COMMAND) (cdr COMMAND)\)
+  (apply (car COMMAND) (cdr COMMAND))
 
 and returns the same value, but additionally runs hooks like
 `pre-command-hook' and `post-command-hook', and sets variables
@@ -189,7 +189,7 @@ test for `called-interactively' in the command will fail."
   "Return a copy of S with all matches of REGEXPS removed.
 
 Elements of REGEXPS may also be two-element lists \(REGEXP
-SUBEXP\), where SUBEXP is the number of a subexpression in
+SUBEXP), where SUBEXP is the number of a subexpression in
 REGEXP.  In that case, only that subexpression will be removed
 rather than the entire match."
   ;; Use a temporary buffer since replace-match copies strings, which
@@ -214,8 +214,8 @@ property list, or no properties if there is no plist before it.
 
 As a simple example,
 
-\(ert-propertized-string \"foo \" '(face italic) \"bar\" \" baz\" nil \
-\" quux\"\)
+\(ert-propertized-string \"foo \" \\='(face italic) \"bar\" \" baz\" nil \
+\" quux\")
 
 would return the string \"foo bar baz quux\" where the substring
 \"bar baz\" has a `face' property with the value `italic'.
@@ -283,6 +283,30 @@ BUFFER defaults to current buffer.  Does not modify BUFFER."
         (when clone
           (let ((kill-buffer-query-functions nil))
             (kill-buffer clone)))))))
+
+
+(defmacro ert-with-message-capture (var &rest body)
+  "Execute BODY while collecting anything written with `message' in VAR.
+
+Capture all messages produced by `message' when it is called from
+Lisp, and concatenate them separated by newlines into one string.
+
+This is useful for separating the issuance of messages by the
+code under test from the behavior of the *Messages* buffer."
+  (declare (debug (symbolp body))
+           (indent 1))
+  (let ((g-advice (cl-gensym)))
+    `(let* ((,var "")
+            (,g-advice (lambda (func &rest args)
+                         (if (or (null args) (equal (car args) ""))
+                             (apply func args)
+                           (let ((msg (apply #'format-message args)))
+                             (setq ,var (concat ,var msg "\n"))
+                             (funcall func "%s" msg))))))
+       (advice-add 'message :around ,g-advice)
+       (unwind-protect
+           (progn ,@body)
+         (advice-remove 'message ,g-advice)))))
 
 
 (provide 'ert-x)

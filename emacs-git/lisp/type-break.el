@@ -1,6 +1,6 @@
 ;;; type-break.el --- encourage rests from typing at appropriate intervals  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1994-1995, 1997, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1994-1995, 1997, 2000-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Noah Friedman
@@ -45,7 +45,7 @@
 
 ;; If you find echo area messages annoying and would prefer to see messages
 ;; in the mode line instead, do M-x type-break-mode-line-message-mode
-;; or set the variable of the same name to `t'.
+;; or set the variable of the same name to t.
 
 ;; This program can truly cons up a storm because of all the calls to
 ;; `current-time' (which always returns fresh conses).  I'm dismayed by
@@ -133,7 +133,7 @@ keystroke even though they really require multiple keys to generate them.
 The command `type-break-guesstimate-keystroke-threshold' can be used to
 guess a reasonably good pair of values for this variable."
   :set-after '(type-break-interval)
-  :type 'sexp
+  :type '(cons (choice integer (const nil)) (choice integer (const nil)))
   :group 'type-break)
 
 (defcustom type-break-query-function 'yes-or-no-p
@@ -677,7 +677,7 @@ INTERVAL is the full length of an interval (defaults to TIME)."
 (defun type-break-check ()
   "Ask to take a typing break if appropriate.
 This may be the case either because the scheduled time has come \(and the
-minimum keystroke threshold has been reached\) or because the maximum
+minimum keystroke threshold has been reached) or because the maximum
 keystroke threshold has been exceeded."
   (type-break-file-keystroke-count)
   (let* ((min-threshold (car type-break-keystroke-threshold))
@@ -803,8 +803,9 @@ this or ask the user to start one right now."
    (type-break-mode-line-message-mode)
    (t
     (beep t)
-    (message "%sYou should take a typing break now.  Do `M-x type-break'."
-             (type-break-time-stamp))
+    (message "%sYou should take a typing break now.  Do `%s'."
+             (type-break-time-stamp)
+             (substitute-command-keys "\\[type-break]"))
     (sit-for 1)
     (beep t)
     ;; return nil so query caller knows to reset reminder, as if user

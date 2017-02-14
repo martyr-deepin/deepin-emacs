@@ -1,6 +1,6 @@
 ### @configure_input@
 
-# Copyright (C) 1994, 1996-2015 Free Software Foundation, Inc.
+# Copyright (C) 1994, 1996-2017 Free Software Foundation, Inc.
 
 # This file is part of GNU Emacs.
 
@@ -218,7 +218,6 @@ gnus.pdf: $(gnus_deps)
 	cp gnustmppdf.pdf $@
 	rm gnustmppdf.*
 
-${buildinfodir}/tramp.info tramp.html: EXTRA_OPTS = -D emacs
 ${buildinfodir}/tramp.info tramp.html: ${srcdir}/trampver.texi
 
 

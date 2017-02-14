@@ -1,6 +1,6 @@
 ;;; appt.el --- appointment notification functions
 
-;; Copyright (C) 1989-1990, 1994, 1998, 2001-2015 Free Software
+;; Copyright (C) 1989-1990, 1994, 1998, 2001-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Neil Mager <neilm@juliet.ll.mit.edu>
@@ -482,7 +482,9 @@ Usually just deletes the appointment buffer."
     (and window
          (or (eq window (frame-root-window (window-frame window)))
              (delete-window window))))
-  (kill-buffer appt-buffer-name)
+  (let ((buffer (get-buffer appt-buffer-name)))
+    (when buffer
+      (kill-buffer buffer)))
   (if appt-audible
       (beep 1)))
 
@@ -511,13 +513,13 @@ The default is `appt-message-warning-time'."
   (interactive "sTime (hh:mm[am/pm]): \nsMessage: \n\
 sMinutes before the appointment to start warning: ")
   (unless (string-match appt-time-regexp time)
-    (error "Unacceptable time-string"))
+    (user-error "Unacceptable time-string"))
   (and (stringp warntime)
        (setq warntime (unless (string-equal warntime "")
                         (string-to-number warntime))))
   (and warntime
        (not (integerp warntime))
-       (error "Argument WARNTIME must be an integer, or nil"))
+       (user-error "Argument WARNTIME must be an integer, or nil"))
   (or appt-timer (appt-activate))
   (let ((time-msg (list (list (appt-convert-time time))
                         (concat time " " msg) t)))

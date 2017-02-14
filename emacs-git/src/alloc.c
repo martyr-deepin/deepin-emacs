@@ -1,14 +1,14 @@
 /* Storage allocation and gc for GNU Emacs Lisp interpreter.
 
-Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2015 Free Software
+Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2017 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,21 +20,22 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <limits.h>		/* For CHAR_BIT.  */
-
-#ifdef ENABLE_CHECKING
-#include <signal.h>		/* For SIGABRT.  */
-#endif
+#include <signal.h>		/* For SIGABRT, SIGDANGER.  */
 
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
 
 #include "lisp.h"
-#include "process.h"
+#include "dispextern.h"
 #include "intervals.h"
 #include "puresize.h"
+#include "sheap.h"
+#include "systime.h"
 #include "character.h"
 #include "buffer.h"
 #include "window.h"
@@ -46,6 +47,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include TERM_HEADER
 #endif /* HAVE_WINDOW_SYSTEM */
 
+#include <flexmember.h>
 #include <verify.h>
 #include <execinfo.h>           /* For backtrace.  */
 
@@ -55,6 +57,10 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #ifdef MSDOS
 #include "dosfns.h"		/* For dos_memory_info.  */
+#endif
+
+#ifdef HAVE_MALLOC_H
+# include <malloc.h>
 #endif
 
 #if (defined ENABLE_CHECKING			\
@@ -69,11 +75,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 static bool valgrind_p;
 #endif
 
-/* GC_CHECK_MARKED_OBJECTS means do sanity checks on allocated objects.
-   Doable only if GC_MARK_STACK.  */
-#if ! GC_MARK_STACK
-# undef GC_CHECK_MARKED_OBJECTS
-#endif
+/* GC_CHECK_MARKED_OBJECTS means do sanity checks on allocated objects.  */
 
 /* GC_MALLOC_CHECK defined means perform validity checks of malloc'd
    memory.  Can do this only if using gmalloc.c and if not checking
@@ -95,16 +97,110 @@ static bool valgrind_p;
 #include "w32heap.h"	/* for sbrk */
 #endif
 
-#ifdef DOUG_LEA_MALLOC
+#ifdef GNU_LINUX
+/* The address where the heap starts.  */
+void *
+my_heap_start (void)
+{
+  static void *start;
+  if (! start)
+    start = sbrk (0);
+  return start;
+}
+#endif
 
-#include <malloc.h>
+#ifdef DOUG_LEA_MALLOC
 
 /* Specify maximum number of areas to mmap.  It would be nice to use a
    value that explicitly means "no limit".  */
 
 #define MMAP_MAX_AREAS 100000000
 
-#endif /* not DOUG_LEA_MALLOC */
+/* A pointer to the memory allocated that copies that static data
+   inside glibc's malloc.  */
+static void *malloc_state_ptr;
+
+/* Restore the dumped malloc state.  Because malloc can be invoked
+   even before main (e.g. by the dynamic linker), the dumped malloc
+   state must be restored as early as possible using this special hook.  */
+static void
+malloc_initialize_hook (void)
+{
+  static bool malloc_using_checking;
+
+  if (! initialized)
+    {
+#ifdef GNU_LINUX
+      my_heap_start ();
+#endif
+      malloc_using_checking = getenv ("MALLOC_CHECK_") != NULL;
+    }
+  else
+    {
+      if (!malloc_using_checking)
+	{
+	  /* Work around a bug in glibc's malloc.  MALLOC_CHECK_ must be
+	     ignored if the heap to be restored was constructed without
+	     malloc checking.  Can't use unsetenv, since that calls malloc.  */
+	  char **p = environ;
+	  if (p)
+	    for (; *p; p++)
+	      if (strncmp (*p, "MALLOC_CHECK_=", 14) == 0)
+		{
+		  do
+		    *p = p[1];
+		  while (*++p);
+
+		  break;
+		}
+	}
+
+      if (malloc_set_state (malloc_state_ptr) != 0)
+	emacs_abort ();
+# ifndef XMALLOC_OVERRUN_CHECK
+      alloc_unexec_post ();
+# endif
+    }
+}
+
+/* Declare the malloc initialization hook, which runs before 'main' starts.
+   EXTERNALLY_VISIBLE works around Bug#22522.  */
+# ifndef __MALLOC_HOOK_VOLATILE
+#  define __MALLOC_HOOK_VOLATILE
+# endif
+voidfuncptr __MALLOC_HOOK_VOLATILE __malloc_initialize_hook EXTERNALLY_VISIBLE
+  = malloc_initialize_hook;
+
+#endif
+
+#if defined DOUG_LEA_MALLOC || !defined CANNOT_DUMP
+
+/* Allocator-related actions to do just before and after unexec.  */
+
+void
+alloc_unexec_pre (void)
+{
+# ifdef DOUG_LEA_MALLOC
+  malloc_state_ptr = malloc_get_state ();
+  if (!malloc_state_ptr)
+    fatal ("malloc_get_state: %s", strerror (errno));
+# endif
+# ifdef HYBRID_MALLOC
+  bss_sbrk_did_unexec = true;
+# endif
+}
+
+void
+alloc_unexec_post (void)
+{
+# ifdef DOUG_LEA_MALLOC
+  free (malloc_state_ptr);
+# endif
+# ifdef HYBRID_MALLOC
+  bss_sbrk_did_unexec = false;
+# endif
+}
+#endif
 
 /* Mark, unmark, query mark bit of a Lisp string.  S must be a pointer
    to a struct Lisp_String.  */
@@ -141,12 +237,6 @@ EMACS_INT memory_full_cons_threshold;
 
 bool gc_in_progress;
 
-/* True means abort if try to GC.
-   This is for code which is written on the assumption that
-   no GC will happen, so as to verify that assumption.  */
-
-bool abort_on_gc;
-
 /* Number of live and free conses etc.  */
 
 static EMACS_INT total_conses, total_markers, total_symbols, total_buffers;
@@ -182,11 +272,6 @@ static ptrdiff_t pure_size;
    If this is non-zero, this implies that an overflow occurred.  */
 
 static ptrdiff_t pure_bytes_used_before_overflow;
-
-/* True if P points into pure space.  */
-
-#define PURE_POINTER_P(P)					\
-  ((uintptr_t) (P) - (uintptr_t) purebeg <= pure_size)
 
 /* Index in pure at which next pure Lisp object will be allocated..  */
 
@@ -298,8 +383,6 @@ enum mem_type
   MEM_TYPE_SPARE
 };
 
-#if GC_MARK_STACK || defined GC_MALLOC_CHECK
-
 /* A unique object in pure space used to make some Lisp objects
    on free lists recognizable in O(1).  */
 
@@ -355,10 +438,6 @@ struct mem_node
   enum mem_type type;
 };
 
-/* Base address of stack.  Set in main.  */
-
-Lisp_Object *stack_base;
-
 /* Root of the tree describing allocated Lisp memory.  */
 
 static struct mem_node *mem_root;
@@ -380,15 +459,9 @@ static void mem_delete (struct mem_node *);
 static void mem_delete_fixup (struct mem_node *);
 static struct mem_node *mem_find (void *);
 
-#endif /* GC_MARK_STACK || GC_MALLOC_CHECK */
-
 #ifndef DEADP
 # define DEADP(x) 0
 #endif
-
-/* Recording what needs to be marked for gc.  */
-
-struct gcpro *gcprolist;
 
 /* Addresses of staticpro'd variables.  Initialize it to a nonzero
    value; otherwise some compilers put it into BSS.  */
@@ -402,21 +475,61 @@ static int staticidx;
 
 static void *pure_alloc (size_t, int);
 
-/* Return X rounded to the next multiple of Y.  Arguments should not
-   have side effects, as they are evaluated more than once.  Assume X
-   + Y - 1 does not overflow.  Tune for Y being a power of 2.  */
+/* True if N is a power of 2.  N should be positive.  */
 
-#define ROUNDUP(x, y) ((y) & ((y) - 1)					\
-		       ? ((x) + (y) - 1) - ((x) + (y) - 1) % (y)	\
-		       : ((x) + (y) - 1) & ~ ((y) - 1))
+#define POWER_OF_2(n) (((n) & ((n) - 1)) == 0)
+
+/* Return X rounded to the next multiple of Y.  Y should be positive,
+   and Y - 1 + X should not overflow.  Arguments should not have side
+   effects, as they are evaluated more than once.  Tune for Y being a
+   power of 2.  */
+
+#define ROUNDUP(x, y) (POWER_OF_2 (y)					\
+		       ? ((y) - 1 + (x)) & ~ ((y) - 1)			\
+		       : ((y) - 1 + (x)) - ((y) - 1 + (x)) % (y))
 
 /* Return PTR rounded up to the next multiple of ALIGNMENT.  */
 
 static void *
-ALIGN (void *ptr, int alignment)
+pointer_align (void *ptr, int alignment)
 {
   return (void *) ROUNDUP ((uintptr_t) ptr, alignment);
 }
+
+/* Extract the pointer hidden within A, if A is not a symbol.
+   If A is a symbol, extract the hidden pointer's offset from lispsym,
+   converted to void *.  */
+
+#define macro_XPNTR_OR_SYMBOL_OFFSET(a) \
+  ((void *) (intptr_t) (USE_LSB_TAG ? XLI (a) - XTYPE (a) : XLI (a) & VALMASK))
+
+/* Extract the pointer hidden within A.  */
+
+#define macro_XPNTR(a) \
+  ((void *) ((intptr_t) XPNTR_OR_SYMBOL_OFFSET (a) \
+	     + (SYMBOLP (a) ? (char *) lispsym : NULL)))
+
+/* For pointer access, define XPNTR and XPNTR_OR_SYMBOL_OFFSET as
+   functions, as functions are cleaner and can be used in debuggers.
+   Also, define them as macros if being compiled with GCC without
+   optimization, for performance in that case.  The macro_* names are
+   private to this section of code.  */
+
+static ATTRIBUTE_UNUSED void *
+XPNTR_OR_SYMBOL_OFFSET (Lisp_Object a)
+{
+  return macro_XPNTR_OR_SYMBOL_OFFSET (a);
+}
+static ATTRIBUTE_UNUSED void *
+XPNTR (Lisp_Object a)
+{
+  return macro_XPNTR (a);
+}
+
+#if DEFINE_KEY_OPS_AS_MACROS
+# define XPNTR_OR_SYMBOL_OFFSET(a) macro_XPNTR_OR_SYMBOL_OFFSET (a)
+# define XPNTR(a) macro_XPNTR (a)
+#endif
 
 static void
 XFLOAT_INIT (Lisp_Object f, double n)
@@ -424,6 +537,7 @@ XFLOAT_INIT (Lisp_Object f, double n)
   XFLOAT (f)->u.data = n;
 }
 
+#ifdef DOUG_LEA_MALLOC
 static bool
 pointers_fit_in_lispobj_p (void)
 {
@@ -440,6 +554,7 @@ mmap_lisp_allowed_p (void)
      regions.  */
   return pointers_fit_in_lispobj_p () && !might_dump;
 }
+#endif
 
 /* Head of a circularly-linked list of extant finalizers. */
 static struct Lisp_Finalizer finalizers;
@@ -455,6 +570,8 @@ static struct Lisp_Finalizer doomed_finalizers;
 				Malloc
  ************************************************************************/
 
+#if defined SIGDANGER || (!defined SYSTEM_MALLOC && !defined HYBRID_MALLOC)
+
 /* Function malloc calls this if it finds we are near exhausting storage.  */
 
 void
@@ -463,6 +580,7 @@ malloc_warning (const char *str)
   pending_malloc_warning = str;
 }
 
+#endif
 
 /* Display an already-pending malloc warning.  */
 
@@ -523,17 +641,14 @@ buffer_memory_full (ptrdiff_t nbytes)
 #define XMALLOC_OVERRUN_CHECK_OVERHEAD \
   (2 * XMALLOC_OVERRUN_CHECK_SIZE + XMALLOC_OVERRUN_SIZE_SIZE)
 
+#define XMALLOC_BASE_ALIGNMENT alignof (max_align_t)
+
+#define XMALLOC_HEADER_ALIGNMENT \
+   COMMON_MULTIPLE (GCALIGNMENT, XMALLOC_BASE_ALIGNMENT)
+
 /* Define XMALLOC_OVERRUN_SIZE_SIZE so that (1) it's large enough to
    hold a size_t value and (2) the header size is a multiple of the
    alignment that Emacs needs for C types and for USE_LSB_TAG.  */
-#define XMALLOC_BASE_ALIGNMENT alignof (max_align_t)
-
-#if USE_LSB_TAG
-# define XMALLOC_HEADER_ALIGNMENT \
-    COMMON_MULTIPLE (GCALIGNMENT, XMALLOC_BASE_ALIGNMENT)
-#else
-# define XMALLOC_HEADER_ALIGNMENT XMALLOC_BASE_ALIGNMENT
-#endif
 #define XMALLOC_OVERRUN_SIZE_SIZE				\
    (((XMALLOC_OVERRUN_CHECK_SIZE + sizeof (size_t)		\
       + XMALLOC_HEADER_ALIGNMENT - 1)				\
@@ -711,8 +826,10 @@ malloc_unblock_input (void)
       malloc_probe (size);			\
   } while (0)
 
+static void *lmalloc (size_t) ATTRIBUTE_MALLOC_SIZE ((1));
+static void *lrealloc (void *, size_t);
 
-/* Like malloc but check for no memory and block interrupt input..  */
+/* Like malloc but check for no memory and block interrupt input.  */
 
 void *
 xmalloc (size_t size)
@@ -720,7 +837,7 @@ xmalloc (size_t size)
   void *val;
 
   MALLOC_BLOCK_INPUT;
-  val = malloc (size);
+  val = lmalloc (size);
   MALLOC_UNBLOCK_INPUT;
 
   if (!val && size)
@@ -737,7 +854,7 @@ xzalloc (size_t size)
   void *val;
 
   MALLOC_BLOCK_INPUT;
-  val = malloc (size);
+  val = lmalloc (size);
   MALLOC_UNBLOCK_INPUT;
 
   if (!val && size)
@@ -758,9 +875,9 @@ xrealloc (void *block, size_t size)
   /* We must call malloc explicitly when BLOCK is 0, since some
      reallocs don't do this.  */
   if (! block)
-    val = malloc (size);
+    val = lmalloc (size);
   else
-    val = realloc (block, size);
+    val = lrealloc (block, size);
   MALLOC_UNBLOCK_INPUT;
 
   if (!val && size)
@@ -798,9 +915,10 @@ void *
 xnmalloc (ptrdiff_t nitems, ptrdiff_t item_size)
 {
   eassert (0 <= nitems && 0 < item_size);
-  if (min (PTRDIFF_MAX, SIZE_MAX) / item_size < nitems)
+  ptrdiff_t nbytes;
+  if (INT_MULTIPLY_WRAPV (nitems, item_size, &nbytes) || SIZE_MAX < nbytes)
     memory_full (SIZE_MAX);
-  return xmalloc (nitems * item_size);
+  return xmalloc (nbytes);
 }
 
 
@@ -811,9 +929,10 @@ void *
 xnrealloc (void *pa, ptrdiff_t nitems, ptrdiff_t item_size)
 {
   eassert (0 <= nitems && 0 < item_size);
-  if (min (PTRDIFF_MAX, SIZE_MAX) / item_size < nitems)
+  ptrdiff_t nbytes;
+  if (INT_MULTIPLY_WRAPV (nitems, item_size, &nbytes) || SIZE_MAX < nbytes)
     memory_full (SIZE_MAX);
-  return xrealloc (pa, nitems * item_size);
+  return xrealloc (pa, nbytes);
 }
 
 
@@ -844,33 +963,43 @@ void *
 xpalloc (void *pa, ptrdiff_t *nitems, ptrdiff_t nitems_incr_min,
 	 ptrdiff_t nitems_max, ptrdiff_t item_size)
 {
+  ptrdiff_t n0 = *nitems;
+  eassume (0 < item_size && 0 < nitems_incr_min && 0 <= n0 && -1 <= nitems_max);
+
   /* The approximate size to use for initial small allocation
      requests.  This is the largest "small" request for the GNU C
      library malloc.  */
   enum { DEFAULT_MXFAST = 64 * sizeof (size_t) / 4 };
 
   /* If the array is tiny, grow it to about (but no greater than)
-     DEFAULT_MXFAST bytes.  Otherwise, grow it by about 50%.  */
-  ptrdiff_t n = *nitems;
-  ptrdiff_t tiny_max = DEFAULT_MXFAST / item_size - n;
-  ptrdiff_t half_again = n >> 1;
-  ptrdiff_t incr_estimate = max (tiny_max, half_again);
-
-  /* Adjust the increment according to three constraints: NITEMS_INCR_MIN,
+     DEFAULT_MXFAST bytes.  Otherwise, grow it by about 50%.
+     Adjust the growth according to three constraints: NITEMS_INCR_MIN,
      NITEMS_MAX, and what the C language can represent safely.  */
-  ptrdiff_t C_language_max = min (PTRDIFF_MAX, SIZE_MAX) / item_size;
-  ptrdiff_t n_max = (0 <= nitems_max && nitems_max < C_language_max
-		     ? nitems_max : C_language_max);
-  ptrdiff_t nitems_incr_max = n_max - n;
-  ptrdiff_t incr = max (nitems_incr_min, min (incr_estimate, nitems_incr_max));
 
-  eassert (0 < item_size && 0 < nitems_incr_min && 0 <= n && -1 <= nitems_max);
+  ptrdiff_t n, nbytes;
+  if (INT_ADD_WRAPV (n0, n0 >> 1, &n))
+    n = PTRDIFF_MAX;
+  if (0 <= nitems_max && nitems_max < n)
+    n = nitems_max;
+
+  ptrdiff_t adjusted_nbytes
+    = ((INT_MULTIPLY_WRAPV (n, item_size, &nbytes) || SIZE_MAX < nbytes)
+       ? min (PTRDIFF_MAX, SIZE_MAX)
+       : nbytes < DEFAULT_MXFAST ? DEFAULT_MXFAST : 0);
+  if (adjusted_nbytes)
+    {
+      n = adjusted_nbytes / item_size;
+      nbytes = adjusted_nbytes - adjusted_nbytes % item_size;
+    }
+
   if (! pa)
     *nitems = 0;
-  if (nitems_incr_max < incr)
+  if (n - n0 < nitems_incr_min
+      && (INT_ADD_WRAPV (n0, nitems_incr_min, &n)
+	  || (0 <= nitems_max && nitems_max < n)
+	  || INT_MULTIPLY_WRAPV (n, item_size, &nbytes)))
     memory_full (SIZE_MAX);
-  n += incr;
-  pa = xrealloc (pa, n * item_size);
+  pa = xrealloc (pa, nbytes);
   *nitems = n;
   return pa;
 }
@@ -950,7 +1079,7 @@ lisp_malloc (size_t nbytes, enum mem_type type)
   allocated_mem_type = type;
 #endif
 
-  val = malloc (nbytes);
+  val = lmalloc (nbytes);
 
 #if ! USE_LSB_TAG
   /* If the memory just allocated cannot be addressed thru a Lisp
@@ -969,7 +1098,7 @@ lisp_malloc (size_t nbytes, enum mem_type type)
     }
 #endif
 
-#if GC_MARK_STACK && !defined GC_MALLOC_CHECK
+#ifndef GC_MALLOC_CHECK
   if (val && type != MEM_TYPE_NON_LISP)
     mem_insert (val, (char *) val + nbytes, type);
 #endif
@@ -989,7 +1118,7 @@ lisp_free (void *block)
 {
   MALLOC_BLOCK_INPUT;
   free (block);
-#if GC_MARK_STACK && !defined GC_MALLOC_CHECK
+#ifndef GC_MALLOC_CHECK
   mem_delete (mem_find (block));
 #endif
   MALLOC_UNBLOCK_INPUT;
@@ -1000,37 +1129,40 @@ lisp_free (void *block)
 /* The entry point is lisp_align_malloc which returns blocks of at most
    BLOCK_BYTES and guarantees they are aligned on a BLOCK_ALIGN boundary.  */
 
+/* Byte alignment of storage blocks.  */
+#define BLOCK_ALIGN (1 << 10)
+verify (POWER_OF_2 (BLOCK_ALIGN));
+
 /* Use aligned_alloc if it or a simple substitute is available.
    Address sanitization breaks aligned allocation, as of gcc 4.8.2 and
-   clang 3.3 anyway.  */
+   clang 3.3 anyway.  Aligned allocation is incompatible with
+   unexmacosx.c, so don't use it on Darwin.  */
 
-#if ! ADDRESS_SANITIZER
-# if !defined SYSTEM_MALLOC && !defined DOUG_LEA_MALLOC && !defined HYBRID_MALLOC
+#if ! ADDRESS_SANITIZER && !defined DARWIN_OS
+# if (defined HAVE_ALIGNED_ALLOC					\
+      || (defined HYBRID_MALLOC						\
+	  ? defined HAVE_POSIX_MEMALIGN					\
+	  : !defined SYSTEM_MALLOC && !defined DOUG_LEA_MALLOC))
 #  define USE_ALIGNED_ALLOC 1
-/* Defined in gmalloc.c.  */
-void *aligned_alloc (size_t, size_t);
-# elif defined HYBRID_MALLOC
-#  if defined ALIGNED_ALLOC || defined HAVE_POSIX_MEMALIGN
-#   define USE_ALIGNED_ALLOC 1
-#   define aligned_alloc hybrid_aligned_alloc
-/* Defined in gmalloc.c.  */
-void *aligned_alloc (size_t, size_t);
-#  endif
-# elif defined HAVE_ALIGNED_ALLOC
+# elif !defined HYBRID_MALLOC && defined HAVE_POSIX_MEMALIGN
 #  define USE_ALIGNED_ALLOC 1
-# elif defined HAVE_POSIX_MEMALIGN
-#  define USE_ALIGNED_ALLOC 1
+#  define aligned_alloc my_aligned_alloc /* Avoid collision with lisp.h.  */
 static void *
 aligned_alloc (size_t alignment, size_t size)
 {
+  /* POSIX says the alignment must be a power-of-2 multiple of sizeof (void *).
+     Verify this for all arguments this function is given.  */
+  verify (BLOCK_ALIGN % sizeof (void *) == 0
+	  && POWER_OF_2 (BLOCK_ALIGN / sizeof (void *)));
+  verify (GCALIGNMENT % sizeof (void *) == 0
+	  && POWER_OF_2 (GCALIGNMENT / sizeof (void *)));
+  eassert (alignment == BLOCK_ALIGN || alignment == GCALIGNMENT);
+
   void *p;
   return posix_memalign (&p, alignment, size) == 0 ? p : 0;
 }
 # endif
 #endif
-
-/* BLOCK_ALIGN has to be a power of 2.  */
-#define BLOCK_ALIGN (1 << 10)
 
 /* Padding to leave at the end of a malloc'd block.  This is to give
    malloc a chance to minimize the amount of memory wasted to alignment.
@@ -1058,16 +1190,18 @@ struct ablock
     char payload[BLOCK_BYTES];
     struct ablock *next_free;
   } x;
-  /* `abase' is the aligned base of the ablocks.  */
-  /* It is overloaded to hold the virtual `busy' field that counts
-     the number of used ablock in the parent ablocks.
-     The first ablock has the `busy' field, the others have the `abase'
-     field.  To tell the difference, we assume that pointers will have
-     integer values larger than 2 * ABLOCKS_SIZE.  The lowest bit of `busy'
-     is used to tell whether the real base of the parent ablocks is `abase'
-     (if not, the word before the first ablock holds a pointer to the
-     real base).  */
+
+  /* ABASE is the aligned base of the ablocks.  It is overloaded to
+     hold a virtual "busy" field that counts twice the number of used
+     ablock values in the parent ablocks, plus one if the real base of
+     the parent ablocks is ABASE (if the "busy" field is even, the
+     word before the first ablock holds a pointer to the real base).
+     The first ablock has a "busy" ABASE, and the others have an
+     ordinary pointer ABASE.  To tell the difference, the code assumes
+     that pointers, when cast to uintptr_t, are at least 2 *
+     ABLOCKS_SIZE + 1.  */
   struct ablocks *abase;
+
   /* The padding of all but the last ablock is unused.  The padding of
      the last ablock in an ablocks is not allocated.  */
 #if BLOCK_PADDING
@@ -1086,18 +1220,18 @@ struct ablocks
 
 #define ABLOCK_ABASE(block) \
   (((uintptr_t) (block)->abase) <= (1 + 2 * ABLOCKS_SIZE)	\
-   ? (struct ablocks *)(block)					\
+   ? (struct ablocks *) (block)					\
    : (block)->abase)
 
 /* Virtual `busy' field.  */
-#define ABLOCKS_BUSY(abase) ((abase)->blocks[0].abase)
+#define ABLOCKS_BUSY(a_base) ((a_base)->blocks[0].abase)
 
 /* Pointer to the (not necessarily aligned) malloc block.  */
 #ifdef USE_ALIGNED_ALLOC
 #define ABLOCKS_BASE(abase) (abase)
 #else
 #define ABLOCKS_BASE(abase) \
-  (1 & (intptr_t) ABLOCKS_BUSY (abase) ? abase : ((void **)abase)[-1])
+  (1 & (intptr_t) ABLOCKS_BUSY (abase) ? abase : ((void **) (abase))[-1])
 #endif
 
 /* The list of free ablock.   */
@@ -1123,7 +1257,7 @@ lisp_align_malloc (size_t nbytes, enum mem_type type)
   if (!free_ablock)
     {
       int i;
-      intptr_t aligned; /* int gets warning casting to 64-bit pointer.  */
+      bool aligned;
 
 #ifdef DOUG_LEA_MALLOC
       if (!mmap_lisp_allowed_p ())
@@ -1131,10 +1265,11 @@ lisp_align_malloc (size_t nbytes, enum mem_type type)
 #endif
 
 #ifdef USE_ALIGNED_ALLOC
+      verify (ABLOCKS_BYTES % BLOCK_ALIGN == 0);
       abase = base = aligned_alloc (BLOCK_ALIGN, ABLOCKS_BYTES);
 #else
       base = malloc (ABLOCKS_BYTES);
-      abase = ALIGN (base, BLOCK_ALIGN);
+      abase = pointer_align (base, BLOCK_ALIGN);
 #endif
 
       if (base == 0)
@@ -1179,13 +1314,14 @@ lisp_align_malloc (size_t nbytes, enum mem_type type)
 	  abase->blocks[i].x.next_free = free_ablock;
 	  free_ablock = &abase->blocks[i];
 	}
-      ABLOCKS_BUSY (abase) = (struct ablocks *) aligned;
+      intptr_t ialigned = aligned;
+      ABLOCKS_BUSY (abase) = (struct ablocks *) ialigned;
 
-      eassert (0 == ((uintptr_t) abase) % BLOCK_ALIGN);
+      eassert ((uintptr_t) abase % BLOCK_ALIGN == 0);
       eassert (ABLOCK_ABASE (&abase->blocks[3]) == abase); /* 3 is arbitrary */
       eassert (ABLOCK_ABASE (&abase->blocks[0]) == abase);
       eassert (ABLOCKS_BASE (abase) == base);
-      eassert (aligned == (intptr_t) ABLOCKS_BUSY (abase));
+      eassert ((intptr_t) ABLOCKS_BUSY (abase) == aligned);
     }
 
   abase = ABLOCK_ABASE (free_ablock);
@@ -1194,7 +1330,7 @@ lisp_align_malloc (size_t nbytes, enum mem_type type)
   val = free_ablock;
   free_ablock = free_ablock->x.next_free;
 
-#if GC_MARK_STACK && !defined GC_MALLOC_CHECK
+#ifndef GC_MALLOC_CHECK
   if (type != MEM_TYPE_NON_LISP)
     mem_insert (val, (char *) val + nbytes, type);
 #endif
@@ -1214,19 +1350,21 @@ lisp_align_free (void *block)
   struct ablocks *abase = ABLOCK_ABASE (ablock);
 
   MALLOC_BLOCK_INPUT;
-#if GC_MARK_STACK && !defined GC_MALLOC_CHECK
+#ifndef GC_MALLOC_CHECK
   mem_delete (mem_find (block));
 #endif
   /* Put on free list.  */
   ablock->x.next_free = free_ablock;
   free_ablock = ablock;
   /* Update busy count.  */
-  ABLOCKS_BUSY (abase)
-    = (struct ablocks *) (-2 + (intptr_t) ABLOCKS_BUSY (abase));
+  intptr_t busy = (intptr_t) ABLOCKS_BUSY (abase) - 2;
+  eassume (0 <= busy && busy <= 2 * ABLOCKS_SIZE - 1);
+  ABLOCKS_BUSY (abase) = (struct ablocks *) busy;
 
-  if (2 > (intptr_t) ABLOCKS_BUSY (abase))
+  if (busy < 2)
     { /* All the blocks are free.  */
-      int i = 0, aligned = (intptr_t) ABLOCKS_BUSY (abase);
+      int i = 0;
+      bool aligned = busy;
       struct ablock **tem = &free_ablock;
       struct ablock *atop = &abase->blocks[aligned ? ABLOCKS_SIZE : ABLOCKS_SIZE - 1];
 
@@ -1248,6 +1386,83 @@ lisp_align_free (void *block)
       free (ABLOCKS_BASE (abase));
     }
   MALLOC_UNBLOCK_INPUT;
+}
+
+#if !defined __GNUC__ && !defined __alignof__
+# define __alignof__(type) alignof (type)
+#endif
+
+/* True if malloc (N) is known to return a multiple of GCALIGNMENT
+   whenever N is also a multiple.  In practice this is true if
+   __alignof__ (max_align_t) is a multiple as well, assuming
+   GCALIGNMENT is 8; other values of GCALIGNMENT have not been looked
+   into.  Use __alignof__ if available, as otherwise
+   MALLOC_IS_GC_ALIGNED would be false on GCC x86 even though the
+   alignment is OK there.
+
+   This is a macro, not an enum constant, for portability to HP-UX
+   10.20 cc and AIX 3.2.5 xlc.  */
+#define MALLOC_IS_GC_ALIGNED \
+  (GCALIGNMENT == 8 && __alignof__ (max_align_t) % GCALIGNMENT == 0)
+
+/* True if a malloc-returned pointer P is suitably aligned for SIZE,
+   where Lisp alignment may be needed if SIZE is Lisp-aligned.  */
+
+static bool
+laligned (void *p, size_t size)
+{
+  return (MALLOC_IS_GC_ALIGNED || (intptr_t) p % GCALIGNMENT == 0
+	  || size % GCALIGNMENT != 0);
+}
+
+/* Like malloc and realloc except that if SIZE is Lisp-aligned, make
+   sure the result is too, if necessary by reallocating (typically
+   with larger and larger sizes) until the allocator returns a
+   Lisp-aligned pointer.  Code that needs to allocate C heap memory
+   for a Lisp object should use one of these functions to obtain a
+   pointer P; that way, if T is an enum Lisp_Type value and L ==
+   make_lisp_ptr (P, T), then XPNTR (L) == P and XTYPE (L) == T.
+
+   On typical modern platforms these functions' loops do not iterate.
+   On now-rare (and perhaps nonexistent) platforms, the loops in
+   theory could repeat forever.  If an infinite loop is possible on a
+   platform, a build would surely loop and the builder can then send
+   us a bug report.  Adding a counter to try to detect any such loop
+   would complicate the code (and possibly introduce bugs, in code
+   that's never really exercised) for little benefit.  */
+
+static void *
+lmalloc (size_t size)
+{
+#if USE_ALIGNED_ALLOC
+  if (! MALLOC_IS_GC_ALIGNED && size % GCALIGNMENT == 0)
+    return aligned_alloc (GCALIGNMENT, size);
+#endif
+
+  while (true)
+    {
+      void *p = malloc (size);
+      if (laligned (p, size))
+	return p;
+      free (p);
+      size_t bigger = size + GCALIGNMENT;
+      if (size < bigger)
+	size = bigger;
+    }
+}
+
+static void *
+lrealloc (void *p, size_t size)
+{
+  while (true)
+    {
+      p = realloc (p, size);
+      if (laligned (p, size))
+	return p;
+      size_t bigger = size + GCALIGNMENT;
+      if (size < bigger)
+	size = bigger;
+    }
 }
 
 
@@ -1539,27 +1754,23 @@ static char const string_overrun_cookie[GC_STRING_OVERRUN_COOKIE_SIZE] =
 
 #ifdef GC_CHECK_STRING_BYTES
 
-#define SDATA_SIZE(NBYTES)			\
-     ((SDATA_DATA_OFFSET			\
-       + (NBYTES) + 1				\
-       + sizeof (ptrdiff_t) - 1)		\
-      & ~(sizeof (ptrdiff_t) - 1))
+#define SDATA_SIZE(NBYTES) FLEXSIZEOF (struct sdata, data, NBYTES)
 
 #else /* not GC_CHECK_STRING_BYTES */
 
 /* The 'max' reserves space for the nbytes union member even when NBYTES + 1 is
    less than the size of that member.  The 'max' is not needed when
-   SDATA_DATA_OFFSET is a multiple of sizeof (ptrdiff_t), because then the
-   alignment code reserves enough space.  */
+   SDATA_DATA_OFFSET is a multiple of FLEXALIGNOF (struct sdata),
+   because then the alignment code reserves enough space.  */
 
 #define SDATA_SIZE(NBYTES)				      \
      ((SDATA_DATA_OFFSET				      \
-       + (SDATA_DATA_OFFSET % sizeof (ptrdiff_t) == 0	      \
+       + (SDATA_DATA_OFFSET % FLEXALIGNOF (struct sdata) == 0 \
 	  ? NBYTES					      \
-	  : max (NBYTES, sizeof (ptrdiff_t) - 1))	      \
+	  : max (NBYTES, FLEXALIGNOF (struct sdata) - 1))     \
        + 1						      \
-       + sizeof (ptrdiff_t) - 1)			      \
-      & ~(sizeof (ptrdiff_t) - 1))
+       + FLEXALIGNOF (struct sdata) - 1)		      \
+      & ~(FLEXALIGNOF (struct sdata) - 1))
 
 #endif /* not GC_CHECK_STRING_BYTES */
 
@@ -1603,9 +1814,7 @@ string_bytes (struct Lisp_String *s)
   ptrdiff_t nbytes =
     (s->size_byte < 0 ? s->size & ~ARRAY_MARK_FLAG : s->size_byte);
 
-  if (!PURE_POINTER_P (s)
-      && s->data
-      && nbytes != SDATA_NBYTES (SDATA_OF_STRING (s)))
+  if (!PURE_P (s) && s->data && nbytes != SDATA_NBYTES (SDATA_OF_STRING (s)))
     emacs_abort ();
   return nbytes;
 }
@@ -1781,7 +1990,7 @@ allocate_string_data (struct Lisp_String *s,
 
   if (nbytes > LARGE_STRING_BYTES)
     {
-      size_t size = offsetof (struct sblock, data) + needed;
+      size_t size = FLEXSIZEOF (struct sblock, data, needed);
 
 #ifdef DOUG_LEA_MALLOC
       if (!mmap_lisp_allowed_p ())
@@ -1795,9 +2004,9 @@ allocate_string_data (struct Lisp_String *s,
         mallopt (M_MMAP_MAX, MMAP_MAX_AREAS);
 #endif
 
-      b->next_free = b->data;
-      b->data[0].string = NULL;
+      data = b->data;
       b->next = large_sblocks;
+      b->next_free = data;
       large_sblocks = b;
     }
   else if (current_sblock == NULL
@@ -1807,9 +2016,9 @@ allocate_string_data (struct Lisp_String *s,
     {
       /* Not enough room in the current sblock.  */
       b = lisp_malloc (SBLOCK_SIZE, MEM_TYPE_NON_LISP);
-      b->next_free = b->data;
-      b->data[0].string = NULL;
+      data = b->data;
       b->next = NULL;
+      b->next_free = data;
 
       if (current_sblock)
 	current_sblock->next = b;
@@ -1818,14 +2027,16 @@ allocate_string_data (struct Lisp_String *s,
       current_sblock = b;
     }
   else
-    b = current_sblock;
+    {
+      b = current_sblock;
+      data = b->next_free;
+    }
 
-  data = b->next_free;
+  data->string = s;
   b->next_free = (sdata *) ((char *) data + needed + GC_STRING_EXTRA);
 
   MALLOC_UNBLOCK_INPUT;
 
-  data->string = s;
   s->data = SDATA_DATA (data);
 #ifdef GC_CHECK_STRING_BYTES
   SDATA_NBYTES (data) = nbytes;
@@ -1982,89 +2193,96 @@ free_large_strings (void)
 static void
 compact_small_strings (void)
 {
-  struct sblock *b, *tb, *next;
-  sdata *from, *to, *end, *tb_end;
-  sdata *to_end, *from_end;
-
   /* TB is the sblock we copy to, TO is the sdata within TB we copy
      to, and TB_END is the end of TB.  */
-  tb = oldest_sblock;
-  tb_end = (sdata *) ((char *) tb + SBLOCK_SIZE);
-  to = tb->data;
-
-  /* Step through the blocks from the oldest to the youngest.  We
-     expect that old blocks will stabilize over time, so that less
-     copying will happen this way.  */
-  for (b = oldest_sblock; b; b = b->next)
+  struct sblock *tb = oldest_sblock;
+  if (tb)
     {
-      end = b->next_free;
-      eassert ((char *) end <= (char *) b + SBLOCK_SIZE);
+      sdata *tb_end = (sdata *) ((char *) tb + SBLOCK_SIZE);
+      sdata *to = tb->data;
 
-      for (from = b->data; from < end; from = from_end)
+      /* Step through the blocks from the oldest to the youngest.  We
+	 expect that old blocks will stabilize over time, so that less
+	 copying will happen this way.  */
+      struct sblock *b = tb;
+      do
 	{
-	  /* Compute the next FROM here because copying below may
-	     overwrite data we need to compute it.  */
-	  ptrdiff_t nbytes;
-	  struct Lisp_String *s = from->string;
+	  sdata *end = b->next_free;
+	  eassert ((char *) end <= (char *) b + SBLOCK_SIZE);
+
+	  for (sdata *from = b->data; from < end; )
+	    {
+	      /* Compute the next FROM here because copying below may
+		 overwrite data we need to compute it.  */
+	      ptrdiff_t nbytes;
+	      struct Lisp_String *s = from->string;
 
 #ifdef GC_CHECK_STRING_BYTES
-	  /* Check that the string size recorded in the string is the
-	     same as the one recorded in the sdata structure.  */
-	  if (s && string_bytes (s) != SDATA_NBYTES (from))
-	    emacs_abort ();
+	      /* Check that the string size recorded in the string is the
+		 same as the one recorded in the sdata structure.  */
+	      if (s && string_bytes (s) != SDATA_NBYTES (from))
+		emacs_abort ();
 #endif /* GC_CHECK_STRING_BYTES */
 
-	  nbytes = s ? STRING_BYTES (s) : SDATA_NBYTES (from);
-	  eassert (nbytes <= LARGE_STRING_BYTES);
+	      nbytes = s ? STRING_BYTES (s) : SDATA_NBYTES (from);
+	      eassert (nbytes <= LARGE_STRING_BYTES);
 
-	  nbytes = SDATA_SIZE (nbytes);
-	  from_end = (sdata *) ((char *) from + nbytes + GC_STRING_EXTRA);
+	      nbytes = SDATA_SIZE (nbytes);
+	      sdata *from_end = (sdata *) ((char *) from
+					   + nbytes + GC_STRING_EXTRA);
 
 #ifdef GC_CHECK_STRING_OVERRUN
-	  if (memcmp (string_overrun_cookie,
-		      (char *) from_end - GC_STRING_OVERRUN_COOKIE_SIZE,
-		      GC_STRING_OVERRUN_COOKIE_SIZE))
-	    emacs_abort ();
+	      if (memcmp (string_overrun_cookie,
+			  (char *) from_end - GC_STRING_OVERRUN_COOKIE_SIZE,
+			  GC_STRING_OVERRUN_COOKIE_SIZE))
+		emacs_abort ();
 #endif
 
-	  /* Non-NULL S means it's alive.  Copy its data.  */
-	  if (s)
-	    {
-	      /* If TB is full, proceed with the next sblock.  */
-	      to_end = (sdata *) ((char *) to + nbytes + GC_STRING_EXTRA);
-	      if (to_end > tb_end)
+	      /* Non-NULL S means it's alive.  Copy its data.  */
+	      if (s)
 		{
-		  tb->next_free = to;
-		  tb = tb->next;
-		  tb_end = (sdata *) ((char *) tb + SBLOCK_SIZE);
-		  to = tb->data;
-		  to_end = (sdata *) ((char *) to + nbytes + GC_STRING_EXTRA);
-		}
+		  /* If TB is full, proceed with the next sblock.  */
+		  sdata *to_end = (sdata *) ((char *) to
+					     + nbytes + GC_STRING_EXTRA);
+		  if (to_end > tb_end)
+		    {
+		      tb->next_free = to;
+		      tb = tb->next;
+		      tb_end = (sdata *) ((char *) tb + SBLOCK_SIZE);
+		      to = tb->data;
+		      to_end = (sdata *) ((char *) to + nbytes + GC_STRING_EXTRA);
+		    }
 
-	      /* Copy, and update the string's `data' pointer.  */
-	      if (from != to)
-		{
-		  eassert (tb != b || to < from);
-		  memmove (to, from, nbytes + GC_STRING_EXTRA);
-		  to->string->data = SDATA_DATA (to);
-		}
+		  /* Copy, and update the string's `data' pointer.  */
+		  if (from != to)
+		    {
+		      eassert (tb != b || to < from);
+		      memmove (to, from, nbytes + GC_STRING_EXTRA);
+		      to->string->data = SDATA_DATA (to);
+		    }
 
-	      /* Advance past the sdata we copied to.  */
-	      to = to_end;
+		  /* Advance past the sdata we copied to.  */
+		  to = to_end;
+		}
+	      from = from_end;
 	    }
+	  b = b->next;
 	}
+      while (b);
+
+      /* The rest of the sblocks following TB don't contain live data, so
+	 we can free them.  */
+      for (b = tb->next; b; )
+	{
+	  struct sblock *next = b->next;
+	  lisp_free (b);
+	  b = next;
+	}
+
+      tb->next_free = to;
+      tb->next = NULL;
     }
 
-  /* The rest of the sblocks following TB don't contain live data, so
-     we can free them.  */
-  for (b = tb->next; b; b = next)
-    {
-      next = b->next;
-      lisp_free (b);
-    }
-
-  tb->next_free = to;
-  tb->next = NULL;
   current_sblock = tb;
 }
 
@@ -2092,8 +2310,11 @@ INIT must be an integer that represents a character.  */)
     {
       nbytes = XINT (length);
       val = make_uninit_string (nbytes);
-      memset (SDATA (val), c, nbytes);
-      SDATA (val)[nbytes] = 0;
+      if (nbytes)
+	{
+	  memset (SDATA (val), c, nbytes);
+	  SDATA (val)[nbytes] = 0;
+	}
     }
   else
     {
@@ -2102,9 +2323,8 @@ INIT must be an integer that represents a character.  */)
       EMACS_INT string_len = XINT (length);
       unsigned char *p, *beg, *end;
 
-      if (string_len > STRING_BYTES_MAX / len)
+      if (INT_MULTIPLY_WRAPV (len, string_len, &nbytes))
 	string_overflow ();
-      nbytes = len * string_len;
       val = make_uninit_multibyte_string (string_len, nbytes);
       for (beg = SDATA (val), p = beg, end = beg + nbytes; p < end; p += len)
 	{
@@ -2119,7 +2339,8 @@ INIT must be an integer that represents a character.  */)
 	      memcpy (p, beg, len);
 	    }
 	}
-      *p = 0;
+      if (nbytes)
+	*p = 0;
     }
 
   return val;
@@ -2503,9 +2724,7 @@ void
 free_cons (struct Lisp_Cons *ptr)
 {
   ptr->u.chain = cons_free_list;
-#if GC_MARK_STACK
   ptr->car = Vdead;
-#endif
   cons_free_list = ptr;
   consing_since_gc -= sizeof *ptr;
   total_free_conses++;
@@ -2653,45 +2872,15 @@ usage: (list &rest OBJECTS)  */)
 
 DEFUN ("make-list", Fmake_list, Smake_list, 2, 2, 0,
        doc: /* Return a newly created list of length LENGTH, with each element being INIT.  */)
-  (register Lisp_Object length, Lisp_Object init)
+  (Lisp_Object length, Lisp_Object init)
 {
-  register Lisp_Object val;
-  register EMACS_INT size;
-
+  Lisp_Object val = Qnil;
   CHECK_NATNUM (length);
-  size = XFASTINT (length);
 
-  val = Qnil;
-  while (size > 0)
+  for (EMACS_INT size = XFASTINT (length); 0 < size; size--)
     {
       val = Fcons (init, val);
-      --size;
-
-      if (size > 0)
-	{
-	  val = Fcons (init, val);
-	  --size;
-
-	  if (size > 0)
-	    {
-	      val = Fcons (init, val);
-	      --size;
-
-	      if (size > 0)
-		{
-		  val = Fcons (init, val);
-		  --size;
-
-		  if (size > 0)
-		    {
-		      val = Fcons (init, val);
-		      --size;
-		    }
-		}
-	    }
-	}
-
-      QUIT;
+      rarely_quit (size);
     }
 
   return val;
@@ -2729,15 +2918,15 @@ set_next_vector (struct Lisp_Vector *v, struct Lisp_Vector *p)
 enum
   {
     /* Alignment of struct Lisp_Vector objects.  */
-    vector_alignment = COMMON_MULTIPLE (ALIGNOF_STRUCT_LISP_VECTOR,
-					USE_LSB_TAG ? GCALIGNMENT : 1),
+    vector_alignment = COMMON_MULTIPLE (FLEXALIGNOF (struct Lisp_Vector),
+					 GCALIGNMENT),
 
     /* Vector size requests are a multiple of this.  */
     roundup_size = COMMON_MULTIPLE (vector_alignment, word_size)
   };
 
 /* Verify assumptions described above.  */
-verify ((VECTOR_BLOCK_SIZE % roundup_size) == 0);
+verify (VECTOR_BLOCK_SIZE % roundup_size == 0);
 verify (VECTOR_BLOCK_SIZE <= (1 << PSEUDOVECTOR_SIZE_BITS));
 
 /* Round up X to nearest mult-of-ROUNDUP_SIZE --- use at compile time.  */
@@ -2853,7 +3042,7 @@ allocate_vector_block (void)
 {
   struct vector_block *block = xmalloc (sizeof *block);
 
-#if GC_MARK_STACK && !defined GC_MALLOC_CHECK
+#ifndef GC_MALLOC_CHECK
   mem_insert (block->data, block->data + VECTOR_BLOCK_BYTES,
 	      MEM_TYPE_VECTOR_BLOCK);
 #endif
@@ -2967,8 +3156,7 @@ vector_nbytes (struct Lisp_Vector *v)
 }
 
 /* Release extra resources still in use by VECTOR, which may be any
-   vector-like object.  For now, this is used just to free data in
-   font objects.  */
+   vector-like object.  */
 
 static void
 cleanup_vector (struct Lisp_Vector *vector)
@@ -2978,7 +3166,7 @@ cleanup_vector (struct Lisp_Vector *vector)
       && ((vector->header.size & PSEUDOVECTOR_SIZE_MASK)
 	  == FONT_OBJECT_MAX))
     {
-      struct font_driver *drv = ((struct font *) vector)->driver;
+      struct font_driver const *drv = ((struct font *) vector)->driver;
 
       /* The font driver might sometimes be NULL, e.g. if Emacs was
 	 interrupted before it had time to set it up.  */
@@ -2989,6 +3177,13 @@ cleanup_vector (struct Lisp_Vector *vector)
 	  drv->close ((struct font *) vector);
 	}
     }
+
+  if (PSEUDOVECTOR_TYPEP (&vector->header, PVEC_THREAD))
+    finalize_one_thread ((struct thread_state *) vector);
+  else if (PSEUDOVECTOR_TYPEP (&vector->header, PVEC_MUTEX))
+    finalize_one_mutex ((struct Lisp_Mutex *) vector);
+  else if (PSEUDOVECTOR_TYPEP (&vector->header, PVEC_CONDVAR))
+    finalize_one_condvar ((struct Lisp_CondVar *) vector);
 }
 
 /* Reclaim space used by unmarked vectors.  */
@@ -3062,7 +3257,7 @@ sweep_vectors (void)
       if (free_this_block)
 	{
 	  *bprev = block->next;
-#if GC_MARK_STACK && !defined GC_MALLOC_CHECK
+#ifndef GC_MALLOC_CHECK
 	  mem_delete (mem_find (block->data));
 #endif
 	  xfree (block);
@@ -3164,7 +3359,8 @@ allocate_vector (EMACS_INT len)
   if (min ((nbytes_max - header_size) / word_size, MOST_POSITIVE_FIXNUM) < len)
     memory_full (SIZE_MAX);
   v = allocate_vectorlike (len);
-  v->header.size = len;
+  if (len)
+    v->header.size = len;
   return v;
 }
 
@@ -3205,22 +3401,13 @@ allocate_buffer (void)
 DEFUN ("make-vector", Fmake_vector, Smake_vector, 2, 2, 0,
        doc: /* Return a newly created vector of length LENGTH, with each element being INIT.
 See also the function `vector'.  */)
-  (register Lisp_Object length, Lisp_Object init)
+  (Lisp_Object length, Lisp_Object init)
 {
-  Lisp_Object vector;
-  register ptrdiff_t sizei;
-  register ptrdiff_t i;
-  register struct Lisp_Vector *p;
-
   CHECK_NATNUM (length);
-
-  p = allocate_vector (XFASTINT (length));
-  sizei = XFASTINT (length);
-  for (i = 0; i < sizei; i++)
+  struct Lisp_Vector *p = allocate_vector (XFASTINT (length));
+  for (ptrdiff_t i = 0; i < XFASTINT (length); i++)
     p->contents[i] = init;
-
-  XSETVECTOR (vector, p);
-  return vector;
+  return make_lisp_ptr (p, Lisp_Vectorlike);
 }
 
 DEFUN ("vector", Fvector, Svector, 0, MANY, 0,
@@ -3229,12 +3416,9 @@ Any number of arguments, even zero arguments, are allowed.
 usage: (vector &rest OBJECTS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
-  ptrdiff_t i;
-  register Lisp_Object val = make_uninit_vector (nargs);
-  register struct Lisp_Vector *p = XVECTOR (val);
-
-  for (i = 0; i < nargs; i++)
-    p->contents[i] = args[i];
+  Lisp_Object val = make_uninit_vector (nargs);
+  struct Lisp_Vector *p = XVECTOR (val);
+  memcpy (p->contents, args, nargs * sizeof *args);
   return val;
 }
 
@@ -3273,9 +3457,8 @@ stack before executing the byte-code.
 usage: (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INTERACTIVE-SPEC &rest ELEMENTS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
-  ptrdiff_t i;
-  register Lisp_Object val = make_uninit_vector (nargs);
-  register struct Lisp_Vector *p = XVECTOR (val);
+  Lisp_Object val = make_uninit_vector (nargs);
+  struct Lisp_Vector *p = XVECTOR (val);
 
   /* We used to purecopy everything here, if purify-flag was set.  This worked
      OK for Emacs-23, but with Emacs-24's lexical binding code, it can be
@@ -3285,8 +3468,7 @@ usage: (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INT
      just wasteful and other times plainly wrong (e.g. those free vars may want
      to be setcar'd).  */
 
-  for (i = 0; i < nargs; i++)
-    p->contents[i] = args[i];
+  memcpy (p->contents, args, nargs * sizeof *args);
   make_byte_code (p);
   XSETCOMPILED (val, p);
   return val;
@@ -3299,15 +3481,13 @@ usage: (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INT
  ***********************************************************************/
 
 /* Like struct Lisp_Symbol, but padded so that the size is a multiple
-   of the required alignment if LSB tags are used.  */
+   of the required alignment.  */
 
 union aligned_Lisp_Symbol
 {
   struct Lisp_Symbol s;
-#if USE_LSB_TAG
   unsigned char c[(sizeof (struct Lisp_Symbol) + GCALIGNMENT - 1)
 		  & -GCALIGNMENT];
-#endif
 };
 
 /* Each symbol_block is just under 1020 bytes long, since malloc
@@ -3359,7 +3539,7 @@ init_symbol (Lisp_Object val, Lisp_Object name)
   set_symbol_next (val, NULL);
   p->gcmarkbit = false;
   p->interned = SYMBOL_UNINTERNED;
-  p->constant = 0;
+  p->trapped_write = SYMBOL_UNTRAPPED_WRITE;
   p->declared_special = false;
   p->pinned = false;
 }
@@ -3411,15 +3591,13 @@ Its value is void, and its function definition and property list are nil.  */)
  ***********************************************************************/
 
 /* Like union Lisp_Misc, but padded so that its size is a multiple of
-   the required alignment when LSB tags are used.  */
+   the required alignment.  */
 
 union aligned_Lisp_Misc
 {
   union Lisp_Misc m;
-#if USE_LSB_TAG
   unsigned char c[(sizeof (union Lisp_Misc) + GCALIGNMENT - 1)
 		  & -GCALIGNMENT];
-#endif
 };
 
 /* Allocation of markers and other objects that share that structure.
@@ -3548,7 +3726,6 @@ make_save_ptr_int (void *a, ptrdiff_t b)
   return val;
 }
 
-#if ! (defined USE_X_TOOLKIT || defined USE_GTK)
 Lisp_Object
 make_save_ptr_ptr (void *a, void *b)
 {
@@ -3559,7 +3736,6 @@ make_save_ptr_ptr (void *a, void *b)
   p->data[1].pointer = b;
   return val;
 }
-#endif
 
 Lisp_Object
 make_save_funcptr_ptr_obj (void (*a) (void), void *b, Lisp_Object c)
@@ -3704,6 +3880,23 @@ make_event_array (ptrdiff_t nargs, Lisp_Object *args)
   }
 }
 
+#ifdef HAVE_MODULES
+/* Create a new module user ptr object.  */
+Lisp_Object
+make_user_ptr (void (*finalizer) (void *), void *p)
+{
+  Lisp_Object obj;
+  struct Lisp_User_Ptr *uptr;
+
+  obj = allocate_misc (Lisp_Misc_User_Ptr);
+  uptr = XUSER_PTR (obj);
+  uptr->finalizer = finalizer;
+  uptr->p = p;
+  return obj;
+}
+
+#endif
+
 static void
 init_finalizer_list (struct Lisp_Finalizer *head)
 {
@@ -3773,21 +3966,18 @@ queue_doomed_finalizers (struct Lisp_Finalizer *dest,
 static Lisp_Object
 run_finalizer_handler (Lisp_Object args)
 {
-  add_to_log ("finalizer failed: %S", args, Qnil);
+  add_to_log ("finalizer failed: %S", args);
   return Qnil;
 }
 
 static void
 run_finalizer_function (Lisp_Object function)
 {
-  struct gcpro gcpro1;
   ptrdiff_t count = SPECPDL_INDEX ();
 
-  GCPRO1 (function);
   specbind (Qinhibit_quit, Qt);
   internal_condition_case_1 (call0, function, Qt, run_finalizer_handler);
   unbind_to (count, Qnil);
-  UNGCPRO;
 }
 
 static void
@@ -3926,8 +4116,6 @@ refill_memory_reserve (void)
 			   C Stack Marking
  ************************************************************************/
 
-#if GC_MARK_STACK || defined GC_MALLOC_CHECK
-
 /* Conservative C stack marking requires a method to identify possibly
    live Lisp objects given a pointer value.  We do this by keeping
    track of blocks of Lisp data that are allocated in a red-black tree
@@ -3994,25 +4182,11 @@ mem_insert (void *start, void *end, enum mem_type type)
   c = mem_root;
   parent = NULL;
 
-#if GC_MARK_STACK != GC_MAKE_GCPROS_NOOPS
-
-  while (c != MEM_NIL)
-    {
-      if (start >= c->start && start < c->end)
-	emacs_abort ();
-      parent = c;
-      c = start < c->start ? c->left : c->right;
-    }
-
-#else /* GC_MARK_STACK == GC_MARK_STACK_CHECK_GCPROS */
-
   while (c != MEM_NIL)
     {
       parent = c;
       c = start < c->start ? c->left : c->right;
     }
-
-#endif /* GC_MARK_STACK == GC_MARK_STACK_CHECK_GCPROS */
 
   /* Create a new node.  */
 #ifdef GC_MALLOC_CHECK
@@ -4499,70 +4673,11 @@ live_buffer_p (struct mem_node *m, void *p)
 	  && !NILP (((struct buffer *) p)->name_));
 }
 
-#endif /* GC_MARK_STACK || defined GC_MALLOC_CHECK */
-
-#if GC_MARK_STACK
-
-#if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
-
-/* Currently not used, but may be called from gdb.  */
-
-void dump_zombies (void) EXTERNALLY_VISIBLE;
-
-/* Array of objects that are kept alive because the C stack contains
-   a pattern that looks like a reference to them.  */
-
-#define MAX_ZOMBIES 10
-static Lisp_Object zombies[MAX_ZOMBIES];
-
-/* Number of zombie objects.  */
-
-static EMACS_INT nzombies;
-
-/* Number of garbage collections.  */
-
-static EMACS_INT ngcs;
-
-/* Average percentage of zombies per collection.  */
-
-static double avg_zombies;
-
-/* Max. number of live and zombie objects.  */
-
-static EMACS_INT max_live, max_zombies;
-
-/* Average number of live objects per GC.  */
-
-static double avg_live;
-
-DEFUN ("gc-status", Fgc_status, Sgc_status, 0, 0, "",
-       doc: /* Show information about live and zombie objects.  */)
-  (void)
-{
-  Lisp_Object zombie_list = Qnil;
-  for (int i = 0; i < min (MAX_ZOMBIES, nzombies); i++)
-    zombie_list = Fcons (zombies[i], zombie_list);
-  return CALLN (Fmessage,
-		build_string ("%d GCs, avg live/zombies = %.2f/%.2f"
-			      " (%f%%), max %d/%d\nzombies: %S"),
-		make_number (ngcs), make_float (avg_live),
-		make_float (avg_zombies),
-		make_float (avg_zombies / avg_live / 100),
-		make_number (max_live), make_number (max_zombies),
-		zombie_list);
-}
-
-#endif /* GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES */
-
-
 /* Mark OBJ if we can prove it's a Lisp_Object.  */
 
 static void
 mark_maybe_object (Lisp_Object obj)
 {
-  void *po;
-  struct mem_node *m;
-
 #if USE_VALGRIND
   if (valgrind_p)
     VALGRIND_MAKE_MEM_DEFINED (&obj, sizeof (obj));
@@ -4571,12 +4686,12 @@ mark_maybe_object (Lisp_Object obj)
   if (INTEGERP (obj))
     return;
 
-  po = (void *) XPNTR (obj);
-  m = mem_find (po);
+  void *po = XPNTR (obj);
+  struct mem_node *m = mem_find (po);
 
   if (m != MEM_NIL)
     {
-      bool mark_p = 0;
+      bool mark_p = false;
 
       switch (XTYPE (obj))
 	{
@@ -4616,26 +4731,23 @@ mark_maybe_object (Lisp_Object obj)
 	}
 
       if (mark_p)
-	{
-#if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
-	  if (nzombies < MAX_ZOMBIES)
-	    zombies[nzombies] = obj;
-	  ++nzombies;
-#endif
-	  mark_object (obj);
-	}
+	mark_object (obj);
     }
 }
 
 /* Return true if P can point to Lisp data, and false otherwise.
-   USE_LSB_TAG needs Lisp data to be aligned on multiples of GCALIGNMENT.
-   Otherwise, assume that Lisp data is aligned on even addresses.  */
+   Symbols are implemented via offsets not pointers, but the offsets
+   are also multiples of GCALIGNMENT.  */
 
 static bool
 maybe_lisp_pointer (void *p)
 {
-  return !((intptr_t) p % (USE_LSB_TAG ? GCALIGNMENT : 2));
+  return (uintptr_t) p % GCALIGNMENT == 0;
 }
+
+#ifndef HAVE_MODULES
+enum { HAVE_MODULES = false };
+#endif
 
 /* If P points to Lisp data, mark that as live if it isn't already
    marked.  */
@@ -4650,8 +4762,17 @@ mark_maybe_pointer (void *p)
     VALGRIND_MAKE_MEM_DEFINED (&p, sizeof (p));
 #endif
 
-  if (!maybe_lisp_pointer (p))
-    return;
+  if (sizeof (Lisp_Object) == sizeof (void *) || !HAVE_MODULES)
+    {
+      if (!maybe_lisp_pointer (p))
+        return;
+    }
+  else
+    {
+      /* For the wide-int case, also mark emacs_value tagged pointers,
+	 which can be generated by emacs-module.c's value_to_lisp.  */
+      p = (void *) ((uintptr_t) p & ~(GCALIGNMENT - 1));
+    }
 
   m = mem_find (p);
   if (m != MEM_NIL)
@@ -4722,39 +4843,13 @@ mark_maybe_pointer (void *p)
    miss objects if __alignof__ were used.  */
 #define GC_POINTER_ALIGNMENT alignof (void *)
 
-/* Define POINTERS_MIGHT_HIDE_IN_OBJECTS to 1 if marking via C pointers does
-   not suffice, which is the typical case.  A host where a Lisp_Object is
-   wider than a pointer might allocate a Lisp_Object in non-adjacent halves.
-   If USE_LSB_TAG, the bottom half is not a valid pointer, but it should
-   suffice to widen it to to a Lisp_Object and check it that way.  */
-#if USE_LSB_TAG || VAL_MAX < UINTPTR_MAX
-# if !USE_LSB_TAG && VAL_MAX < UINTPTR_MAX >> GCTYPEBITS
-  /* If tag bits straddle pointer-word boundaries, neither mark_maybe_pointer
-     nor mark_maybe_object can follow the pointers.  This should not occur on
-     any practical porting target.  */
-#  error "MSB type bits straddle pointer-word boundaries"
-# endif
-  /* Marking via C pointers does not suffice, because Lisp_Objects contain
-     pointer words that hold pointers ORed with type bits.  */
-# define POINTERS_MIGHT_HIDE_IN_OBJECTS 1
-#else
-  /* Marking via C pointers suffices, because Lisp_Objects contain pointer
-     words that hold unmodified pointers.  */
-# define POINTERS_MIGHT_HIDE_IN_OBJECTS 0
-#endif
-
 /* Mark Lisp objects referenced from the address range START+OFFSET..END
    or END+OFFSET..START.  */
 
 static void ATTRIBUTE_NO_SANITIZE_ADDRESS
 mark_memory (void *start, void *end)
 {
-  void **pp;
-  int i;
-
-#if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
-  nzombies = 0;
-#endif
+  char *pp;
 
   /* Make START the pointer to the start of the memory region,
      if it isn't already.  */
@@ -4764,6 +4859,8 @@ mark_memory (void *start, void *end)
       start = end;
       end = tem;
     }
+
+  eassert (((uintptr_t) start) % GC_POINTER_ALIGNMENT == 0);
 
   /* Mark Lisp data pointed to.  This is necessary because, in some
      situations, the C compiler optimizes Lisp objects away, so that
@@ -4775,7 +4872,7 @@ mark_memory (void *start, void *end)
        Lisp_Object obj = build_string ("test");
        struct Lisp_String *s = XSTRING (obj);
        Fgarbage_collect ();
-       fprintf (stderr, "test `%s'\n", s->data);
+       fprintf (stderr, "test '%s'\n", s->data);
        return Qnil;
      }
 
@@ -4783,22 +4880,26 @@ mark_memory (void *start, void *end)
      away.  The only reference to the life string is through the
      pointer `s'.  */
 
-  for (pp = start; (void *) pp < end; pp++)
-    for (i = 0; i < sizeof *pp; i += GC_POINTER_ALIGNMENT)
-      {
-	void *p = *(void **) ((char *) pp + i);
-	mark_maybe_pointer (p);
-	if (POINTERS_MIGHT_HIDE_IN_OBJECTS)
-	  mark_maybe_object (XIL ((intptr_t) p));
-      }
+  for (pp = start; (void *) pp < end; pp += GC_POINTER_ALIGNMENT)
+    {
+      mark_maybe_pointer (*(void **) pp);
+      mark_maybe_object (*(Lisp_Object *) pp);
+    }
 }
 
-#if !defined GC_SAVE_REGISTERS_ON_STACK && !defined GC_SETJMP_WORKS
+#ifndef HAVE___BUILTIN_UNWIND_INIT
+
+# ifdef GC_SETJMP_WORKS
+static void
+test_setjmp (void)
+{
+}
+# else
 
 static bool setjmp_tested_p;
 static int longjmps_done;
 
-#define SETJMP_WILL_LIKELY_WORK "\
+#  define SETJMP_WILL_LIKELY_WORK "\
 \n\
 Emacs garbage collector has been changed to use conservative stack\n\
 marking.  Emacs has determined that the method it uses to do the\n\
@@ -4811,7 +4912,7 @@ verify that the methods used are appropriate for your system.\n\
 Please mail the result to <emacs-devel@gnu.org>.\n\
 "
 
-#define SETJMP_WILL_NOT_WORK "\
+#  define SETJMP_WILL_NOT_WORK "\
 \n\
 Emacs garbage collector has been changed to use conservative stack\n\
 marking.  Emacs has determined that the default method it uses to do the\n\
@@ -4837,6 +4938,9 @@ Please mail the result to <emacs-devel@gnu.org>.\n\
 static void
 test_setjmp (void)
 {
+  if (setjmp_tested_p)
+    return;
+  setjmp_tested_p = true;
   char buf[10];
   register int x;
   sys_jmp_buf jbuf;
@@ -4873,45 +4977,60 @@ test_setjmp (void)
   if (longjmps_done == 1)
     sys_longjmp (jbuf, 1);
 }
+# endif /* ! GC_SETJMP_WORKS */
+#endif /* ! HAVE___BUILTIN_UNWIND_INIT */
 
-#endif /* not GC_SAVE_REGISTERS_ON_STACK && not GC_SETJMP_WORKS */
-
-
-#if GC_MARK_STACK == GC_MARK_STACK_CHECK_GCPROS
-
-/* Abort if anything GCPRO'd doesn't survive the GC.  */
-
-static void
-check_gcpros (void)
+/* The type of an object near the stack top, whose address can be used
+   as a stack scan limit.  */
+typedef union
 {
-  struct gcpro *p;
-  ptrdiff_t i;
+  /* Align the stack top properly.  Even if !HAVE___BUILTIN_UNWIND_INIT,
+     jmp_buf may not be aligned enough on darwin-ppc64.  */
+  max_align_t o;
+#ifndef HAVE___BUILTIN_UNWIND_INIT
+  sys_jmp_buf j;
+  char c;
+#endif
+} stacktop_sentry;
 
-  for (p = gcprolist; p; p = p->next)
-    for (i = 0; i < p->nvars; ++i)
-      if (!survives_gc_p (p->var[i]))
-	/* FIXME: It's not necessarily a bug.  It might just be that the
-	   GCPRO is unnecessary or should release the object sooner.  */
-	emacs_abort ();
-}
+/* Force callee-saved registers and register windows onto the stack.
+   Use the platform-defined __builtin_unwind_init if available,
+   obviating the need for machine dependent methods.  */
+#ifndef HAVE___BUILTIN_UNWIND_INIT
+# ifdef __sparc__
+   /* This trick flushes the register windows so that all the state of
+      the process is contained in the stack.
+      FreeBSD does not have a ta 3 handler, so handle it specially.
+      FIXME: Code in the Boehm GC suggests flushing (with 'flushrs') is
+      needed on ia64 too.  See mach_dep.c, where it also says inline
+      assembler doesn't work with relevant proprietary compilers.  */
+#  if defined __sparc64__ && defined __FreeBSD__
+#   define __builtin_unwind_init() asm ("flushw")
+#  else
+#   define __builtin_unwind_init() asm ("ta 3")
+#  endif
+# else
+#  define __builtin_unwind_init() ((void) 0)
+# endif
+#endif
 
-#elif GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
-
-void
-dump_zombies (void)
-{
-  int i;
-
-  fprintf (stderr, "\nZombies kept alive = %"pI"d:\n", nzombies);
-  for (i = 0; i < min (MAX_ZOMBIES, nzombies); ++i)
-    {
-      fprintf (stderr, "  %d = ", i);
-      debug_print (zombies[i]);
-    }
-}
-
-#endif /* GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES */
-
+/* Set *P to the address of the top of the stack.  This must be a
+   macro, not a function, so that it is executed in the caller’s
+   environment.  It is not inside a do-while so that its storage
+   survives the macro.  */
+#ifdef HAVE___BUILTIN_UNWIND_INIT
+# define SET_STACK_TOP_ADDRESS(p)	\
+   stacktop_sentry sentry;		\
+   __builtin_unwind_init ();		\
+   *(p) = &sentry
+#else
+# define SET_STACK_TOP_ADDRESS(p)		\
+   stacktop_sentry sentry;			\
+   __builtin_unwind_init ();			\
+   test_setjmp ();				\
+   sys_setjmp (sentry.j);			\
+   *(p) = &sentry + (stack_bottom < &sentry.c)
+#endif
 
 /* Mark live Lisp objects on the C stack.
 
@@ -4923,12 +5042,7 @@ dump_zombies (void)
    We have to mark Lisp objects in CPU registers that can hold local
    variables or are used to pass parameters.
 
-   If GC_SAVE_REGISTERS_ON_STACK is defined, it should expand to
-   something that either saves relevant registers on the stack, or
-   calls mark_maybe_object passing it each register's contents.
-
-   If GC_SAVE_REGISTERS_ON_STACK is not defined, the current
-   implementation assumes that calling setjmp saves registers we need
+   This code assumes that calling setjmp saves registers we need
    to see in a jmp_buf which itself lies on the stack.  This doesn't
    have to be true!  It must be verified for each system, possibly
    by taking a look at the source code of setjmp.
@@ -4961,31 +5075,42 @@ dump_zombies (void)
    would be necessary, each one starting with one byte more offset
    from the stack start.  */
 
-static void
-mark_stack (void *end)
+void
+mark_stack (char *bottom, char *end)
 {
-
   /* This assumes that the stack is a contiguous region in memory.  If
      that's not the case, something has to be done here to iterate
      over the stack segments.  */
-  mark_memory (stack_base, end);
+  mark_memory (bottom, end);
 
   /* Allow for marking a secondary stack, like the register stack on the
      ia64.  */
 #ifdef GC_MARK_SECONDARY_STACK
   GC_MARK_SECONDARY_STACK ();
 #endif
-
-#if GC_MARK_STACK == GC_MARK_STACK_CHECK_GCPROS
-  check_gcpros ();
-#endif
 }
 
-#else /* GC_MARK_STACK == 0 */
+/* This is a trampoline function that flushes registers to the stack,
+   and then calls FUNC.  ARG is passed through to FUNC verbatim.
 
-#define mark_maybe_object(obj) emacs_abort ()
+   This function must be called whenever Emacs is about to release the
+   global interpreter lock.  This lets the garbage collector easily
+   find roots in registers on threads that are not actively running
+   Lisp.
 
-#endif /* GC_MARK_STACK != 0 */
+   It is invalid to run any Lisp code or to allocate any GC memory
+   from FUNC.  */
+
+void
+flush_stack_call_func (void (*func) (void *arg), void *arg)
+{
+  void *end;
+  struct thread_state *self = current_thread;
+  SET_STACK_TOP_ADDRESS (&end);
+  self->stack_top = end;
+  func (arg);
+  eassert (current_thread == self);
+}
 
 static bool
 c_symbol_p (struct Lisp_Symbol *sym)
@@ -5036,16 +5161,11 @@ valid_pointer_p (void *p)
 int
 valid_lisp_object_p (Lisp_Object obj)
 {
-  void *p;
-#if GC_MARK_STACK
-  struct mem_node *m;
-#endif
-
   if (INTEGERP (obj))
     return 1;
 
-  p = (void *) XPNTR (obj);
-  if (PURE_POINTER_P (p))
+  void *p = XPNTR (obj);
+  if (PURE_P (p))
     return 1;
 
   if (SYMBOLP (obj) && c_symbol_p (p))
@@ -5054,11 +5174,7 @@ valid_lisp_object_p (Lisp_Object obj)
   if (p == &buffer_defaults || p == &buffer_local_symbols)
     return 2;
 
-#if !GC_MARK_STACK
-  return valid_pointer_p (p);
-#else
-
-  m = mem_find (p);
+  struct mem_node *m = mem_find (p);
 
   if (m == MEM_NIL)
     {
@@ -5105,35 +5221,6 @@ valid_lisp_object_p (Lisp_Object obj)
     }
 
   return 0;
-#endif
-}
-
-/* If GC_MARK_STACK, return 1 if STR is a relocatable data of Lisp_String
-   (i.e. there is a non-pure Lisp_Object X so that SDATA (X) == STR) and 0
-   if not.  Otherwise we can't rely on valid_lisp_object_p and return -1.
-   This function is slow and should be used for debugging purposes.  */
-
-int
-relocatable_string_data_p (const char *str)
-{
-  if (PURE_POINTER_P (str))
-    return 0;
-#if GC_MARK_STACK
-  if (str)
-    {
-      struct sdata *sdata
-	= (struct sdata *) (str - offsetof (struct sdata, data));
-
-      if (0 < valid_pointer_p (sdata)
-	  && 0 < valid_pointer_p (sdata->string)
-	  && maybe_lisp_pointer (sdata->string))
-	return (valid_lisp_object_p
-		(make_lisp_ptr (sdata->string, Lisp_String))
-		&& (const char *) sdata->string->data == str);
-    }
-  return 0;
-#endif /* GC_MARK_STACK */
-  return -1;
 }
 
 /***********************************************************************
@@ -5148,22 +5235,13 @@ static void *
 pure_alloc (size_t size, int type)
 {
   void *result;
-#if USE_LSB_TAG
-  size_t alignment = GCALIGNMENT;
-#else
-  size_t alignment = alignof (EMACS_INT);
-
-  /* Give Lisp_Floats an extra alignment.  */
-  if (type == Lisp_Float)
-    alignment = alignof (struct Lisp_Float);
-#endif
 
  again:
   if (type >= 0)
     {
       /* Allocate space for a Lisp object from the beginning of the free
 	 space with taking account of alignment.  */
-      result = ALIGN (purebeg + pure_bytes_used_lisp, alignment);
+      result = pointer_align (purebeg + pure_bytes_used_lisp, GCALIGNMENT);
       pure_bytes_used_lisp = ((char *)result - (char *)purebeg) + size;
     }
   else
@@ -5190,6 +5268,8 @@ pure_alloc (size_t size, int type)
 }
 
 
+#ifndef CANNOT_DUMP
+
 /* Print a warning if PURESIZE is too small.  */
 
 void
@@ -5200,6 +5280,7 @@ check_pure_size (void)
 	      " bytes needed)"),
 	     pure_bytes_used + pure_bytes_used_before_overflow);
 }
+#endif
 
 
 /* Find the byte sequence {DATA[0], ..., DATA[NBYTES-1], '\0'} from
@@ -5356,6 +5437,38 @@ make_pure_vector (ptrdiff_t len)
   return new;
 }
 
+/* Copy all contents and parameters of TABLE to a new table allocated
+   from pure space, return the purified table.  */
+static struct Lisp_Hash_Table *
+purecopy_hash_table (struct Lisp_Hash_Table *table)
+{
+  eassert (NILP (table->weak));
+  eassert (!NILP (table->pure));
+
+  struct Lisp_Hash_Table *pure = pure_alloc (sizeof *pure, Lisp_Vectorlike);
+  struct hash_table_test pure_test = table->test;
+
+  /* Purecopy the hash table test.  */
+  pure_test.name = purecopy (table->test.name);
+  pure_test.user_hash_function = purecopy (table->test.user_hash_function);
+  pure_test.user_cmp_function = purecopy (table->test.user_cmp_function);
+
+  pure->test = pure_test;
+  pure->header = table->header;
+  pure->weak = purecopy (Qnil);
+  pure->rehash_size = purecopy (table->rehash_size);
+  pure->rehash_threshold = purecopy (table->rehash_threshold);
+  pure->hash = purecopy (table->hash);
+  pure->next = purecopy (table->next);
+  pure->next_free = purecopy (table->next_free);
+  pure->index = purecopy (table->index);
+  pure->count = table->count;
+  pure->key_and_value = purecopy (table->key_and_value);
+  pure->pure = purecopy (table->pure);
+
+  return pure;
+}
+
 DEFUN ("purecopy", Fpurecopy, Spurecopy, 1, 1, 0,
        doc: /* Make a copy of object OBJ in pure storage.
 Recursively copies contents of vectors and cons cells.
@@ -5364,19 +5477,31 @@ Does not copy symbols.  Copies strings without text properties.  */)
 {
   if (NILP (Vpurify_flag))
     return obj;
-  else if (MARKERP (obj) || OVERLAYP (obj)
-	   || HASH_TABLE_P (obj) || SYMBOLP (obj))
+  else if (MARKERP (obj) || OVERLAYP (obj) || SYMBOLP (obj))
     /* Can't purify those.  */
     return obj;
   else
     return purecopy (obj);
 }
 
+/* Pinned objects are marked before every GC cycle.  */
+static struct pinned_object
+{
+  Lisp_Object object;
+  struct pinned_object *next;
+} *pinned_objects;
+
 static Lisp_Object
 purecopy (Lisp_Object obj)
 {
-  if (PURE_POINTER_P (XPNTR (obj)) || INTEGERP (obj) || SUBRP (obj))
+  if (INTEGERP (obj)
+      || (! SYMBOLP (obj) && PURE_P (XPNTR_OR_SYMBOL_OFFSET (obj)))
+      || SUBRP (obj))
     return obj;    /* Already pure.  */
+
+  if (STRINGP (obj) && XSTRING (obj)->intervals)
+    message_with_string ("Dropping text-properties while making string `%s' pure",
+			 obj, true);
 
   if (HASH_TABLE_P (Vpurify_flag)) /* Hash consing.  */
     {
@@ -5390,14 +5515,30 @@ purecopy (Lisp_Object obj)
   else if (FLOATP (obj))
     obj = make_pure_float (XFLOAT_DATA (obj));
   else if (STRINGP (obj))
+    obj = make_pure_string (SSDATA (obj), SCHARS (obj),
+			    SBYTES (obj),
+			    STRING_MULTIBYTE (obj));
+  else if (HASH_TABLE_P (obj))
     {
-      if (XSTRING (obj)->intervals)
-	message ("Dropping text-properties when making string pure");
-      obj = make_pure_string (SSDATA (obj), SCHARS (obj),
-			      SBYTES (obj),
-			      STRING_MULTIBYTE (obj));
+      struct Lisp_Hash_Table *table = XHASH_TABLE (obj);
+      /* Do not purify hash tables which haven't been defined with
+         :purecopy as non-nil or are weak - they aren't guaranteed to
+         not change.  */
+      if (!NILP (table->weak) || NILP (table->pure))
+        {
+          /* Instead, add the hash table to the list of pinned objects,
+             so that it will be marked during GC.  */
+          struct pinned_object *o = xmalloc (sizeof *o);
+          o->object = obj;
+          o->next = pinned_objects;
+          pinned_objects = o;
+          return obj; /* Don't hash cons it.  */
+        }
+
+      struct Lisp_Hash_Table *h = purecopy_hash_table (table);
+      XSET_HASH_TABLE (obj, h);
     }
-  else if (COMPILEDP (obj) || VECTORP (obj) || HASH_TABLE_P (obj))
+  else if (COMPILEDP (obj) || VECTORP (obj))
     {
       struct Lisp_Vector *objp = XVECTOR (obj);
       ptrdiff_t nbytes = vector_nbytes (objp);
@@ -5424,7 +5565,7 @@ purecopy (Lisp_Object obj)
     }
   else
     {
-      Lisp_Object fmt = build_pure_c_string ("Don't know how to purify: %S");
+      AUTO_STRING (fmt, "Don't know how to purify: %S");
       Fsignal (Qerror, list1 (CALLN (Fformat, fmt, obj)));
     }
 
@@ -5495,10 +5636,6 @@ total_bytes_of_live_objects (void)
 
 #ifdef HAVE_WINDOW_SYSTEM
 
-/* This code has a few issues on MS-Windows, see Bug#15876 and Bug#16140.  */
-
-#if !defined (HAVE_NTGUI)
-
 /* Remove unmarked font-spec and font-entity objects from ENTRY, which is
    (DRIVER-TYPE NUM-FRAMES FONT-CACHE-DATA ...), and return changed entry.  */
 
@@ -5513,21 +5650,49 @@ compact_font_cache_entry (Lisp_Object entry)
       Lisp_Object obj = XCAR (tail);
 
       /* Consider OBJ if it is (font-spec . [font-entity font-entity ...]).  */
-      if (CONSP (obj) && FONT_SPEC_P (XCAR (obj))
-	  && !VECTOR_MARKED_P (XFONT_SPEC (XCAR (obj)))
-	  && VECTORP (XCDR (obj)))
+      if (CONSP (obj) && GC_FONT_SPEC_P (XCAR (obj))
+	  && !VECTOR_MARKED_P (GC_XFONT_SPEC (XCAR (obj)))
+	  /* Don't use VECTORP here, as that calls ASIZE, which could
+	     hit assertion violation during GC.  */
+	  && (VECTORLIKEP (XCDR (obj))
+	      && ! (gc_asize (XCDR (obj)) & PSEUDOVECTOR_FLAG)))
 	{
-	  ptrdiff_t i, size = ASIZE (XCDR (obj)) & ~ARRAY_MARK_FLAG;
+	  ptrdiff_t i, size = gc_asize (XCDR (obj));
+	  Lisp_Object obj_cdr = XCDR (obj);
 
 	  /* If font-spec is not marked, most likely all font-entities
 	     are not marked too.  But we must be sure that nothing is
 	     marked within OBJ before we really drop it.  */
 	  for (i = 0; i < size; i++)
-	    if (VECTOR_MARKED_P (XFONT_ENTITY (AREF (XCDR (obj), i))))
-	      break;
+            {
+              Lisp_Object objlist;
+
+              if (VECTOR_MARKED_P (GC_XFONT_ENTITY (AREF (obj_cdr, i))))
+                break;
+
+              objlist = AREF (AREF (obj_cdr, i), FONT_OBJLIST_INDEX);
+              for (; CONSP (objlist); objlist = XCDR (objlist))
+                {
+                  Lisp_Object val = XCAR (objlist);
+                  struct font *font = GC_XFONT_OBJECT (val);
+
+                  if (!NILP (AREF (val, FONT_TYPE_INDEX))
+                      && VECTOR_MARKED_P(font))
+                    break;
+                }
+              if (CONSP (objlist))
+		{
+		  /* Found a marked font, bail out.  */
+		  break;
+		}
+            }
 
 	  if (i == size)
-	    drop = 1;
+	    {
+	      /* No marked fonts were found, so this entire font
+		 entity can be dropped.  */
+	      drop = 1;
+	    }
 	}
       if (drop)
 	*prev = XCDR (tail);
@@ -5536,8 +5701,6 @@ compact_font_cache_entry (Lisp_Object entry)
     }
   return entry;
 }
-
-#endif /* not HAVE_NTGUI */
 
 /* Compact font caches on all terminals and mark
    everything which is still here after compaction.  */
@@ -5550,15 +5713,17 @@ compact_font_caches (void)
   for (t = terminal_list; t; t = t->next_terminal)
     {
       Lisp_Object cache = TERMINAL_FONT_CACHE (t);
-#if !defined (HAVE_NTGUI)
-      if (CONSP (cache))
+      /* Inhibit compacting the caches if the user so wishes.  Some of
+	 the users don't mind a larger memory footprint, but do mind
+	 slower redisplay.  */
+      if (!inhibit_compacting_font_caches
+	  && CONSP (cache))
 	{
 	  Lisp_Object entry;
 
 	  for (entry = XCDR (cache); CONSP (entry); entry = XCDR (entry))
 	    XSETCAR (entry, compact_font_cache_entry (XCAR (entry)));
 	}
-#endif /* not HAVE_NTGUI */
       mark_object (cache);
     }
 }
@@ -5587,6 +5752,13 @@ compact_undo_list (Lisp_Object list)
 	prev = xcdr_addr (tail);
     }
   return list;
+}
+
+static void
+mark_pinned_objects (void)
+{
+  for (struct pinned_object *pobj = pinned_objects; pobj; pobj = pobj->next)
+    mark_object (pobj->object);
 }
 
 static void
@@ -5626,16 +5798,13 @@ garbage_collect_1 (void *end)
   Lisp_Object retval = Qnil;
   size_t tot_before = 0;
 
-  if (abort_on_gc)
-    emacs_abort ();
-
   /* Can't GC if pure storage overflowed because we can't determine
      if something is a pure object or not.  */
   if (pure_bytes_used_before_overflow)
     return Qnil;
 
   /* Record this function, so it appears on the profiler's backtraces.  */
-  record_in_backtrace (Qautomatic_gc, 0, 0);
+  record_in_backtrace (QAutomatic_GC, 0, 0);
 
   check_cons_list ();
 
@@ -5653,9 +5822,16 @@ garbage_collect_1 (void *end)
      don't let that cause a recursive GC.  */
   consing_since_gc = 0;
 
-  /* Save what's currently displayed in the echo area.  */
-  message_p = push_message ();
-  record_unwind_protect_void (pop_message_unwind);
+  /* Save what's currently displayed in the echo area.  Don't do that
+     if we are GC'ing because we've run out of memory, since
+     push_message will cons, and we might have no memory for that.  */
+  if (NILP (Vmemory_full))
+    {
+      message_p = push_message ();
+      record_unwind_protect_void (pop_message_unwind);
+    }
+  else
+    message_p = false;
 
   /* Save a copy of the contents of the stack, for debugging.  */
 #if MAX_SAVE_STACK > 0
@@ -5705,41 +5881,18 @@ garbage_collect_1 (void *end)
   for (i = 0; i < staticidx; i++)
     mark_object (*staticvec[i]);
 
+  mark_pinned_objects ();
   mark_pinned_symbols ();
-  mark_specpdl ();
   mark_terminals ();
   mark_kboards ();
+  mark_threads ();
 
 #ifdef USE_GTK
   xg_mark_data ();
 #endif
 
-#if (GC_MARK_STACK == GC_MAKE_GCPROS_NOOPS \
-     || GC_MARK_STACK == GC_MARK_STACK_CHECK_GCPROS)
-  mark_stack (end);
-#else
-  {
-    register struct gcpro *tail;
-    for (tail = gcprolist; tail; tail = tail->next)
-      for (i = 0; i < tail->nvars; i++)
-	mark_object (tail->var[i]);
-  }
-  mark_byte_stack ();
-#endif
-  {
-    struct handler *handler;
-    for (handler = handlerlist; handler; handler = handler->next)
-      {
-	mark_object (handler->tag_or_ch);
-	mark_object (handler->val);
-      }
-  }
 #ifdef HAVE_WINDOW_SYSTEM
   mark_fringe_data ();
-#endif
-
-#if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
-  mark_stack (end);
 #endif
 
   /* Everything is now marked, except for the data in font caches,
@@ -5770,14 +5923,8 @@ garbage_collect_1 (void *end)
   gc_sweep ();
 
   /* Clear the mark bits that we set in certain root slots.  */
-
-  unmark_byte_stack ();
   VECTOR_UNMARK (&buffer_defaults);
   VECTOR_UNMARK (&buffer_local_symbols);
-
-#if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES && 0
-  dump_zombies ();
-#endif
 
   check_cons_list ();
 
@@ -5804,7 +5951,7 @@ garbage_collect_1 (void *end)
 	}
     }
 
-  if (garbage_collection_messages)
+  if (garbage_collection_messages && NILP (Vmemory_full))
     {
       if (message_p || minibuf_level > 0)
 	restore_message ();
@@ -5851,21 +5998,6 @@ garbage_collect_1 (void *end)
 #endif
   };
   retval = CALLMANY (Flist, total);
-
-#if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
-  {
-    /* Compute average percentage of zombies.  */
-    double nlive
-      = (total_conses + total_symbols + total_markers + total_strings
-         + total_vectors + total_floats + total_intervals + total_buffers);
-
-    avg_live = (avg_live * ngcs + nlive) / (ngcs + 1);
-    max_live = max (nlive, max_live);
-    avg_zombies = (avg_zombies * ngcs + nzombies) / (ngcs + 1);
-    max_zombies = max (nzombies, max_zombies);
-    ++ngcs;
-  }
-#endif
 
   /* GC is complete: now we can run our finalizer callbacks.  */
   run_finalizers (&doomed_finalizers);
@@ -5917,69 +6049,9 @@ returns nil, because real GC can't be done.
 See Info node `(elisp)Garbage Collection'.  */)
   (void)
 {
-#if (GC_MARK_STACK == GC_MAKE_GCPROS_NOOPS		\
-     || GC_MARK_STACK == GC_MARK_STACK_CHECK_GCPROS	\
-     || GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES)
   void *end;
-
-#ifdef HAVE___BUILTIN_UNWIND_INIT
-  /* Force callee-saved registers and register windows onto the stack.
-     This is the preferred method if available, obviating the need for
-     machine dependent methods.  */
-  __builtin_unwind_init ();
-  end = &end;
-#else /* not HAVE___BUILTIN_UNWIND_INIT */
-#ifndef GC_SAVE_REGISTERS_ON_STACK
-  /* jmp_buf may not be aligned enough on darwin-ppc64 */
-  union aligned_jmpbuf {
-    Lisp_Object o;
-    sys_jmp_buf j;
-  } j;
-  volatile bool stack_grows_down_p = (char *) &j > (char *) stack_base;
-#endif
-  /* This trick flushes the register windows so that all the state of
-     the process is contained in the stack.  */
-  /* Fixme: Code in the Boehm GC suggests flushing (with `flushrs') is
-     needed on ia64 too.  See mach_dep.c, where it also says inline
-     assembler doesn't work with relevant proprietary compilers.  */
-#ifdef __sparc__
-#if defined (__sparc64__) && defined (__FreeBSD__)
-  /* FreeBSD does not have a ta 3 handler.  */
-  asm ("flushw");
-#else
-  asm ("ta 3");
-#endif
-#endif
-
-  /* Save registers that we need to see on the stack.  We need to see
-     registers used to hold register variables and registers used to
-     pass parameters.  */
-#ifdef GC_SAVE_REGISTERS_ON_STACK
-  GC_SAVE_REGISTERS_ON_STACK (end);
-#else /* not GC_SAVE_REGISTERS_ON_STACK */
-
-#ifndef GC_SETJMP_WORKS  /* If it hasn't been checked yet that
-			    setjmp will definitely work, test it
-			    and print a message with the result
-			    of the test.  */
-  if (!setjmp_tested_p)
-    {
-      setjmp_tested_p = 1;
-      test_setjmp ();
-    }
-#endif /* GC_SETJMP_WORKS */
-
-  sys_setjmp (j.j);
-  end = stack_grows_down_p ? (char *) &j + sizeof j : (char *) &j;
-#endif /* not GC_SAVE_REGISTERS_ON_STACK */
-#endif /* not HAVE___BUILTIN_UNWIND_INIT */
+  SET_STACK_TOP_ADDRESS (&end);
   return garbage_collect_1 (end);
-#elif (GC_MARK_STACK == GC_USE_GCPROS_AS_BEFORE)
-  /* Old GCPROs-based method without stack marking.  */
-  return garbage_collect_1 (NULL);
-#else
-  emacs_abort ();
-#endif /* GC_MARK_STACK */
 }
 
 /* Mark Lisp objects in glyph matrix MATRIX.  Currently the
@@ -6013,7 +6085,7 @@ mark_glyph_matrix (struct glyph_matrix *matrix)
    all the references contained in it.  */
 
 #define LAST_MARKED_SIZE 500
-static Lisp_Object last_marked[LAST_MARKED_SIZE];
+Lisp_Object last_marked[LAST_MARKED_SIZE] EXTERNALLY_VISIBLE;
 static int last_marked_index;
 
 /* For debugging--call abort when we cdr down this many
@@ -6133,7 +6205,7 @@ mark_face_cache (struct face_cache *c)
       int i, j;
       for (i = 0; i < c->used; ++i)
 	{
-	  struct face *face = FACE_FROM_ID (c->f, i);
+	  struct face *face = FACE_FROM_ID_OR_NULL (c->f, i);
 
 	  if (face)
 	    {
@@ -6172,7 +6244,7 @@ mark_save_value (struct Lisp_Save_Value *ptr)
   /* If `save_type' is zero, `data[0].pointer' is the address
      of a memory area containing `data[1].integer' potential
      Lisp_Objects.  */
-  if (GC_MARK_STACK && ptr->save_type == SAVE_TYPE_MEMORY)
+  if (ptr->save_type == SAVE_TYPE_MEMORY)
     {
       Lisp_Object *p = ptr->data[0].pointer;
       ptrdiff_t nelt;
@@ -6238,7 +6310,7 @@ mark_object (Lisp_Object arg)
  loop:
 
   po = XPNTR (obj);
-  if (PURE_POINTER_P (po))
+  if (PURE_P (po))
     return;
 
   last_marked[last_marked_index++] = obj;
@@ -6247,7 +6319,7 @@ mark_object (Lisp_Object arg)
 
   /* Perform some sanity checks on the objects marked here.  Abort if
      we encounter an object we know is bogus.  This increases GC time
-     by ~80%, and requires compilation with GC_MARK_STACK != 0.  */
+     by ~80%.  */
 #ifdef GC_CHECK_MARKED_OBJECTS
 
   /* Check that the object pointed to by PO is known to be a Lisp
@@ -6320,7 +6392,7 @@ mark_object (Lisp_Object arg)
 
 #ifdef GC_CHECK_MARKED_OBJECTS
 	m = mem_find (po);
-	if (m == MEM_NIL && !SUBRP (obj))
+	if (m == MEM_NIL && !SUBRP (obj) && !main_thread_p (po))
 	  emacs_abort ();
 #endif /* GC_CHECK_MARKED_OBJECTS */
 
@@ -6330,7 +6402,9 @@ mark_object (Lisp_Object arg)
 	else
 	  pvectype = PVEC_NORMAL_VECTOR;
 
-	if (pvectype != PVEC_SUBR && pvectype != PVEC_BUFFER)
+	if (pvectype != PVEC_SUBR
+	    && pvectype != PVEC_BUFFER
+	    && !main_thread_p (po))
 	  CHECK_LIVE (live_vector_p);
 
 	switch (pvectype)
@@ -6475,11 +6549,11 @@ mark_object (Lisp_Object arg)
 	    break;
 	  default: emacs_abort ();
 	  }
-	if (!PURE_POINTER_P (XSTRING (ptr->name)))
+	if (!PURE_P (XSTRING (ptr->name)))
 	  MARK_STRING (XSTRING (ptr->name));
 	MARK_INTERVAL_TREE (string_intervals (ptr->name));
 	/* Inner loop to mark next symbol in this bucket, if any.  */
-	ptr = ptr->next;
+	po = ptr = ptr->next;
 	if (ptr)
 	  goto nextsym;
       }
@@ -6513,6 +6587,12 @@ mark_object (Lisp_Object arg)
           XMISCANY (obj)->gcmarkbit = true;
           mark_object (XFINALIZER (obj)->function);
           break;
+
+#ifdef HAVE_MODULES
+	case Lisp_Misc_User_Ptr:
+	  XMISCANY (obj)->gcmarkbit = true;
+	  break;
+#endif
 
 	default:
 	  emacs_abort ();
@@ -6622,7 +6702,7 @@ survives_gc_p (Lisp_Object obj)
       emacs_abort ();
     }
 
-  return survives_p || PURE_POINTER_P ((void *) XPNTR (obj));
+  return survives_p || PURE_P (XPNTR (obj));
 }
 
 
@@ -6673,9 +6753,7 @@ sweep_conses (void)
                       this_free++;
                       cblk->conses[pos].u.chain = cons_free_list;
                       cons_free_list = &cblk->conses[pos];
-#if GC_MARK_STACK
                       cons_free_list->car = Vdead;
-#endif
                     }
                   else
                     {
@@ -6834,9 +6912,7 @@ sweep_symbols (void)
                 xfree (SYMBOL_BLV (&sym->s));
               sym->s.next = symbol_free_list;
               symbol_free_list = &sym->s;
-#if GC_MARK_STACK
               symbol_free_list->function = Vdead;
-#endif
               ++this_free;
             }
           else
@@ -6894,8 +6970,16 @@ sweep_misc (void)
             {
               if (mblk->markers[i].m.u_any.type == Lisp_Misc_Marker)
                 unchain_marker (&mblk->markers[i].m.u_marker);
-              if (mblk->markers[i].m.u_any.type == Lisp_Misc_Finalizer)
+              else if (mblk->markers[i].m.u_any.type == Lisp_Misc_Finalizer)
                 unchain_finalizer (&mblk->markers[i].m.u_finalizer);
+#ifdef HAVE_MODULES
+	      else if (mblk->markers[i].m.u_any.type == Lisp_Misc_User_Ptr)
+		{
+		  struct Lisp_User_Ptr *uptr = &mblk->markers[i].m.u_user_ptr;
+		  if (uptr->finalizer)
+		    uptr->finalizer (uptr->p);
+		}
+#endif
               /* Set the type of the freed object to Lisp_Misc_Free.
                  We could leave the type alone, since nobody checks it,
                  but this might catch bugs faster.  */
@@ -7033,7 +7117,7 @@ We divide the value by 1024 to make sure it fits in a Lisp integer.  */)
 {
   Lisp_Object end;
 
-#ifdef HAVE_NS
+#if defined HAVE_NS || !HAVE_SBRK
   /* Avoid warning.  sbrk has no relation to memory allocated anyway.  */
   XSETINT (end, 0);
 #else
@@ -7221,21 +7305,6 @@ die (const char *msg, const char *file, int line)
 
 #if defined (ENABLE_CHECKING) && USE_STACK_LISP_OBJECTS
 
-/* Debugging check whether STR is ASCII-only.  */
-
-const char *
-verify_ascii (const char *str)
-{
-  const unsigned char *ptr = (unsigned char *) str, *end = ptr + strlen (str);
-  while (ptr < end)
-    {
-      int c = STRING_CHAR_ADVANCE (ptr);
-      if (!ASCII_CHAR_P (c))
-	emacs_abort ();
-    }
-  return str;
-}
-
 /* Stress alloca with inconveniently sized requests and check
    whether all allocated areas may be used for Lisp_Object.  */
 
@@ -7265,7 +7334,6 @@ init_alloc_once (void)
 {
   /* Even though Qt's contents are not set up, its address is known.  */
   Vpurify_flag = Qt;
-  gc_precise = (GC_MARK_STACK == GC_USE_GCPROS_AS_BEFORE);
 
   purebeg = PUREBEG;
   pure_size = PURESIZE;
@@ -7274,10 +7342,8 @@ init_alloc_once (void)
   init_finalizer_list (&finalizers);
   init_finalizer_list (&doomed_finalizers);
 
-#if GC_MARK_STACK || defined GC_MALLOC_CHECK
   mem_init ();
   Vdead = make_pure_string ("DEAD", 4, 4, 0);
-#endif
 
 #ifdef DOUG_LEA_MALLOC
   mallopt (M_TRIM_THRESHOLD, 128 * 1024); /* Trim threshold.  */
@@ -7294,13 +7360,6 @@ init_alloc_once (void)
 void
 init_alloc (void)
 {
-  gcprolist = 0;
-  byte_stack_list = 0;
-#if GC_MARK_STACK
-#if !defined GC_SAVE_REGISTERS_ON_STACK && !defined GC_SETJMP_WORKS
-  setjmp_tested_p = longjmps_done = 0;
-#endif
-#endif
   Vgc_elapsed = make_float (0.0);
   gcs_done = 0;
 
@@ -7398,7 +7457,7 @@ do hash-consing of the objects allocated to pure space.  */);
   DEFSYM (Qstring_bytes, "string-bytes");
   DEFSYM (Qvector_slots, "vector-slots");
   DEFSYM (Qheap, "heap");
-  DEFSYM (Qautomatic_gc, "Automatic GC");
+  DEFSYM (QAutomatic_GC, "Automatic GC");
 
   DEFSYM (Qgc_cons_threshold, "gc-cons-threshold");
   DEFSYM (Qchar_table_extra_slots, "char-table-extra-slots");
@@ -7408,11 +7467,6 @@ do hash-consing of the objects allocated to pure space.  */);
 The time is in seconds as a floating point value.  */);
   DEFVAR_INT ("gcs-done", gcs_done,
               doc: /* Accumulated number of garbage collections done.  */);
-
-  DEFVAR_BOOL ("gc-precise", gc_precise,
-               doc: /* Non-nil means GC stack marking is precise.
-Useful mainly for automated GC tests.  Build time constant.*/);
-  XSYMBOL (intern_c_string ("gc-precise"))->constant = 1;
 
   defsubr (&Scons);
   defsubr (&Slist);
@@ -7432,10 +7486,6 @@ Useful mainly for automated GC tests.  Build time constant.*/);
   defsubr (&Smemory_info);
   defsubr (&Smemory_use_counts);
   defsubr (&Ssuspicious_object);
-
-#if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
-  defsubr (&Sgc_status);
-#endif
 }
 
 /* When compiled with GCC, GDB might say "No enum type named

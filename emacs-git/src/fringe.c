@@ -1,13 +1,13 @@
 /* Fringe handling (split from xdisp.c).
-   Copyright (C) 1985-1988, 1993-1995, 1997-2015 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1997-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,7 +26,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "frame.h"
 #include "window.h"
 #include "dispextern.h"
-#include "character.h"
 #include "buffer.h"
 #include "blockinput.h"
 #include "termhooks.h"
@@ -621,8 +620,7 @@ draw_fringe_bitmap_1 (struct window *w, struct glyph_row *row, int left_p, int o
       break;
     }
 
-  p.face = FACE_FROM_ID (f, face_id);
-
+  p.face = FACE_FROM_ID_OR_NULL (f, face_id);
   if (p.face == NULL)
     {
       /* This could happen after clearing face cache.
@@ -957,7 +955,7 @@ update_window_fringes (struct window *w, bool keep_current_p)
      row->indicate_bob_p is set, so it's OK that top_row_ends_at_zv_p
      is not initialized here.  Similarly for bot_ind_rn,
      row->indicate_eob_p and bot_row_ends_at_zv_p.  */
-  int top_row_ends_at_zv_p IF_LINT (= 0), bot_row_ends_at_zv_p IF_LINT (= 0);
+  int top_row_ends_at_zv_p UNINIT, bot_row_ends_at_zv_p UNINIT;
 
   if (w->pseudo_window_p)
     return 0;
@@ -1405,6 +1403,21 @@ init_fringe_bitmap (int which, struct fringe_bitmap *fb, int once_p)
       unsigned short *bits = fb->bits;
       int j;
 
+#ifdef USE_CAIRO
+      for (j = 0; j < fb->height; j++)
+	{
+	  unsigned short b = *bits;
+#ifdef WORDS_BIGENDIAN
+	  *bits++ = (b << (16 - fb->width));
+#else
+	  b = (unsigned short)((swap_nibble[b & 0xf] << 12)
+			       | (swap_nibble[(b>>4) & 0xf] << 8)
+			       | (swap_nibble[(b>>8) & 0xf] << 4)
+			       | (swap_nibble[(b>>12) & 0xf]));
+	  *bits++ = (b >> (16 - fb->width));
+#endif
+	}
+#else  /* not USE_CAIRO */
       if (fb->width <= 8)
 	{
 	  unsigned char *cbits = (unsigned char *)fb->bits;
@@ -1433,6 +1446,7 @@ init_fringe_bitmap (int which, struct fringe_bitmap *fb, int once_p)
 	      *bits++ = b;
 	    }
 	}
+#endif /* not USE_CAIRO */
 #endif /* HAVE_X_WINDOWS */
 
     }
@@ -1612,7 +1626,7 @@ If FACE is nil, reset face to default fringe face.  */)
     {
       struct frame *f = SELECTED_FRAME ();
 
-      if (FACE_FROM_ID (f, FRINGE_FACE_ID)
+      if (FACE_FROM_ID_OR_NULL (f, FRINGE_FACE_ID)
 	  && lookup_derived_face (f, face, FRINGE_FACE_ID, 1) < 0)
 	error ("No such face");
     }
@@ -1686,7 +1700,7 @@ syms_of_fringe (void)
   DEFVAR_LISP ("overflow-newline-into-fringe", Voverflow_newline_into_fringe,
     doc: /* Non-nil means that newline may flow into the right fringe.
 This means that display lines which are exactly as wide as the window
-(not counting the final newline) will only occupy one screen line, by
+\(not counting the final newline) will only occupy one screen line, by
 showing (or hiding) the final newline in the right fringe; when point
 is at the final newline, the cursor is shown in the right fringe.
 If nil, also continue lines which are exactly as wide as the window.  */);
@@ -1731,10 +1745,14 @@ init_fringe (void)
   fringe_faces = xzalloc (max_fringe_bitmaps * sizeof *fringe_faces);
 }
 
-#ifdef HAVE_NTGUI
+#if defined (HAVE_NTGUI) || defined (USE_CAIRO)
 
 void
+#ifdef HAVE_NTGUI
 w32_init_fringe (struct redisplay_interface *rif)
+#else
+x_cr_init_fringe (struct redisplay_interface *rif)
+#endif
 {
   int bt;
 
@@ -1747,7 +1765,9 @@ w32_init_fringe (struct redisplay_interface *rif)
       rif->define_fringe_bitmap (bt, fb->bits, fb->height, fb->width);
     }
 }
+#endif
 
+#ifdef HAVE_NTGUI
 void
 w32_reset_fringes (void)
 {

@@ -1,6 +1,6 @@
 ;;; lisp.el --- Lisp editing commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1994, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1985-1986, 1994, 2000-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -364,8 +364,7 @@ is called as a function to find the defun's beginning."
 	  (arg-+ve (> arg 0)))
       (save-restriction
 	(widen)
-	(let ((ppss (let (syntax-begin-function
-			  font-lock-beginning-of-syntax-function)
+	(let ((ppss (let (syntax-begin-function)
 		      (syntax-ppss)))
 	      ;; position of least enclosing paren, or nil.
 	      encl-pos)
@@ -588,7 +587,11 @@ Interactively, the behavior depends on `narrow-to-defun-include-comments'."
 Each element looks like (OPEN-CHAR CLOSE-CHAR) or (COMMAND-CHAR
 OPEN-CHAR CLOSE-CHAR).  The characters OPEN-CHAR and CLOSE-CHAR
 of the pair whose key is equal to the last input character with
-or without modifiers, are inserted by `insert-pair'.")
+or without modifiers, are inserted by `insert-pair'.
+
+If COMMAND-CHAR is specified, it is a character that triggers the
+insertion of the open/close pair, and COMMAND-CHAR itself isn't
+inserted.")
 
 (defun insert-pair (&optional arg open close)
   "Enclose following ARG sexps in a pair of OPEN and CLOSE characters.
@@ -619,8 +622,11 @@ This command assumes point is not in a string or comment."
   (if (and open close)
       (if (and transient-mark-mode mark-active)
           (progn
-            (save-excursion (goto-char (region-end))       (insert close))
-            (save-excursion (goto-char (region-beginning)) (insert open)))
+            (save-excursion
+              (goto-char (region-end))
+              (insert close))
+            (goto-char (region-beginning))
+            (insert open))
         (if arg (setq arg (prefix-numeric-value arg))
           (setq arg 0))
         (cond ((> arg 0) (skip-chars-forward " \t"))
@@ -746,9 +752,10 @@ The context determines which symbols are considered.  If the
 symbol starts just after an open-parenthesis, only symbols with
 function definitions are considered.  Otherwise, all symbols with
 function definitions, values or properties are considered."
-  (declare (obsolete completion-at-point "24.4"))
+  (declare (obsolete completion-at-point "24.4")
+           (advertised-calling-convention () "25.1"))
   (interactive)
-  (let* ((data (lisp-completion-at-point))
+  (let* ((data (elisp-completion-at-point))
          (plist (nthcdr 3 data)))
     (if (null data)
         (minibuffer-message "Nothing to complete")

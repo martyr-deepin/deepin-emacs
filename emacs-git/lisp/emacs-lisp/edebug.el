@@ -1,6 +1,6 @@
 ;;; edebug.el --- a source-level debugger for Emacs Lisp  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988-1995, 1997, 1999-2015 Free Software Foundation,
+;; Copyright (C) 1988-1995, 1997, 1999-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Daniel LaLiberte <liberte@holonexus.org>
@@ -85,7 +85,7 @@ This applies to `eval-defun', `eval-region', `eval-buffer', and
 
 You can use the command `edebug-all-defs' to toggle the value of this
 variable.  You may wish to make it local to each buffer with
-\(make-local-variable 'edebug-all-defs) in your
+\(make-local-variable \\='edebug-all-defs) in your
 `emacs-lisp-mode-hook'."
   :type 'boolean
   :group 'edebug)
@@ -111,6 +111,18 @@ So to specify exceptions for macros that have some arguments evaluated
 and some not, use `def-edebug-spec' to specify an `edebug-form-spec'."
   :type 'boolean
   :group 'edebug)
+
+(defcustom edebug-max-depth 150
+  "Maximum recursion depth when instrumenting code.
+This limit is intended to stop recursion if an Edebug specification
+contains an infinite loop.  When Edebug is instrumenting code
+containing very large quoted lists, it may reach this limit and give
+the error message \"Too deep - perhaps infinite loop in spec?\".
+Make this limit larger to countermand that, but you may also need to
+increase `max-lisp-eval-depth' and `max-specpdl-size'."
+  :type 'integer
+  :group 'edebug
+  :version "26.1")
 
 (defcustom edebug-save-windows t
   "If non-nil, Edebug saves and restores the window configuration.
@@ -225,12 +237,19 @@ After execution is resumed, the error is signaled again."
   "If non-nil, an expression to test for at every stop point.
 If the result is non-nil, then break.  Errors are ignored."
   :type 'sexp
+  :risky t
   :group 'edebug)
 
 (defcustom edebug-sit-for-seconds 1
   "Number of seconds to pause when execution mode is `trace' or `continue'."
   :type 'number
   :group 'edebug)
+
+(defcustom edebug-sit-on-break t
+  "Whether or not to pause for `edebug-sit-for-seconds' on reaching a break."
+  :type 'boolean
+  :group 'edebug
+  :version "26.1")
 
 ;;; Form spec utilities.
 
@@ -561,7 +580,7 @@ already is one.)"
 (defun edebug-install-read-eval-functions ()
   (interactive)
   (add-function :around load-read-function #'edebug--read)
-  (advice-add 'eval-defun :override 'edebug-eval-defun))
+  (advice-add 'eval-defun :override #'edebug-eval-defun))
 
 (defun edebug-uninstall-read-eval-functions ()
   (interactive)
@@ -600,7 +619,7 @@ list of a symbol.")
 (defun edebug-get-form-data-entry (pnt &optional end-point)
   ;; Find the edebug form data entry which is closest to PNT.
   ;; If END-POINT is supplied, match must be exact.
-  ;; Return `nil' if none found.
+  ;; Return nil if none found.
   (let ((rest edebug-form-data)
 	closest-entry
 	(closest-dist 999999))  ;; Need maxint here.
@@ -861,11 +880,9 @@ Maybe clear the markers and delete the symbol's edebug property?"
 	 (list
 	  (edebug-storing-offsets (- (point) 2) 'function)
 	  (edebug-read-storing-offsets stream)))
-	((memq (following-char) '(?: ?B ?O ?X ?b ?o ?x ?1 ?2 ?3 ?4 ?5 ?6
-				  ?7 ?8 ?9 ?0))
+        (t
 	 (backward-char 1)
-	 (read stream))
-	(t (edebug-syntax-error "Bad char after #"))))
+	 (read stream))))
 
 (defun edebug-read-list (stream)
   (forward-char 1)			; skip \(
@@ -1445,7 +1462,6 @@ expressions; a `progn' form will be returned enclosing these forms."
 (defvar edebug-after-dotted-spec nil)
 
 (defvar edebug-matching-depth 0)  ;; initial value
-(defconst edebug-max-depth 150)  ;; maximum number of matching recursions.
 
 
 ;;; Failure to match
@@ -1926,6 +1942,7 @@ expressions; a `progn' form will be returned enclosing these forms."
 (def-edebug-spec defun
   (&define name lambda-list
 	   [&optional stringp]
+           [&optional ("declare" &rest sexp)]
 	   [&optional ("interactive" interactive)]
 	   def-body))
 (def-edebug-spec defmacro
@@ -2162,8 +2179,7 @@ The purpose of this function is so you can properly undo
 subsequent changes to the same binding, by passing the status
 cons cell to `edebug-restore-status'.  The status cons cell
 has the form (LOCUS . VALUE), where LOCUS can be a buffer
-\(for a buffer-local binding), a frame (for a frame-local binding),
-or nil (if the default binding is current)."
+\(for a buffer-local binding), or nil (if the default binding is current)."
   (cons (variable-binding-locus var)
 	(symbol-value var)))
 
@@ -2355,7 +2371,7 @@ MSG is printed after `::::} '."
 (defvar edebug-window-data)  ; window and window-start for current function
 (defvar edebug-outside-windows) ; outside window configuration
 (defvar edebug-eval-buffer) ; for the evaluation list.
-(defvar edebug-outside-d-c-i-n-s-w) ; outside default-cursor-in-non-selected-windows
+(defvar edebug-outside-d-c-i-n-s-w) ; outside default cursor-in-non-selected-windows
 
 (defvar edebug-eval-list nil) ;; List of expressions to evaluate.
 
@@ -2488,6 +2504,7 @@ MSG is printed after `::::} '."
                 (progn
                   ;; Display result of previous evaluation.
                   (if (and edebug-break
+                           edebug-sit-on-break
                            (not (eq edebug-execution-mode 'Continue-fast)))
                       (sit-for edebug-sit-for-seconds)) ; Show message.
                   (edebug-previous-result)))
@@ -3162,12 +3179,12 @@ Do this when stopped before the form or it will be too late.
 One side effect of using this command is that the next time the
 function or macro is called, Edebug will be called there as well."
   (interactive)
-  (if (not (looking-at "\("))
+  (if (not (looking-at "("))
       (error "You must be before a list form")
     (let ((func
 	   (save-excursion
 	     (down-list 1)
-	     (if (looking-at "\(")
+	     (if (looking-at "(")
 		 (edebug--form-data-name
 		  (edebug-get-form-data-entry (point)))
 	       (read (current-buffer))))))
@@ -3216,57 +3233,45 @@ This is useful for exiting even if `unwind-protect' code may be executed."
   (setq edebug-execution-mode 'Go-nonstop)
   (top-level))
 
-
 ;;(defun edebug-exit-out ()
 ;;  "Go until the current function exits."
 ;;  (interactive)
 ;;  (edebug-set-mode 'exiting "Exit..."))
 
-
-;;; The following initial mode setting definitions are not used yet.
-
-'(defconst edebug-initial-mode-alist
-  '((edebug-Continue-fast . Continue-fast)
-    (edebug-Trace-fast . Trace-fast)
-    (edebug-continue . continue)
-    (edebug-trace . trace)
-    (edebug-go . go)
-    (edebug-step-through . step)
-    (edebug-Go-nonstop . Go-nonstop)
-    )
+(defconst edebug-initial-mode-alist
+  '((edebug-step-mode . step)
+    (edebug-next-mode . next)
+    (edebug-trace-mode . trace)
+    (edebug-Trace-fast-mode . Trace-fast)
+    (edebug-go-mode . go)
+    (edebug-continue-mode . continue)
+    (edebug-Continue-fast-mode . Continue-fast)
+    (edebug-Go-nonstop-mode . Go-nonstop))
   "Association list between commands and the modes they set.")
 
+(defvar edebug-mode-map)		; will be defined fully later.
 
-'(defun edebug-set-initial-mode ()
-  "Ask for the initial mode of the enclosing function.
+(defun edebug-set-initial-mode ()
+  "Set the initial execution mode of Edebug.
 The mode is requested via the key that would be used to set the mode in
 edebug-mode."
   (interactive)
-  (let* ((this-function (edebug-which-function))
-	 (keymap (if (eq edebug-mode-map (current-local-map))
-		     edebug-mode-map))
-	 (old-mode (or (get this-function 'edebug-initial-mode)
-		       edebug-initial-mode))
+  (let* ((old-mode edebug-initial-mode)
 	 (key (read-key-sequence
 	       (format
-		"Change initial edebug mode for %s from %s (%s) to (enter key): "
-		       this-function
-		       old-mode
-		       (where-is-internal
-			(car (rassq old-mode edebug-initial-mode-alist))
-			keymap 'firstonly
-			))))
-	 (mode (cdr (assq (key-binding key) edebug-initial-mode-alist)))
-	 )
-    (if (and mode
-	     (or (get this-function 'edebug-initial-mode)
-		 (not (eq mode edebug-initial-mode))))
+		"Change initial edebug mode from %s (%c) to (enter key): "
+		old-mode
+		(aref (where-is-internal
+		       (car (rassq old-mode edebug-initial-mode-alist))
+		       edebug-mode-map 'firstonly)
+		      0))))
+	 (mode (cdr (assq (lookup-key edebug-mode-map key)
+			  edebug-initial-mode-alist))))
+    (if mode
 	(progn
-	  (put this-function 'edebug-initial-mode mode)
-	  (message "Initial mode for %s is now: %s"
-		   this-function mode))
-      (error "Key must map to one of the mode changing commands")
-      )))
+	  (setq edebug-initial-mode mode)
+	  (message "Edebug's initial mode is now: %s" mode))
+      (error "Key must map to one of the mode changing commands"))))
 
 ;;; Evaluation of expressions
 
@@ -3373,7 +3378,7 @@ Return the result of the last expression."
 (defalias 'edebug-prin1 'prin1)
 (defalias 'edebug-print 'print)
 (defalias 'edebug-prin1-to-string 'prin1-to-string)
-(defalias 'edebug-format 'format)
+(defalias 'edebug-format 'format-message)
 (defalias 'edebug-message 'message)
 
 (defun edebug-eval-expression (expr)
@@ -3425,7 +3430,9 @@ be installed in `emacs-lisp-mode-map'.")
   (define-key emacs-lisp-mode-map "\C-x\C-a\C-s" 'edebug-step-mode)
   (define-key emacs-lisp-mode-map "\C-x\C-a\C-n" 'edebug-next-mode)
   (define-key emacs-lisp-mode-map "\C-x\C-a\C-c" 'edebug-go-mode)
-  (define-key emacs-lisp-mode-map "\C-x\C-a\C-l" 'edebug-where))
+  (define-key emacs-lisp-mode-map "\C-x\C-a\C-l" 'edebug-where)
+  ;; The following isn't a GUD binding.
+  (define-key emacs-lisp-mode-map "\C-x\C-a\C-m" 'edebug-set-initial-mode))
 
 (defvar edebug-mode-map
   (let ((map (copy-keymap emacs-lisp-mode-map)))
@@ -3790,16 +3797,18 @@ Otherwise call `debug' normally."
       (if t (progn
 
       ;; Delete interspersed edebug internals.
-      (while (re-search-forward "^  \(?edebug" nil t)
+      (while (re-search-forward "^  (?edebug" nil t)
 	(beginning-of-line)
 	(cond
-	 ((looking-at "^  \(edebug-after")
+	 ((looking-at "^  (edebug-after")
 	  ;; Previous lines may contain code, so just delete this line.
 	  (setq last-ok-point (point))
 	  (forward-line 1)
 	  (delete-region last-ok-point (point)))
 
-	 ((looking-at "^  edebug")
+	 ((looking-at (if debugger-stack-frame-as-list
+                          "^  (edebug"
+                        "^  edebug"))
 	  (forward-line 1)
 	  (delete-region last-ok-point (point))
 	  )))

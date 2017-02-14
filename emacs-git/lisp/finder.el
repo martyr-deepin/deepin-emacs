@@ -1,6 +1,6 @@
 ;;; finder.el --- topic & keyword-based code finder
 
-;; Copyright (C) 1992, 1997-1999, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1992, 1997-1999, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
@@ -114,10 +114,6 @@ Each element has the form (KEYWORD . DESCRIPTION).")
     st)
   "Syntax table used while in `finder-mode'.")
 
-(defvar finder-font-lock-keywords
-  '(("`\\([^'`]+\\)'" 1 font-lock-constant-face prepend))
-  "Font-lock keywords for Finder mode.")
-
 (defvar finder-headmark nil
   "Internal Finder mode variable, local in Finder buffer.")
 
@@ -134,8 +130,8 @@ Keywords and package names both should be symbols.")
 ;; useful, and because in parallel builds of Emacs they may get
 ;; modified while we are trying to read them.
 ;; http://lists.gnu.org/archive/html/emacs-pretest-bug/2007-01/msg00469.html
-;; ldefs-boot is not auto-generated, but has nothing useful.
-(defvar finder-no-scan-regexp "\\(^\\.#\\|\\(loaddefs\\|ldefs-boot\\|\
+;; ldefs-boot-* are not auto-generated during build, but has nothing useful.
+(defvar finder-no-scan-regexp "\\(^\\.#\\|\\(loaddefs\\|ldefs-boot-.*\\|\
 cus-load\\|finder-inf\\|esh-groups\\|subdirs\\|leim-list\\)\\.el$\\)"
   "Regexp matching file names not to scan for keywords.")
 
@@ -197,7 +193,7 @@ from; the default is `load-path'."
 	summary keywords package version entry desc)
     (dolist (d (or dirs load-path))
       (when (file-exists-p (directory-file-name d))
-	(message "Directory %s" d)
+	(message "Scanning %s for finder" d)
 	(setq package-override
 	      (intern-soft
 	       (cdr-safe
@@ -242,7 +238,7 @@ from; the default is `load-path'."
 		    ;; The idea here is that eg calc.el gets to define
 		    ;; the description of the calc package.
 		    ;; This does not work for eg nxml-mode.el.
-		    ((eq base-name package)
+		    ((or (eq base-name package) version)
 		     (setq desc (cdr entry))
 		     (aset desc 0 version)
 		     (aset desc 2 summary)))

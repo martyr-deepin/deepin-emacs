@@ -1,6 +1,6 @@
 ;;; ede/pconf.el --- configure.ac maintenance for EDE
 
-;;; Copyright (C) 1998-2000, 2005, 2008-2015 Free Software Foundation,
+;;; Copyright (C) 1998-2000, 2005, 2008-2017 Free Software Foundation,
 ;;; Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
@@ -31,8 +31,8 @@
 
 (defvar ede-pconf-create-file-query 'ask
   "Controls if queries are made while creating project files.
-A value of 'ask means to always ask the user before creating
-a file, such as AUTHORS.  A value of 'never means don't ask, and
+A value of `ask' means to always ask the user before creating
+a file, such as AUTHORS.  A value of `never' means don't ask, and
 don't do it.  A value of nil means to just do it.")
 
 ;;; Code:
@@ -93,11 +93,11 @@ don't do it.  A value of nil means to just do it.")
     (ede-map-all-subprojects
      this
      (lambda (sp)
-       (ede-map-targets sp 'ede-proj-flush-autoconf)))
+       (ede-map-targets sp #'ede-proj-flush-autoconf)))
     (ede-map-all-subprojects
      this
      (lambda (sp)
-       (ede-map-targets this 'ede-proj-tweak-autoconf)))
+       (ede-map-targets this #'ede-proj-tweak-autoconf)))
     ;; Now save
     (save-buffer)
     (setq postcmd "autoreconf -f -i;")

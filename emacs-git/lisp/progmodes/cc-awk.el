@@ -1,6 +1,6 @@
 ;;; cc-awk.el --- AWK specific code within cc-mode.
 
-;; Copyright (C) 1988, 1994, 1996, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1988, 1994, 1996, 2000-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Alan Mackenzie <acm@muc.de> (originally based on awk-mode.el)
@@ -72,7 +72,7 @@
     (modify-syntax-entry ?\# "<   " st)
     ;; / can delimit regexes or be a division operator.  By default we assume
     ;; that it is a division sign, and fix the regexp operator cases with
-    ;; `font-lock-syntactic-keywords'.
+    ;; `c-awk-set-syntax-table-properties'.
     (modify-syntax-entry ?/ "." st)     ; ACM 2002/4/27.
     (modify-syntax-entry ?* "." st)
     (modify-syntax-entry ?+ "." st)
@@ -215,7 +215,7 @@
 (defconst c-awk-neutrals*-re
   (concat "\\(" c-awk-neutral-re "\\)*"))
 ;;   A (possibly empty) string of neutral characters (or character pairs).
-(defconst c-awk-var-num-ket-re "[]\)0-9a-zA-Z_$.\x80-\xff]+")
+(defconst c-awk-var-num-ket-re "[])0-9a-zA-Z_$.\x80-\xff]+")
 ;;   Matches a char which is a constituent of a variable or number, or a ket
 ;; (i.e. closing bracKET), round or square.  Assume that all characters \x80 to
 ;; \xff are "letters".
@@ -227,7 +227,7 @@
 ;; will only work when there won't be a preceding " or / before the sought /
 ;; to foul things up.
 (defconst c-awk-non-arith-op-bra-re
-  "[[\({&=:!><,?;'~|]")
+  "[[({&=:!><,?;'~|]")
 ;;   Matches an opening BRAcket (of any sort), or any operator character
 ;; apart from +,-,/,*,%.  For the purpose at hand (detecting a / which is a
 ;; regexp bracket) these arith ops are unnecessary and a pain, because of "++"
@@ -266,7 +266,7 @@
 ;; Matches optional whitespace followed by a "/" with string syntax (a matched
 ;; regexp delimiter).
 (defconst c-awk-space*-unclosed-regexp-/-re
-  (concat c-awk-escaped-nls*-with-space* "\\s\|"))
+  (concat c-awk-escaped-nls*-with-space* "\\s|"))
 ;; Matches optional whitespace followed by a "/" with string fence syntax (an
 ;; unmatched regexp delimiter).
 
@@ -785,13 +785,16 @@
 ;;     Scan the buffer text between point and LIM, setting (and clearing) the
 ;; syntax-table property where necessary.
 ;;
-;; This function is designed to be called as the FUNCTION in a MATCHER in
-;; font-lock-syntactic-keywords, and it always returns NIL (to inhibit
-;; repeated calls from font-lock: See elisp info page "Search-based
-;; Fontification").  It also gets called, with a bit of glue, from
-;; after-change-functions when font-lock isn't active.  Point is left
-;; "undefined" after this function exits.  THE BUFFER SHOULD HAVE BEEN
-;; WIDENED, AND ANY PRECIOUS MATCH-DATA SAVED BEFORE CALLING THIS ROUTINE.
+;; This function is designed to be called as the FUNCTION in a MATCHER
+;; in font-lock-syntactic-keywords, and it always returns NIL (to
+;; inhibit repeated calls from font-lock: See elisp info page
+;; "Search-based Fontification").  (2015-11-24: CC Mode doesn't use
+;; `font-lock-syntactic-keywords' and hasn't done for a very long
+;; time, if ever.  ACM.)  This function gets called, with a bit of
+;; glue, from after-change-functions whether or not font-lock is
+;; active.  Point is left "undefined" after this function exits.  THE
+;; BUFFER SHOULD HAVE BEEN WIDENED, AND ANY PRECIOUS MATCH-DATA SAVED
+;; BEFORE CALLING THIS ROUTINE.
 ;;
 ;; We need to set/clear the syntax-table property on:
 ;; (i) / - It is set to "string" on a / which is the opening or closing
@@ -1147,8 +1150,8 @@ comment at the start of cc-engine.el for more info."
 
 (cc-provide 'cc-awk)			; Changed from 'awk-mode, ACM 2002/5/21
 
-;;; Local Variables:
-;;; indent-tabs-mode: t
-;;; tab-width: 8
-;;; End:
+;; Local Variables:
+;; indent-tabs-mode: t
+;; tab-width: 8
+;; End:
 ;;; awk-mode.el ends here

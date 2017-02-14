@@ -1,6 +1,6 @@
 ;;; ido.el --- interactively do things with buffers and files
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 ;; Author: Kim F. Storm <storm@cua.dk>
 ;; Based on: iswitchb by Stephen Eglen <stephen@cns.ed.ac.uk>
@@ -322,6 +322,7 @@
 ;;; Code:
 
 (defvar recentf-list)
+(require 'seq)
 
 ;;;; Options
 
@@ -377,7 +378,7 @@ use either \\[customize] or the function `ido-mode'."
   '("\\` ")
   "List of regexps or functions matching buffer names to ignore.
 For example, traditional behavior is not to list buffers whose names begin
-with a space, for which the regexp is `\\` '.  See the source file for
+with a space, for which the regexp is `\\\\=` '.  See the source file for
 example functions that filter buffer names."
   :type '(repeat (choice regexp function))
   :group 'ido)
@@ -386,7 +387,7 @@ example functions that filter buffer names."
   '("\\`CVS/" "\\`#" "\\`.#" "\\`\\.\\./" "\\`\\./")
   "List of regexps or functions matching file names to ignore.
 For example, traditional behavior is not to list files whose names begin
-with a #, for which the regexp is `\\`#'.  See the source file for
+with a #, for which the regexp is `\\\\=`#'.  See the source file for
 example functions that filter filenames."
   :type '(repeat (choice regexp function))
   :group 'ido)
@@ -741,8 +742,8 @@ not provide the normal completion.  To show the completions, use \\[ido-toggle-i
 
 (defcustom ido-enter-matching-directory 'only
   "Additional methods to enter sub-directory of first/only matching item.
-If value is 'first, enter first matching sub-directory when typing a slash.
-If value is 'only, typing a slash only enters the sub-directory if it is
+If value is `first', enter first matching sub-directory when typing a slash.
+If value is `only', typing a slash only enters the sub-directory if it is
 the only matching item.
 If value is t, automatically enter a sub-directory when it is the only
 matching item, even without typing a slash."
@@ -754,8 +755,8 @@ matching item, even without typing a slash."
 
 (defcustom ido-create-new-buffer 'prompt
   "Specify whether a new buffer is created if no buffer matches substring.
-Choices are 'always to create new buffers unconditionally, 'prompt to
-ask user whether to create buffer, or 'never to never create new buffer."
+Choices are `always' to create new buffers unconditionally, `prompt' to
+ask user whether to create buffer, or `never' to never create new buffer."
   :type '(choice (const always)
 		 (const prompt)
 		 (const never))
@@ -940,7 +941,7 @@ This hook is run during minibuffer setup if Ido is active.
 It is intended for use in customizing Ido for interoperation
 with other packages.  For instance:
 
-  (add-hook 'ido-minibuffer-setup-hook
+  (add-hook \\='ido-minibuffer-setup-hook
 	    (lambda () (setq-local max-mini-window-height 3)))
 
 will constrain Emacs to a maximum minibuffer height of 3 lines when
@@ -1604,8 +1605,8 @@ With ARG, turn Ido mode on if arg is positive, off otherwise.
 Turning on Ido mode will remap (via a minor-mode keymap) the default
 keybindings for the `find-file' and `switch-to-buffer' families of
 commands to the Ido versions of these functions.
-However, if ARG arg equals 'files, remap only commands for files, or
-if it equals 'buffers, remap only commands for buffer switching.
+However, if ARG arg equals `files', remap only commands for files, or
+if it equals `buffers', remap only commands for buffer switching.
 This function also adds a hook to the minibuffer."
   (interactive "P")
   (setq ido-mode
@@ -1881,6 +1882,7 @@ If INITIAL is non-nil, it specifies the initial input string."
        ido-selected
        ido-final-text
        (done nil)
+       (non-essential t) ;; prevent eager Tramp connection
        (icomplete-mode nil) ;; prevent icomplete starting up
        ;; Exported dynamic variables:
        ido-cur-list
@@ -2274,7 +2276,8 @@ If cursor is not at the end of the user input, move to end of input."
 
        ((and (eq ido-create-new-buffer 'prompt)
 	     (null require-match)
-	     (not (y-or-n-p (format "No buffer matching `%s', create one? " buf))))
+	     (not (y-or-n-p (format-message
+			     "No buffer matching `%s', create one? " buf))))
 	nil)
 
        ;; buffer doesn't exist
@@ -2284,7 +2287,8 @@ If cursor is not at the end of the user input, move to end of input."
 
        ((and (eq ido-create-new-buffer 'prompt)
 	     (null require-match)
-	     (not (y-or-n-p (format "No buffer matching `%s', create one? " buf))))
+	     (not (y-or-n-p (format-message
+			     "No buffer matching `%s', create one? " buf))))
 	nil)
 
        ;; create a new buffer
@@ -3180,11 +3184,19 @@ for first matching file."
       (if (> i 0)
 	  (setq ido-cur-list (ido-chop ido-cur-list (nth i ido-matches)))))))
 
-(defun ido-restrict-to-matches ()
-  "Set current item list to the currently matched items."
-  (interactive)
+(defun ido-restrict-to-matches (&optional removep)
+  "Set current item list to the currently matched items.
+
+When argument REMOVEP is non-nil, the currently matched items are
+instead removed from the current item list."
+  (interactive "P")
   (when ido-matches
-    (setq ido-cur-list ido-matches
+    (setq ido-cur-list (if removep
+                           ;; An important feature is to preserve the
+                           ;; order of the elements.
+                           (seq-difference ido-cur-list ido-matches)
+                         ido-matches)
+          ido-matches ido-cur-list
 	  ido-text-init ""
 	  ido-rescan nil
 	  ido-exit 'keep)
@@ -3480,14 +3492,12 @@ This is to make them appear as if they were \"virtual buffers\"."
   ;; the file which the user might thought was still open.
   (unless recentf-mode (recentf-mode 1))
   (setq ido-virtual-buffers nil)
-  (let ((bookmarks (and (boundp 'bookmark-alist)
-                        bookmark-alist))
-        name)
+  (let (name)
     (dolist (head (append
                    recentf-list
-                   (delq nil (mapcar (lambda (bookmark)
-                                       (cdr (assoc 'filename bookmark)))
-                                     bookmarks))))
+                   (and (fboundp 'bookmark-get-filename)
+                        (delq nil (mapcar #'bookmark-get-filename
+                                          (bound-and-true-p bookmark-alist))))))
       (setq name (file-name-nondirectory head))
       ;; In case HEAD is a directory with trailing /.  See bug#14552.
       (when (equal name "")
@@ -3495,7 +3505,7 @@ This is to make them appear as if they were \"virtual buffers\"."
       (when (equal name "")
 	(setq name head))
       (and (not (equal name ""))
-	   (null (get-file-buffer head))
+           (null (let (file-name-handler-alist) (get-file-buffer head)))
            (not (assoc name ido-virtual-buffers))
            (not (member name ido-temp-list))
            (not (ido-ignore-item-p name ido-ignore-buffers))
@@ -3548,7 +3558,9 @@ it is put to the start of the list."
     (let* ((len (1- (length dir)))
 	   (non-essential t)
 	   (compl
-	    (or (file-name-all-completions "" dir)
+	    (or ;; We do not want to be disturbed by "File does not
+                ;; exist" errors.
+                (ignore-errors (file-name-all-completions "" dir))
 		;; work around bug in ange-ftp.
 		;; /ftp:user@host: => nil
 		;; /ftp:user@host:./ => ok
@@ -3766,13 +3778,13 @@ frame, rather than all frames, regardless of value of `ido-all-frames'."
 		       (not (and (eq ido-cur-item 'buffer)
 				 ido-buffer-disable-smart-matches))
 		       (not ido-enable-regexp)
-		       (not (string-match "\$\\'" rex0))
+		       (not (string-match "$\\'" rex0))
 		       (concat "\\`" rex0 (if slash "/" "") "\\'")))
 	 (suffix-re (and do-full slash
 			 (not (and (eq ido-cur-item 'buffer)
 				   ido-buffer-disable-smart-matches))
 			 (not ido-enable-regexp)
-			 (not (string-match "\$\\'" rex0))
+			 (not (string-match "$\\'" rex0))
 			 (concat rex0 "/\\'")))
 	 (prefix-re (and full-re (not ido-enable-prefix)
 			 (concat "\\`" rexq)))

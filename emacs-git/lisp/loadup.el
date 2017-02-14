@@ -1,6 +1,6 @@
 ;;; loadup.el --- load up standardly loaded Lisp files for Emacs
 
-;; Copyright (C) 1985-1986, 1992, 1994, 2001-2015 Free Software
+;; Copyright (C) 1985-1986, 1992, 1994, 2001-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -47,6 +47,13 @@
 
 ;;; Code:
 
+;; This is used in xdisp.c to determine when bidi reordering is safe.
+;; (It starts non-nil in temacs, but we set it non-nil here anyway, in
+;; case someone loads loadup one more time.)  We reset it after
+;; successfully loading charprop.el, which defines the Unicode tables
+;; bidi.c needs for its job.
+(setq redisplay--inhibit-bidi t)
+
 ;; Add subdirectories to the load-path for files that might get
 ;; autoloaded when bootstrapping.
 ;; This is because PATH_DUMPLOADSEARCH is just "../lisp".
@@ -60,6 +67,10 @@
     (let ((dir (car load-path)))
       ;; We'll probably overflow the pure space.
       (setq purify-flag nil)
+      ;; Value of max-lisp-eval-depth when compiling initially.
+      ;; During bootstrapping the byte-compiler is run interpreted when
+      ;; compiling itself, which uses a lot more stack than usual.
+      (setq max-lisp-eval-depth 2200)
       (setq load-path (list (expand-file-name "." dir)
 			    (expand-file-name "emacs-lisp" dir)
 			    (expand-file-name "language" dir)
@@ -67,13 +78,9 @@
 			    (expand-file-name "textmodes" dir)
 			    (expand-file-name "vc" dir)))))
 
-;; Prevent build-time PATH getting stored in the binary.
-;; Mainly cosmetic, but helpful for Guix.  (Bug#20330)
-(setq exec-path nil)
-
 (if (eq t purify-flag)
     ;; Hash consing saved around 11% of pure space in my tests.
-    (setq purify-flag (make-hash-table :test 'equal :size 70000)))
+    (setq purify-flag (make-hash-table :test 'equal :size 80000)))
 
 (message "Using load-path %s" load-path)
 
@@ -110,6 +117,10 @@
 (load "format")
 (load "bindings")
 (load "window")  ; Needed here for `replace-buffer-in-windows'.
+;; We are now capable of resizing the mini-windows, so give the
+;; variable its advertised default value (it starts as nil, see
+;; xdisp.c).
+(setq resize-mini-windows 'grow-only)
 (setq load-source-file-function 'load-with-code-conversion)
 (load "files")
 
@@ -132,23 +143,32 @@
 (load "button")
 
 ;; We don't want to store loaddefs.el in the repository because it is
-;; a generated file; but it is required in order to compile the lisp files.
-;; When bootstrapping, we cannot generate loaddefs.el until an
-;; emacs binary has been built.  We therefore compromise and keep
-;; ldefs-boot.el in the repository.  This does not need to be updated
-;; as often as the real loaddefs.el would.  Bootstrap should always
-;; work with ldefs-boot.el.  Therefore, Whenever a new autoload cookie
-;; gets added that is necessary during bootstrapping, ldefs-boot.el
-;; should be updated by overwriting it with an up-to-date copy of
-;; loaddefs.el that is uncorrupted by local changes.
-;; autogen/update_autogen can be used to periodically update ldefs-boot.
+;; a generated file; but it is required in order to compile the lisp
+;; files.  When bootstrapping, we cannot generate loaddefs.el until an
+;; emacs binary has been built.  We therefore support the build with
+;; two files, ldefs-boot-manual.el and ldefs-boot-auto.el, which
+;; contain the autoloads that are actually called during bootstrap.
+;; These do not need to be updated as often as the real loaddefs.el
+;; would.  Bootstrap should always work with ldefs-boot-manual.el.
+;; Therefore, Whenever a new autoload cookie gets added that is
+;; necessary during bootstrapping, ldefs-boot-auto.el should be
+;; updated using the "generate-ldefs-boot" make target.
+;; autogen/update_autogen can be used to periodically update
+;; ldefs-boot.
 (condition-case nil (load "loaddefs.el")
   ;; In case loaddefs hasn't been generated yet.
-  (file-error (load "ldefs-boot.el")))
+  (file-error (load "ldefs-boot-manual.el")))
+
+(let ((new (make-hash-table :test 'equal)))
+  ;; Now that loaddefs has populated definition-prefixes, purify its contents.
+  (maphash (lambda (k v) (puthash (purecopy k) (purecopy v) new))
+           definition-prefixes)
+  (setq definition-prefixes new))
 
 (load "emacs-lisp/nadvice")
 (load "emacs-lisp/cl-preloaded")
 (load "minibuffer")            ;After loaddefs, for define-minor-mode.
+(load "obarray")        ;abbrev.el is implemented in terms of obarrays.
 (load "abbrev")         ;lisp-mode.el and simple.el use define-abbrev-table.
 (load "simple")
 
@@ -162,7 +182,8 @@
 (load "case-table")
 ;; This file doesn't exist when building a development version of Emacs
 ;; from the repository.  It is generated just after temacs is built.
-(load "international/charprop.el" t)
+(if (load "international/charprop.el" t)
+    (setq redisplay--inhibit-bidi nil))
 (load "international/characters")
 (load "composite")
 
@@ -179,8 +200,8 @@
 (load "language/romanian")
 (load "language/greek")
 (load "language/hebrew")
-(load "international/cp51932.el")
-(load "international/eucjp-ms.el")
+(load "international/cp51932")
+(load "international/eucjp-ms")
 (load "language/japanese")
 (load "language/korean")
 (load "language/lao")
@@ -276,7 +297,13 @@
 (if (featurep 'ns)
     (progn
       (load "term/common-win")
-      (load "term/ns-win")))
+      ;; Don't load ucs-normalize.el unless uni-*.el files were
+      ;; already produced, because it needs uni-*.el files that might
+      ;; not be built early enough during bootstrap.
+      (when (load-history-filename-element "charprop\\.el")
+        (load "international/mule-util")
+        (load "international/ucs-normalize")
+        (load "term/ns-win"))))
 (if (fboundp 'x-create-frame)
     ;; Do it after loading term/foo-win.el since the value of the
     ;; mouse-wheel-*-event vars depends on those files being loaded or not.
@@ -403,12 +430,21 @@ lost after dumping")))
     (message "Pure-hashed: %d strings, %d vectors, %d conses, %d bytecodes, %d others"
              strings vectors conses bytecodes others)))
 
+;; Prevent build-time PATH getting stored in the binary.
+;; Mainly cosmetic, but helpful for Guix.  (Bug#20330)
+;; Do this here, rather than earlier, so that the above code
+;; can invoke Git commands and the like.
+(setq exec-path nil)
+
 ;; Avoid error if user loads some more libraries now and make sure the
 ;; hash-consing hash table is GC'd.
 (setq purify-flag nil)
 
 (if (null (garbage-collect))
     (setq pure-space-overflow t))
+
+;; Make sure we will attempt bidi reordering henceforth.
+(setq redisplay--inhibit-bidi nil)
 
 (if (member (car (last command-line-args)) '("dump" "bootstrap"))
     (progn

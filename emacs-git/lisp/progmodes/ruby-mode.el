@@ -1,6 +1,6 @@
 ;;; ruby-mode.el --- Major mode for editing Ruby files
 
-;; Copyright (C) 1994-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2017 Free Software Foundation, Inc.
 
 ;; Authors: Yukihiro Matsumoto
 ;;	Nobuyoshi Nakada
@@ -32,7 +32,7 @@
 ;; file after putting it on your load path:
 ;;
 ;;    (autoload 'ruby-mode "ruby-mode" "Major mode for ruby files" t)
-;;    (add-to-list 'auto-mode-alist '("\\.rb$" . ruby-mode))
+;;    (add-to-list 'auto-mode-alist '("\\.rb\\'" . ruby-mode))
 ;;    (add-to-list 'interpreter-mode-alist '("ruby" . ruby-mode))
 ;;
 ;; Still needs more docstrings; search below for TODO.
@@ -102,7 +102,7 @@
 
 (eval-and-compile
   (defconst ruby-here-doc-beg-re
-  "\\(<\\)<\\(-\\)?\\(\\([a-zA-Z0-9_]+\\)\\|[\"]\\([^\"]+\\)[\"]\\|[']\\([^']+\\)[']\\)"
+  "\\(<\\)<\\([~-]\\)?\\(\\([a-zA-Z0-9_]+\\)\\|[\"]\\([^\"]+\\)[\"]\\|[']\\([^']+\\)[']\\)"
   "Regexp to match the beginning of a heredoc.")
 
   (defconst ruby-expression-expansion-re
@@ -188,9 +188,10 @@ This should only be called after matching against `ruby-here-doc-beg-re'."
     (modify-syntax-entry ?# "<" table)
     (modify-syntax-entry ?\n ">" table)
     (modify-syntax-entry ?\\ "\\" table)
-    (modify-syntax-entry ?$ "." table)
+    (modify-syntax-entry ?$ "'" table)
     (modify-syntax-entry ?_ "_" table)
-    (modify-syntax-entry ?: "_" table)
+    (modify-syntax-entry ?: "'" table)
+    (modify-syntax-entry ?@ "'" table)
     (modify-syntax-entry ?< "." table)
     (modify-syntax-entry ?> "." table)
     (modify-syntax-entry ?& "." table)
@@ -287,7 +288,7 @@ Only has effect when `ruby-use-smie' is nil."
   :group 'ruby
   :safe 'booleanp)
 
-;; FIXME Woefully under documented.  What is the point of the last `t'?.
+;; FIXME Woefully under documented.  What is the point of the last t?.
 (defcustom ruby-deep-indent-paren '(?\( ?\[ ?\] t)
   "Deep indent lists in parenthesis when non-nil.
 The value t means continuous line.
@@ -367,7 +368,7 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
        (exp  (exp1) (exp "," exp) (exp "=" exp)
              (id " @ " exp))
        (exp1 (exp2) (exp2 "?" exp1 ":" exp1))
-       (exp2 (exp3) (exp3 "." exp2))
+       (exp2 (exp3) (exp3 "." exp3))
        (exp3 ("def" insts "end")
              ("begin" insts-rescue-insts "end")
              ("do" insts "end")
@@ -387,7 +388,7 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
        (cases (exp "then" insts)
               (cases "when" cases) (insts "else" insts))
        (expseq (exp) );;(expseq "," expseq)
-       (hashvals (id "=>" exp1) (hashvals "," hashvals))
+       (hashvals (exp1 "=>" exp1) (hashvals "," hashvals))
        (insts-rescue-insts (insts)
                            (insts-rescue-insts "rescue" insts-rescue-insts)
                            (insts-rescue-insts "ensure" insts-rescue-insts))
@@ -405,21 +406,25 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
      '((right "=")
        (right "+=" "-=" "*=" "/=" "%=" "**=" "&=" "|=" "^="
               "<<=" ">>=" "&&=" "||=")
-       (left ".." "...")
-       (left "+" "-")
-       (left "*" "/" "%" "**")
+       (nonassoc ".." "...")
        (left "&&" "||")
-       (left "^" "&" "|")
        (nonassoc "<=>")
-       (nonassoc ">" ">=" "<" "<=")
        (nonassoc "==" "===" "!=")
        (nonassoc "=~" "!~")
+       (nonassoc ">" ">=" "<" "<=")
+       (left "^" "&" "|")
        (left "<<" ">>")
-       (right "."))))))
+       (left "+" "-")
+       (left "*" "/" "%")
+       (left "**")
+       (assoc "."))))))
 
 (defun ruby-smie--bosp ()
   (save-excursion (skip-chars-backward " \t")
-                  (or (bolp) (memq (char-before) '(?\; ?=)))))
+                  (or (and (bolp)
+                           ;; Newline is escaped.
+                           (not (eq (char-before (1- (point))) ?\\)))
+                      (memq (char-before) '(?\; ?=)))))
 
 (defun ruby-smie--implicit-semi-p ()
   (save-excursion
@@ -427,17 +432,11 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
     (not (or (bolp)
              (memq (char-before) '(?\[ ?\())
              (and (memq (char-before)
-                        '(?\; ?- ?+ ?* ?/ ?: ?. ?, ?\\ ?& ?> ?< ?% ?~ ?^))
-                  ;; Not a binary operator symbol.
-                  (not (eq (char-before (1- (point))) ?:))
-                  ;; Not the end of a regexp or a percent literal.
-                  (not (memq (car (syntax-after (1- (point)))) '(7 15))))
-             (and (eq (char-before) ?\?)
-                  (equal (save-excursion (ruby-smie--backward-token)) "?"))
-             (and (eq (char-before) ?=)
-                  ;; Not a symbol :==, :!=, or a foo= method.
-                  (string-match "\\`\\s." (save-excursion
-                                            (ruby-smie--backward-token))))
+                        '(?\; ?- ?+ ?* ?/ ?: ?. ?, ?\\ ?& ?> ?< ?% ?~ ?^ ?= ??))
+                  ;; Not a binary operator symbol like :+ or :[]=.
+                  ;; Or a (method or symbol) name ending with ?.
+                  ;; Or the end of a regexp or a percent literal.
+                  (not (memq (car (syntax-after (1- (point)))) '(3 7 15))))
              (and (eq (char-before) ?|)
                   (member (save-excursion (ruby-smie--backward-token))
                           '("|" "||")))
@@ -445,12 +444,12 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
                   (member (save-excursion (ruby-smie--backward-token))
                           '("iuwu-mod" "and" "or")))
              (save-excursion
-               (forward-comment 1)
-               (eq (char-after) ?.))))))
+               (forward-comment (point-max))
+               (looking-at "&?\\."))))))
 
 (defun ruby-smie--redundant-do-p (&optional skip)
   (save-excursion
-    (if skip (backward-word 1))
+    (if skip (backward-word-strictly 1))
     (member (nth 2 (smie-backward-sexp ";")) '("while" "until" "for"))))
 
 (defun ruby-smie--opening-pipe-p ()
@@ -481,12 +480,16 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
                                              "else" "elsif" "do" "end" "and")
                                            'symbols))))
          (memq (car (syntax-after pos)) '(7 15))
-         (looking-at "[([]\\|[-+!~]\\sw\\|:\\(?:\\sw\\|\\s.\\)")))))
+         (looking-at "[([]\\|[-+!~:]\\(?:\\sw\\|\\s_\\)")))))
 
-(defun ruby-smie--at-dot-call ()
+(defun ruby-smie--before-method-name ()
+  ;; Only need to be accurate when method has keyword name.
   (and (eq ?w (char-syntax (following-char)))
-       (eq (char-before) ?.)
-       (not (eq (char-before (1- (point))) ?.))))
+       (or
+        (and
+         (eq (char-before) ?.)
+         (not (eq (char-before (1- (point))) ?.)))
+        (looking-back "^\\s *def\\s +\\=" (line-beginning-position)))))
 
 (defun ruby-smie--forward-token ()
   (let ((pos (point)))
@@ -507,17 +510,15 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
              (save-excursion
                (ruby-smie--args-separator-p (prog1 (point) (goto-char pos)))))
         " @ ")
-       ((looking-at ":\\s.+")
-        (goto-char (match-end 0)) (match-string 0)) ;bug#15208.
        ((looking-at "\\s\"") "")                    ;A string.
        (t
-        (let ((dot (ruby-smie--at-dot-call))
+        (let ((dot (ruby-smie--before-method-name))
               (tok (smie-default-forward-token)))
           (when dot
             (setq tok (concat "." tok)))
           (cond
            ((member tok '("unless" "if" "while" "until"))
-            (if (save-excursion (forward-word -1) (ruby-smie--bosp))
+            (if (save-excursion (forward-word-strictly -1) (ruby-smie--bosp))
                 tok "iuwu-mod"))
            ((string-match-p "\\`|[*&]?\\'" tok)
             (forward-char (- 1 (length tok)))
@@ -535,6 +536,7 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
                  (line-end-position))
               (ruby-smie--forward-token)) ;Fully redundant.
              (t ";")))
+           ((equal tok "&.") ".")
            (t tok)))))))))
 
 (defun ruby-smie--backward-token ()
@@ -555,11 +557,9 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
       " @ ")
      (t
       (let ((tok (smie-default-backward-token))
-            (dot (ruby-smie--at-dot-call)))
+            (dot (ruby-smie--before-method-name)))
         (when dot
           (setq tok (concat "." tok)))
-        (when (and (eq ?: (char-before)) (string-match "\\`\\s." tok))
-          (forward-char -1) (setq tok (concat ":" tok))) ;; bug#15208.
         (cond
          ((member tok '("unless" "if" "while" "until"))
           (if (ruby-smie--bosp)
@@ -577,11 +577,12 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
          ((equal tok "do")
           (cond
            ((not (ruby-smie--redundant-do-p)) tok)
-           ((> (save-excursion (forward-word 1)
+           ((> (save-excursion (forward-word-strictly 1)
                                (forward-comment (point-max)) (point))
                (line-end-position))
             (ruby-smie--backward-token)) ;Fully redundant.
            (t ";")))
+         ((equal tok "&.") ".")
          (t tok)))))))
 
 (defun ruby-smie--indent-to-stmt ()
@@ -629,19 +630,13 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
         ;; because when `.' is inside the line, the
         ;; additional indentation from it looks out of place.
         ((smie-rule-parent-p ".")
-         (let (smie--parent)
-           (save-excursion
-             ;; Traverse up the parents until the parent is "." at
-             ;; indentation, or any other token.
-             (while (and (let ((parent (smie-indent--parent)))
-                           (goto-char (cadr parent))
-                           (save-excursion
-                             (unless (integerp (car parent)) (forward-char -1))
-                             (not (ruby-smie--bosp))))
-                         (progn
-                           (setq smie--parent nil)
-                           (smie-rule-parent-p "."))))
-             (smie-rule-parent))))
+         ;; Traverse up the call chain until the parent is not `.',
+         ;; or `.' at indentation, or at eol.
+         (while (and (not (ruby-smie--bosp))
+                     (equal (nth 2 (smie-backward-sexp ".")) ".")
+                     (not (ruby-smie--bosp)))
+           (forward-char -1))
+         (smie-indent-virtual))
         (t (smie-rule-parent))))))
     (`(:after . ,(or `"(" "[" "{"))
      ;; FIXME: Shouldn't this be the default behavior of
@@ -661,14 +656,16 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
     (`(:before . ".")
      (if (smie-rule-sibling-p)
          (and ruby-align-chained-calls 0)
-       ruby-indent-level))
+       (smie-backward-sexp ".")
+       (cons 'column (+ (current-column)
+                        ruby-indent-level))))
     (`(:before . ,(or `"else" `"then" `"elsif" `"rescue" `"ensure"))
      (smie-rule-parent))
     (`(:before . "when")
      ;; Align to the previous `when', but look up the virtual
      ;; indentation of `case'.
      (if (smie-rule-sibling-p) 0 (smie-rule-parent)))
-    (`(:after . ,(or "=" "iuwu-mod" "+" "-" "*" "/" "&&" "||" "%" "**" "^" "&"
+    (`(:after . ,(or "=" "+" "-" "*" "/" "&&" "||" "%" "**" "^" "&"
                      "<=>" ">" "<" ">=" "<=" "==" "===" "!=" "<<" ">>"
                      "+=" "-=" "*=" "/=" "%=" "**=" "&=" "|=" "^=" "|"
                      "<<=" ">>=" "&&=" "||=" "and" "or"))
@@ -681,6 +678,8 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
        (if (ruby-smie--indent-to-stmt-p token)
            (ruby-smie--indent-to-stmt)
          (cons 'column (current-column)))))
+    (`(:before . "iuwu-mod")
+     (smie-rule-parent ruby-indent-level))
     ))
 
 (defun ruby--at-indentation-p (&optional point)
@@ -695,7 +694,7 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
   (let ((index-alist '()) (case-fold-search nil)
         name next pos decl sing)
     (goto-char beg)
-    (while (re-search-forward "^\\s *\\(\\(class\\s +\\|\\(class\\s *<<\\s *\\)\\|module\\s +\\)\\([^\(<\n ]+\\)\\|\\(def\\|alias\\)\\s +\\([^\(\n ]+\\)\\)" end t)
+    (while (re-search-forward "^\\s *\\(\\(class\\s +\\|\\(class\\s *<<\\s *\\)\\|module\\s +\\)\\([^(<\n ]+\\)\\|\\(def\\|alias\\)\\s +\\([^(\n ]+\\)\\)" end t)
       (setq sing (match-beginning 3))
       (setq decl (match-string 5))
       (setq next (match-end 0))
@@ -709,7 +708,7 @@ It is used when `ruby-encoding-magic-comment-style' is set to `custom'."
         (if prefix
             (setq name
                   (cond
-                   ((string-match "^self\." name)
+                   ((string-match "^self\\." name)
                     (concat (substring prefix 0 -1) (substring name 4)))
                   (t (concat prefix name)))))
         (push (cons name pos) index-alist)
@@ -888,12 +887,18 @@ and `\\' when preceded by `?'."
           ((and (eq c ?:) (or (not b) (eq (char-syntax b) ? ))))
           ((eq c ?\\) (eq b ??)))))
 
-(defun ruby-singleton-class-p (&optional pos)
+(defun ruby-verify-heredoc (&optional pos)
   (save-excursion
     (when pos (goto-char pos))
-    (forward-word -1)
-    (and (or (bolp) (not (eq (char-before (point)) ?_)))
-         (looking-at ruby-singleton-class-re))))
+    ;; Not right after a symbol or prefix character.
+    ;; Method names are only allowed when separated by
+    ;; whitespace.  Not a limitation in Ruby, but it's hard for
+    ;; us to do better.
+    (when (not (memq (car (syntax-after (1- (point)))) '(2 3 6 10)))
+      (or (not (memq (char-before) '(?\s ?\t)))
+          (ignore (forward-word-strictly -1))
+          (eq (char-before) ?_)
+          (not (looking-at ruby-singleton-class-re))))))
 
 (defun ruby-expr-beg (&optional option)
   "Check if point is possibly at the beginning of an expression.
@@ -913,7 +918,7 @@ Can be one of `heredoc', `modifier', `expr-qstr', `expr-re'."
         nil)
        ((looking-at ruby-operator-re))
        ((eq option 'heredoc)
-        (and (< space 0) (not (ruby-singleton-class-p start))))
+        (and (< space 0) (ruby-verify-heredoc start)))
        ((or (looking-at "[\\[({,;]")
             (and (looking-at "[!?]")
                  (or (not (eq option 'modifier))
@@ -1146,7 +1151,7 @@ delimiter."
        ((looking-at "<<")
         (cond
          ((and (ruby-expr-beg 'heredoc)
-               (looking-at "<<\\(-\\)?\\(\\([\"'`]\\)\\([^\n]+?\\)\\3\\|\\(?:\\sw\\|\\s_\\)+\\)"))
+               (looking-at "<<\\([-~]\\)?\\(\\([\"'`]\\)\\([^\n]+?\\)\\3\\|\\(?:\\sw\\|\\s_\\)+\\)"))
           (setq re (regexp-quote (or (match-string 4) (match-string 2))))
           (if (match-beginning 1) (setq re (concat "\\s *" re)))
           (let* ((id-end (goto-char (match-end 0)))
@@ -1178,9 +1183,7 @@ delimiter."
           (setq in-string (match-end 0))
           (goto-char ruby-indent-point)))
        (t
-        (error (format "Bad string %s"
-                       (buffer-substring (point) pnt)
-                       ))))))
+        (error "Bad string %s" (buffer-substring (point) pnt))))))
   (list in-string nest depth pcol))
 
 (defun ruby-parse-region (start end)
@@ -1236,7 +1239,7 @@ delimiter."
                     ((let ((s (ruby-parse-region (point) ruby-indent-point)))
                        (and (nth 2 s) (> (nth 2 s) 0)
                             (or (goto-char (cdr (nth 1 s))) t)))
-                     (forward-word -1)
+                     (forward-word-strictly -1)
                      (setq indent (ruby-indent-size (current-column)
 						    (nth 2 state))))
                     (t
@@ -1255,7 +1258,7 @@ delimiter."
         (if (null (cdr (nth 1 state)))
             (error "Invalid nesting"))
         (goto-char (cdr (nth 1 state)))
-        (forward-word -1)               ; skip back a keyword
+        (forward-word-strictly -1)               ; skip back a keyword
         (setq begin (point))
         (cond
          ((looking-at "do\\>[^_]")      ; iter block is a special case
@@ -1348,7 +1351,7 @@ delimiter."
                                       (forward-char -1)
                                       (not (looking-at "{")))
                                     (progn
-                                      (forward-word -1)
+                                      (forward-word-strictly -1)
                                       (not (looking-at "do\\>[^_]")))))
                               (t t))))
                        (not (eq ?, c))
@@ -1371,7 +1374,7 @@ delimiter."
       (goto-char ruby-indent-point)
       (beginning-of-line)
       (skip-syntax-forward " ")
-      (if (looking-at "\\.[^.]")
+      (if (looking-at "\\.[^.]\\|&\\.")
           (+ indent ruby-indent-level)
         indent))))
 
@@ -1501,10 +1504,11 @@ With ARG, do it many times.  Negative ARG means move backward."
                         (not (eq (char-before (point)) ?.))
                         (not (eq (char-before (point)) ?:)))
                    (ruby-end-of-block)
-                   (forward-word 1))
+                   (forward-word-strictly 1))
                   ((looking-at "\\(\\$\\|@@?\\)?\\sw")
                    (while (progn
-                            (while (progn (forward-word 1) (looking-at "_")))
+                            (while (progn (forward-word-strictly 1)
+                                          (looking-at "_")))
                             (cond ((looking-at "::") (forward-char 2) t)
                                   ((> (skip-chars-forward ".") 0))
                                   ((looking-at "\\?\\|!\\(=[~=>]\\|[^~=]\\)")
@@ -1520,7 +1524,7 @@ With ARG, do it many times.  Negative ARG means move backward."
                        (skip-chars-forward "<"))
                      (not expr))))
             (setq i (1- i)))
-        ((error) (forward-word 1)))
+        ((error) (forward-word-strictly 1)))
       i))))
 
 (defun ruby-backward-sexp (&optional arg)
@@ -1556,7 +1560,7 @@ With ARG, do it many times.  Negative ARG means move forward."
                   ((looking-at "\\s(") nil)
                   (t
                    (forward-char 1)
-                   (while (progn (forward-word -1)
+                   (while (progn (forward-word-strictly -1)
                                  (pcase (char-before)
                                    (`?_ t)
                                    (`?. (forward-char -1) t)
@@ -1795,9 +1799,9 @@ If the result is do-end block, it will always be multiline."
            (content
             (buffer-substring-no-properties (1+ min) (1- max))))
       (setq content
-            (if (equal string-quote "\"")
-                (replace-regexp-in-string "\\\\\"" "\"" (replace-regexp-in-string "\\([^\\\\]\\)'" "\\1\\\\'" content))
-              (replace-regexp-in-string "\\\\\'" "'" (replace-regexp-in-string "\\([^\\\\]\\)\"" "\\1\\\\\"" content))))
+            (if (equal string-quote "'")
+                (replace-regexp-in-string "\\\\\"" "\"" (replace-regexp-in-string "\\(\\`\\|[^\\\\]\\)'" "\\1\\\\'" content))
+              (replace-regexp-in-string "\\\\'" "'" (replace-regexp-in-string "\\(\\`\\|[^\\\\]\\)\"" "\\1\\\\\"" content))))
       (let ((orig-point (point)))
         (delete-region min max)
         (insert
@@ -1832,7 +1836,7 @@ It will be properly highlighted even when the call omits parens.")
      "\\)\\s *")
     "Regexp to match text that can be followed by a regular expression."))
 
-(defun ruby-syntax-propertize-function (start end)
+(defun ruby-syntax-propertize (start end)
   "Syntactic keywords for Ruby mode.  See `syntax-propertize-function'."
   (let (case-fold-search)
     (goto-char start)
@@ -1843,21 +1847,34 @@ It will be properly highlighted even when the call omits parens.")
      (syntax-propertize-rules
       ;; $' $" $` .... are variables.
       ;; ?' ?" ?` are character literals (one-char strings in 1.9+).
-      ("\\([?$]\\)[#\"'`]"
+      ("\\([?$]\\)[#\"'`:?]"
        (1 (if (save-excursion
                 (nth 3 (syntax-ppss (match-beginning 0))))
               ;; Within a string, skip.
-              (goto-char (match-end 1))
-            (string-to-syntax "\\"))))
-      ;; Part of symbol when at the end of a method name.
+              (ignore
+               (goto-char (match-end 1)))
+            (put-text-property (match-end 1) (match-end 0)
+                               'syntax-table (string-to-syntax "_"))
+            (string-to-syntax "'"))))
+      ;; Symbols with special characters.
+      ("\\(^\\|[^:]\\)\\(:\\([-+~]@?\\|[/%&|^`]\\|\\*\\*?\\|<\\(<\\|=>?\\)?\\|>[>=]?\\|===?\\|=~\\|![~=]?\\|\\[\\]=?\\)\\)"
+       (3 (unless (nth 8 (syntax-ppss (match-beginning 3)))
+            (goto-char (match-end 0))
+            (string-to-syntax "_"))))
+      ;; Part of method name when at the end of it.
       ("[!?]"
        (0 (unless (save-excursion
                     (or (nth 8 (syntax-ppss (match-beginning 0)))
-                        (eq (char-before) ?:)
                         (let (parse-sexp-lookup-properties)
                           (zerop (skip-syntax-backward "w_")))
                         (memq (preceding-char) '(?@ ?$))))
             (string-to-syntax "_"))))
+      ;; Backtick method redefinition.
+      ("^[ \t]*def +\\(`\\)" (1 "_"))
+      ;; Ternary operator colon followed by opening paren or bracket
+      ;; (semi-important for indentation).
+      ("\\(:\\)\\(?:[\({]\\|\\[[^]]\\)"
+       (1 (string-to-syntax ".")))
       ;; Regular expressions.  Start with matching unescaped slash.
       ("\\(?:\\=\\|[^\\]\\)\\(?:\\\\\\\\\\)*\\(/\\)"
        (1 (let ((state (save-excursion (syntax-ppss (match-beginning 1)))))
@@ -1882,16 +1899,22 @@ It will be properly highlighted even when the call omits parens.")
       ("^\\(=\\)begin\\_>" (1 "!"))
       ;; Handle here documents.
       ((concat ruby-here-doc-beg-re ".*\\(\n\\)")
-       (7 (unless (or (nth 8 (save-excursion
-                               (syntax-ppss (match-beginning 0))))
-                      (ruby-singleton-class-p (match-beginning 0)))
+       (7 (when (and (not (nth 8 (save-excursion
+                                   (syntax-ppss (match-beginning 0)))))
+                     (ruby-verify-heredoc (match-beginning 0)))
             (put-text-property (match-beginning 7) (match-end 7)
                                'syntax-table (string-to-syntax "\""))
             (ruby-syntax-propertize-heredoc end))))
       ;; Handle percent literals: %w(), %q{}, etc.
-      ((concat "\\(?:^\\|[[ \t\n<+(,=]\\)" ruby-percent-literal-beg-re)
-       (1 (prog1 "|" (ruby-syntax-propertize-percent-literal end)))))
+      ((concat "\\(?:^\\|[[ \t\n<+(,=*]\\)" ruby-percent-literal-beg-re)
+       (1 (unless (nth 8 (save-excursion (syntax-ppss (match-beginning 1))))
+            ;; Not inside a string, a comment, or a percent literal.
+            (ruby-syntax-propertize-percent-literal end)
+            (string-to-syntax "|")))))
      (point) end)))
+
+(define-obsolete-function-alias
+  'ruby-syntax-propertize-function 'ruby-syntax-propertize "25.1")
 
 (defun ruby-syntax-propertize-heredoc (limit)
   (let ((ppss (syntax-ppss))
@@ -1902,7 +1925,7 @@ It will be properly highlighted even when the call omits parens.")
         (beginning-of-line)
         (while (re-search-forward ruby-here-doc-beg-re
                                   (line-end-position) t)
-          (unless (ruby-singleton-class-p (match-beginning 0))
+          (when (ruby-verify-heredoc (match-beginning 0))
             (push (concat (ruby-here-doc-end-match) "\n") res))))
       (save-excursion
         ;; With multiple openers on the same line, we don't know in which
@@ -1930,35 +1953,33 @@ It will be properly highlighted even when the call omits parens.")
 
 (defun ruby-syntax-propertize-percent-literal (limit)
   (goto-char (match-beginning 2))
-  ;; Not inside a simple string or comment.
-  (when (eq t (nth 3 (syntax-ppss)))
-    (let* ((op (char-after))
-           (ops (char-to-string op))
-           (cl (or (cdr (aref (syntax-table) op))
-                   (cdr (assoc op '((?< . ?>))))))
-           parse-sexp-lookup-properties)
-      (save-excursion
-        (condition-case nil
-            (progn
-              (if cl              ; Paired delimiters.
-                  ;; Delimiter pairs of the same kind can be nested
-                  ;; inside the literal, as long as they are balanced.
-                  ;; Create syntax table that ignores other characters.
-                  (with-syntax-table (make-char-table 'syntax-table nil)
-                    (modify-syntax-entry op (concat "(" (char-to-string cl)))
-                    (modify-syntax-entry cl (concat ")" ops))
-                    (modify-syntax-entry ?\\ "\\")
-                    (save-restriction
-                      (narrow-to-region (point) limit)
-                      (forward-list))) ; skip to the paired character
-                ;; Single character delimiter.
-                (re-search-forward (concat "[^\\]\\(?:\\\\\\\\\\)*"
-                                           (regexp-quote ops)) limit nil))
-              ;; Found the closing delimiter.
-              (put-text-property (1- (point)) (point) 'syntax-table
-                                 (string-to-syntax "|")))
-          ;; Unclosed literal, do nothing.
-          ((scan-error search-failed)))))))
+  (let* ((op (char-after))
+         (ops (char-to-string op))
+         (cl (or (cdr (aref (syntax-table) op))
+                 (cdr (assoc op '((?< . ?>))))))
+         parse-sexp-lookup-properties)
+    (save-excursion
+      (condition-case nil
+          (progn
+            (if cl              ; Paired delimiters.
+                ;; Delimiter pairs of the same kind can be nested
+                ;; inside the literal, as long as they are balanced.
+                ;; Create syntax table that ignores other characters.
+                (with-syntax-table (make-char-table 'syntax-table nil)
+                  (modify-syntax-entry op (concat "(" (char-to-string cl)))
+                  (modify-syntax-entry cl (concat ")" ops))
+                  (modify-syntax-entry ?\\ "\\")
+                  (save-restriction
+                    (narrow-to-region (point) limit)
+                    (forward-list))) ; skip to the paired character
+              ;; Single character delimiter.
+              (re-search-forward (concat "[^\\]\\(?:\\\\\\\\\\)*"
+                                         (regexp-quote ops)) limit nil))
+            ;; Found the closing delimiter.
+            (put-text-property (1- (point)) (point) 'syntax-table
+                               (string-to-syntax "|")))
+        ;; Unclosed literal, do nothing.
+        ((scan-error search-failed))))))
 
 (defun ruby-syntax-propertize-expansion ()
   ;; Save the match data to a text property, for font-locking later.
@@ -2009,7 +2030,8 @@ It will be properly highlighted even when the call omits parens.")
          (t
           (error (concat
                   "Internal error on `ruby-in-ppss-context-p': "
-                  "context name `" (symbol-name context) "' is unknown"))))
+                  "context name `%s' is unknown")
+                 context)))
         t)))
 
 (defvar ruby-font-lock-syntax-table
@@ -2019,7 +2041,7 @@ It will be properly highlighted even when the call omits parens.")
   "The syntax table to use for fontifying Ruby mode buffers.
 See `font-lock-syntax-table'.")
 
-(defconst ruby-font-lock-keyword-beg-re "\\(?:^\\|[^.@$]\\|\\.\\.\\)")
+(defconst ruby-font-lock-keyword-beg-re "\\(?:^\\|[^.@$:]\\|\\.\\.\\)")
 
 (defconst ruby-font-lock-keywords
   `(;; Functions.
@@ -2149,28 +2171,25 @@ See `font-lock-syntax-table'.")
      (1 font-lock-builtin-face))
     ;; Here-doc beginnings.
     (,ruby-here-doc-beg-re
-     (0 (unless (ruby-singleton-class-p (match-beginning 0))
+     (0 (when (ruby-verify-heredoc (match-beginning 0))
           'font-lock-string-face)))
     ;; Perl-ish keywords.
     "\\_<\\(?:BEGIN\\|END\\)\\_>\\|^__END__$"
-    ;; Variables.
+    ;; Singleton objects.
     (,(concat ruby-font-lock-keyword-beg-re
               "\\_<\\(nil\\|true\\|false\\)\\_>")
      1 font-lock-constant-face)
     ;; Keywords that evaluate to certain values.
     ("\\_<__\\(?:LINE\\|ENCODING\\|FILE\\)__\\_>"
      (0 font-lock-builtin-face))
-    ;; Symbols with symbol characters.
-    ("\\(^\\|[^:]\\)\\(:@?\\(?:\\w\\|_\\)+\\)\\([!?=]\\)?"
+    ;; Symbols.
+    ("\\(^\\|[^:]\\)\\(:@\\{0,2\\}\\(?:\\sw\\|\\s_\\)+\\)"
      (2 font-lock-constant-face)
      (3 (unless (and (eq (char-before (match-end 3)) ?=)
                      (eq (char-after (match-end 3)) ?>))
-          ;; bug#18466
+          ;; bug#18644
           font-lock-constant-face)
         nil t))
-    ;; Symbols with special characters.
-    ("\\(^\\|[^:]\\)\\(:\\([-+~]@?\\|[/%&|^`]\\|\\*\\*?\\|<\\(<\\|=>?\\)?\\|>[>=]?\\|===?\\|=~\\|![~=]?\\|\\[\\]=?\\|#{[^}\n\\\\]*\\(\\\\.[^}\n\\\\]*\\)*}\\)\\)"
-     2 font-lock-constant-face)
     ;; Special globals.
     (,(concat "\\$\\(?:[:\"!@;,/\\._><\\$?~=*&`'+0-9]\\|-[0adFiIlpvw]\\|"
               (regexp-opt '("LOAD_PATH" "LOADED_FEATURES" "PROGRAM_NAME"
@@ -2192,10 +2211,11 @@ See `font-lock-syntax-table'.")
     ("\\(\\$\\|@\\|@@\\)\\(\\w\\|_\\)+"
      0 font-lock-variable-name-face)
     ;; Constants.
-    ("\\(?:\\_<\\|::\\)\\([A-Z]+\\(\\w\\|_\\)*\\)"
+    ("\\_<\\([A-Z]+\\(\\w\\|_\\)*\\)"
      1 (unless (eq ?\( (char-after)) font-lock-type-face))
-    ("\\(^\\s *\\|[\[\{\(,]\\s *\\|\\sw\\s +\\)\\(\\(\\sw\\|_\\)+\\):[^:]"
-     (2 font-lock-constant-face))
+    ;; Ruby 1.9-style symbol hash keys.
+    ("\\(?:^\\s *\\|[[{(,]\\s *\\|\\sw\\s +\\)\\(\\(\\sw\\|_\\)+:\\)[^:]"
+     (1 (progn (forward-char -1) font-lock-constant-face)))
     ;; Conversion methods on Kernel.
     (,(concat ruby-font-lock-keyword-beg-re
               (regexp-opt '("Array" "Complex" "Float" "Hash"
@@ -2209,7 +2229,7 @@ See `font-lock-syntax-table'.")
      1 font-lock-negation-char-face)
     ;; Character literals.
     ;; FIXME: Support longer escape sequences.
-    ("\\_<\\?\\\\?\\S " 0 font-lock-string-face)
+    ("\\?\\\\?\\_<.\\_>" 0 font-lock-string-face)
     ;; Regexp options.
     ("\\(?:\\s|\\|/\\)\\([imxo]+\\)"
      1 (when (save-excursion
@@ -2252,15 +2272,16 @@ See `font-lock-syntax-table'.")
   (setq-local font-lock-keywords ruby-font-lock-keywords)
   (setq-local font-lock-syntax-table ruby-font-lock-syntax-table)
 
-  (setq-local syntax-propertize-function #'ruby-syntax-propertize-function))
+  (setq-local syntax-propertize-function #'ruby-syntax-propertize))
 
 ;;; Invoke ruby-mode when appropriate
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist
-             (cons (purecopy (concat "\\(?:\\."
-                                     "rb\\|ru\\|rake\\|thor"
+             (cons (purecopy (concat "\\(?:\\.\\(?:"
+                                     "rbw?\\|ru\\|rake\\|thor"
                                      "\\|jbuilder\\|rabl\\|gemspec\\|podspec"
+                                     "\\)"
                                      "\\|/"
                                      "\\(?:Gem\\|Rake\\|Cap\\|Thor"
                                      "\\|Puppet\\|Berks"

@@ -1,6 +1,6 @@
 ;;; semantic/db.el --- Semantic tag database manager
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: tags
@@ -142,7 +142,7 @@ Abstract tables do not have file names associated with them."
   nil)
 
 (cl-defmethod semanticdb-dirty-p ((obj semanticdb-abstract-table))
-  "Return non-nil if OBJ is 'dirty'."
+  "Return non-nil if OBJ is dirty."
   nil)
 
 (cl-defmethod semanticdb-set-dirty ((obj semanticdb-abstract-table))
@@ -313,7 +313,7 @@ If OBJ's file is not loaded, read it in first."
 		    (oref (oref obj parent-db) reference-directory)))
 
 (cl-defmethod semanticdb-dirty-p ((obj semanticdb-table))
-  "Return non-nil if OBJ is 'dirty'."
+  "Return non-nil if OBJ is dirty."
   (oref obj dirty))
 
 (cl-defmethod semanticdb-set-dirty ((obj semanticdb-table))
@@ -369,7 +369,7 @@ Abstract tables do not have file names associated with them."
   nil)
 
 (cl-defmethod semanticdb-dirty-p ((DB semanticdb-project-database))
-  "Return non-nil if DB is 'dirty'.
+  "Return non-nil if DB is dirty.
 A database is dirty if the state of the database changed in a way
 where it may need to resynchronize with some persistent storage."
   (let ((dirty nil)
@@ -814,7 +814,7 @@ local variable."
 ;; associated databases.
 
 (defcustom semanticdb-project-roots nil
-  "*List of directories, where each directory is the root of some project.
+  "List of directories, where each directory is the root of some project.
 All subdirectories of a root project are considered a part of one project.
 Values in this string can be overridden by project management programs
 via the `semanticdb-project-root-functions' variable."

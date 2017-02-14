@@ -1,6 +1,6 @@
 ;;; profiler.el --- UI and helper functions for Emacs's native profiler -*- lexical-binding: t -*-
 
-;; Copyright (C) 2012-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2017 Free Software Foundation, Inc.
 
 ;; Author: Tomohiro Matsuyama <tomo@cx4a.org>
 ;; Keywords: lisp
@@ -56,7 +56,7 @@
 	 (format "%s" object))))
 
 (defun profiler-format-percent (number divisor)
-  (concat (number-to-string (/ (* number 100) divisor)) "%"))
+  (format "%d%%" (floor (* 100.0 number) divisor)))
 
 (defun profiler-format-number (number)
   "Format NUMBER in human readable string."
@@ -534,6 +534,7 @@ RET: expand or collapse"))
     (define-key map "\r"    'profiler-report-toggle-entry)
     (define-key map "\t"    'profiler-report-toggle-entry)
     (define-key map "i"     'profiler-report-toggle-entry)
+    (define-key map [mouse-1] 'profiler-report-toggle-entry)
     (define-key map "f"     'profiler-report-find-entry)
     (define-key map "j"     'profiler-report-find-entry)
     (define-key map [mouse-2] 'profiler-report-find-entry)
@@ -692,7 +693,8 @@ With a prefix argument, expand the whole subtree."
 
 (defun profiler-report-toggle-entry (&optional arg)
   "Expand entry at point if the tree is collapsed,
-otherwise collapse."
+otherwise collapse.  With prefix argument, expand all subentries
+below entry at point."
   (interactive "P")
   (or (profiler-report-expand-entry arg)
       (profiler-report-collapse-entry)))

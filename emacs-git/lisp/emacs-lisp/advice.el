@@ -1,6 +1,6 @@
 ;;; advice.el --- An overloading mechanism for Emacs Lisp functions  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1994, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Hans Chalupsky <hans@cs.buffalo.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -168,7 +168,8 @@
 ;;  "Switch to non-existing buffers only upon confirmation."
 ;;  (interactive "BSwitch to buffer: ")
 ;;  (if (or (get-buffer (ad-get-arg 0))
-;;          (y-or-n-p (format "`%s' does not exist, create? " (ad-get-arg 0))))
+;;          (y-or-n-p (format-message "`%s' does not exist, create? "
+;;                                    (ad-get-arg 0))))
 ;;      ad-do-it))
 ;;
 ;;(defadvice find-file (before existing-files-only activate)
@@ -1628,7 +1629,7 @@ COMPILE argument of `ad-activate' was supplied as nil."
 Only proper subtrees are considered, for example, if TREE is (1 (2 (3)) 4)
 then the subtrees will be 1 (2 (3)) 2 (3) 3 4, dotted structures are
 allowed too.  Once a qualifying subtree has been found its subtrees will
-not be considered anymore.  (ad-substitute-tree 'atom 'identity tree)
+not be considered anymore.  (ad-substitute-tree \\='atom \\='identity tree)
 generates a copy of TREE."
   (cond ((consp tReE)
          (cons (if (funcall sUbTrEe-TeSt (car tReE))
@@ -1831,7 +1832,7 @@ Redefining advices affect the construction of an advised definition."
 ;; @@ Interactive input functions:
 ;; ===============================
 
-(declare-function 'function-called-at-point "help")
+(declare-function function-called-at-point "help")
 
 (defun ad-read-advised-function (&optional prompt predicate default)
   "Read name of advised function with completion from the minibuffer.
@@ -2149,7 +2150,6 @@ the cache-id will clear the cache."
 
 (defun ad-arglist (definition)
   "Return the argument list of DEFINITION."
-  (require 'help-fns)
   (help-function-arglist
    (if (or (macrop definition) (ad-advice-p definition))
        (cdr definition)
@@ -2419,8 +2419,8 @@ as if they had been supplied to a function with TARGET-ARGLIST directly.
 Excess source arguments will be neglected, missing source arguments will be
 supplied as nil.  Returns a `funcall' or `apply' form with the second element
 being `function' which has to be replaced by an actual function argument.
-Example: `(ad-map-arglists '(a &rest args) '(w x y z))' will return
-         `(funcall ad--addoit-function a (car args) (car (cdr args)) (nth 2 args))'."
+Example: (ad-map-arglists \\='(a &rest args) \\='(w x y z)) will return
+         (funcall ad--addoit-function a (car args) (car (cdr args)) (nth 2 args))."
   (let* ((parsed-source-arglist (ad-parse-arglist source-arglist))
 	 (source-reqopt-args (append (nth 0 parsed-source-arglist)
 				     (nth 1 parsed-source-arglist)))
@@ -2473,8 +2473,6 @@ Example: `(ad-map-arglists '(a &rest args) '(w x y z))' will return
 	       (format "%s-advice `%s'."
 		       (capitalize (symbol-name class))
 		       (ad-advice-name advice)))))))
-
-(require 'help-fns)	    ;For help-split-fundoc and help-add-fundoc-usage.
 
 (defun ad--make-advised-docstring (function &optional style)
   "Construct a documentation string for the advised FUNCTION.
@@ -2832,7 +2830,7 @@ advised definition from scratch."
 		    (ad-get-cache-id function))))
       (ad-set-advice-info function old-advice-info)
       (advice-remove function advicefunname)
-      (fset advicefunname old-advice)
+      (if advicefunname (fset advicefunname old-advice))
       (if old-advice (advice-add function :around advicefunname)))))
 
 
@@ -3109,7 +3107,7 @@ deactivation, which might run hooks and get into other trouble."
   "Define a piece of advice for FUNCTION (a symbol).
 The syntax of `defadvice' is as follows:
 
-  \(defadvice FUNCTION (CLASS NAME [POSITION] [ARGLIST] FLAG...)
+  (defadvice FUNCTION (CLASS NAME [POSITION] [ARGLIST] FLAG...)
     [DOCSTRING] [INTERACTIVE-FORM]
     BODY...)
 

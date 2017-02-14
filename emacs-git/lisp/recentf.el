@@ -1,6 +1,6 @@
 ;;; recentf.el --- setup a menu of recently opened files
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
 ;; Created: July 19 1999
@@ -82,7 +82,7 @@ See the command `recentf-save-list'."
                 recentf-mode
                 (recentf-load-list)))))
 
-(defcustom recentf-save-file-modes 384 ;; 0600
+(defcustom recentf-save-file-modes #o600
   "Mode bits of recentf save file, as an integer, or nil.
 If non-nil, after writing `recentf-save-file', set its mode bits to
 this value.  By default give R/W access only to the user who owns that
@@ -294,7 +294,7 @@ They are successively passed a file name to transform it."
             (function :tag "Other function")))))
 
 (defcustom recentf-show-file-shortcuts-flag t
-  "Whether to show ``[N]'' for the Nth item up to 10.
+  "Whether to show \"[N]\" for the Nth item up to 10.
 If non-nil, `recentf-open-files' will show labels for keys that can be
 used as shortcuts to open the Nth file."
   :group 'recentf
@@ -781,7 +781,7 @@ Filenames are relative to the `default-directory'."
     )
   "List of rules used by `recentf-arrange-by-rule' to build sub-menus.
 A rule is a pair (SUB-MENU-TITLE . MATCHER).  SUB-MENU-TITLE is the
-displayed title of the sub-menu where a '%d' `format' pattern is
+displayed title of the sub-menu where a `%d' `format' pattern is
 replaced by the number of items in the sub-menu.  MATCHER is a regexp
 or a list of regexps.  Items matching one of the regular expressions in
 MATCHER are added to the corresponding sub-menu.
@@ -798,7 +798,7 @@ may have been modified to match another rule."
   "Title of the `recentf-arrange-by-rule' sub-menu.
 This is for the menu where items that don't match any
 `recentf-arrange-rules' are displayed.  If nil these items are
-displayed in the main recent files menu.  A '%d' `format' pattern in
+displayed in the main recent files menu.  A `%d' `format' pattern in
 the title is replaced by the number of items in the sub-menu."
   :group 'recentf-filters
   :type '(choice (const  :tag "Main menu" nil)
@@ -1064,7 +1064,6 @@ Go to the beginning of buffer if not found."
     (define-key km "q" 'recentf-cancel-dialog)
     (define-key km "n" 'next-line)
     (define-key km "p" 'previous-line)
-    (define-key km [follow-link] "\C-m")
     km)
   "Keymap used in recentf dialogs.")
 
@@ -1125,8 +1124,9 @@ IGNORE arguments."
   (recentf-dialog (format "*%s - Edit list*" recentf-menu-title)
     (set (make-local-variable 'recentf-edit-list) nil)
     (widget-insert
-     "Click on OK to delete selected files from the recent list.
-Click on Cancel or type `q' to cancel.\n")
+     (format-message
+      "Click on OK to delete selected files from the recent list.
+Click on Cancel or type `q' to cancel.\n"))
     ;; Insert the list of files as checkboxes
     (dolist (item recentf-list)
       (widget-create 'checkbox
@@ -1187,6 +1187,9 @@ IGNORE other arguments."
            :format "%[%t\n%]"
            :help-echo ,(concat "Open " (cdr menu-element))
            :action recentf-open-files-action
+           ;; Override the (problematic) follow-link property of the
+           ;; `link' widget (bug#22434).
+           :follow-link nil
            ,(cdr menu-element))))
 
 (defun recentf-open-files-items (files)
@@ -1224,7 +1227,7 @@ use for the dialog.  It defaults to \"*`recentf-menu-title'*\"."
                        ", or type the corresponding digit key,"
                      "")
                    " to open it.\n"
-                   "Click on Cancel or type `q' to cancel.\n")
+                   (format-message "Click on Cancel or type `q' to cancel.\n"))
     ;; Use a L&F that looks like the recentf menu.
     (tree-widget-set-theme "folder")
     (apply 'widget-create
@@ -1281,7 +1284,8 @@ Write data into the file specified by `recentf-save-file'."
       (with-temp-buffer
         (erase-buffer)
         (set-buffer-file-coding-system recentf-save-file-coding-system)
-        (insert (format recentf-save-file-header (current-time-string)))
+        (insert (format-message recentf-save-file-header
+				(current-time-string)))
         (recentf-dump-variable 'recentf-list recentf-max-saved-items)
         (recentf-dump-variable 'recentf-filter-changer-current)
         (insert "\n\n;; Local Variables:\n"

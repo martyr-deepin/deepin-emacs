@@ -1,6 +1,6 @@
 ;;; cl.el --- Compatibility aliases for the old CL library.  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2012-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2017 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: extensions
@@ -154,7 +154,6 @@
                every
                some
                mapcon
-               mapcan
                mapl
                maplist
                map
@@ -259,30 +258,6 @@
                copy-list
                ldiff
                list*
-               cddddr
-               cdddar
-               cddadr
-               cddaar
-               cdaddr
-               cdadar
-               cdaadr
-               cdaaar
-               cadddr
-               caddar
-               cadadr
-               cadaar
-               caaddr
-               caadar
-               caaadr
-               caaaar
-               cdddr
-               cddar
-               cdadr
-               cdaar
-               caddr
-               cadar
-               caadr
-               caaar
                tenth
                ninth
                eighth
@@ -365,7 +340,7 @@ The two cases that are handled are:
             `(list 'lambda '(&rest --cl-rest--)
                    ,@(cl-sublis sub (nreverse decls))
                    (list 'apply
-                         (list 'quote
+                         (list 'function
                                #'(lambda ,(append new (cadr f))
                                    ,@(cl-sublis sub body)))
                          ,@(nconc (mapcar (lambda (x) `(list 'quote ,x))
@@ -568,7 +543,7 @@ may be bound to temporary variables which are introduced
 automatically to preserve proper execution order of the arguments.
 For example:
 
-  (defsetf nth (n x) (v) `(setcar (nthcdr ,n ,x) ,v))
+  (defsetf nth (n x) (v) \\=`(setcar (nthcdr ,n ,x) ,v))
 
 You can replace this form with `gv-define-setter'.
 

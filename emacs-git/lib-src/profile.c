@@ -1,5 +1,5 @@
 /* profile.c --- generate periodic events for profiling of Emacs Lisp code.
-   Copyright (C) 1992, 1994, 1999, 2001-2015 Free Software Foundation,
+   Copyright (C) 1992, 1994, 1999, 2001-2017 Free Software Foundation,
    Inc.
 
 Author: Boaz Ben-Zvi <boaz@lcs.mit.edu>
@@ -8,8 +8,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -35,6 +35,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <intprops.h>
 #include <systime.h>
@@ -84,13 +85,13 @@ main (void)
 	  puts (get_time ());
 	  break;
 	case 'q':
-	  exit (EXIT_SUCCESS);
+	  return EXIT_SUCCESS;
 	}
       /* Anything remaining on the line is ignored.  */
       while (c != '\n' && c != EOF)
 	c = getchar ();
     }
-  exit (EXIT_FAILURE);
+  return EXIT_FAILURE;
 }
 
 

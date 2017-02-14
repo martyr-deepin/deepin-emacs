@@ -1,6 +1,6 @@
 ;;; version.el --- record version number of Emacs
 
-;; Copyright (C) 1985, 1992, 1994-1995, 1999-2015 Free Software
+;; Copyright (C) 1985, 1992, 1994-1995, 1999-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -38,15 +38,16 @@ This variable first existed in version 19.23.")
   "Minor version number of this version of Emacs.
 This variable first existed in version 19.23.")
 
-(defconst emacs-build-time (current-time)
-  "Time at which Emacs was dumped out.")
-
 (defconst emacs-build-system (system-name)
-  "Name of the system on which Emacs was built.")
+  "Name of the system on which Emacs was built, or nil if not available.")
+
+(defconst emacs-build-time (if emacs-build-system (current-time))
+  "Time at which Emacs was dumped out, or nil if not available.")
 
 (defvar motif-version-string)
 (defvar gtk-version-string)
 (defvar ns-version-string)
+(defvar cairo-version-string)
 
 (defun emacs-version (&optional here)
   "Return string describing the version of Emacs that is running.
@@ -55,9 +56,7 @@ Don't use this function in programs to choose actions according
 to the system configuration; look at `system-configuration' instead."
   (interactive "P")
   (let ((version-string
-         (format (if (not (called-interactively-p 'interactive))
-		     "GNU Emacs %s (%s%s%s)\n of %s on %s"
-		   "GNU Emacs %s (%s%s%s) of %s on %s")
+         (format "GNU Emacs %s (%s%s%s%s)%s"
                  emacs-version
 		 system-configuration
 		 (cond ((featurep 'motif)
@@ -68,13 +67,22 @@ to the system configuration; look at `system-configuration' instead."
 		       ((featurep 'ns)
 			(format ", NS %s" ns-version-string))
 		       (t ""))
+		 (if (featurep 'cairo)
+		     (format ", cairo version %s" cairo-version-string)
+		   "")
 		 (if (and (boundp 'x-toolkit-scroll-bars)
 			  (memq x-toolkit-scroll-bars '(xaw xaw3d)))
 		     (format ", %s scroll bars"
 			     (capitalize (symbol-name x-toolkit-scroll-bars)))
 		   "")
-		 (format-time-string "%Y-%m-%d" emacs-build-time)
-                 emacs-build-system)))
+		 (if emacs-build-time
+		     (format-time-string (concat
+					  (if (called-interactively-p
+					       'interactive)
+					      "" "\n")
+					  " of %Y-%m-%d")
+					 emacs-build-time)
+		   ""))))
     (if here
         (insert version-string)
       (if (called-interactively-p 'interactive)
@@ -96,6 +104,18 @@ or if we could not determine the revision.")
 (define-obsolete-function-alias 'emacs-bzr-get-version
                                 'emacs-repository-get-version "24.4")
 
+(defun emacs-repository-version-git (dir)
+  "Ask git itself for the version information for directory DIR."
+  (message "Waiting for git...")
+  (with-temp-buffer
+    (let ((default-directory (file-name-as-directory dir)))
+      (and (eq 0
+	       (with-demoted-errors "Error running git rev-parse: %S"
+		 (call-process "git" nil '(t nil) nil "rev-parse" "HEAD")))
+	   (progn (goto-char (point-min))
+		  (looking-at "[0-9a-fA-F]\\{40\\}"))
+	   (match-string 0)))))
+
 (defun emacs-repository-get-version (&optional dir external)
   "Try to return as a string the repository revision of the Emacs sources.
 The format of the returned string is dependent on the VCS in use.
@@ -104,21 +124,9 @@ control, or if we could not determine the revision.  Note that
 this reports on the current state of the sources, which may not
 correspond to the running Emacs.
 
-Optional argument DIR is a directory to use instead of
-`source-directory'.  Optional argument EXTERNAL is ignored and is
-retained for compatibility."
-  (or dir (setq dir source-directory))
-  (cond ((file-directory-p (expand-file-name ".git" dir))
-	 (message "Waiting for git...")
-	 (with-temp-buffer
-	   (let ((default-directory (file-name-as-directory dir)))
-	     (and (eq 0
-		      (condition-case nil
-			  (call-process "git" nil '(t nil) nil "rev-parse"
-					"HEAD")
-			(error nil)))
-		  (not (zerop (buffer-size)))
-		  (replace-regexp-in-string "\n" "" (buffer-string))))))))
+Optional argument DIR is a directory to use instead of `source-directory'.
+Optional argument EXTERNAL is ignored."
+  (emacs-repository-version-git (or dir source-directory)))
 
 ;; We put version info into the executable in the form that `ident' uses.
 (purecopy (concat "\n$Id: " (subst-char-in-string ?\n ?\s (emacs-version))

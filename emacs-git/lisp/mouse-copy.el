@@ -1,6 +1,6 @@
 ;;; mouse-copy.el --- one-click text copy and move
 
-;; Copyright (C) 1996, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: John Heidemann <johnh@ISI.EDU>
 ;; Keywords: mouse
@@ -154,7 +154,7 @@ If you have the bug (or the real fix :-), please let me know."
   "Drag out a secondary selection, then paste it at the current point.
 
 To test this function, evaluate:
-	(global-set-key [M-down-mouse-1] 'mouse-drag-secondary-pasting)
+	(global-set-key [M-down-mouse-1] \\='mouse-drag-secondary-pasting)
 put the point at one place, then click and drag over some other region."
   (interactive "e")
   ;; Work-around: We see and react to each part of a multi-click event

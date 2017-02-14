@@ -1,6 +1,6 @@
 ;;; forms.el --- Forms mode: edit a file as a form to fill in
 
-;; Copyright (C) 1991, 1994-1997, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1991, 1994-1997, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Johan Vromans <jvromans@squirrel.nl>
@@ -589,7 +589,14 @@ Commands:                        Equivalent keys in read-only mode:
 	(make-local-variable 'forms--dynamic-text)
 
 	;; Prevent accidental overwrite of the control file and auto-save.
-	(set-visited-file-name nil)
+        ;; We bind change-major-mode-with-file-name to nil to prevent
+        ;; set-visited-file-name from calling set-auto-mode, which
+        ;; might kill all local variables and set forms-file nil,
+        ;; which will then barf in find-file-noselect below.  This can
+        ;; happen when the user sets the default major mode that is
+        ;; different from the Fundamental mode.
+        (let (change-major-mode-with-file-name)
+          (set-visited-file-name nil))
 
 	;; Prepare this buffer for further processing.
 	(setq buffer-read-only nil)
@@ -692,10 +699,12 @@ Commands:                        Equivalent keys in read-only mode:
 	(insert
 	 "GNU Emacs Forms Mode\n\n"
 	 (if (file-exists-p forms-file)
-	     (concat "No records available in file `" forms-file "'\n\n")
-	   (format "Creating new file `%s'\nwith %d field%s per record\n\n"
-		   forms-file forms-number-of-fields
-		   (if (= 1 forms-number-of-fields) "" "s")))
+	     (format-message
+	      "No records available in file `%s'\n\n" forms-file)
+	   (format-message
+	    "Creating new file `%s'\nwith %d field%s per record\n\n"
+	    forms-file forms-number-of-fields
+	    (if (= 1 forms-number-of-fields) "" "s")))
 	 "Use " (substitute-command-keys "\\[forms-insert-record]")
 	 " to create new records.\n")
 	(setq forms--current-record 1)
@@ -1755,7 +1764,7 @@ Otherwise enables edit mode if the visited file is writable."
 With ARG: store the record after the current one.
 If `forms-new-record-filter' contains the name of a function,
 it is called to fill (some of) the fields with default values.
-If `forms-insert-after is non-nil, the default behavior is to insert
+If `forms-insert-after' is non-nil, the default behavior is to insert
 after the current record."
 
   (interactive "P")

@@ -1,10 +1,11 @@
 ;;; python.el --- Python's flying circus support for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
-;; Author: Fabián E. Gallina <fabian@anue.biz>
+;; Author: Fabián E. Gallina <fgallina@gnu.org>
 ;; URL: https://github.com/fgallina/python.el
-;; Version: 0.24.5
+;; Version: 0.25.2
+;; Package-Requires: ((emacs "24.1") (cl-lib "1.0"))
 ;; Maintainer: emacs-devel@gnu.org
 ;; Created: Jul 2010
 ;; Keywords: languages
@@ -180,6 +181,12 @@
 ;; shell so that relative imports work properly using the
 ;; `python-shell-package-enable' command.
 
+;; Shell remote support: remote Python shells are started with the
+;; correct environment for files opened remotely through tramp, also
+;; respecting dir-local variables provided `enable-remote-dir-locals'
+;; is non-nil.  The logic for this is transparently handled by the
+;; `python-shell-with-environment' macro.
+
 ;; Shell syntax highlighting: when enabled current input in shell is
 ;; highlighted.  The variable `python-shell-font-lock-enable' controls
 ;; activation of this feature globally when shells are started.
@@ -255,6 +262,7 @@
 (require 'cl-lib)
 (require 'comint)
 (require 'json)
+(require 'tramp-sh)
 
 ;; Avoid compiler warnings
 (defvar view-return-to-alist)
@@ -265,7 +273,7 @@
 (autoload 'help-function-arglist "help-fns")
 
 ;;;###autoload
-(add-to-list 'auto-mode-alist (cons (purecopy "\\.py\\'")  'python-mode))
+(add-to-list 'auto-mode-alist (cons (purecopy "\\.pyw?\\'")  'python-mode))
 ;;;###autoload
 (add-to-list 'interpreter-mode-alist (cons (purecopy "python[0-9.]*") 'python-mode))
 
@@ -274,6 +282,18 @@
   :group 'languages
   :version "24.3"
   :link '(emacs-commentary-link "python"))
+
+
+;;; 24.x Compat
+
+
+(unless (fboundp 'prog-widen)
+  (defun prog-widen ()
+    (widen)))
+
+(unless (fboundp 'prog-first-column)
+  (defun prog-first-column ()
+    0))
 
 
 ;;; Bindings
@@ -284,6 +304,7 @@
     (define-key map [remap backward-sentence] 'python-nav-backward-block)
     (define-key map [remap forward-sentence] 'python-nav-forward-block)
     (define-key map [remap backward-up-list] 'python-nav-backward-up-list)
+    (define-key map [remap mark-defun] 'python-mark-defun)
     (define-key map "\C-c\C-j" 'imenu)
     ;; Indent specific
     (define-key map "\177" 'python-indent-dedent-line-backspace)
@@ -309,6 +330,7 @@
     ;; Some util commands
     (define-key map "\C-c\C-v" 'python-check)
     (define-key map "\C-c\C-f" 'python-eldoc-at-point)
+    (define-key map "\C-c\C-d" 'python-describe-at-point)
     ;; Utilities
     (substitute-key-definition 'complete-symbol 'completion-at-point
                                map global-map)
@@ -359,11 +381,14 @@
 
 ;;; Python specialized rx
 
-(eval-when-compile
+(eval-and-compile
   (defconst python-rx-constituents
     `((block-start          . ,(rx symbol-start
                                    (or "def" "class" "if" "elif" "else" "try"
-                                       "except" "finally" "for" "while" "with")
+                                       "except" "finally" "for" "while" "with"
+                                       ;; Python 3.5+ PEP492
+                                       (and "async" (+ space)
+                                            (or "def" "for" "with")))
                                    symbol-end))
       (dedenter            . ,(rx symbol-start
                                    (or "elif" "else" "except" "finally")
@@ -374,7 +399,11 @@
                                   symbol-end))
       (decorator            . ,(rx line-start (* space) ?@ (any letter ?_)
                                    (* (any word ?_))))
-      (defun                . ,(rx symbol-start (or "def" "class") symbol-end))
+      (defun                . ,(rx symbol-start
+                                   (or "def" "class"
+                                       ;; Python 3.5+ PEP492
+                                       (and "async" (+ space) "def"))
+                                   symbol-end))
       (if-name-main         . ,(rx line-start "if" (+ space) "__name__"
                                    (+ space) "==" (+ space)
                                    (any ?' ?\") "__main__" (any ?' ?\")
@@ -430,7 +459,7 @@ This variant of `rx' supports common Python named REGEXPS."
 
 ;;; Font-lock and syntax
 
-(eval-when-compile
+(eval-and-compile
   (defun python-syntax--context-compiler-macro (form type &optional syntax-ppss)
     (pcase type
       (`'comment
@@ -464,13 +493,13 @@ The type returned can be `comment', `string' or `paren'."
      ((nth 1 ppss) 'paren))))
 
 (defsubst python-syntax-comment-or-string-p (&optional ppss)
-  "Return non-nil if PPSS is inside 'comment or 'string."
+  "Return non-nil if PPSS is inside comment or string."
   (nth 8 (or ppss (syntax-ppss))))
 
 (defsubst python-syntax-closing-paren-p ()
   "Return non-nil if char after point is a closing paren."
-  (= (syntax-class (syntax-after (point)))
-     (syntax-class (string-to-syntax ")"))))
+  (eql (syntax-class (syntax-after (point)))
+       (syntax-class (string-to-syntax ")"))))
 
 (define-obsolete-function-alias
   'python-info-ppss-context #'python-syntax-context "24.3")
@@ -506,6 +535,9 @@ The type returned can be `comment', `string' or `paren'."
           ;; fontified like that in order to keep font-lock consistent between
           ;; Python versions.
           "nonlocal"
+          ;; Python 3.5+ PEP492
+          (and "async" (+ space) (or "def" "for" "with"))
+          "await"
           ;; Extra:
           "self")
          symbol-end)
@@ -530,23 +562,32 @@ The type returned can be `comment', `string' or `paren'."
     ;; Builtin Exceptions
     (,(rx symbol-start
           (or
+           ;; Python 2 and 3:
            "ArithmeticError" "AssertionError" "AttributeError" "BaseException"
-           "DeprecationWarning" "EOFError" "EnvironmentError" "Exception"
-           "FloatingPointError" "FutureWarning" "GeneratorExit" "IOError"
-           "ImportError" "ImportWarning" "IndexError" "KeyError"
-           "KeyboardInterrupt" "LookupError" "MemoryError" "NameError"
-           "NotImplementedError" "OSError" "OverflowError"
-           "PendingDeprecationWarning" "ReferenceError" "RuntimeError"
-           "RuntimeWarning" "StopIteration" "SyntaxError" "SyntaxWarning"
-           "SystemError" "SystemExit" "TypeError" "UnboundLocalError"
-           "UnicodeDecodeError" "UnicodeEncodeError" "UnicodeError"
-           "UnicodeTranslateError" "UnicodeWarning" "UserWarning" "VMSError"
-           "ValueError" "Warning" "WindowsError" "ZeroDivisionError"
+           "BufferError" "BytesWarning" "DeprecationWarning" "EOFError"
+           "EnvironmentError" "Exception" "FloatingPointError" "FutureWarning"
+           "GeneratorExit" "IOError" "ImportError" "ImportWarning"
+           "IndentationError" "IndexError" "KeyError" "KeyboardInterrupt"
+           "LookupError" "MemoryError" "NameError" "NotImplementedError"
+           "OSError" "OverflowError" "PendingDeprecationWarning"
+           "ReferenceError" "RuntimeError" "RuntimeWarning" "StopIteration"
+           "SyntaxError" "SyntaxWarning" "SystemError" "SystemExit" "TabError"
+           "TypeError" "UnboundLocalError" "UnicodeDecodeError"
+           "UnicodeEncodeError" "UnicodeError" "UnicodeTranslateError"
+           "UnicodeWarning" "UserWarning" "ValueError" "Warning"
+           "ZeroDivisionError"
            ;; Python 2:
            "StandardError"
            ;; Python 3:
-           "BufferError" "BytesWarning" "IndentationError" "ResourceWarning"
-           "TabError")
+           "BlockingIOError" "BrokenPipeError" "ChildProcessError"
+           "ConnectionAbortedError" "ConnectionError" "ConnectionRefusedError"
+           "ConnectionResetError" "FileExistsError" "FileNotFoundError"
+           "InterruptedError" "IsADirectoryError" "NotADirectoryError"
+           "PermissionError" "ProcessLookupError" "RecursionError"
+           "ResourceWarning" "StopAsyncIteration" "TimeoutError"
+           ;; OS specific
+           "VMSError" "WindowsError"
+           )
           symbol-end) . font-lock-type-face)
     ;; Builtins
     (,(rx symbol-start
@@ -598,6 +639,11 @@ The type returned can be `comment', `string' or `paren'."
   (syntax-propertize-rules
    ((python-rx string-delimiter)
     (0 (ignore (python-syntax-stringify))))))
+
+(defconst python--prettify-symbols-alist
+  '(("lambda"  . ?λ)
+    ("and" . ?∧)
+    ("or" . ?∨)))
 
 (defsubst python-syntax-count-quotes (quote-char &optional point limit)
   "Count number of quotes around point (max is 3).
@@ -689,6 +735,7 @@ It makes underscores and dots word constituent chars.")
 
 (defcustom python-indent-guess-indent-offset-verbose t
   "Non-nil means to emit a warning when indentation guessing fails."
+  :version "25.1"
   :type 'boolean
   :group 'python
   :safe' booleanp)
@@ -734,7 +781,7 @@ work on `python-indent-calculate-indentation' instead."
   (interactive)
   (save-excursion
     (save-restriction
-      (widen)
+      (prog-widen)
       (goto-char (point-min))
       (let ((block-end))
         (while (and (not block-end)
@@ -833,7 +880,7 @@ keyword
  - Point is on a line starting a dedenter block.
  - START is the position where the dedenter block starts."
   (save-restriction
-    (widen)
+    (prog-widen)
     (let ((ppss (save-excursion
                   (beginning-of-line)
                   (syntax-ppss))))
@@ -958,18 +1005,20 @@ keyword
        ((save-excursion
           (back-to-indentation)
           (skip-chars-backward " \t\n")
-          (python-nav-beginning-of-statement)
-          (cons
-           (cond ((python-info-current-line-comment-p)
-                  :after-comment)
-                 ((save-excursion
-                    (goto-char (line-end-position))
-                    (python-util-forward-comment -1)
-                    (python-nav-beginning-of-statement)
-                    (looking-at (python-rx block-ender)))
-                  :after-block-end)
-                 (t :after-line))
-           (point))))))))
+          (if (bobp)
+              (cons :no-indent 0)
+            (python-nav-beginning-of-statement)
+            (cons
+             (cond ((python-info-current-line-comment-p)
+                    :after-comment)
+                   ((save-excursion
+                      (goto-char (line-end-position))
+                      (python-util-forward-comment -1)
+                      (python-nav-beginning-of-statement)
+                      (looking-at (python-rx block-ender)))
+                    :after-block-end)
+                   (t :after-line))
+             (point)))))))))
 
 (defun python-indent--calculate-indentation ()
   "Internal implementation of `python-indent-calculate-indentation'.
@@ -978,10 +1027,10 @@ current context or a list of integers.  The latter case is only
 happening for :at-dedenter-block-start context since the
 possibilities can be narrowed to specific indentation points."
   (save-restriction
-    (widen)
+    (prog-widen)
     (save-excursion
       (pcase (python-indent-context)
-        (`(:no-indent . ,_) 0)
+        (`(:no-indent . ,_) (prog-first-column)) ; usually 0
         (`(,(or :after-line
                 :after-comment
                 :inside-string
@@ -1019,7 +1068,7 @@ possibilities can be narrowed to specific indentation points."
          (let ((opening-block-start-points
                 (python-info-dedenter-opening-block-positions)))
            (if (not opening-block-start-points)
-               0  ; if not found default to first column
+               (prog-first-column) ; if not found default to first column
              (mapcar (lambda (pos)
                        (save-excursion
                          (goto-char pos)
@@ -1037,15 +1086,9 @@ integers.  Levels are returned in ascending order, and in the
 case INDENTATION is a list, this order is enforced."
   (if (listp indentation)
       (sort (copy-sequence indentation) #'<)
-    (let* ((remainder (% indentation python-indent-offset))
-           (steps (/ (- indentation remainder) python-indent-offset))
-           (levels (mapcar (lambda (step)
-                             (* python-indent-offset step))
-                           (number-sequence steps 0 -1))))
-      (reverse
-       (if (not (zerop remainder))
-           (cons indentation levels)
-         levels)))))
+    (nconc (number-sequence (prog-first-column) (1- indentation)
+                            python-indent-offset)
+           (list indentation))))
 
 (defun python-indent--previous-level (levels indentation)
   "Return previous level from LEVELS relative to INDENTATION."
@@ -1068,7 +1111,7 @@ minimum."
         (python-indent--previous-level levels (current-indentation))
       (if levels
           (apply #'max levels)
-        0))))
+        (prog-first-column)))))
 
 (defun python-indent-line (&optional previous)
   "Internal implementation of `python-indent-line-function'.
@@ -1253,6 +1296,21 @@ the line will be re-indented automatically if needed."
                        (line-number-at-pos current-pos))
               ;; Reindent region if this is a multiline statement
               (python-indent-region dedenter-pos current-pos)))))))))
+
+
+;;; Mark
+
+(defun python-mark-defun (&optional allow-extend)
+  "Put mark at end of this defun, point at beginning.
+The defun marked is the one that contains point or follows point.
+
+Interactively (or with ALLOW-EXTEND non-nil), if this command is
+repeated or (in Transient Mark mode) if the mark is active, it
+marks the next defun after the ones already marked."
+  (interactive "p")
+  (when (python-info-looking-at-beginning-of-defun)
+    (end-of-line 1))
+  (mark-defun allow-extend))
 
 
 ;;; Navigation
@@ -1805,7 +1863,7 @@ This command assumes point is not in a string or comment."
 
 (defun python-nav-if-name-main ()
   "Move point at the beginning the __main__ block.
-When \"if __name__ == '__main__':\" is found returns its
+When \"if __name__ == \\='__main__\\=':\" is found returns its
 position, else returns nil."
   (interactive)
   (let ((point (point))
@@ -1926,53 +1984,61 @@ Python shell.  See commentary for details."
   :safe 'booleanp)
 
 (defcustom python-shell-process-environment nil
-  "List of environment variables for Python shell.
-This variable follows the same rules as `process-environment'
-since it merges with it before the process creation routines are
-called.  When this variable is nil, the Python shell is run with
-the default `process-environment'."
+  "List of overridden environment variables for subprocesses to inherit.
+Each element should be a string of the form ENVVARNAME=VALUE.
+When this variable is non-nil, values are exported into the
+process environment before starting it.  Any variables already
+present in the current environment are superseded by variables
+set here."
   :type '(repeat string)
-  :group 'python
-  :safe 'listp)
+  :group 'python)
 
 (defcustom python-shell-extra-pythonpaths nil
   "List of extra pythonpaths for Python shell.
-The values of this variable are added to the existing value of
-PYTHONPATH in the `process-environment' variable."
+When this variable is non-nil, values added at the beginning of
+the PYTHONPATH before starting processes.  Any values present
+here that already exists in PYTHONPATH are moved to the beginning
+of the list so that they are prioritized when looking for
+modules."
   :type '(repeat string)
-  :group 'python
-  :safe 'listp)
+  :group 'python)
 
 (defcustom python-shell-exec-path nil
-  "List of path to search for binaries.
-This variable follows the same rules as `exec-path' since it
-merges with it before the process creation routines are called.
-When this variable is nil, the Python shell is run with the
-default `exec-path'."
+  "List of paths for searching executables.
+When this variable is non-nil, values added at the beginning of
+the PATH before starting processes.  Any values present here that
+already exists in PATH are moved to the beginning of the list so
+that they are prioritized when looking for executables."
   :type '(repeat string)
-  :group 'python
-  :safe 'listp)
+  :group 'python)
+
+(defcustom python-shell-remote-exec-path nil
+  "List of paths to be ensured remotely for searching executables.
+When this variable is non-nil, values are exported into remote
+hosts PATH before starting processes.  Values defined in
+`python-shell-exec-path' will take precedence to paths defined
+here.  Normally you wont use this variable directly unless you
+plan to ensure a particular set of paths to all Python shell
+executed through tramp connections."
+  :version "25.1"
+  :type '(repeat string)
+  :group 'python)
 
 (defcustom python-shell-virtualenv-root nil
   "Path to virtualenv root.
-This variable, when set to a string, makes the values stored in
-`python-shell-process-environment' and `python-shell-exec-path'
-to be modified properly so shells are started with the specified
+This variable, when set to a string, makes the environment to be
+modified such that shells are started within the specified
 virtualenv."
   :type '(choice (const nil) string)
-  :group 'python
-  :safe 'stringp)
+  :group 'python)
 
 (define-obsolete-variable-alias
   'python-shell-virtualenv-path 'python-shell-virtualenv-root "25.1")
 
-(defcustom python-shell-setup-codes '(python-shell-completion-setup-code
-                                      python-ffap-setup-code
-                                      python-eldoc-setup-code)
+(defcustom python-shell-setup-codes nil
   "List of code run by `python-shell-send-setup-codes'."
   :type '(repeat symbol)
-  :group 'python
-  :safe 'listp)
+  :group 'python)
 
 (defcustom python-shell-compilation-regexp-alist
   `((,(rx line-start (1+ (any " \t")) "File \""
@@ -1988,6 +2054,148 @@ virtualenv."
   "`compilation-error-regexp-alist' for inferior Python."
   :type '(alist string)
   :group 'python)
+
+(defmacro python-shell--add-to-path-with-priority (pathvar paths)
+  "Modify PATHVAR and ensure PATHS are added only once at beginning."
+  `(dolist (path (reverse ,paths))
+     (cl-delete path ,pathvar :test #'string=)
+     (cl-pushnew path ,pathvar :test #'string=)))
+
+(defun python-shell-calculate-pythonpath ()
+  "Calculate the PYTHONPATH using `python-shell-extra-pythonpaths'."
+  (let ((pythonpath
+         (split-string
+          (or (getenv "PYTHONPATH") "") path-separator 'omit)))
+    (python-shell--add-to-path-with-priority
+     pythonpath python-shell-extra-pythonpaths)
+    (mapconcat 'identity pythonpath path-separator)))
+
+(defun python-shell-calculate-process-environment ()
+  "Calculate `process-environment' or `tramp-remote-process-environment'.
+Prepends `python-shell-process-environment', sets extra
+pythonpaths from `python-shell-extra-pythonpaths' and sets a few
+virtualenv related vars.  If `default-directory' points to a
+remote host, the returned value is intended for
+`tramp-remote-process-environment'."
+  (let* ((remote-p (file-remote-p default-directory))
+         (process-environment (if remote-p
+                                  tramp-remote-process-environment
+                                process-environment))
+         (virtualenv (when python-shell-virtualenv-root
+                       (directory-file-name python-shell-virtualenv-root))))
+    (dolist (env python-shell-process-environment)
+      (pcase-let ((`(,key ,value) (split-string env "=")))
+        (setenv key value)))
+    (when python-shell-unbuffered
+      (setenv "PYTHONUNBUFFERED" "1"))
+    (when python-shell-extra-pythonpaths
+      (setenv "PYTHONPATH" (python-shell-calculate-pythonpath)))
+    (if (not virtualenv)
+        process-environment
+      (setenv "PYTHONHOME" nil)
+      (setenv "VIRTUAL_ENV" virtualenv))
+    process-environment))
+
+(defun python-shell-calculate-exec-path ()
+  "Calculate `exec-path'.
+Prepends `python-shell-exec-path' and adds the binary directory
+for virtualenv if `python-shell-virtualenv-root' is set.  If
+`default-directory' points to a remote host, the returned value
+appends `python-shell-remote-exec-path' instead of `exec-path'."
+  (let ((new-path (copy-sequence
+                   (if (file-remote-p default-directory)
+                       python-shell-remote-exec-path
+                     exec-path))))
+    (python-shell--add-to-path-with-priority
+     new-path python-shell-exec-path)
+    (if (not python-shell-virtualenv-root)
+        new-path
+      (python-shell--add-to-path-with-priority
+       new-path
+       (list (expand-file-name "bin" python-shell-virtualenv-root)))
+      new-path)))
+
+(defun python-shell-tramp-refresh-remote-path (vec paths)
+  "Update VEC's remote-path giving PATHS priority."
+  (let ((remote-path (tramp-get-connection-property vec "remote-path" nil)))
+    (when remote-path
+      (python-shell--add-to-path-with-priority remote-path paths)
+      (tramp-set-connection-property vec "remote-path" remote-path)
+      (tramp-set-remote-path vec))))
+
+(defun python-shell-tramp-refresh-process-environment (vec env)
+  "Update VEC's process environment with ENV."
+  ;; Stolen from `tramp-open-connection-setup-interactive-shell'.
+  (let ((env (append (when (fboundp #'tramp-get-remote-locale)
+                       ;; Emacs<24.4 compat.
+                       (list (tramp-get-remote-locale vec)))
+		     (copy-sequence env)))
+        (tramp-end-of-heredoc
+         (if (boundp 'tramp-end-of-heredoc)
+             tramp-end-of-heredoc
+           (md5 tramp-end-of-output)))
+	unset vars item)
+    (while env
+      (setq item (split-string (car env) "=" 'omit))
+      (setcdr item (mapconcat 'identity (cdr item) "="))
+      (if (and (stringp (cdr item)) (not (string-equal (cdr item) "")))
+	  (push (format "%s %s" (car item) (cdr item)) vars)
+	(push (car item) unset))
+      (setq env (cdr env)))
+    (when vars
+      (tramp-send-command
+       vec
+       (format "while read var val; do export $var=$val; done <<'%s'\n%s\n%s"
+	       tramp-end-of-heredoc
+	       (mapconcat 'identity vars "\n")
+	       tramp-end-of-heredoc)
+       t))
+    (when unset
+      (tramp-send-command
+       vec (format "unset %s" (mapconcat 'identity unset " ")) t))))
+
+(defmacro python-shell-with-environment (&rest body)
+  "Modify shell environment during execution of BODY.
+Temporarily sets `process-environment' and `exec-path' during
+execution of body.  If `default-directory' points to a remote
+machine then modifies `tramp-remote-process-environment' and
+`python-shell-remote-exec-path' instead."
+  (declare (indent 0) (debug (body)))
+  (let ((vec (make-symbol "vec")))
+    `(progn
+       (let* ((,vec
+               (when (file-remote-p default-directory)
+                 (ignore-errors
+                   (tramp-dissect-file-name default-directory 'noexpand))))
+              (process-environment
+               (if ,vec
+                   process-environment
+                 (python-shell-calculate-process-environment)))
+              (exec-path
+               (if ,vec
+                   exec-path
+                 (python-shell-calculate-exec-path)))
+              (tramp-remote-process-environment
+               (if ,vec
+                   (python-shell-calculate-process-environment)
+                 tramp-remote-process-environment)))
+         (when (tramp-get-connection-process ,vec)
+           ;; For already existing connections, the new exec path must
+           ;; be re-set, otherwise it won't take effect.  One example
+           ;; of such case is when remote dir-locals are read and
+           ;; *then* subprocesses are triggered within the same
+           ;; connection.
+           (python-shell-tramp-refresh-remote-path
+            ,vec (python-shell-calculate-exec-path))
+           ;; The `tramp-remote-process-environment' variable is only
+           ;; effective when the started process is an interactive
+           ;; shell, otherwise (like in the case of processes started
+           ;; with `process-file') the environment is not changed.
+           ;; This makes environment modifications effective
+           ;; unconditionally.
+           (python-shell-tramp-refresh-process-environment
+            ,vec tramp-remote-process-environment))
+         ,(macroexp-progn body)))))
 
 (defvar python-shell--prompt-calculated-input-regexp nil
   "Calculated input prompt regexp for inferior python shell.
@@ -2011,69 +2219,70 @@ shows a warning with instructions to avoid hangs and returns nil.
 When `python-shell-prompt-detect-enabled' is nil avoids any
 detection and just returns nil."
   (when python-shell-prompt-detect-enabled
-    (let* ((process-environment (python-shell-calculate-process-environment))
-           (exec-path (python-shell-calculate-exec-path))
-           (code (concat
-                  "import sys\n"
-                  "ps = [getattr(sys, 'ps%s' % i, '') for i in range(1,4)]\n"
-                  ;; JSON is built manually for compatibility
-                  "ps_json = '\\n[\"%s\", \"%s\", \"%s\"]\\n' % tuple(ps)\n"
-                  "print (ps_json)\n"
-                  "sys.exit(0)\n"))
-           (output
-            (with-temp-buffer
-              ;; TODO: improve error handling by using
-              ;; `condition-case' and displaying the error message to
-              ;; the user in the no-prompts warning.
-              (ignore-errors
-                (let ((code-file (python-shell--save-temp-file code)))
-                  ;; Use `process-file' as it is remote-host friendly.
-                  (process-file
-                   python-shell-interpreter
-                   code-file
-                   '(t nil)
-                   nil
-                   python-shell-interpreter-interactive-arg)
-                  ;; Try to cleanup
-                  (delete-file code-file)))
-              (buffer-string)))
-           (prompts
-            (catch 'prompts
-              (dolist (line (split-string output "\n" t))
-                (let ((res
-                       ;; Check if current line is a valid JSON array
-                       (and (string= (substring line 0 2) "[\"")
-                            (ignore-errors
-                              ;; Return prompts as a list, not vector
-                              (append (json-read-from-string line) nil)))))
-                  ;; The list must contain 3 strings, where the first
-                  ;; is the input prompt, the second is the block
-                  ;; prompt and the last one is the output prompt.  The
-                  ;; input prompt is the only one that can't be empty.
-                  (when (and (= (length res) 3)
-                             (cl-every #'stringp res)
-                             (not (string= (car res) "")))
-                    (throw 'prompts res))))
-              nil)))
-      (when (and (not prompts)
-                 python-shell-prompt-detect-failure-warning)
-        (lwarn
-         '(python python-shell-prompt-regexp)
-         :warning
-         (concat
-          "Python shell prompts cannot be detected.\n"
-          "If your emacs session hangs when starting python shells\n"
-          "recover with `keyboard-quit' and then try fixing the\n"
-          "interactive flag for your interpreter by adjusting the\n"
-          "`python-shell-interpreter-interactive-arg' or add regexps\n"
-          "matching shell prompts in the directory-local friendly vars:\n"
-          "  + `python-shell-prompt-regexp'\n"
-          "  + `python-shell-prompt-block-regexp'\n"
-          "  + `python-shell-prompt-output-regexp'\n"
-          "Or alternatively in:\n"
-          "  + `python-shell-prompt-input-regexps'\n"
-          "  + `python-shell-prompt-output-regexps'")))
-      prompts)))
+    (python-shell-with-environment
+      (let* ((code (concat
+                    "import sys\n"
+                    "ps = [getattr(sys, 'ps%s' % i, '') for i in range(1,4)]\n"
+                    ;; JSON is built manually for compatibility
+                    "ps_json = '\\n[\"%s\", \"%s\", \"%s\"]\\n' % tuple(ps)\n"
+                    "print (ps_json)\n"
+                    "sys.exit(0)\n"))
+             (interpreter python-shell-interpreter)
+             (interpreter-arg python-shell-interpreter-interactive-arg)
+             (output
+              (with-temp-buffer
+                ;; TODO: improve error handling by using
+                ;; `condition-case' and displaying the error message to
+                ;; the user in the no-prompts warning.
+                (ignore-errors
+                  (let ((code-file (python-shell--save-temp-file code)))
+                    ;; Use `process-file' as it is remote-host friendly.
+                    (process-file
+                     interpreter
+                     code-file
+                     '(t nil)
+                     nil
+                     interpreter-arg)
+                    ;; Try to cleanup
+                    (delete-file code-file)))
+                (buffer-string)))
+             (prompts
+              (catch 'prompts
+                (dolist (line (split-string output "\n" t))
+                  (let ((res
+                         ;; Check if current line is a valid JSON array
+                         (and (string= (substring line 0 2) "[\"")
+                              (ignore-errors
+                                ;; Return prompts as a list, not vector
+                                (append (json-read-from-string line) nil)))))
+                    ;; The list must contain 3 strings, where the first
+                    ;; is the input prompt, the second is the block
+                    ;; prompt and the last one is the output prompt.  The
+                    ;; input prompt is the only one that can't be empty.
+                    (when (and (= (length res) 3)
+                               (cl-every #'stringp res)
+                               (not (string= (car res) "")))
+                      (throw 'prompts res))))
+                nil)))
+        (when (and (not prompts)
+                   python-shell-prompt-detect-failure-warning)
+          (lwarn
+           '(python python-shell-prompt-regexp)
+           :warning
+           (concat
+            "Python shell prompts cannot be detected.\n"
+            "If your emacs session hangs when starting python shells\n"
+            "recover with `keyboard-quit' and then try fixing the\n"
+            "interactive flag for your interpreter by adjusting the\n"
+            "`python-shell-interpreter-interactive-arg' or add regexps\n"
+            "matching shell prompts in the directory-local friendly vars:\n"
+            "  + `python-shell-prompt-regexp'\n"
+            "  + `python-shell-prompt-block-regexp'\n"
+            "  + `python-shell-prompt-output-regexp'\n"
+            "Or alternatively in:\n"
+            "  + `python-shell-prompt-input-regexps'\n"
+            "  + `python-shell-prompt-output-regexps'")))
+        prompts))))
 
 (defun python-shell-prompt-validate-regexps ()
   "Validate all user provided regexps for prompts.
@@ -2169,61 +2378,15 @@ the `buffer-name'."
 
 (defun python-shell-calculate-command ()
   "Calculate the string used to execute the inferior Python process."
-  (let ((exec-path (python-shell-calculate-exec-path)))
-    ;; `exec-path' gets tweaked so that virtualenv's specific
-    ;; `python-shell-interpreter' absolute path can be found by
-    ;; `executable-find'.
-    (format "%s %s"
-            ;; FIXME: Why executable-find?
-            (shell-quote-argument
-             (executable-find python-shell-interpreter))
-            python-shell-interpreter-args)))
+  (format "%s %s"
+          ;; `python-shell-make-comint' expects to be able to
+          ;; `split-string-and-unquote' the result of this function.
+          (combine-and-quote-strings (list python-shell-interpreter))
+          python-shell-interpreter-args))
 
 (define-obsolete-function-alias
   'python-shell-parse-command
   #'python-shell-calculate-command "25.1")
-
-(defun python-shell-calculate-pythonpath ()
-  "Calculate the PYTHONPATH using `python-shell-extra-pythonpaths'."
-  (let ((pythonpath (getenv "PYTHONPATH"))
-        (extra (mapconcat 'identity
-                          python-shell-extra-pythonpaths
-                          path-separator)))
-    (if pythonpath
-        (concat extra path-separator pythonpath)
-      extra)))
-
-(defun python-shell-calculate-process-environment ()
-  "Calculate process environment given `python-shell-virtualenv-root'."
-  (let ((process-environment (append
-                              python-shell-process-environment
-                              process-environment nil))
-        (virtualenv (if python-shell-virtualenv-root
-                        (directory-file-name python-shell-virtualenv-root)
-                      nil)))
-    (when python-shell-unbuffered
-      (setenv "PYTHONUNBUFFERED" "1"))
-    (when python-shell-extra-pythonpaths
-      (setenv "PYTHONPATH" (python-shell-calculate-pythonpath)))
-    (if (not virtualenv)
-        process-environment
-      (setenv "PYTHONHOME" nil)
-      (setenv "PATH" (format "%s/bin%s%s"
-                             virtualenv path-separator
-                             (or (getenv "PATH") "")))
-      (setenv "VIRTUAL_ENV" virtualenv))
-    process-environment))
-
-(defun python-shell-calculate-exec-path ()
-  "Calculate exec path given `python-shell-virtualenv-root'."
-  (let ((path (append
-               ;; Use nil as the tail so that the list is a full copy,
-               ;; this is a paranoid safeguard for side-effects.
-               python-shell-exec-path exec-path nil)))
-    (if (not python-shell-virtualenv-root)
-        path
-      (cons (expand-file-name "bin" python-shell-virtualenv-root)
-            path))))
 
 (defvar python-shell--package-depth 10)
 
@@ -2275,7 +2438,7 @@ banner and the initial prompt are received separately."
 (defun python-shell-comint-end-of-output-p (output)
   "Return non-nil if OUTPUT is ends with input prompt."
   (string-match
-   ;; XXX: It seems on OSX an extra carriage return is attached
+   ;; XXX: It seems on macOS an extra carriage return is attached
    ;; at the end of output, this handles that too.
    (concat
     "\r?\n?"
@@ -2471,6 +2634,47 @@ With argument MSG show activation/deactivation message."
       (python-shell-font-lock-turn-off msg))
     python-shell-font-lock-enable))
 
+(defvar python-shell--first-prompt-received-output-buffer nil)
+(defvar python-shell--first-prompt-received nil)
+
+(defcustom python-shell-first-prompt-hook nil
+  "Hook run upon first (non-pdb) shell prompt detection.
+This is the place for shell setup functions that need to wait for
+output.  Since the first prompt is ensured, this helps the
+current process to not hang waiting for output by safeguarding
+interactive actions can be performed.  This is useful to safely
+attach setup code for long-running processes that eventually
+provide a shell."
+  :version "25.1"
+  :type 'hook
+  :group 'python)
+
+(defun python-shell-comint-watch-for-first-prompt-output-filter (output)
+  "Run `python-shell-first-prompt-hook' when first prompt is found in OUTPUT."
+  (when (not python-shell--first-prompt-received)
+    (set (make-local-variable 'python-shell--first-prompt-received-output-buffer)
+         (concat python-shell--first-prompt-received-output-buffer
+                 (ansi-color-filter-apply output)))
+    (when (python-shell-comint-end-of-output-p
+           python-shell--first-prompt-received-output-buffer)
+      (if (string-match-p
+           (concat python-shell-prompt-pdb-regexp (rx eos))
+           (or python-shell--first-prompt-received-output-buffer ""))
+          ;; Skip pdb prompts and reset the buffer.
+          (setq python-shell--first-prompt-received-output-buffer nil)
+        (set (make-local-variable 'python-shell--first-prompt-received) t)
+        (setq python-shell--first-prompt-received-output-buffer nil)
+        (with-current-buffer (current-buffer)
+          (let ((inhibit-quit nil))
+            (run-hooks 'python-shell-first-prompt-hook))))))
+  output)
+
+;; Used to hold user interactive overrides to
+;; `python-shell-interpreter' and `python-shell-interpreter-args' that
+;; will be made buffer-local by `inferior-python-mode':
+(defvar python-shell--interpreter)
+(defvar python-shell--interpreter-args)
+
 (define-derived-mode inferior-python-mode comint-mode "Inferior Python"
   "Major mode for Python inferior process.
 Runs a Python interpreter as a subprocess of Emacs, with Python
@@ -2496,15 +2700,17 @@ initialization of the interpreter via `python-shell-setup-codes'
 variable.
 
 \(Type \\[describe-mode] in the process buffer for a list of commands.)"
-  (let ((interpreter python-shell-interpreter)
-        (args python-shell-interpreter-args))
-    (when python-shell--parent-buffer
-      (python-util-clone-local-variables python-shell--parent-buffer))
-    ;; Users can override default values for these vars when calling
-    ;; `run-python'.  This ensures new values let-bound in
-    ;; `python-shell-make-comint' are locally set.
-    (set (make-local-variable 'python-shell-interpreter) interpreter)
-    (set (make-local-variable 'python-shell-interpreter-args) args))
+  (when python-shell--parent-buffer
+    (python-util-clone-local-variables python-shell--parent-buffer))
+  (set (make-local-variable 'indent-tabs-mode) nil)
+  ;; Users can interactively override default values for
+  ;; `python-shell-interpreter' and `python-shell-interpreter-args'
+  ;; when calling `run-python'.  This ensures values let-bound in
+  ;; `python-shell-make-comint' are locally set if needed.
+  (set (make-local-variable 'python-shell-interpreter)
+       (or python-shell--interpreter python-shell-interpreter))
+  (set (make-local-variable 'python-shell-interpreter-args)
+       (or python-shell--interpreter-args python-shell-interpreter-args))
   (set (make-local-variable 'python-shell--prompt-calculated-input-regexp) nil)
   (set (make-local-variable 'python-shell--prompt-calculated-output-regexp) nil)
   (python-shell-prompt-set-calculated-regexps)
@@ -2513,6 +2719,7 @@ variable.
   (setq mode-line-process '(":%s"))
   (set (make-local-variable 'comint-output-filter-functions)
        '(ansi-color-process-output
+         python-shell-comint-watch-for-first-prompt-output-filter
          python-pdbtrack-comint-output-filter-function
          python-comint-postoutput-scroll-to-bottom))
   (set (make-local-variable 'compilation-error-regexp-alist)
@@ -2526,9 +2733,7 @@ variable.
   (make-local-variable 'python-shell-internal-last-output)
   (when python-shell-font-lock-enable
     (python-shell-font-lock-turn-on))
-  (compilation-shell-minor-mode 1)
-  (python-shell-accept-process-output
-   (get-buffer-process (current-buffer))))
+  (compilation-shell-minor-mode 1))
 
 (defun python-shell-make-comint (cmd proc-name &optional show internal)
   "Create a Python shell comint buffer.
@@ -2542,31 +2747,30 @@ convention for temporary/internal buffers, and also makes sure
 the user is not queried for confirmation when the process is
 killed."
   (save-excursion
-    (let* ((proc-buffer-name
-            (format (if (not internal) "*%s*" " *%s*") proc-name))
-           (process-environment (python-shell-calculate-process-environment))
-           (exec-path (python-shell-calculate-exec-path)))
-      (when (not (comint-check-proc proc-buffer-name))
-        (let* ((cmdlist (split-string-and-unquote cmd))
-               (interpreter (car cmdlist))
-               (args (cdr cmdlist))
-               (buffer (apply #'make-comint-in-buffer proc-name proc-buffer-name
-                              interpreter nil args))
-               (python-shell--parent-buffer (current-buffer))
-               (process (get-buffer-process buffer))
-               ;; As the user may have overridden default values for
-               ;; these vars on `run-python', let-binding them allows
-               ;; to have the new right values in all setup code
-               ;; that's is done in `inferior-python-mode', which is
-               ;; important, especially for prompt detection.
-               (python-shell-interpreter interpreter)
-               (python-shell-interpreter-args
-                (mapconcat #'identity args " ")))
-          (with-current-buffer buffer
-            (inferior-python-mode))
-          (when show (display-buffer buffer))
-          (and internal (set-process-query-on-exit-flag process nil))))
-      proc-buffer-name)))
+    (python-shell-with-environment
+      (let* ((proc-buffer-name
+              (format (if (not internal) "*%s*" " *%s*") proc-name)))
+        (when (not (comint-check-proc proc-buffer-name))
+          (let* ((cmdlist (split-string-and-unquote cmd))
+                 (interpreter (car cmdlist))
+                 (args (cdr cmdlist))
+                 (buffer (apply #'make-comint-in-buffer proc-name proc-buffer-name
+                                interpreter nil args))
+                 (python-shell--parent-buffer (current-buffer))
+                 (process (get-buffer-process buffer))
+                 ;; Users can override the interpreter and args
+                 ;; interactively when calling `run-python', let-binding
+                 ;; these allows having the new right values in all
+                 ;; setup code that is done in `inferior-python-mode',
+                 ;; which is important, especially for prompt detection.
+                 (python-shell--interpreter interpreter)
+                 (python-shell--interpreter-args
+                  (mapconcat #'identity args " ")))
+            (with-current-buffer buffer
+              (inferior-python-mode))
+            (when show (display-buffer buffer))
+            (and internal (set-process-query-on-exit-flag process nil))))
+        proc-buffer-name))))
 
 ;;;###autoload
 (defun run-python (&optional cmd dedicated show)
@@ -2646,7 +2850,8 @@ of `error' with a user-friendly message."
   (or (python-shell-get-process)
       (if interactivep
           (user-error
-           "Start a Python process first with `M-x run-python' or `%s'."
+           "Start a Python process first with `%s' or `%s'."
+           (substitute-command-keys "\\[run-python]")
            ;; Get the binding.
            (key-description
             (where-is-internal
@@ -2805,36 +3010,39 @@ This is a wrapper over `buffer-substring' that takes care of
 different transformations for the code sent to be evaluated in
 the python shell:
   1. When optional argument NOMAIN is non-nil everything under an
-     \"if __name__ == '__main__'\" block will be removed.
+     \"if __name__ == \\='__main__\\='\" block will be removed.
   2. When a subregion of the buffer is sent, it takes care of
      appending extra empty lines so tracebacks are correct.
   3. When the region sent is a substring of the current buffer, a
      coding cookie is added.
   4. Wraps indented regions under an \"if True:\" block so the
      interpreter evaluates them correctly."
-  (let* ((substring (buffer-substring-no-properties start end))
+  (let* ((start (save-excursion
+                  ;; Normalize start to the line beginning position.
+                  (goto-char start)
+                  (line-beginning-position)))
+         (substring (buffer-substring-no-properties start end))
          (starts-at-point-min-p (save-restriction
                                   (widen)
                                   (= (point-min) start)))
          (encoding (python-info-encoding))
+         (toplevel-p (zerop (save-excursion
+                              (goto-char start)
+                              (python-util-forward-comment 1)
+                              (current-indentation))))
          (fillstr (when (not starts-at-point-min-p)
                     (concat
                      (format "# -*- coding: %s -*-\n" encoding)
                      (make-string
                       ;; Subtract 2 because of the coding cookie.
-                      (- (line-number-at-pos start) 2) ?\n))))
-         (toplevel-block-p (save-excursion
-                             (goto-char start)
-                             (or (zerop (line-number-at-pos start))
-                                 (progn
-                                   (python-util-forward-comment 1)
-                                   (zerop (current-indentation)))))))
+                      (- (line-number-at-pos start) 2) ?\n)))))
     (with-temp-buffer
       (python-mode)
-      (if fillstr (insert fillstr))
+      (when fillstr
+        (insert fillstr))
       (insert substring)
       (goto-char (point-min))
-      (when (not toplevel-block-p)
+      (when (not toplevel-p)
         (insert "if True:")
         (delete-region (point) (line-end-position)))
       (when nomain
@@ -2869,7 +3077,7 @@ the python shell:
 (defun python-shell-send-region (start end &optional send-main msg)
   "Send the region delimited by START and END to inferior Python process.
 When optional argument SEND-MAIN is non-nil, allow execution of
-code inside blocks delimited by \"if __name__== '__main__':\".
+code inside blocks delimited by \"if __name__== \\='__main__\\=':\".
 When called interactively SEND-MAIN defaults to nil, unless it's
 called with prefix argument.  When optional argument MSG is
 non-nil, forces display of a user-friendly message if there's no
@@ -2886,7 +3094,7 @@ process running; defaults to t when called interactively."
 (defun python-shell-send-buffer (&optional send-main msg)
   "Send the entire buffer to inferior Python process.
 When optional argument SEND-MAIN is non-nil, allow execution of
-code inside blocks delimited by \"if __name__== '__main__':\".
+code inside blocks delimited by \"if __name__== \\='__main__\\=':\".
 When called interactively SEND-MAIN defaults to nil, unless it's
 called with prefix argument.  When optional argument MSG is
 non-nil, forces display of a user-friendly message if there's no
@@ -2944,13 +3152,10 @@ t when called interactively."
                      (insert-file-contents
                       (or temp-file-name file-name))
                      (python-info-encoding)))
-         (file-name (expand-file-name
-                     (or (file-remote-p file-name 'localname)
-                         file-name)))
+         (file-name (expand-file-name (file-local-name file-name)))
          (temp-file-name (when temp-file-name
                            (expand-file-name
-                            (or (file-remote-p temp-file-name 'localname)
-                                temp-file-name)))))
+                            (file-local-name temp-file-name)))))
     (python-shell-send-string
      (format
       (concat
@@ -2977,76 +3182,82 @@ t when called interactively."
   "Send all setup code for shell.
 This function takes the list of setup code to send from the
 `python-shell-setup-codes' list."
-  (let ((process (python-shell-get-process))
-        (code (concat
-               (mapconcat
-                (lambda (elt)
-                  (cond ((stringp elt) elt)
-                        ((symbolp elt) (symbol-value elt))
-                        (t "")))
-                python-shell-setup-codes
-                "\n\n")
-               "\n\nprint ('python.el: sent setup code')")))
-    (python-shell-send-string code process)
-    (python-shell-accept-process-output process)))
+  (when python-shell-setup-codes
+    (let ((process (python-shell-get-process))
+          (code (concat
+                 (mapconcat
+                  (lambda (elt)
+                    (cond ((stringp elt) elt)
+                          ((symbolp elt) (symbol-value elt))
+                          (t "")))
+                  python-shell-setup-codes
+                  "\n\nprint ('python.el: sent setup code')"))))
+      (python-shell-send-string code process)
+      (python-shell-accept-process-output process))))
 
-(add-hook 'inferior-python-mode-hook
+(add-hook 'python-shell-first-prompt-hook
           #'python-shell-send-setup-code)
 
 
 ;;; Shell completion
 
 (defcustom python-shell-completion-setup-code
-  "try:
-    import readline
-except:
-    def __PYTHON_EL_get_completions(text):
-        return []
-else:
-    def __PYTHON_EL_get_completions(text):
+  "
+def __PYTHON_EL_get_completions(text):
+    completions = []
+    completer = None
+
+    try:
+        import readline
+
         try:
             import __builtin__
         except ImportError:
             # Python 3
             import builtins as __builtin__
         builtins = dir(__builtin__)
-        completions = []
+
         is_ipython = ('__IPYTHON__' in builtins or
                       '__IPYTHON__active' in builtins)
         splits = text.split()
         is_module = splits and splits[0] in ('from', 'import')
-        try:
-            if is_ipython and is_module:
-                from IPython.core.completerlib import module_completion
-                completions = module_completion(text.strip())
-            elif is_ipython and '__IP' in builtins:
-                completions = __IP.complete(text)
-            elif is_ipython and 'get_ipython' in builtins:
-                completions = get_ipython().Completer.all_completions(text)
-            else:
-                # Try to reuse current completer.
+
+        if is_ipython and is_module:
+            from IPython.core.completerlib import module_completion
+            completions = module_completion(text.strip())
+        elif is_ipython and '__IP' in builtins:
+            completions = __IP.complete(text)
+        elif is_ipython and 'get_ipython' in builtins:
+            completions = get_ipython().Completer.all_completions(text)
+        else:
+            # Try to reuse current completer.
+            completer = readline.get_completer()
+            if not completer:
+                # importing rlcompleter sets the completer, use it as a
+                # last resort to avoid breaking customizations.
+                import rlcompleter
                 completer = readline.get_completer()
-                if not completer:
-                    # importing rlcompleter sets the completer, use it as a
-                    # last resort to avoid breaking customizations.
-                    import rlcompleter
-                    completer = readline.get_completer()
-                i = 0
-                while True:
-                    completion = completer(text, i)
-                    if not completion:
-                        break
-                    i += 1
-                    completions.append(completion)
-        except:
-            pass
-        return completions"
+            if getattr(completer, 'PYTHON_EL_WRAPPED', False):
+                completer.print_mode = False
+            i = 0
+            while True:
+                completion = completer(text, i)
+                if not completion:
+                    break
+                i += 1
+                completions.append(completion)
+    except:
+        pass
+    finally:
+        if getattr(completer, 'PYTHON_EL_WRAPPED', False):
+            completer.print_mode = True
+    return completions"
   "Code used to setup completion in inferior Python processes."
   :type 'string
   :group 'python)
 
 (defcustom python-shell-completion-string-code
-  "';'.join(__PYTHON_EL_get_completions('''%s'''))\n"
+  "';'.join(__PYTHON_EL_get_completions('''%s'''))"
   "Python code used to get a string of completions separated by semicolons.
 The string passed to the function is the current python name or
 the full statement in the case of imports."
@@ -3070,18 +3281,22 @@ the full statement in the case of imports."
   (list "pypy")
   "List of disabled interpreters.
 When a match is found, native completion is disabled."
+  :version "25.1"
   :type '(repeat string))
 
 (defcustom python-shell-completion-native-enable t
   "Enable readline based native completion."
+  :version "25.1"
   :type 'boolean)
 
 (defcustom python-shell-completion-native-output-timeout 5.0
   "Time in seconds to wait for completion output before giving up."
+  :version "25.1"
   :type 'float)
 
 (defcustom python-shell-completion-native-try-output-timeout 1.0
   "Time in seconds to wait for *trying* native completion output."
+  :version "25.1"
   :type 'float)
 
 (defvar python-shell-completion-native-redirect-buffer
@@ -3102,84 +3317,126 @@ When a match is found, native completion is disabled."
          python-shell-completion-native-try-output-timeout))
     (python-shell-completion-native-get-completions
      (get-buffer-process (current-buffer))
-     nil "int")))
+     nil "_")))
 
 (defun python-shell-completion-native-setup ()
   "Try to setup native completion, return non-nil on success."
   (let ((process (python-shell-get-process)))
-    (python-shell-send-string "
+    (with-current-buffer (process-buffer process)
+      (python-shell-send-string "
 def __PYTHON_EL_native_completion_setup():
     try:
         import readline
+
         try:
             import __builtin__
         except ImportError:
             # Python 3
             import builtins as __builtin__
+
         builtins = dir(__builtin__)
         is_ipython = ('__IPYTHON__' in builtins or
                       '__IPYTHON__active' in builtins)
+
         class __PYTHON_EL_Completer:
+            '''Completer wrapper that prints candidates to stdout.
+
+            It wraps an existing completer function and changes its behavior so
+            that the user input is unchanged and real candidates are printed to
+            stdout.
+
+            Returned candidates are '0__dummy_completion__' and
+            '1__dummy_completion__' in that order ('0__dummy_completion__' is
+            returned repeatedly until all possible candidates are consumed).
+
+            The real candidates are printed to stdout so that they can be
+            easily retrieved through comint output redirect trickery.
+            '''
+
             PYTHON_EL_WRAPPED = True
+
             def __init__(self, completer):
                 self.completer = completer
                 self.last_completion = None
+                self.print_mode = True
+
             def __call__(self, text, state):
                 if state == 0:
-                    # The first completion is always a dummy completion.  This
-                    # ensures proper output for sole completions and a current
-                    # input safeguard when no completions are available.
+                    # Set the first dummy completion.
                     self.last_completion = None
                     completion = '0__dummy_completion__'
                 else:
                     completion = self.completer(text, state - 1)
+
                 if not completion:
-                    if state == 1:
-                        # When no completions are available, two non-sharing
-                        # prefix strings are returned just to ensure output
+                    if self.last_completion != '1__dummy_completion__':
+                        # When no more completions are available, returning a
+                        # dummy with non-sharing prefix allow ensuring output
                         # while preventing changes to current input.
+                        # Coincidentally it's also the end of output.
                         completion = '1__dummy_completion__'
-                    elif self.last_completion != '~~~~__dummy_completion__':
-                        # This marks the end of output.
-                        completion = '~~~~__dummy_completion__'
                 elif completion.endswith('('):
                     # Remove parens on callables as it breaks completion on
                     # arguments (e.g. str(Ari<tab>)).
                     completion = completion[:-1]
                 self.last_completion = completion
-                return completion
+
+                if completion in (
+                        '0__dummy_completion__', '1__dummy_completion__'):
+                    return completion
+                elif completion:
+                    # For every non-dummy completion, return a repeated dummy
+                    # one and print the real candidate so it can be retrieved
+                    # by comint output filters.
+                    if self.print_mode:
+                        print (completion)
+                        return '0__dummy_completion__'
+                    else:
+                        return completion
+                else:
+                    return completion
+
         completer = readline.get_completer()
+
         if not completer:
             # Used as last resort to avoid breaking customizations.
             import rlcompleter
             completer = readline.get_completer()
+
         if completer and not getattr(completer, 'PYTHON_EL_WRAPPED', False):
             # Wrap the existing completer function only once.
             new_completer = __PYTHON_EL_Completer(completer)
             if not is_ipython:
                 readline.set_completer(new_completer)
             else:
-                # IPython hacks readline such that `readline.set_completer`
+                # Try both initializations to cope with all IPython versions.
+                # This works fine for IPython 3.x but not for earlier:
+                readline.set_completer(new_completer)
+                # IPython<3 hacks readline such that `readline.set_completer`
                 # won't work.  This workaround injects the new completer
-                # function into the existing instance directly.
+                # function into the existing instance directly:
                 instance = getattr(completer, 'im_self', completer.__self__)
                 instance.rlcomplete = new_completer
+
         if readline.__doc__ and 'libedit' in readline.__doc__:
             readline.parse_and_bind('bind ^I rl_complete')
         else:
             readline.parse_and_bind('tab: complete')
             # Require just one tab to send output.
             readline.parse_and_bind('set show-all-if-ambiguous on')
-        print ('python.el: readline is available')
-    except IOError:
-        print ('python.el: readline not available')
-__PYTHON_EL_native_completion_setup()"
-     process)
-    (python-shell-accept-process-output process)
-    (when (save-excursion
-            (re-search-backward
-             (regexp-quote "python.el: readline is available") nil t 1))
-      (python-shell-completion-native-try))))
+
+        print ('python.el: native completion setup loaded')
+    except:
+        print ('python.el: native completion setup failed')
+
+__PYTHON_EL_native_completion_setup()" process)
+      (when (and
+             (python-shell-accept-process-output
+              process python-shell-completion-native-try-output-timeout)
+             (save-excursion
+               (re-search-backward
+                (regexp-quote "python.el: native completion setup loaded") nil t 1)))
+        (python-shell-completion-native-try)))))
 
 (defun python-shell-completion-native-turn-off (&optional msg)
   "Turn off shell native completions.
@@ -3216,7 +3473,7 @@ With argument MSG show activation/deactivation message."
            (concat
             "Your `python-shell-interpreter' doesn't seem to "
             "support readline, yet `python-shell-completion-native' "
-            (format "was `t' and %S is not part of the "
+            (format "was t and %S is not part of the "
                     (file-name-nondirectory python-shell-interpreter))
             "`python-shell-completion-native-disabled-interpreters' "
             "list.  Native completions have been disabled locally. "))
@@ -3226,7 +3483,7 @@ With argument MSG show activation/deactivation message."
   "Like `python-shell-completion-native-turn-on-maybe' but force messages."
   (python-shell-completion-native-turn-on-maybe t))
 
-(add-hook 'inferior-python-mode-hook
+(add-hook 'python-shell-first-prompt-hook
           #'python-shell-completion-native-turn-on-maybe-with-msg)
 
 (defun python-shell-completion-native-toggle (&optional msg)
@@ -3244,103 +3501,75 @@ With argument MSG show activation/deactivation message."
 When IMPORT is non-nil takes precedence over INPUT for
 completion."
   (with-current-buffer (process-buffer process)
-    (when (and python-shell-completion-native-enable
-               (python-util-comint-last-prompt)
-               (>= (point) (cdr (python-util-comint-last-prompt))))
-      (let* ((input (or import input))
-             (original-filter-fn (process-filter process))
-             (redirect-buffer (get-buffer-create
-                               python-shell-completion-native-redirect-buffer))
-             (separators (python-rx (or whitespace open-paren close-paren)))
-             (trigger "\t")
-             (new-input (concat input trigger))
-             (input-length
-              (save-excursion
-                (+ (- (point-max) (comint-bol)) (length new-input))))
-             (delete-line-command (make-string input-length ?\b))
-             (input-to-send (concat new-input delete-line-command)))
-        ;; Ensure restoring the process filter, even if the user quits
-        ;; or there's some other error.
-        (unwind-protect
-            (with-current-buffer redirect-buffer
-              ;; Cleanup the redirect buffer
-              (delete-region (point-min) (point-max))
-              ;; Mimic `comint-redirect-send-command', unfortunately it
-              ;; can't be used here because it expects a newline in the
-              ;; command and that's exactly what we are trying to avoid.
-              (let ((comint-redirect-echo-input nil)
-                    (comint-redirect-verbose nil)
-                    (comint-redirect-perform-sanity-check nil)
-                    (comint-redirect-insert-matching-regexp nil)
-                    ;; Feed it some regex that will never match.
-                    (comint-redirect-finished-regexp "^\\'$")
-                    (comint-redirect-output-buffer redirect-buffer)
-                    (current-time (float-time)))
-                ;; Compatibility with Emacs 24.x.  Comint changed and
-                ;; now `comint-redirect-filter' gets 3 args.  This
-                ;; checks which version of `comint-redirect-filter' is
-                ;; in use based on its args and uses `apply-partially'
-                ;; to make it up for the 3 args case.
-                (if (= (length
-                        (help-function-arglist 'comint-redirect-filter)) 3)
-                    (set-process-filter
-                     process (apply-partially
-                              #'comint-redirect-filter original-filter-fn))
-                  (set-process-filter process #'comint-redirect-filter))
-                (process-send-string process input-to-send)
-                ;; Grab output until our dummy completion used as
-                ;; output end marker is found.  Output is accepted
-                ;; *very* quickly to keep the shell super-responsive.
-                (while (and (not (re-search-backward "~~~~__dummy_completion__" nil t))
-                            (< (- current-time (float-time))
-                               python-shell-completion-native-output-timeout))
-                  (accept-process-output process 0.01))
+    (let* ((input (or import input))
+           (original-filter-fn (process-filter process))
+           (redirect-buffer (get-buffer-create
+                             python-shell-completion-native-redirect-buffer))
+           (trigger "\t")
+           (new-input (concat input trigger))
+           (input-length
+            (save-excursion
+              (+ (- (point-max) (comint-bol)) (length new-input))))
+           (delete-line-command (make-string input-length ?\b))
+           (input-to-send (concat new-input delete-line-command)))
+      ;; Ensure restoring the process filter, even if the user quits
+      ;; or there's some other error.
+      (unwind-protect
+          (with-current-buffer redirect-buffer
+            ;; Cleanup the redirect buffer
+            (erase-buffer)
+            ;; Mimic `comint-redirect-send-command', unfortunately it
+            ;; can't be used here because it expects a newline in the
+            ;; command and that's exactly what we are trying to avoid.
+            (let ((comint-redirect-echo-input nil)
+                  (comint-redirect-completed nil)
+                  (comint-redirect-perform-sanity-check nil)
+                  (comint-redirect-insert-matching-regexp t)
+                  (comint-redirect-finished-regexp
+                   "1__dummy_completion__[[:space:]]*\n")
+                  (comint-redirect-output-buffer redirect-buffer))
+              ;; Compatibility with Emacs 24.x.  Comint changed and
+              ;; now `comint-redirect-filter' gets 3 args.  This
+              ;; checks which version of `comint-redirect-filter' is
+              ;; in use based on its args and uses `apply-partially'
+              ;; to make it up for the 3 args case.
+              (if (= (length
+                      (help-function-arglist 'comint-redirect-filter)) 3)
+                  (set-process-filter
+                   process (apply-partially
+                            #'comint-redirect-filter original-filter-fn))
+                (set-process-filter process #'comint-redirect-filter))
+              (process-send-string process input-to-send)
+              ;; Grab output until our dummy completion used as
+              ;; output end marker is found.
+              (when (python-shell-accept-process-output
+                     process python-shell-completion-native-output-timeout
+                     comint-redirect-finished-regexp)
+                (re-search-backward "0__dummy_completion__" nil t)
                 (cl-remove-duplicates
-                 (cl-remove-if
-                  (lambda (c)
-                    (string-match "__dummy_completion__" c))
-                  (split-string
-                   (buffer-substring-no-properties
-                    (point-min) (point-max))
-                   separators t))
-                 :test #'string=)))
-          (set-process-filter process original-filter-fn))))))
+                 (split-string
+                  (buffer-substring-no-properties
+                   (line-beginning-position) (point-min))
+                  "[ \f\t\n\r\v()]+" t)
+                 :test #'string=))))
+        (set-process-filter process original-filter-fn)))))
 
 (defun python-shell-completion-get-completions (process import input)
   "Do completion at point using PROCESS for IMPORT or INPUT.
 When IMPORT is non-nil takes precedence over INPUT for
 completion."
+  (setq input (or import input))
   (with-current-buffer (process-buffer process)
-    (let* ((prompt
-            (let ((prompt-boundaries (python-util-comint-last-prompt)))
-              (buffer-substring-no-properties
-               (car prompt-boundaries) (cdr prompt-boundaries))))
-           (completion-code
-            ;; Check whether a prompt matches a pdb string, an import
-            ;; statement or just the standard prompt and use the
-            ;; correct python-shell-completion-*-code string
-            (cond ((and (string-match
-                         (concat "^" python-shell-prompt-pdb-regexp) prompt))
-                   ;; Since there are no guarantees the user will remain
-                   ;; in the same context where completion code was sent
-                   ;; (e.g. user steps into a function), safeguard
-                   ;; resending completion setup continuously.
-                   (concat python-shell-completion-setup-code
-                           "\nprint (" python-shell-completion-string-code ")"))
-                  ((string-match
-                    python-shell--prompt-calculated-input-regexp prompt)
-                   python-shell-completion-string-code)
-                  (t nil)))
-           (subject (or import input)))
-      (and completion-code
-           (> (length input) 0)
-           (let ((completions
-                  (python-util-strip-string
-                   (python-shell-send-string-no-output
-                    (format completion-code subject) process))))
-             (and (> (length completions) 2)
-                  (split-string completions
-                                "^'\\|^\"\\|;\\|'$\\|\"$" t)))))))
+    (let ((completions
+           (python-util-strip-string
+            (python-shell-send-string-no-output
+             (format
+              (concat python-shell-completion-setup-code
+                      "\nprint (" python-shell-completion-string-code ")")
+              input) process))))
+      (when (> (length completions) 2)
+        (split-string completions
+                      "^'\\|^\"\\|;\\|'$\\|\"$" t)))))
 
 (defun python-shell-completion-at-point (&optional process)
   "Function for `completion-at-point-functions' in `inferior-python-mode'.
@@ -3367,10 +3596,28 @@ using that one instead of current buffer's process."
               (forward-char (length (match-string-no-properties 0)))
               (point))))
          (end (point))
+         (prompt-boundaries
+          (with-current-buffer (process-buffer process)
+            (python-util-comint-last-prompt)))
+         (prompt
+          (with-current-buffer (process-buffer process)
+            (when prompt-boundaries
+              (buffer-substring-no-properties
+               (car prompt-boundaries) (cdr prompt-boundaries)))))
          (completion-fn
-          (if python-shell-completion-native-enable
-              #'python-shell-completion-native-get-completions
-            #'python-shell-completion-get-completions)))
+          (with-current-buffer (process-buffer process)
+            (cond ((or (null prompt)
+                       (< (point) (cdr prompt-boundaries)))
+                   #'ignore)
+                  ((or (not python-shell-completion-native-enable)
+                       ;; Even if native completion is enabled, for
+                       ;; pdb interaction always use the fallback
+                       ;; mechanism since the completer is changed.
+                       ;; Also, since pdb interaction is single-line
+                       ;; based, this is enough.
+                       (string-match-p python-shell-prompt-pdb-regexp prompt))
+                   #'python-shell-completion-get-completions)
+                  (t #'python-shell-completion-native-get-completions)))))
     (list start end
           (completion-table-dynamic
            (apply-partially
@@ -3422,12 +3669,18 @@ Never set this variable directly, use
   "Set the buffer for FILE-NAME as the tracked buffer.
 Internally it uses the `python-pdbtrack-tracked-buffer' variable.
 Returns the tracked buffer."
-  (let ((file-buffer (get-file-buffer
-                      (concat (file-remote-p default-directory)
-                              file-name))))
+  (let* ((file-name-prospect (concat (file-remote-p default-directory)
+                              file-name))
+         (file-buffer (get-file-buffer file-name-prospect)))
     (if file-buffer
         (setq python-pdbtrack-tracked-buffer file-buffer)
-      (setq file-buffer (find-file-noselect file-name))
+      (cond
+       ((file-exists-p file-name-prospect)
+        (setq file-buffer (find-file-noselect file-name-prospect)))
+       ((and (not (equal file-name file-name-prospect))
+             (file-exists-p file-name))
+        ;; Fallback to a locally available copy of the file.
+        (setq file-buffer (find-file-noselect file-name-prospect))))
       (when (not (member file-buffer python-pdbtrack-buffers-to-kill))
         (add-to-list 'python-pdbtrack-buffers-to-kill file-buffer)))
     file-buffer))
@@ -3786,14 +4039,14 @@ be added to `python-mode-skeleton-abbrev-table'."
   "Abbrev table for Python mode."
   :parents (list python-mode-skeleton-abbrev-table))
 
-(defmacro python-define-auxiliary-skeleton (name doc &optional &rest skel)
+(defmacro python-define-auxiliary-skeleton (name &optional doc &rest skel)
   "Define a `python-mode' auxiliary skeleton using NAME DOC and SKEL.
 The skeleton will be bound to python-skeleton-NAME."
   (declare (indent 2))
   (let* ((name (symbol-name name))
          (function-name (intern (concat "python-skeleton--" name)))
-         (msg (format
-               "Add '%s' clause? " name)))
+         (msg (funcall (if (fboundp 'format-message) #'format-message #'format)
+                       "Add `%s' clause? " name)))
     (when (not skel)
       (setq skel
             `(< ,(format "%s:" name) \n \n
@@ -3806,11 +4059,11 @@ The skeleton will be bound to python-skeleton-NAME."
          (signal 'quit t))
        ,@skel)))
 
-(python-define-auxiliary-skeleton else nil)
+(python-define-auxiliary-skeleton else)
 
-(python-define-auxiliary-skeleton except nil)
+(python-define-auxiliary-skeleton except)
 
-(python-define-auxiliary-skeleton finally nil)
+(python-define-auxiliary-skeleton finally)
 
 (python-skeleton-define if nil
   "Condition: "
@@ -3884,13 +4137,22 @@ The skeleton will be bound to python-skeleton-NAME."
 ;;; FFAP
 
 (defcustom python-ffap-setup-code
-  "def __FFAP_get_module_path(module):
+  "
+def __FFAP_get_module_path(objstr):
     try:
-        import os
-        path = __import__(module).__file__
-        if path[-4:] == '.pyc' and os.path.exists(path[0:-1]):
-            path = path[:-1]
-        return path
+        import inspect
+        import os.path
+        # NameError exceptions are delayed until this point.
+        obj = eval(objstr)
+        module = inspect.getmodule(obj)
+        filename = module.__file__
+        ext = os.path.splitext(filename)[1]
+        if ext in ('.pyc', '.pyo'):
+            # Point to the source file.
+            filename = filename[:-1]
+        if os.path.exists(filename):
+            return filename
+        return ''
     except:
         return ''"
   "Python code to get a module path."
@@ -3898,7 +4160,7 @@ The skeleton will be bound to python-skeleton-NAME."
   :group 'python)
 
 (defcustom python-ffap-string-code
-  "__FFAP_get_module_path('''%s''')\n"
+  "__FFAP_get_module_path('''%s''')"
   "Python code used to get a string with the path of a module."
   :type 'string
   :group 'python)
@@ -3913,9 +4175,12 @@ The skeleton will be bound to python-skeleton-NAME."
         nil
       (let ((module-file
              (python-shell-send-string-no-output
-              (format python-ffap-string-code module) process)))
-        (when module-file
-          (substring-no-properties module-file 1 -1))))))
+              (concat
+               python-ffap-setup-code
+               "\nprint (" (format python-ffap-string-code module) ")")
+              process)))
+        (unless (zerop (length module-file))
+          (python-util-strip-string module-file))))))
 
 (defvar ffap-alist)
 
@@ -3962,8 +4227,7 @@ See `python-check-command' for the default."
                                     "")))))))
   (setq python-check-custom-command command)
   (save-some-buffers (not compilation-ask-about-save) nil)
-  (let ((process-environment (python-shell-calculate-process-environment))
-        (exec-path (python-shell-calculate-exec-path)))
+  (python-shell-with-environment
     (compilation-start command nil
                        (lambda (_modename)
                          (format python-check-buffer-name command)))))
@@ -4002,13 +4266,13 @@ See `python-check-command' for the default."
             doc = doc.splitlines()[0]
     except:
         doc = ''
-    print (doc)"
+    return doc"
   "Python code to setup documentation retrieval."
   :type 'string
   :group 'python)
 
 (defcustom python-eldoc-string-code
-  "__PYDOC_get_help('''%s''')\n"
+  "__PYDOC_get_help('''%s''')"
   "Python code used to get a string with the documentation of an object."
   :type 'string
   :group 'python)
@@ -4034,22 +4298,62 @@ returns will be used.  If not FORCE-PROCESS is passed what
 `python-shell-get-process' returns is used."
   (let ((process (or force-process (python-shell-get-process))))
     (when process
-      (let ((input (or force-input
-                       (python-eldoc--get-symbol-at-point))))
-        (and input
-             ;; Prevent resizing the echo area when iPython is
-             ;; enabled.  Bug#18794.
-             (python-util-strip-string
-              (python-shell-send-string-no-output
-               (format python-eldoc-string-code input)
-               process)))))))
+      (let* ((input (or force-input
+                        (python-eldoc--get-symbol-at-point)))
+             (docstring
+              (when input
+                ;; Prevent resizing the echo area when iPython is
+                ;; enabled.  Bug#18794.
+                (python-util-strip-string
+                 (python-shell-send-string-no-output
+                  (concat
+                   python-eldoc-setup-code
+                   "\nprint(" (format python-eldoc-string-code input) ")")
+                  process)))))
+        (unless (zerop (length docstring))
+          docstring)))))
+
+(defvar-local python-eldoc-get-doc t
+  "Non-nil means eldoc should fetch the documentation
+  automatically. Set to nil by `python-eldoc-function' if
+  `python-eldoc-function-timeout-permanent' is non-nil and
+  `python-eldoc-function' times out.")
+
+(defcustom python-eldoc-function-timeout 1
+  "Timeout for `python-eldoc-function' in seconds."
+  :group 'python
+  :type 'integer
+  :version "25.1")
+
+(defcustom python-eldoc-function-timeout-permanent t
+  "Non-nil means that when `python-eldoc-function' times out
+`python-eldoc-get-doc' will be set to nil"
+  :group 'python
+  :type 'boolean
+  :version "25.1")
 
 (defun python-eldoc-function ()
   "`eldoc-documentation-function' for Python.
 For this to work as best as possible you should call
 `python-shell-send-buffer' from time to time so context in
-inferior Python process is updated properly."
-  (python-eldoc--get-doc-at-point))
+inferior Python process is updated properly.
+
+If `python-eldoc-function-timeout' seconds elapse before this
+function returns then if
+`python-eldoc-function-timeout-permanent' is non-nil
+`python-eldoc-get-doc' will be set to nil and eldoc will no
+longer return the documentation at the point automatically.
+
+Set `python-eldoc-get-doc' to t to reenable eldoc documentation
+fetching"
+  (when python-eldoc-get-doc
+    (with-timeout (python-eldoc-function-timeout
+                   (if python-eldoc-function-timeout-permanent
+                       (progn
+                         (message "Eldoc echo-area display muted in this buffer, see `python-eldoc-function'")
+                         (setq python-eldoc-get-doc nil))
+                     (message "`python-eldoc-function' timed out, see `python-eldoc-function-timeout'")))
+      (python-eldoc--get-doc-at-point))))
 
 (defun python-eldoc-at-point (symbol)
   "Get help on SYMBOL using `help'.
@@ -4062,6 +4366,11 @@ Interactively, prompt for symbol."
                           "Describe symbol: ")
                         nil nil symbol))))
   (message (python-eldoc--get-doc-at-point symbol)))
+
+(defun python-describe-at-point (symbol process)
+  (interactive (list (python-info-current-symbol)
+                     (python-shell-get-process)))
+  (comint-send-string process (concat "help('" symbol "')\n")))
 
 
 ;;; Hideshow
@@ -4106,6 +4415,15 @@ It must be a function with two arguments: TYPE and NAME.")
       "*class definition*"
     "*function definition*"))
 
+(defun python-imenu--get-defun-type-name ()
+  "Return defun type and name at current position."
+  (when (looking-at python-nav-beginning-of-defun-regexp)
+    (let ((split (split-string (match-string-no-properties 0))))
+      (if (= (length split) 2)
+          split
+        (list (concat (car split) " " (cadr split))
+              (car (last split)))))))
+
 (defun python-imenu--put-parent (type name pos tree)
   "Add the parent with TYPE, NAME and POS to TREE."
   (let ((label
@@ -4123,11 +4441,9 @@ not be passed explicitly unless you know what you are doing."
   (setq min-indent (or min-indent 0)
         prev-indent (or prev-indent python-indent-offset))
   (let* ((pos (python-nav-backward-defun))
-         (type)
-         (name (when (and pos (looking-at python-nav-beginning-of-defun-regexp))
-                 (let ((split (split-string (match-string-no-properties 0))))
-                   (setq type (car split))
-                   (cadr split))))
+         (defun-type-name (and pos (python-imenu--get-defun-type-name)))
+         (type (car defun-type-name))
+         (name (cadr defun-type-name))
          (label (when name
                   (funcall python-imenu-format-item-label-function type name)))
          (indent (current-indentation))
@@ -4230,7 +4546,7 @@ Optional argument INCLUDE-TYPE indicates to include the type of the defun.
 This function can be used as the value of `add-log-current-defun-function'
 since it returns nil if point is not inside a defun."
   (save-restriction
-    (widen)
+    (prog-widen)
     (save-excursion
       (end-of-line 1)
       (let ((names)
@@ -4377,7 +4693,8 @@ likely an invalid python file."
     (let ((dedenter-pos (python-info-dedenter-statement-p)))
       (when dedenter-pos
         (goto-char dedenter-pos)
-        (let* ((pairs '(("elif" "elif" "if")
+        (let* ((cur-line (line-beginning-position))
+               (pairs '(("elif" "elif" "if")
                         ("else" "if" "elif" "except" "for" "while")
                         ("except" "except" "try")
                         ("finally" "else" "except" "try")))
@@ -4393,7 +4710,22 @@ likely an invalid python file."
               (let ((indentation (current-indentation)))
                 (when (and (not (memq indentation collected-indentations))
                            (or (not collected-indentations)
-                               (< indentation (apply #'min collected-indentations))))
+                               (< indentation (apply #'min collected-indentations)))
+                           ;; There must be no line with indentation
+                           ;; smaller than `indentation' (except for
+                           ;; blank lines) between the found opening
+                           ;; block and the current line, otherwise it
+                           ;; is not an opening block.
+                           (save-excursion
+                             (forward-line)
+                             (let ((no-back-indent t))
+                               (save-match-data
+                                 (while (and (< (point) cur-line)
+                                             (setq no-back-indent
+                                                   (or (> (current-indentation) indentation)
+                                                       (python-info-current-line-empty-p))))
+                                   (forward-line)))
+                               no-back-indent)))
                   (setq collected-indentations
                         (cons indentation collected-indentations))
                   (when (member (match-string-no-properties 0)
@@ -4413,7 +4745,7 @@ likely an invalid python file."
   (let ((point (python-info-dedenter-opening-block-position)))
     (when point
       (save-restriction
-        (widen)
+        (prog-widen)
         (message "Closes %s" (save-excursion
                                (goto-char point)
                                (buffer-substring
@@ -4434,7 +4766,7 @@ statement."
 With optional argument LINE-NUMBER, check that line instead."
   (save-excursion
     (save-restriction
-      (widen)
+      (prog-widen)
       (when line-number
         (python-util-goto-line line-number))
       (while (and (not (eobp))
@@ -4450,7 +4782,7 @@ With optional argument LINE-NUMBER, check that line instead."
 Optional argument LINE-NUMBER forces the line number to check against."
   (save-excursion
     (save-restriction
-      (widen)
+      (prog-widen)
       (when line-number
         (python-util-goto-line line-number))
       (when (python-info-line-ends-backslash-p)
@@ -4467,7 +4799,7 @@ When current line is continuation of another return the point
 where the continued line ends."
   (save-excursion
     (save-restriction
-      (widen)
+      (prog-widen)
       (let* ((context-type (progn
                              (back-to-indentation)
                              (python-syntax-context-type)))
@@ -4582,12 +4914,19 @@ point's current `syntax-ppss'."
              ;; Allow up to two consecutive docstrings only.
              (>=
               2
-              (progn
+              (let (last-backward-sexp-point)
                 (while (save-excursion
                          (python-nav-backward-sexp)
                          (setq backward-sexp-point (point))
                          (and (= indentation (current-indentation))
-                              (not (bobp)) ; Prevent infloop.
+                              ;; Make sure we're always moving point.
+                              ;; If we get stuck in the same position
+                              ;; on consecutive loop iterations,
+                              ;; bail out.
+                              (prog1 (not (eql last-backward-sexp-point
+                                               backward-sexp-point))
+                                (setq last-backward-sexp-point
+                                      backward-sexp-point))
                               (looking-at-p
                                (concat "[uU]?[rR]?"
                                        (python-rx string-delimiter)))))
@@ -4853,7 +5192,7 @@ returned as is."
   (add-to-list
    'hs-special-modes-alist
    `(python-mode
-     "\\s-*\\(?:def\\|class\\)\\>"
+     "\\s-*\\_<\\(?:def\\|class\\)\\_>"
      ;; Use the empty string as end regexp so it doesn't default to
      ;; "\\s)".  This way parens at end of defun are properly hidden.
      ""
@@ -4869,6 +5208,9 @@ returned as is."
            "`outline-level' function for Python mode."
            (1+ (/ (current-indentation) python-indent-offset))))
 
+  (set (make-local-variable 'prettify-symbols-alist)
+       python--prettify-symbols-alist)
+
   (python-skeleton-add-menu-items)
 
   (make-local-variable 'python-shell-internal-buffer)
@@ -4880,7 +5222,6 @@ returned as is."
 (provide 'python)
 
 ;; Local Variables:
-;; coding: utf-8
 ;; indent-tabs-mode: nil
 ;; End:
 

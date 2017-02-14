@@ -1,6 +1,6 @@
-;;; eudc.el --- Emacs Unified Directory Client -*- coding: utf-8 -*-
+;;; eudc.el --- Emacs Unified Directory Client
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2017 Free Software Foundation, Inc.
 
 ;; Author: Oscar Figueiredo <oscar@cpe.fr>
 ;;         Pavel Janík <Pavel@Janik.cz>
@@ -106,6 +106,18 @@
 ;; Protocol local. Whether the protocol supports queries with no specified
 ;; attribute name
 (defvar eudc-protocol-has-default-query-attributes nil)
+
+(defvar bbdb-version)
+
+(defun eudc--using-bbdb-3-or-newer-p ()
+  "Return non-nil if BBDB version is 3 or greater."
+  (or
+   ;; MELPA versions of BBDB may have a bad package version, but
+   ;; they're all version 3 or later.
+   (equal bbdb-version "@PACKAGE_VERSION@")
+   ;; Development versions of BBDB can have the format "X.YZ devo".
+   ;; Split the string just in case.
+   (version<= "3" (car (split-string bbdb-version)))))
 
 (defun eudc-plist-member (plist prop)
   "Return t if PROP has a value specified in PLIST."
@@ -1134,7 +1146,7 @@ queries the server for the existing fields and displays a corresponding form."
 
 (defun eudc-menu ()
   (let (command)
-    (append '("Directory Search")
+    (append '("Directory Servers")
 	    (list
 	     (append
 	      '("Server")
@@ -1174,8 +1186,8 @@ queries the server for the existing fields and displays a corresponding form."
       (define-key
 	global-map
 	[menu-bar tools directory-search]
-	(cons "Directory Search"
-	      (easy-menu-create-menu "Directory Search" (cdr (eudc-menu))))))
+	(cons "Directory Servers"
+	      (easy-menu-create-menu "Directory Servers" (cdr (eudc-menu))))))
      ((fboundp 'easy-menu-add-item)
       (let ((menu (eudc-menu)))
 	(easy-menu-add-item nil '("tools") (easy-menu-create-menu (car menu)
@@ -1185,8 +1197,9 @@ queries the server for the existing fields and displays a corresponding form."
       (define-key
 	global-map
 	[menu-bar tools eudc]
-	(cons "Directory Search"
-	      (easy-menu-create-keymaps "Directory Search" (cdr (eudc-menu))))))
+	(cons "Directory Servers"
+	      (easy-menu-create-keymaps "Directory Servers"
+                                        (cdr (eudc-menu))))))
      (t
       (error "Unknown version of easymenu"))))
    ))
@@ -1219,7 +1232,7 @@ This does nothing except loading eudc by autoload side-effect."
 (cond
  ((not (featurep 'xemacs))
   (defvar eudc-tools-menu
-    (let ((map (make-sparse-keymap "Directory Search")))
+    (let ((map (make-sparse-keymap "Directory Servers")))
       (define-key map [phone]
 	`(menu-item ,(purecopy "Get Phone") eudc-get-phone
 		    :help ,(purecopy "Get the phone field of name from the directory server")))
@@ -1243,7 +1256,7 @@ This does nothing except loading eudc by autoload side-effect."
       map))
   (fset 'eudc-tools-menu (symbol-value 'eudc-tools-menu)))
  (t
-  (let ((menu  '("Directory Search"
+  (let ((menu  '("Directory Servers"
 		 ["Load Hotlist of Servers" eudc-load-eudc t]
 		 ["New Server" eudc-set-server t]
 		 ["---" nil nil]
@@ -1267,8 +1280,8 @@ This does nothing except loading eudc by autoload side-effect."
 	    (define-key
 	      global-map
 	      [menu-bar tools eudc]
-	      (cons "Directory Search"
-		    (easy-menu-create-keymaps "Directory Search"
+	      (cons "Directory Servers"
+		    (easy-menu-create-keymaps "Directory Servers"
 					      (cdr menu)))))))))))
 
 ;;}}}

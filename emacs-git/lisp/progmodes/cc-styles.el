@@ -1,6 +1,6 @@
 ;;; cc-styles.el --- support for styles in CC Mode
 
-;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2017 Free Software Foundation, Inc.
 
 ;; Authors:    2004- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -67,6 +67,7 @@
 			 (arglist-close . c-lineup-arglist)
 			 (inline-open . 0)
 			 (brace-list-open . +)
+			 (brace-list-intro . c-lineup-arglist-intro-after-paren)
 			 (topmost-intro-cont
 			  . (first c-lineup-topmost-intro-cont
 				   c-lineup-gnu-DEFUN-intro-cont))))
@@ -663,8 +664,8 @@ DEFAULT-STYLE has the same format as `c-default-style'."
 
 (cc-provide 'cc-styles)
 
-;;; Local Variables:
-;;; indent-tabs-mode: t
-;;; tab-width: 8
-;;; End:
+;; Local Variables:
+;; indent-tabs-mode: t
+;; tab-width: 8
+;; End:
 ;;; cc-styles.el ends here

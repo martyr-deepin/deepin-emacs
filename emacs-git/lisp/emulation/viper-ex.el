@@ -1,6 +1,6 @@
 ;;; viper-ex.el --- functions implementing the Ex commands for Viper
 
-;; Copyright (C) 1994-1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1998, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Package: viper
@@ -396,7 +396,7 @@ reversed."
     ))
 
 ;; Get an ex-token which is either an address or a command.
-;; A token has a type, \(command, address, end-mark\), and a value
+;; A token has a type, (command, address, end-mark), and a value
 (defun viper-get-ex-token ()
   (save-window-excursion
     (setq viper-ex-work-buf (get-buffer-create viper-ex-work-buf-name))
@@ -491,7 +491,7 @@ reversed."
 	     (forward-char 1)
 	     (cond ((looking-at "'") (setq ex-token nil))
 		   ((looking-at "[a-z]") (setq ex-token (following-char)))
-		   (t (error "Marks are ' and a-z")))
+		   (t (error "%s" "Marks are ' and a-z")))
 	     (forward-char 1))
 	    ((looking-at "\n")
 	     (setq ex-token-type 'end-mark)
@@ -1250,7 +1250,7 @@ reversed."
 	(kill-region (point) (mark t))))))
 
 
-(declare-function viper-change-state-to-vi "viper-cmd" ())
+(declare-function viper-change-state-to-vi "viper-cmd" (&rest _))
 
 ;; Ex edit command
 ;; In Viper, `e' and `e!' behave identically.  In both cases, the user is
@@ -1658,7 +1658,7 @@ reversed."
   (if (and (not (string= ex-file (buffer-file-name)))
 	   (buffer-modified-p)
 	   (not ex-variant))
-      (error "No write since last change \(:rec! overrides\)"))
+      (error "No write since last change (:rec! overrides)"))
   (recover-file ex-file))
 
 ;; Tell that `rewind' is obsolete and to use `:next count' instead
@@ -1998,7 +1998,7 @@ Please contact your system administrator. "
     (beginning-of-line)
     (if opt-c (message "done"))))
 
-(declare-function viper-change-state-to-emacs "viper-cmd" ())
+(declare-function viper-change-state-to-emacs "viper-cmd" (&rest _))
 
 ;; Ex tag command
 (defun ex-tag ()
@@ -2190,7 +2190,7 @@ Please contact your system administrator. "
 (defun ex-compile ()
   "Reads args from the command line, then runs make with the args.
 If no args are given, then it runs the last compile command.
-Type 'mak ' (including the space) to run make with no args."
+Type `mak ' (including the space) to run make with no args."
   (let (args)
     (with-current-buffer (setq viper-ex-work-buf
                                (get-buffer-create viper-ex-work-buf-name))

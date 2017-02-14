@@ -1,4 +1,4 @@
-Copyright (C) 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 2001-2017 Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 
@@ -12,9 +12,9 @@ what you do when using them.
 
 * Instructions and scripts used to prepare an Emacs release.
 
-** FOR-RELEASE
+** release-process
 
-Living list of activities that must be completed before the next release.
+The release process used by GNU Emacs.
 
 ** make-tarball.txt
 
@@ -37,7 +37,7 @@ Build Emacs in various ways.
 
 ** quick-install-emacs
 
-Install emacs quickly (`incrementally').
+Install emacs quickly ("incrementally").
 
 ** alloc-colors.c
 

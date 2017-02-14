@@ -1,6 +1,6 @@
 ;;; speedbar --- quick access to files and tags in a frame
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: file, tags, tools
@@ -203,7 +203,7 @@ the user is done with the current expansion list.")
     )
   "List of functions to periodically call stealthily.
 This list is of the form:
- '( (\"NAME\" FUNCTION ...)
+  ( (\"NAME\" FUNCTION ...)
     ...)
 where NAME is the name of the major display mode these functions are
 for, and the remaining elements FUNCTION are functions to call in order.
@@ -242,8 +242,8 @@ frame."
 
 (defcustom speedbar-query-confirmation-method 'all
   "Query control for file operations.
-The 'all flag means to always query before file operations.
-The 'none-but-delete flag means to not query before any file
+The `all' flag means to always query before file operations.
+The `none-but-delete' flag means to not query before any file
 operations, except before a file deletion."
   :group 'speedbar
   :type '(radio (const :tag "Always Query before some file operations."
@@ -392,8 +392,8 @@ display is used instead."
 
 (defcustom speedbar-default-position 'left-right
   "Default position of the speedbar frame.
-Possible values are 'left, 'right or 'left-right.
-If value is 'left-right, the most suitable location is
+Possible values are `left', `right' or `left-right'.
+If value is `left-right', the most suitable location is
 determined automatically."
   :group 'speedbar
   :type '(radio (const :tag "Automatic" left-right)
@@ -458,9 +458,9 @@ items is reached."
 (defcustom speedbar-directory-button-trim-method 'span
   "Indicates how the directory button will be displayed.
 Possible values are:
- 'span - span large directories over multiple lines.
- 'trim - trim large directories to only show the last few.
- nil   - no trimming."
+ `span' - span large directories over multiple lines.
+ `trim' - trim large directories to only show the last few.
+ nil    - no trimming."
   :group 'speedbar
   :type '(radio (const :tag "Span large directories over multiple lines."
 		       span)
@@ -1989,7 +1989,7 @@ INDEX is not used, but is required by the caller."
 This is the button that expands or contracts a node (if applicable),
 and EXP-BUTTON-CHAR the character in it (+, -, ?, etc).  EXP-BUTTON-FUNCTION
 is the function to call if it's clicked on.  Button types are
-'bracket, 'angle, 'curly, 'expandtag, 'statictag, t, or nil.
+`bracket', `angle', `curly', `expandtag', `statictag', t, or nil.
 EXP-BUTTON-DATA is extra data attached to the text forming the expansion
 button.
 
@@ -2061,7 +2061,7 @@ position to insert a new item, and that the new item will end with a CR."
   "Insert list of FILES starting at point, and indenting all files to LEVEL.
 Tag expandable items with a +, otherwise a ?.  Don't highlight ? as we
 don't know how to manage them.  The input parameter FILES is a cons
-cell of the form ( 'DIRLIST . 'FILELIST )."
+cell of the form (DIRLIST . FILELIST)."
   ;; Start inserting all the directories
   (let ((dirs (car files)))
     (while dirs
@@ -2341,7 +2341,7 @@ Argument LST is the list of tags to trim."
       (append newlst trimlst))))
 
 (defun speedbar-simple-group-tag-hierarchy (lst)
-  "Create a simple 'Tags' group with orphaned tags.
+  "Create a simple `Tags' group with orphaned tags.
 Argument LST is the list of tags to sort into groups."
   (let ((newlst nil)
 	(sublst nil))
@@ -2857,7 +2857,7 @@ indicator, then do not add a space."
 	(progn
 	  (goto-char speedbar-ro-to-do-point)
 	  (while (and (not (input-pending-p))
-		      (re-search-forward "^\\([0-9]+\\):\\s-*[[<][+-\?][]>] "
+		      (re-search-forward "^\\([0-9]+\\):\\s-*[[<][+-?][]>] "
 					 nil t))
 	    (setq speedbar-ro-to-do-point (point))
 	    (let ((f (speedbar-line-file)))
@@ -3469,11 +3469,11 @@ TOKEN will be the list, and INDENT is the current indentation level."
 ;;
 (defcustom speedbar-select-frame-method 'attached
   "Specify how to select a frame for displaying a file.
-A value of 'attached means to use the attached frame (the frame
-that speedbar was started from.)  A number such as 1 or -1 means to
-pass that number to `other-frame' while selecting a frame from speedbar."
+A number such as 1 or -1 means to pass that number to `other-frame'
+while selecting a frame from speedbar.  Any other value means to use
+the attached frame (the frame that speedbar was started from)."
   :group 'speedbar
-  :type 'sexp)
+  :type '(choice integer (other :tag "attached" attached)))
 
 (defun speedbar-find-file-in-frame (file)
   "This will load FILE into the speedbar attached frame.

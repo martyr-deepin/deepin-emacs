@@ -1,6 +1,6 @@
 ;;; ediff-ptch.el --- Ediff's  patch support
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Package: ediff
@@ -90,14 +90,14 @@ See also `ediff-backup-specs'."
 	   ;; traditional `patch'
 	   (format "-b %s" ediff-backup-extension))))
   "Backup directives to pass to the patch program.
-Ediff requires that the old version of the file \(before applying the patch\)
+Ediff requires that the old version of the file \(before applying the patch)
 be saved in a file named `the-patch-file.extension'.  Usually `extension' is
 `.orig', but this can be changed by the user and may depend on the system.
 Therefore, Ediff needs to know the backup extension used by the patch program.
 
 Some versions of the patch program let you specify `-b backup-extension'.
 Other versions only permit `-b', which assumes the extension `.orig'
-\(in which case ediff-backup-extension MUST be also `.orig'\).  The latest
+\(in which case ediff-backup-extension MUST be also `.orig').  The latest
 versions of GNU patch require `-b -z backup-extension'.
 
 Note that both `ediff-backup-extension' and `ediff-backup-specs'
@@ -120,11 +120,12 @@ patch.  So, don't change these variables, unless the default doesn't work."
 ;; This context diff does not recognize spaces inside files, but removing ' '
 ;; from [^ \t] breaks normal patches for some reason
 (defcustom ediff-context-diff-label-regexp
-  (concat "\\(" 	; context diff 2-liner
-	  "^\\*\\*\\* +\\([^ \t]+\\)[^*]+[\t ]*\n--- +\\([^ \t]+\\)"
-	  "\\|" 	; unified format diff 2-liner
-	  "^--- +\\([^ \t]+\\).*\n\\+\\+\\+ +\\([^ \t]+\\)"
-	  "\\)")
+  (let ((stuff "\\([^ \t\n]+\\)"))
+    (concat "\\(" 	; context diff 2-liner
+            "^\\*\\*\\* +" stuff "[^*]+[\t ]*\n--- +" stuff
+            "\\|" 	; unified format diff 2-liner
+            "^--- +" stuff ".*\n\\+\\+\\+ +" stuff
+            "\\)"))
   "Regexp matching filename 2-liners at the start of each context diff.
 You probably don't want to change that, unless you are using an obscure patch
 program."
@@ -268,6 +269,7 @@ program."
 			;; directory part of filename
 			(file-name-as-directory filename)
 		      (file-name-directory filename)))
+        (multi-patch-p (cdr ediff-patch-map))
 	;; In case 2 files are possible patch targets, the user will be offered
 	;; to choose file1 or file2.  In a multifile patch, if the user chooses
 	;; 1 or 2, this choice is preserved to decide future alternatives.
@@ -333,7 +335,7 @@ program."
 		      (ediff-with-current-buffer standard-output
 			(fundamental-mode))
 		      (princ
-		       (format "
+		       (format-message "
 The patch file contains a context diff for
 	%s
 	%s
@@ -342,7 +344,7 @@ to be patched on your system.  If you know the correct file name,
 please enter it now.
 
 If you don't know and still would like to apply patches to
-other files, enter /dev/null
+other files, enter `/dev/null'.
 "
 			       (substring (car proposed-file-names) 6)
 			       (substring (cdr proposed-file-names) 6))))
@@ -406,7 +408,7 @@ other files, enter /dev/null
 		  (with-output-to-temp-buffer ediff-msg-buffer
 		    (ediff-with-current-buffer standard-output
 		      (fundamental-mode))
-		    (princ (format "
+		    (princ (format-message "
 Ediff has inferred that
 	%s
 	%s
@@ -429,6 +431,16 @@ Please advise:
 		 (f2-exists (setcar session-file-object file2))
 		 (f1-exists (setcar session-file-object file1))
 		 (t
+                  ;; TODO: Often for multi-patches the file doesn't exist
+                  ;; because the directory part is wrong; for instance, if the
+                  ;; patch needs to be applied into
+                  ;; (expand-file-name "lisp/vc/ediff-ptch.el" source-directory)
+                  ;; and default-directory is
+                  ;; (expand-file-name "lisp" source-directory)
+                  ;; then Ediff assumes the wrong file:
+                  ;; (expand-file-name "lisp/ediff-ptch.el" source-directory).
+                  ;; We might identify these common failures and suggest
+                  ;; in the prompt the possible corrected file. --Tino
 		  (with-output-to-temp-buffer ediff-msg-buffer
 		    (ediff-with-current-buffer standard-output
 		      (fundamental-mode))
@@ -436,13 +448,15 @@ Please advise:
 		    (if (string= file1 file2)
 			(princ (format "
 	%s
-is assumed to be the target for this patch.  However, this file does not exist."
-				       file1))
+is assumed to be %s target for this %spatch.  However, this file does not exist."
+                           file1
+                           (if multi-patch-p "one" "the")
+                           (if multi-patch-p "multi-" "")))
 		      (princ (format "
 	%s
 	%s
-are two possible targets for this patch.  However, these files do not exist."
-				     file1 file2)))
+are two possible targets for this %spatch.  However, these files do not exist."
+				     file1 file2 (if multi-patch-p "multi-" ""))))
 		    (princ "
 \nPlease enter an alternative patch target ...\n"))
 		  (let ((directory t)
@@ -723,7 +737,7 @@ optional argument, then use it."
 	  (with-output-to-temp-buffer ediff-msg-buffer
 	    (ediff-with-current-buffer standard-output
 	      (fundamental-mode))
-	    (princ (format
+	    (princ (format-message
 		    "Patch program has failed due to a bad patch file,
 it couldn't apply all hunks, OR
 it couldn't create the backup for the file being patched.

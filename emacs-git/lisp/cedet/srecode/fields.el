@@ -1,6 +1,6 @@
 ;;; srecode/fields.el --- Handling type-in fields in a buffer.
 ;;
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -55,7 +55,7 @@ Once an insertion set is done, these fields will be activated.")
      (:underline "green"))
     (((class color) (background light))
      (:underline "green4")))
-  "*Face used to specify editable fields from a template."
+  "Face used to specify editable fields from a template."
   :group 'semantic-faces)
 
 (defcustom srecode-fields-exit-confirmation nil

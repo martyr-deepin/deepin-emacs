@@ -1,6 +1,6 @@
 ;;; net-utils.el --- network functions
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2017 Free Software Foundation, Inc.
 
 ;; Author:  Peter Breton <pbreton@cs.umb.edu>
 ;; Created: Sun Mar 16 1997
@@ -35,14 +35,18 @@
 ;; * Support connections to HOST/PORT, generally for debugging and the like.
 ;; In other words, for doing much the same thing as "telnet HOST PORT", and
 ;; then typing commands.
-;;
-;; PATHS
-;;
-;; On some systems, some of these programs are not in normal user path,
-;; but rather in /sbin, /usr/sbin, and so on.
-
 
 ;;; Code:
+
+;; On some systems, programs like ifconfig are not in normal user
+;; path, but rather in /sbin, /usr/sbin, etc (but non-root users can
+;; still use them for queries).  Actually the trend these
+;; days is for /sbin to be a symlink to /usr/sbin, but we still need to
+;; search both for older systems.
+(defun net-utils--executable-find-sbin (command)
+  "Return absolute name of COMMAND if found in an sbin directory."
+  (let ((exec-path '("/sbin" "/usr/sbin" "/usr/local/sbin")))
+    (executable-find command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Customization Variables
@@ -75,7 +79,7 @@
 ;; On GNU/Linux and Irix, the system's ping program seems to send packets
 ;; indefinitely unless told otherwise
 (defcustom ping-program-options
-  (and (memq system-type '(gnu/linux irix))
+  (and (eq system-type 'gnu/linux)
        (list "-c" "4"))
   "Options for the ping program.
 These options can be used to limit how many ICMP packets are emitted."
@@ -85,10 +89,13 @@ These options can be used to limit how many ICMP packets are emitted."
 (define-obsolete-variable-alias 'ipconfig-program 'ifconfig-program "22.2")
 
 (defcustom ifconfig-program
-  (if (eq system-type 'windows-nt)
-      "ipconfig"
-    "ifconfig")
+  (cond ((eq system-type 'windows-nt) "ipconfig")
+        ((executable-find "ifconfig") "ifconfig")
+        ((net-utils--executable-find-sbin "ifconfig"))
+        ((net-utils--executable-find-sbin "ip"))
+        (t "ip"))
   "Program to print network configuration information."
+  :version "25.1"                       ; add ip
   :group 'net-utils
   :type  'string)
 
@@ -96,29 +103,40 @@ These options can be used to limit how many ICMP packets are emitted."
   'ifconfig-program-options "22.2")
 
 (defcustom ifconfig-program-options
-  (list
-   (if (eq system-type 'windows-nt)
-       "/all" "-a"))
+  (cond ((string-match "ipconfig\\'" ifconfig-program) '("/all"))
+        ((string-match "ifconfig\\'" ifconfig-program) '("-a"))
+        ((string-match "ip\\'" ifconfig-program) '("addr")))
   "Options for the ifconfig program."
+  :version "25.1"
+  :set-after '(ifconfig-program)
   :group 'net-utils
   :type  '(repeat string))
 
-(defcustom iwconfig-program "iwconfig"
+(defcustom iwconfig-program
+  (cond ((executable-find "iwconfig") "iwconfig")
+        ((net-utils--executable-find-sbin "iw") "iw")
+        (t "iw"))
   "Program to print wireless network configuration information."
   :group 'net-utils
   :type 'string
-  :version "23.1")
+  :version "26.1")
 
-(defcustom iwconfig-program-options nil
+(defcustom iwconfig-program-options
+  (cond ((string-match-p "iw\\'" iwconfig-program) (list "dev"))
+        (t nil))
  "Options for the iwconfig program."
  :group 'net-utils
  :type '(repeat string)
- :version "23.1")
+ :version "26.1")
 
-(defcustom netstat-program "netstat"
+(defcustom netstat-program
+  (cond ((executable-find "netstat") "netstat")
+        ((net-utils--executable-find-sbin "ss"))
+        (t "ss"))
   "Program to print network statistics."
   :group 'net-utils
-  :type  'string)
+  :type  'string
+  :version "26.1")
 
 (defcustom netstat-program-options
   (list "-a")
@@ -126,7 +144,7 @@ These options can be used to limit how many ICMP packets are emitted."
   :group 'net-utils
   :type  '(repeat string))
 
-(defcustom arp-program "arp"
+(defcustom arp-program (or (net-utils--executable-find-sbin "arp") "arp")
   "Program to print IP to address translation tables."
   :group 'net-utils
   :type  'string)
@@ -138,20 +156,25 @@ These options can be used to limit how many ICMP packets are emitted."
   :type  '(repeat string))
 
 (defcustom route-program
-  (if (eq system-type 'windows-nt)
-      "route"
-    "netstat")
+  (cond ((eq system-type 'windows-nt) "route")
+        ((executable-find "netstat") "netstat")
+        ((net-utils--executable-find-sbin "netstat"))
+        ((executable-find "ip") "ip")
+        ((net-utils--executable-find-sbin "ip"))
+        (t "ip"))
   "Program to print routing tables."
   :group 'net-utils
-  :type  'string)
+  :type  'string
+  :version "26.1")
 
 (defcustom route-program-options
-  (if (eq system-type 'windows-nt)
-      (list "print")
-    (list "-r"))
+  (cond ((eq system-type 'windows-nt) (list "print"))
+        ((string-match-p "netstat\\'" route-program) (list "-r"))
+        (t (list "route")))
   "Options for the route program."
   :group 'net-utils
-  :type  '(repeat string))
+  :type  '(repeat string)
+  :version "26.1")
 
 (defcustom nslookup-program "nslookup"
   "Program to interactively query DNS information."
@@ -204,7 +227,7 @@ This variable is only used if the variable
   :group 'net-utils
   :type  '(repeat string))
 
-(defcustom smbclient-prompt-regexp "^smb: \>"
+(defcustom smbclient-prompt-regexp "^smb: >"
   "Regexp which matches the smbclient program's prompt.
 
 This variable is only used if the variable

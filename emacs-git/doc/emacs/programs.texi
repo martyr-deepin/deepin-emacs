@@ -1,6 +1,6 @@
 @c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2017 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Programs
@@ -97,7 +97,6 @@ your favorite language, the mode might be implemented in a package not
 distributed with Emacs (@pxref{Packages}); or you can contribute one.
 
 @kindex DEL @r{(programming modes)}
-@findex c-electric-backspace
 @findex backward-delete-char-untabify
   In most programming languages, indentation should vary from line to
 line to illustrate the structure of the program.  Therefore, in most
@@ -272,7 +271,7 @@ bindings for that purpose.
   The Imenu facility offers a way to find the major definitions in
 a file by name.  It is also useful in text formatter major modes,
 where it treats each chapter, section, etc., as a definition.
-(@xref{Tags}, for a more powerful feature that handles multiple files
+(@xref{Xref}, for a more powerful feature that handles multiple files
 together.)
 
 @findex imenu
@@ -742,10 +741,10 @@ because of the parentheses.
   The following commands move over groupings delimited by parentheses
 (or whatever else serves as delimiters in the language you are working
 with).  They ignore strings and comments, including any parentheses
-within them, and also ignore parentheses that are ``quoted'' with an
+within them, and also ignore parentheses that are quoted with an
 escape character.  These commands are mainly intended for editing
 programs, but can be useful for editing any text containing
-parentheses.  They are referred to internally as ``list'' commands
+parentheses.  They are referred to internally as ``list commands''
 because in Lisp these groupings are lists.
 
   These commands assume that the starting point is not inside a string
@@ -767,7 +766,7 @@ Move down in parenthesis structure (@code{down-list}).
 @kindex C-M-p
 @findex forward-list
 @findex backward-list
-  The ``list'' commands @kbd{C-M-n} (@code{forward-list}) and
+  The list commands @kbd{C-M-n} (@code{forward-list}) and
 @kbd{C-M-p} (@code{backward-list}) move forward or backward over one
 (or @var{n}) parenthetical groupings.
 
@@ -814,7 +813,8 @@ opening delimiter and closing delimiter are mismatched---such as in
 @code{blink-matching-paren} turns the feature on or off: @code{nil}
 disables it, but the default is @code{t} to enable it.  Set it to
 @code{jump} to make indication work by momentarily moving the cursor
-to the matching opening delimiter.
+to the matching opening delimiter.  Set it to @code{jump-offscreen} to
+make the cursor jump, even if the opening delimiter is off screen.
 
 @item
 @code{blink-matching-delay} says how many seconds to keep indicating
@@ -833,9 +833,36 @@ displayed.  The default is 102400.
 @findex show-paren-mode
   Show Paren mode, a global minor mode, provides a more powerful kind
 of automatic matching.  Whenever point is before an opening delimiter
-or after a closing delimiter, both that delimiter and its opposite
-delimiter are highlighted.  To toggle Show Paren mode, type @kbd{M-x
-show-paren-mode}.
+or after a closing delimiter, the delimiter, its matching delimiter,
+and optionally the text between them are highlighted.  To toggle Show
+Paren mode, type @kbd{M-x show-paren-mode}.  To customize it, type
+@kbd{M-x customize-group @key{RET} paren-showing}.  The customizable
+options which control the operation of this mode include:
+
+@itemize @bullet
+@item
+@code{show-paren-highlight-open-paren} controls whether to highlight
+an open paren when point stands just before it, and hence its position
+is marked by the cursor anyway.  The default is non-@code{nil} (yes).
+
+@item
+@code{show-paren-style} controls whether just the two parens, or also
+the space between them get highlighted.  The valid options here are
+@code{parenthesis} (show the matching paren), @code{expression}
+(highlight the entire expression enclosed by the parens), and
+@code{mixed} (highlight the matching paren if it is visible, the
+expression otherwise).
+
+@item
+@code{show-paren-when-point-inside-paren}, when non-@code{nil}, causes
+highlighting also when point is on the inside of a parenthesis.
+
+@item
+@code{show-paren-when-point-in-periphery}, when non-@code{nil}, causes
+highlighting also when point is in whitespace at the beginning or end
+of a line, and there is a paren at, respectively, the first or last,
+or the last, non-whitespace position on the line.
+@end itemize
 
 @cindex Electric Pair mode
 @cindex inserting matching parentheses
@@ -850,21 +877,25 @@ features of Electric Pair mode:
 
 @itemize @bullet
 @item
+@vindex electric-pair-preserve-balance
 @code{electric-pair-preserve-balance}, when non-@code{nil}, makes the
 default pairing logic balance out the number of opening and closing
 delimiters.
 
 @item
+@vindex electric-pair-delete-adjacent-pairs
 @code{electric-pair-delete-adjacent-pairs}, when non-@code{nil}, makes
 backspacing between two adjacent delimiters also automatically delete
 the closing delimiter.
 
 @item
+@vindex electric-pair-open-newline-between-pairs
 @code{electric-pair-open-newline-between-pairs}, when non-@code{nil},
-makes inserting inserting a newline between two adjacent pairs also
-automatically open and extra newline after point.
+makes inserting a newline between two adjacent pairs also
+automatically open an extra newline after point.
 
 @item
+@vindex electric-pair-skip-whitespace
 @code{electric-pair-skip-whitespace}, when non-@code{nil}, causes the minor
 mode to skip whitespace forward before deciding whether to skip over
 the closing delimiter.
@@ -917,6 +948,8 @@ will indent the comment to the appropriate position.
 @item @kbd{M-;}
 Insert or realign comment on current line; if the region is active,
 comment or uncomment the region instead (@code{comment-dwim}).
+@item @kbd{C-x C-;}
+Comment or uncomment the current line (@code{comment-line}).
 @item @kbd{C-u M-;}
 Kill comment on current line (@code{comment-kill}).
 @item @kbd{C-x ;}
@@ -940,7 +973,7 @@ you use it.
 
   When a region is active (@pxref{Mark}), @kbd{M-;} either adds
 comment delimiters to the region, or removes them.  If every line in
-the region is already a comment, it ``uncomments'' each of those lines
+the region is already a comment, it uncomments each of those lines
 by removing their comment delimiters.  Otherwise, it adds comment
 delimiters to enclose the text in the region.
 
@@ -970,6 +1003,18 @@ starting delimiter.  As an exception, comments starting in column 0
 are not moved.  Even when an existing comment is properly aligned,
 @kbd{M-;} is still useful for moving directly to the start of the
 comment text.
+
+@findex comment-line
+@kindex C-x C-;
+  @kbd{C-x C-;} (@code{comment-line}) comments or uncomments complete
+lines.  When a region is active (@pxref{Mark}), @kbd{C-x C-;} either
+comments or uncomments the lines in the region.  If the region is not
+active, this command comments or uncomments the line point is on.
+With a positive prefix argument @var{n}, it operates on @var{n} lines
+starting with the current one; with a negative @var{n}, it affects
+@var{n} preceding lines.  After invoking this command with a negative
+argument, successive invocations with a positive argument will operate
+on preceding lines as if the argument were negated.
 
 @findex comment-kill
 @kindex C-u M-;
@@ -1134,7 +1179,7 @@ You can also use @kbd{M-x info-lookup-file} to look for documentation
 for a file name.
 
   If you use @kbd{C-h S} in a major mode that does not support it,
-it asks you to specify the ``symbol help mode''.  You should enter
+it asks you to specify the symbol help mode.  You should enter
 a command such as @code{c-mode} that would select a major
 mode which @kbd{C-h S} does support.
 
@@ -1148,7 +1193,7 @@ replace man pages with better-organized manuals that you can browse
 with Info (@pxref{Misc Help}).  This process is not finished, so it is
 still useful to read manual pages.
 
-@findex manual-entry
+@findex man
   You can read the man page for an operating system command, library
 function, or system call, with the @kbd{M-x man} command.  This
 prompts for a topic, with completion (@pxref{Completion}), and runs
@@ -1165,11 +1210,11 @@ mode buffer.
 named by a digit or by a digit and a letter.  Sometimes there are man
 pages with the same name in different sections.  To read a man page
 from a specific section, type @samp{@var{topic}(@var{section})} or
-@samp{@var{section} @var{topic}} when @kbd{M-x manual-entry} prompts
-for the topic.  For example, the man page for the C library function
+@samp{@var{section} @var{topic}} when @kbd{M-x man} prompts for the
+topic.  For example, the man page for the C library function
 @code{chmod} is in section 2, but there is a shell command of the same
 name, whose man page is in section 1; to view the former, type
-@kbd{M-x manual-entry @key{RET} chmod(2) @key{RET}}.
+@w{@kbd{M-x man @key{RET} chmod(2) @key{RET}}}.
 
 @vindex Man-switches
 @kindex M-n @r{(Man mode)}
@@ -1220,13 +1265,16 @@ variables that you want to use.  @xref{Name Help}.
 
 @cindex Eldoc mode
 @findex eldoc-mode
+@findex global-eldoc-mode
   Eldoc is a buffer-local minor mode that helps with looking up Lisp
 documentation.  When it is enabled, the echo area displays some useful
 information whenever there is a Lisp function or variable at point;
 for a function, it shows the argument list, and for a variable it
 shows the first line of the variable's documentation string.  To
-toggle Eldoc mode, type @kbd{M-x eldoc-mode}.  Eldoc mode can be used
-with the Emacs Lisp and Lisp Interaction major modes.
+toggle Eldoc mode, type @kbd{M-x eldoc-mode}.  There's also a Global
+Eldoc mode, which is turned on by default, and affects buffers, such
+as @samp{*scratch*}, whose major mode is Emacs Lisp or Lisp
+Interaction (@w{@kbd{M-x global-eldoc-mode}} to turn it off globally).
 
 @node Hideshow
 @section Hideshow minor mode
@@ -1261,7 +1309,7 @@ count as blocks.
 @kindex C-c @@ C-M-s
 @kindex C-c @@ C-r
 @kindex C-c @@ C-l
-@kindex S-Mouse-2
+@kindex S-mouse-2
 @table @kbd
 @item C-c @@ C-h
 Hide the current block (@code{hs-hide-block}).
@@ -1269,7 +1317,7 @@ Hide the current block (@code{hs-hide-block}).
 Show the current block (@code{hs-show-block}).
 @item C-c @@ C-c
 Either hide or show the current block (@code{hs-toggle-hiding}).
-@item S-Mouse-2
+@item S-mouse-2
 Toggle hiding for the block you click on (@code{hs-mouse-toggle-hiding}).
 @item C-c @@ C-M-h
 Hide all top-level blocks (@code{hs-hide-all}).
@@ -1324,7 +1372,7 @@ which generates its completion list in a flexible way.  If Semantic
 mode is enabled, it tries to use the Semantic parser data for
 completion (@pxref{Semantic}).  If Semantic mode is not enabled or
 fails at performing completion, it tries to complete using the
-selected tags table (@pxref{Tags}).  If in Emacs Lisp mode, it
+selected tags table (@pxref{Tags Tables}).  If in Emacs Lisp mode, it
 performs completion using the function, variable, or property names
 defined in the current Emacs session.
 
@@ -1381,8 +1429,8 @@ see @ref{Top, Semantic,, semantic, Semantic}.
 see the Semantic Info manual, which is distributed with Emacs.
 @end iftex
 
-  Most of the ``language aware'' features in Emacs, such as Font Lock
-mode (@pxref{Font Lock}), rely on ``rules of thumb''@footnote{Regular
+  Most of the language-aware features in Emacs, such as Font Lock
+mode (@pxref{Font Lock}), rely on rules of thumb@footnote{Regular
 expressions and syntax tables.} that usually give good results but are
 never completely exact.  In contrast, the parsers used by Semantic
 have an exact understanding of programming language syntax.  This
@@ -1478,19 +1526,29 @@ support Outline minor mode (@pxref{Outline Mode}), which can be used
 with the Foldout package (@pxref{Foldout}).
 
 @ifinfo
-  The ``automatic typing'' features may be useful for writing programs.
+  The automatic typing features may be useful for writing programs.
 @xref{Top,,Autotyping, autotype, Autotyping}.
 @end ifinfo
 
 @findex prettify-symbols-mode
   Prettify Symbols mode is a buffer-local minor mode that replaces
-certain strings with more ``attractive'' versions for display
-purposes.  For example, in Emacs Lisp mode, it replaces the string
-``lambda'' with the Greek lambda character.  You may wish to use this
-in non-programming modes as well.  You can customize the mode by
-adding more entries to @code{prettify-symbols-alist}.  There is also a
-global version, @code{global-prettify-symbols-mode}, which enables the
-mode in all buffers that support it.
+certain strings with more attractive versions for display purposes.
+For example, in Emacs Lisp mode, it replaces the string @samp{lambda}
+with the Greek lambda character @samp{λ}.  In a @TeX{} buffer, it will
+replace @samp{\alpha} @dots{} @samp{\omega} and other math macros with
+their Unicode characters.  You may wish to use this in non-programming
+modes as well.  You can customize the mode by adding more entries to
+@code{prettify-symbols-alist}.  More elaborate customization is
+available via customizing @code{prettify-symbols-compose-predicate} if
+its default value @code{prettify-symbols-default-compose-p} is not
+appropriate.  There is also a global version,
+@code{global-prettify-symbols-mode}, which enables the mode in all
+buffers that support it.
+
+  The symbol at point can be shown in its original form.  This is
+controlled by the variable @code{prettify-symbols-unprettify-at-point}:
+if non-@code{nil}, the original form of symbol at point will be
+restored for as long as point is at it.
 
 
 @node C Modes
@@ -1600,7 +1658,7 @@ Move point to the end of the innermost C statement or sentence; like
   In C mode and related modes, certain printing characters are
 @dfn{electric}---in addition to inserting themselves, they also
 reindent the current line, and optionally also insert newlines.  The
-``electric'' characters are @kbd{@{}, @kbd{@}}, @kbd{:}, @kbd{#},
+electric characters are @kbd{@{}, @kbd{@}}, @kbd{:}, @kbd{#},
 @kbd{;}, @kbd{,}, @kbd{<}, @kbd{>}, @kbd{/}, @kbd{*}, @kbd{(}, and
 @kbd{)}.
 
@@ -1797,7 +1855,7 @@ it work.
 Hide-ifdef minor mode hides selected code within @samp{#if} and
 @samp{#ifdef} preprocessor blocks.  If you change the variable
 @code{hide-ifdef-shadow} to @code{t}, Hide-ifdef minor mode
-``shadows'' preprocessor blocks by displaying them with a less
+shadows preprocessor blocks by displaying them with a less
 prominent face, instead of hiding them entirely.  See the
 documentation string of @code{hide-ifdef-mode} for more information.
 
@@ -1805,7 +1863,7 @@ documentation string of @code{hide-ifdef-mode} for more information.
 @cindex related files
 @findex ff-find-related-file
 @vindex ff-related-file-alist
-Find a file ``related'' in a special way to the file visited by the
+Find a file related in a special way to the file visited by the
 current buffer.  Typically this will be the header file corresponding
 to a C/C++ source file, or vice versa.  The variable
 @code{ff-related-file-alist} specifies how to compute related file

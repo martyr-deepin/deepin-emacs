@@ -1,6 +1,6 @@
 ;;; url-handlers.el --- file-name-handler stuff for URL loading  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-1999, 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2017 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes, hypermedia
 
@@ -117,9 +117,9 @@ When URL Handler mode is enabled, this regular expression is
 added to `file-name-handler-alist'.
 
 Some valid URL protocols just do not make sense to visit
-interactively \(about, data, info, irc, mailto, etc\).  This
+interactively \(about, data, info, irc, mailto, etc.).  This
 regular expression avoids conflicts with local files that look
-like URLs \(Gnus is particularly bad at this\)."
+like URLs \(Gnus is particularly bad at this)."
   :group 'url
   :type 'regexp
   :version "25.1"
@@ -223,7 +223,7 @@ the arguments that would have been passed to OPERATION."
         ;; which really stands for "/".
         ;; FIXME: maybe we should check that the host part is "" or "localhost"
         ;; or some name that represents the local host?
-        (or (file-name-directory (url-filename url)) "/")
+        (or (file-name-as-directory (url-filename url)) "/")
       ;; All other URLs are not expected to be directly accessible from
       ;; a local process.
       nil)))
@@ -262,14 +262,16 @@ Fifth arg PRESERVE-UID-GID is ignored.
 A prefix arg makes KEEP-TIME non-nil."
   (if (and (file-exists-p newname)
 	   (not ok-if-already-exists))
-      (error "Opening output file: File already exists, %s" newname))
+      (signal 'file-already-exists (list "File exists" newname)))
   (let ((buffer (url-retrieve-synchronously url))
 	(handle nil))
     (if (not buffer)
-	(error "Opening input file: No such file or directory, %s" url))
+        (signal 'file-missing (list "Opening URL" "No such file or directory"
+                                    url)))
     (with-current-buffer buffer
       (setq handle (mm-dissect-buffer t)))
-    (mm-save-part-to-file handle newname)
+    (let ((mm-attachment-file-modes (default-file-modes)))
+      (mm-save-part-to-file handle newname))
     (kill-buffer buffer)
     (mm-destroy-parts handle)))
 (put 'copy-file 'url-file-handlers 'url-copy-file)
@@ -310,6 +312,30 @@ They count bytes from the beginning of the body."
 (defvar url-http-codes)
 
 ;;;###autoload
+(defun url-insert-buffer-contents (buffer url &optional visit beg end replace)
+  "Insert the contents of BUFFER into current buffer.
+This is like `url-insert', but also decodes the current buffer as
+if it had been inserted from a file named URL."
+  (if visit (setq buffer-file-name url))
+  (save-excursion
+    (let* ((start (point))
+           (size-and-charset (url-insert buffer beg end)))
+      (kill-buffer buffer)
+      (when replace
+        (delete-region (point-min) start)
+        (delete-region (point) (point-max)))
+      (unless (cadr size-and-charset)
+        ;; If the headers don't specify any particular charset, use the
+        ;; usual heuristic/rules that we apply to files.
+        (decode-coding-inserted-region (point-min) (point) url
+                                       visit beg end replace))
+      (let ((inserted (car size-and-charset)))
+        (when (fboundp 'after-insert-file-set-coding)
+          (let ((insval (after-insert-file-set-coding inserted visit)))
+            (if insval (setq inserted insval))))
+        (list url inserted)))))
+
+;;;###autoload
 (defun url-insert-file-contents (url &optional visit beg end replace)
   (let ((buffer (url-retrieve-synchronously url)))
     (unless buffer (signal 'file-error (list url "No Data")))
@@ -317,30 +343,20 @@ They count bytes from the beginning of the body."
       ;; XXX: This is HTTP/S specific and should be moved to url-http
       ;; instead.  See http://debbugs.gnu.org/17549.
       (when (bound-and-true-p url-http-response-status)
-        (unless (and (>= url-http-response-status 200)
-                     (< url-http-response-status 300))
+        ;; Don't signal an error if VISIT is non-nil, because
+        ;; 'insert-file-contents' doesn't.  This is required to
+        ;; support, e.g., 'browse-url-emacs', which is a fancy way of
+        ;; visiting the HTML source of a URL: in that case, we want to
+        ;; display a file buffer even if the URL does not exist and
+        ;; 'url-retrieve-synchronously' returns 404 or whatever.
+        (unless (or visit
+                    (and (>= url-http-response-status 200)
+                         (< url-http-response-status 300)))
           (let ((desc (nth 2 (assq url-http-response-status url-http-codes))))
             (kill-buffer buffer)
             ;; Signal file-error per http://debbugs.gnu.org/16733.
             (signal 'file-error (list url desc))))))
-    (if visit (setq buffer-file-name url))
-    (save-excursion
-      (let* ((start (point))
-             (size-and-charset (url-insert buffer beg end)))
-        (kill-buffer buffer)
-        (when replace
-          (delete-region (point-min) start)
-          (delete-region (point) (point-max)))
-        (unless (cadr size-and-charset)
-          ;; If the headers don't specify any particular charset, use the
-          ;; usual heuristic/rules that we apply to files.
-          (decode-coding-inserted-region start (point) url
-                                         visit beg end replace))
-        (let ((inserted (car size-and-charset)))
-          (when (fboundp 'after-insert-file-set-coding)
-            (let ((insval (after-insert-file-set-coding inserted visit)))
-              (if insval (setq inserted insval))))
-          (list url inserted))))))
+    (url-insert-buffer-contents buffer url visit beg end replace)))
 
 (put 'insert-file-contents 'url-file-handlers 'url-insert-file-contents)
 

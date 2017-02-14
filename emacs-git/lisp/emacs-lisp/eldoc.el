@@ -1,6 +1,6 @@
 ;;; eldoc.el --- Show function arglist or variable docstring in echo area  -*- lexical-binding:t; -*-
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 ;; Author: Noah Friedman <friedman@splode.com>
 ;; Maintainer: friedman@splode.com
@@ -197,12 +197,23 @@ expression point is on."
    (t
     (kill-local-variable 'eldoc-message-commands)
     (remove-hook 'post-command-hook 'eldoc-schedule-timer t)
-    (remove-hook 'pre-command-hook 'eldoc-pre-command-refresh-echo-area t))))
+    (remove-hook 'pre-command-hook 'eldoc-pre-command-refresh-echo-area t)
+    (when eldoc-timer
+      (cancel-timer eldoc-timer)
+      (setq eldoc-timer nil)))))
 
 ;;;###autoload
 (define-minor-mode global-eldoc-mode
-  "Enable `eldoc-mode' in all buffers where it's applicable."
-  :group 'eldoc :global t
+  "Toggle Global Eldoc mode on or off.
+With a prefix argument ARG, enable Global Eldoc mode if ARG is
+positive, and disable it otherwise.  If called from Lisp, enable
+the mode if ARG is omitted or nil, and toggle it if ARG is ‘toggle’.
+
+If Global Eldoc mode is on, `eldoc-mode' will be enabled in all
+buffers where it's applicable.  These are buffers that have modes
+that have enabled eldoc support.  See `eldoc-documentation-function'."
+  :group 'eldoc
+  :global t
   :initialize 'custom-initialize-delay
   :init-value t
   (setq eldoc-last-message nil)
@@ -222,7 +233,7 @@ expression point is on."
            (memq eldoc-timer timer-idle-list)) ;FIXME: Why?
       (setq eldoc-timer
             (run-with-idle-timer
-	     eldoc-idle-delay t
+	     eldoc-idle-delay nil
 	     (lambda ()
                (when (or eldoc-mode
                          (and global-eldoc-mode
@@ -261,7 +272,7 @@ Otherwise work like `message'."
 			mode-line-format)))
           (setq eldoc-mode-line-string
                 (when (stringp format-string)
-                  (apply 'format format-string args)))
+                  (apply #'format-message format-string args)))
           (force-mode-line-update)))
     (apply 'message format-string args)))
 
@@ -274,7 +285,7 @@ Otherwise work like `message'."
 		;; eldoc-last-message so eq test above might succeed on
 		;; subsequent calls.
 		((null (cdr args)) (car args))
-		(t (apply 'format args))))
+		(t (apply #'format-message args))))
     ;; In emacs 19.29 and later, and XEmacs 19.13 and later, all messages
     ;; are recorded in a log.  Do not put eldoc messages in that log since
     ;; they are Legion.
@@ -337,8 +348,8 @@ and the face `eldoc-highlight-function-argument', if they are to have any
 effect.
 
 Major modes should modify this variable using `add-function', for example:
-  (add-function :before-until (local 'eldoc-documentation-function)
-                #'foo-mode-eldoc-function)
+  (add-function :before-until (local \\='eldoc-documentation-function)
+                #\\='foo-mode-eldoc-function)
 so that the global documentation function (i.e. the default value of the
 variable) is taken into account if the major mode specific function does not
 return any documentation.")
@@ -410,6 +421,7 @@ return any documentation.")
 
 ;; Prime the command list.
 (eldoc-add-command-completions
+ "back-to-indentation"
  "backward-" "beginning-of-" "delete-other-windows" "delete-window"
  "down-list" "end-of-" "exchange-point-and-mark" "forward-" "goto-"
  "handle-select-window" "indent-for-tab-command" "left-" "mark-page"

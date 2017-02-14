@@ -1,6 +1,6 @@
 ;;; url-vars.el --- Variables for Uniform Resource Locator tool
 
-;; Copyright (C) 1996-1999, 2001, 2004-2015 Free Software Foundation,
+;; Copyright (C) 1996-1999, 2001, 2004-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Keywords: comm, data, processes, hypermedia
@@ -116,15 +116,16 @@ If a list, this should be a list of symbols of what NOT to send.
 Valid symbols are:
 email    -- the email address
 os       -- the operating system info
+emacs    -- the version of Emacs
 lastloc  -- the last location
 agent    -- do not send the User-Agent string
 cookies  -- never accept HTTP cookies
 
 Samples:
 
- (setq url-privacy-level 'high)
- (setq url-privacy-level '(email lastloc))    ;; equivalent to 'high
- (setq url-privacy-level '(os))
+ (setq url-privacy-level \\='high)
+ (setq url-privacy-level \\='(email lastloc))    ;; equivalent to \\='high
+ (setq url-privacy-level \\='(os))
 
 ::NOTE::
 This variable controls several other variables and is _NOT_ automatically
@@ -143,6 +144,7 @@ variable."
 		(checklist :tag "Custom"
 			   (const :tag "Email address" :value email)
 			   (const :tag "Operating system" :value os)
+			   (const :tag "Emacs version" :value emacs)
 			   (const :tag "Last location" :value lastloc)
 			   (const :tag "Browser identification" :value agent)
 			   (const :tag "No cookies" :value cookie)))
@@ -356,6 +358,23 @@ Currently supported methods:
 		(const :tag "Use SSL for all connections (obsolete)" :value ssl)
 		(const :tag "Direct connection" :value native))
   :group 'url-hairy)
+
+(defcustom url-user-agent 'default
+  "User Agent used by the URL package for HTTP/HTTPS requests.
+Should be one of:
+* A string (not including the \"User-Agent:\" prefix)
+* A function of no arguments, returning a string
+* `default' (to compute a value according to `url-privacy-level')
+* nil (to omit the User-Agent header entirely)"
+  :type
+  '(choice
+    (string :tag "A static User-Agent string")
+    (function :tag "Call a function to get the User-Agent string")
+    (const :tag "No User-Agent at all" :value nil)
+    (const :tag "An string auto-generated according to `url-privacy-level'"
+           :value default))
+  :version "26.1"
+  :group 'url)
 
 (defvar url-setup-done nil "Has setup configuration been done?")
 

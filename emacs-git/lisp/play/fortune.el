@@ -1,6 +1,6 @@
 ;;; fortune.el --- use fortune to create signatures
 
-;; Copyright (C) 1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Holger Schauer <Holger.Schauer@gmx.de>
 ;; Keywords: games utils mail
@@ -301,6 +301,19 @@ specifies the file to choose the fortune from."
                (append (if (stringp fortune-program-options)
                            (split-string fortune-program-options)
                          fortune-program-options) (list fort-file)))))))
+
+;;;###autoload
+(defun fortune-message (&optional file)
+  "Display a fortune cookie to the mini-buffer.
+If called with a prefix, it has the same behavior as `fortune'.
+Optional FILE is a fortune file from which a cookie will be selected."
+  (interactive (list (if current-prefix-arg
+                         (fortune-ask-file)
+                       fortune-file)))
+  (with-temp-buffer
+    (let ((fortune-buffer-name (current-buffer)))
+      (fortune-in-buffer t file)
+      (message "%s" (buffer-string)))))
 
 ;;;###autoload
 (defun fortune (&optional file)

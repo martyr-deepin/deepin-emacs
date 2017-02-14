@@ -1,6 +1,6 @@
 ;;; pgg-pgp.el --- PGP 2.* and 6.* support for PGG.
 
-;; Copyright (C) 1999-2000, 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2000, 2002-2017 Free Software Foundation, Inc.
 
 ;; Author: Daiki Ueno <ueno@unixuser.org>
 ;; Created: 1999/11/02
@@ -99,7 +99,7 @@ Bourne shell or its equivalent \(not tcsh) is needed for \"2>\"."
 	    (pgg-convert-lbt-region (point-min)(point-max) 'LF)
 
 	    (if (memq status '(stop signal))
-		(error "%s exited abnormally: '%s'" program exit-status))
+		(error "%s exited abnormally: `%s'" program exit-status))
 	    (if (= 127 exit-status)
 		(error "%s could not be found" program))
 

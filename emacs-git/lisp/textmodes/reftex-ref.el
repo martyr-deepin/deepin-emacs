@@ -1,6 +1,6 @@
 ;;; reftex-ref.el --- code to create labels and references with RefTeX
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <dominik@science.uva.nl>
 ;; Maintainer: auctex-devel@gnu.org
@@ -24,7 +24,7 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
+(eval-when-compile (require 'cl-lib))
 
 (require 'reftex)
 (require 'reftex-parse)
@@ -228,7 +228,7 @@ This function is controlled by the settings of reftex-insert-label-flags."
                                  (symbol-value reftex-docstruct-symbol)))
               (ding)
               (if (y-or-n-p
-                   (format "Label '%s' exists. Use anyway? " label))
+                   (format-message "Label `%s' exists. Use anyway? " label))
                   (setq valid t)))
 
              ;; Label is ok
@@ -374,7 +374,7 @@ also applies `reftex-translate-to-ascii-function' to the string."
            (sep (or separator "")))
       (while (assoc (concat label sep (int-to-string num))
                     (symbol-value reftex-docstruct-symbol))
-        (incf num))
+        (cl-incf num))
       (setcdr cell num)
       (concat label sep (int-to-string num))))))
 
@@ -566,7 +566,7 @@ When called with 2 C-u prefix args, disable magic word recognition."
                 (reftex-erase-buffer))
               (unless (eq major-mode 'reftex-select-label-mode)
                 (reftex-select-label-mode))
-              (add-to-list 'selection-buffers (current-buffer))
+              (cl-pushnew (current-buffer) selection-buffers)
               (setq truncate-lines t)
               (setq mode-line-format
                     (list "----  " 'mode-line-buffer-identification
@@ -881,5 +881,5 @@ Optional prefix argument OTHER-WINDOW goes to the label in another window."
 ;;; reftex-ref.el ends here
 
 ;; Local Variables:
-;; generated-autoload-file: "reftex.el"
+;; generated-autoload-file: "reftex-loaddefs.el"
 ;; End:

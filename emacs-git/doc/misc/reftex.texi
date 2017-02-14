@@ -46,7 +46,7 @@ This manual documents @RefTeX{} (version @value{VERSION}), a package
 to do labels, references, citations and indices for LaTeX documents
 with Emacs.
 
-Copyright @copyright{} 1997--2015 Free Software Foundation, Inc.
+Copyright @copyright{} 1997--2017 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -2893,6 +2893,9 @@ default.  If you want to have these key bindings available, set in your
 (setq reftex-extra-bindings t)
 @end lisp
 
+Note that this variable has to be set before @RefTeX{} is loaded to
+have an effect.
+
 @vindex reftex-load-hook
 Changing and adding to @RefTeX{}'s key bindings is best done in the hook
 @code{reftex-load-hook}.  For information on the keymaps
@@ -5210,7 +5213,7 @@ mouse    @r{Highlighting is mouse driven.}
 both     @r{Both cursor and mouse trigger highlighting.}
 @end example
 
-Changing this variable requires to rebuild the selection and *toc*
+Changing this variable requires rebuilding the selection and *toc*
 buffers to become effective (keys @kbd{g} or @kbd{r}).
 @end defopt
 
@@ -5418,8 +5421,8 @@ after words.  Disabled indexing in comment lines.
 New command @code{reftex-create-bibtex-file} to create a new database
 with all entries referenced in the current document.
 @item
-New keys @kbd{e} and @kbd{E} allow to produce a BibTeX database file
-from entries marked in a citation selection buffer.
+New keys @kbd{e} and @kbd{E} allow you to produce a BibTeX database
+file from entries marked in a citation selection buffer.
 @end itemize
 
 @noindent @b{Version 4.21}
@@ -5607,8 +5610,8 @@ demand.
 @item
 Index support, along with many new options.
 @item
-The selection of keys for @code{\ref} and @code{\cite} now allows to
-select multiple items by marking entries with the @kbd{m} key.
+The selection of keys for @code{\ref} and @code{\cite} now allows you
+to select multiple items by marking entries with the @kbd{m} key.
 @item
 Fancyref support.
 @end itemize

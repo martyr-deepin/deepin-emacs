@@ -1,6 +1,6 @@
 ;;; org-macro.el --- Macro Replacement Code for Org Mode
 
-;; Copyright (C) 2013-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2017 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -48,7 +48,6 @@
 (declare-function org-remove-double-quotes "org" (s))
 (declare-function org-mode "org" ())
 (declare-function org-file-contents "org" (file &optional noerror))
-(declare-function org-with-wide-buffer "org-macs" (&rest body))
 
 ;;; Variables
 

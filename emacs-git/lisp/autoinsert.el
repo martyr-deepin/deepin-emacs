@@ -1,6 +1,6 @@
 ;;; autoinsert.el --- automatic mode-dependent insertion of text into new files
 
-;; Copyright (C) 1985-1987, 1994-1995, 1998, 2000-2015 Free Software
+;; Copyright (C) 1985-1987, 1994-1995, 1998, 2000-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Charlie Martin <crm@cs.duke.edu>
@@ -67,7 +67,7 @@ Insertion is possible when something appropriate is found in
 `auto-insert-alist'.  When the insertion is marked as unmodified, you can
 save it with  \\[write-file] RET.
 This variable is used when the function `auto-insert' is called, e.g.
-when you do (add-hook 'find-file-hook 'auto-insert).
+when you do (add-hook \\='find-file-hook \\='auto-insert).
 With \\[auto-insert], this is always treated as if it were t."
   :type '(choice (const :tag "Insert if possible" t)
                  (const :tag "Do nothing" nil)
@@ -305,7 +305,17 @@ ACTION may be a skeleton to insert (see `skeleton-insert'), an absolute
 file-name or one relative to `auto-insert-directory' or a function to call.
 ACTION may also be a vector containing several successive single actions as
 described above, e.g. [\"header.insert\" date-and-author-update]."
-  :type 'sexp
+  :type '(alist :key-type
+                (choice (regexp :tag "Regexp matching file name")
+                        (symbol :tag "Major mode")
+                        (cons :tag "Condition and description"
+                              (choice :tag "Condition"
+                               (regexp :tag "Regexp matching file name")
+                               (symbol :tag "Major mode"))
+                              (string :tag "Description")))
+                ;; There's no custom equivalent of "repeat" for vectors.
+                :value-type (choice file function
+                                    (sexp :tag "Skeleton or vector")))
   :version "25.1"
   :group 'auto-insert)
 

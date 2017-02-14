@@ -1,12 +1,12 @@
 /* Cygwin support routines.
-   Copyright (C) 2011-2015 Free Software Foundation, Inc.
+   Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -31,7 +31,7 @@ fchdir_unwind (int dir_fd)
 }
 
 static void
-chdir_to_default_directory ()
+chdir_to_default_directory (void)
 {
   Lisp_Object new_cwd;
   int old_cwd_fd = emacs_open (".", O_RDONLY | O_DIRECTORY, 0);
@@ -46,7 +46,7 @@ chdir_to_default_directory ()
   if (!STRINGP (new_cwd))
     new_cwd = build_string ("/");
 
-  if (chdir (SDATA (ENCODE_FILE (new_cwd))))
+  if (chdir (SSDATA (ENCODE_FILE (new_cwd))))
     error ("could not chdir: %s", strerror (errno));
 }
 

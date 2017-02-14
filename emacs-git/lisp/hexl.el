@@ -1,6 +1,6 @@
 ;;; hexl.el --- edit a file in a hex dump format using the hexl filter -*- lexical-binding: t -*-
 
-;; Copyright (C) 1989, 1994, 1998, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1989, 1994, 1998, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Keith Gabryelski <ag@wheaties.ai.mit.edu>
@@ -294,7 +294,7 @@ in hexl format.
 
 A sample format:
 
-  HEX ADDR: 0001 0203 0405 0607 0809 0a0b 0c0d 0e0f     ASCII-TEXT
+  HEX ADDR: 0011 2233 4455 6677 8899 aabb ccdd eeff     ASCII-TEXT
   --------  ---- ---- ---- ---- ---- ---- ---- ----  ----------------
   00000000: 5468 6973 2069 7320 6865 786c 2d6d 6f64  This is hexl-mod
   00000010: 652e 2020 4561 6368 206c 696e 6520 7265  e.  Each line re
@@ -406,7 +406,7 @@ You can use \\[hexl-find-file] to visit a file in Hexl mode.
 
 
 (defun hexl-isearch-search-function ()
-  (if (and (not isearch-regexp) (not isearch-word))
+  (if (and (not isearch-regexp) (not isearch-regexp-function))
       (lambda (string &optional bound noerror count)
 	(funcall
 	 (if isearch-forward 're-search-forward 're-search-backward)
@@ -935,13 +935,14 @@ and their encoded form is inserted byte by byte."
 		     (mapconcat (function (lambda (c) (format "%x" c)))
 				internal " "))
 	       (if (yes-or-no-p
-		    (format
+		    (format-message
 		     "Insert char 0x%x's internal representation \"%s\"? "
 		     ch internal-hex))
 		   (setq encoded internal)
 		 (error
-		  "Can't encode `0x%x' with this buffer's coding system; try \\[hexl-insert-hex-string]"
-		  ch)))
+		  "Can't encode `0x%x' with this buffer's coding system; %s"
+		  ch
+		  (substitute-command-keys "try \\[hexl-insert-hex-string]"))))
 	     (while (> num 0)
 	       (mapc
 		(function (lambda (c) (hexl-insert-char c 1))) encoded)

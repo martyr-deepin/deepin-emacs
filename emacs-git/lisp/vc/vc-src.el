@@ -1,6 +1,6 @@
 ;;; vc-src.el --- support for SRC version-control  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2017 Free Software Foundation, Inc.
 
 ;; Author:     FSF (see vc.el for full credits)
 ;; Maintainer: Eric S. Raymond <esr@thyrsus.com>
@@ -84,6 +84,8 @@
 (eval-when-compile
   (require 'cl-lib)
   (require 'vc))
+
+(declare-function vc-setup-buffer "vc-dispatcher" (buf))
 
 (defgroup vc-src nil
   "VC SRC backend."
@@ -227,7 +229,7 @@ This function differs from vc-do-command in that it invokes `vc-src-program'."
                                           file
                                         (file-name-directory file)))))
 
-(defun vc-src-checkin (files comment)
+(defun vc-src-checkin (files comment &optional _rev)
   "SRC-specific version of `vc-backend-checkin'.
 REV is ignored."
   (vc-src-command nil files "commit" "-m" comment))

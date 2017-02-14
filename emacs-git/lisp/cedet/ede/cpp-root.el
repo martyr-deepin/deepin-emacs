@@ -1,6 +1,6 @@
 ;;; ede/cpp-root.el --- A simple way to wrap a C++ project with a single root
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -262,7 +262,7 @@ exist, it should return nil."
 		    :documentation
 		    "Compilation command that will be used for this project.
 It could be string or function that will accept proj argument and should return string.
-The string will be passed to 'compile' function that will be issued in root
+The string will be passed to `compile' function that will be issued in root
 directory of project."
 		    )
    )

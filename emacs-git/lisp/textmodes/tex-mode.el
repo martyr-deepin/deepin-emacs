@@ -1,6 +1,6 @@
-;;; tex-mode.el --- TeX, LaTeX, and SliTeX mode commands -*- coding: utf-8 -*-
+;;; tex-mode.el --- TeX, LaTeX, and SliTeX mode commands  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2015 Free
+;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2017 Free
 ;; Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -135,8 +135,8 @@ If nil, TeX runs with no options.  See the documentation of `tex-command'."
   "TeX commands to use when starting TeX.
 They are shell-quoted and precede the input file name, with a separating space.
 If nil, no commands are used.  See the documentation of `tex-command'."
-  :type '(radio (const :tag "Interactive \(nil\)" nil)
-		(const :tag "Nonstop \(\"\\nonstopmode\\input\"\)"
+  :type '(radio (const :tag "Interactive (nil)" nil)
+		(const :tag "Nonstop (\"\\nonstopmode\\input\")"
 		       "\\nonstopmode\\input")
 		(string :tag "String at your choice"))
   :group 'tex-run
@@ -188,7 +188,7 @@ If two printers are not enough of a choice, you can set the variable
 for example,
 
     (setq tex-alt-dvi-print-command
-         '(format \"lpr -P%s\" (read-string \"Use printer: \")))
+         \\='(format \"lpr -P%s\" (read-string \"Use printer: \")))
 
 would tell \\[tex-print] with a prefix argument to ask you which printer to
 use."
@@ -266,8 +266,8 @@ tex shell terminates.")
 
 (defvar tex-command "tex"
   "Command to run TeX.
-If this string contains an asterisk \(`*'\), that is replaced by the file name;
-otherwise the value of `tex-start-options', the \(shell-quoted\)
+If this string contains an asterisk \(`*'), that is replaced by the file name;
+otherwise the value of `tex-start-options', the \(shell-quoted)
 value of `tex-start-commands', and the file name are added at the end
 with blanks as separators.
 
@@ -343,7 +343,7 @@ An alternative value is \" . \", if you use a font with a narrow period."
 (defun latex-imenu-create-index ()
   "Generate an alist for imenu from a LaTeX buffer."
   (let ((section-regexp
-	 (concat "\\\\" (regexp-opt (mapcar 'car latex-section-alist) t)
+	 (concat "\\\\" (regexp-opt (mapcar #'car latex-section-alist) t)
 		 "\\*?[ \t]*{"))
 	(metasection-regexp
 	 (concat "\\\\" (regexp-opt latex-metasection-list t)))
@@ -368,12 +368,12 @@ An alternative value is \" . \", if you use a font with a narrow period."
 			      (match-end 1))
 			     latex-section-alist))))
 	  (backward-char 1)
-	  (condition-case err
+	  (condition-case nil
 	      (progn
 		;; Using sexps allows some use of matching {...} inside
 		;; titles.
 		(forward-sexp 1)
-		(push (cons (concat (apply 'concat
+		(push (cons (concat (apply #'concat
 					   (make-list
 					    (max 0 (- i i0))
 					    latex-imenu-indent-string))
@@ -387,7 +387,7 @@ An alternative value is \" . \", if you use a font with a narrow period."
       (goto-char (point-min))
       (while (search-forward-regexp
 	      "\\\\\\(include\\|input\\|verbatiminput\\|bibliography\\)\
-\[ \t]*{\\([^}\n]+\\)}"
+[ \t]*{\\([^}\n]+\\)}"
 	      nil t)
 	(push (cons (concat "<<" (buffer-substring-no-properties
 				  (match-beginning 2)
@@ -413,7 +413,8 @@ An alternative value is \" . \", if you use a font with a narrow period."
 (defvar latex-outline-regexp
   (concat "\\\\"
 	  (regexp-opt (append latex-metasection-list
-			      (mapcar 'car latex-section-alist)) t)))
+			      (mapcar #'car latex-section-alist))
+                      t)))
 
 (defun latex-outline-level ()
   (if (looking-at latex-outline-regexp)
@@ -504,7 +505,7 @@ An alternative value is \" . \", if you use a font with a narrow period."
                   (funcall inbraces-re
                            (concat "{" (funcall inbraces-re "{[^}]*}") "*}"))
                   "*}\\)+\\$?\\$")
-         (0 tex-math-face))
+         (0 'tex-math))
         ;; Heading args.
         (,(concat slash headings "\\*?" opt arg)
          ;; If ARG ends up matching too much (if the {} don't match, e.g.)
@@ -544,7 +545,8 @@ An alternative value is \" . \", if you use a font with a narrow period."
      (let* (;;
 	    ;; Names of commands whose arg should be fontified with fonts.
 	    (bold (regexp-opt '("textbf" "textsc" "textup"
-				"boldsymbol" "pmb") t))
+				"boldsymbol" "pmb")
+                              t))
 	    (italic (regexp-opt '("textit" "textsl" "emph") t))
 	    ;; FIXME: unimplemented yet.
 	    ;; (type (regexp-opt '("texttt" "textmd" "textrm" "textsf") t))
@@ -566,7 +568,8 @@ An alternative value is \" . \", if you use a font with a narrow period."
 			 '("linebreak" "nolinebreak" "pagebreak" "nopagebreak"
 			   "newline" "newpage" "clearpage" "cleardoublepage"
 			   "displaybreak" "allowdisplaybreaks"
-			   "enlargethispage") t))
+			   "enlargethispage")
+                         t))
 	    (general "\\([a-zA-Z@]+\\**\\|[^ \t\n]\\)")
 	    ;;
 	    ;; Miscellany.
@@ -649,7 +652,7 @@ An alternative value is \" . \", if you use a font with a narrow period."
 (defvar tex-verbatim-environments
   '("verbatim" "verbatim*"))
 (put 'tex-verbatim-environments 'safe-local-variable
-     (lambda (x) (null (delq t (mapcar 'stringp x)))))
+     (lambda (x) (null (delq t (mapcar #'stringp x)))))
 
 (eval-when-compile
   (defconst tex-syntax-propertize-rules
@@ -732,7 +735,8 @@ automatically inserts its partner."
                   (let ((arg-end (match-end 0)))
                     (if (null type)     ;\end
                         (progn (goto-char arg-end)
-                               (latex-forward-sexp -1) (forward-word 1))
+                               (latex-forward-sexp -1)
+                               (forward-word-strictly 1))
                       (goto-char cmd-start)
                       (latex-forward-sexp 1)
                       (let (forward-sexp-function) (backward-sexp)))
@@ -796,16 +800,11 @@ Not smaller than the value set by `tex-suscript-height-minimum'."
   '((t :inherit font-lock-string-face))
   "Face used to highlight TeX math expressions."
   :group 'tex)
-(define-obsolete-face-alias 'tex-math-face 'tex-math "22.1")
-(defvar tex-math-face 'tex-math)
 
 (defface tex-verbatim
-  ;; '((t :inherit font-lock-string-face))
-  '((t :family "courier"))
+  '((t :inherit fixed-pitch-serif))
   "Face used to highlight TeX verbatim environments."
   :group 'tex)
-(define-obsolete-face-alias 'tex-verbatim-face 'tex-verbatim "22.1")
-(defvar tex-verbatim-face 'tex-verbatim)
 
 (defun tex-font-lock-verb (start delim)
   "Place syntax table properties on the \\verb construct.
@@ -833,10 +832,10 @@ START is the position of the \\ and DELIM is the delimiter char."
   (let ((char (nth 3 state)))
     (cond
      ((not char)
-      (if (eq 2 (nth 7 state)) tex-verbatim-face font-lock-comment-face))
-     ((eq char ?$) tex-math-face)
+      (if (eq 2 (nth 7 state)) 'tex-verbatim font-lock-comment-face))
+     ((eq char ?$) 'tex-math)
      ;; A \verb element.
-     (t tex-verbatim-face))))
+     (t 'tex-verbatim))))
 
 
 (defun tex-define-common-keys (keymap)
@@ -869,7 +868,7 @@ START is the position of the \\ and DELIM is the delimiter char."
     (set-keymap-parent map text-mode-map)
     (tex-define-common-keys map)
     (define-key map "\"" 'tex-insert-quote)
-    (define-key map "\n" 'tex-terminate-paragraph)
+    (define-key map "\n" 'tex-handle-newline)
     (define-key map "\M-\r" 'latex-insert-item)
     (define-key map "\C-c}" 'up-list)
     (define-key map "\C-c{" 'tex-insert-braces)
@@ -937,7 +936,7 @@ Inherits `shell-mode-map' with a few additions.")
     ,@tex-face-alist)
   "Alist of face and LaTeX font name for facemenu.")
 
-(defun tex-facemenu-add-face-function (face end)
+(defun tex-facemenu-add-face-function (face _end)
   (or (cdr (assq face tex-face-alist))
       (or (and (consp face)
 	       (consp (car face))
@@ -1034,8 +1033,8 @@ says which mode to use."
 (define-derived-mode plain-tex-mode tex-mode "TeX"
   "Major mode for editing files of input for plain TeX.
 Makes $ and } display the characters they match.
-Makes \" insert `` when it seems to be the beginning of a quotation,
-and '' when it appears to be the end; it inserts \" only after a \\.
+Makes \" insert \\=`\\=` when it seems to be the beginning of a quotation,
+and \\='\\=' when it appears to be the end; it inserts \" only after a \\.
 
 Use \\[tex-region] to run TeX on the current region, plus a \"header\"
 copied from the top of the file (containing macro definitions, etc.),
@@ -1080,8 +1079,8 @@ special subshell is initiated, the hook `tex-shell-hook' is run."
 (define-derived-mode latex-mode tex-mode "LaTeX"
   "Major mode for editing files of input for LaTeX.
 Makes $ and } display the characters they match.
-Makes \" insert `` when it seems to be the beginning of a quotation,
-and '' when it appears to be the end; it inserts \" only after a \\.
+Makes \" insert \\=`\\=` when it seems to be the beginning of a quotation,
+and \\='\\=' when it appears to be the end; it inserts \" only after a \\.
 
 Use \\[tex-region] to run LaTeX on the current region, plus the preamble
 copied from the top of the file (containing \\documentstyle, etc.),
@@ -1128,42 +1127,44 @@ subshell is initiated, `tex-shell-hook' is run."
 	(concat "[ \t]*\\(\\$\\$\\|"
 		"\\\\[][]\\|"
 		"\\\\" (regexp-opt (append
-				    (mapcar 'car latex-section-alist)
+				    (mapcar #'car latex-section-alist)
 				    '("begin" "label" "end"
 				      "item" "bibitem" "newline" "noindent"
 				      "newpage" "footnote" "marginpar"
-				      "parbox" "caption")) t)
+				      "parbox" "caption"))
+                                   t)
 		"\\>\\|\\\\[a-z]*" (regexp-opt '("space" "skip" "page") t)
 		"\\>\\)"))
   (setq paragraph-separate
 	(concat "[\f%]\\|[ \t]*\\($\\|"
 		"\\\\[][]\\|"
 		"\\\\" (regexp-opt (append
-				    (mapcar 'car latex-section-alist)
-				    '("begin" "label" "end" )) t)
+				    (mapcar #'car latex-section-alist)
+				    '("begin" "label" "end" ))
+                                   t)
 		"\\>\\|\\\\\\(" (regexp-opt '("item" "bibitem" "newline"
 					      "noindent" "newpage" "footnote"
 					      "marginpar" "parbox" "caption"))
 		"\\|\\$\\$\\|[a-z]*\\(space\\|skip\\|page[a-z]*\\)"
 		"\\>\\)[ \t]*\\($\\|%\\)\\)"))
-  (setq-local imenu-create-index-function 'latex-imenu-create-index)
+  (setq-local imenu-create-index-function #'latex-imenu-create-index)
   (setq-local tex-face-alist tex-latex-face-alist)
-  (add-hook 'fill-nobreak-predicate 'latex-fill-nobreak-predicate nil t)
-  (setq-local indent-line-function 'latex-indent)
+  (add-hook 'fill-nobreak-predicate #'latex-fill-nobreak-predicate nil t)
+  (setq-local indent-line-function #'latex-indent)
   (setq-local fill-indent-according-to-mode t)
   (add-hook 'completion-at-point-functions
-            'latex-complete-data nil 'local)
+            #'latex-complete-data nil 'local)
   (setq-local outline-regexp latex-outline-regexp)
-  (setq-local outline-level 'latex-outline-level)
-  (setq-local forward-sexp-function 'latex-forward-sexp)
+  (setq-local outline-level #'latex-outline-level)
+  (setq-local forward-sexp-function #'latex-forward-sexp)
   (setq-local skeleton-end-hook nil))
 
 ;;;###autoload
 (define-derived-mode slitex-mode latex-mode "SliTeX"
   "Major mode for editing files of input for SliTeX.
 Makes $ and } display the characters they match.
-Makes \" insert `` when it seems to be the beginning of a quotation,
-and '' when it appears to be the end; it inserts \" only after a \\.
+Makes \" insert \\=`\\=` when it seems to be the beginning of a quotation,
+and \\='\\=' when it appears to be the end; it inserts \" only after a \\.
 
 Use \\[tex-region] to run SliTeX on the current region, plus the preamble
 copied from the top of the file (containing \\documentstyle, etc.),
@@ -1205,6 +1206,9 @@ Entering SliTeX mode runs the hook `text-mode-hook', then the hook
 
 (defvar tildify-space-string)
 (defvar tildify-foreach-region-function)
+(declare-function tildify-foreach-ignore-environments
+                  "tildify" (pairs callback _beg end))
+(defvar tex--prettify-symbols-alist)
 
 (defun tex-common-initialization ()
   ;; Regexp isearch should accept newline and formfeed as whitespace.
@@ -1215,7 +1219,7 @@ Entering SliTeX mode runs the hook `text-mode-hook', then the hook
   ;; rather than using regex-based filtering.
   (setq-local tildify-foreach-region-function
               (apply-partially
-               'tildify-foreach-ignore-environments
+               #'tildify-foreach-ignore-environments
                `(("\\\\\\\\" . "") ; do not remove this
                  (,(eval-when-compile
                      (concat "\\\\begin{\\("
@@ -1246,7 +1250,7 @@ Entering SliTeX mode runs the hook `text-mode-hook', then the hook
   (setq-local facemenu-remove-face-function t)
   (setq-local font-lock-defaults
 	      '((tex-font-lock-keywords tex-font-lock-keywords-1
-	         tex-font-lock-keywords-2 tex-font-lock-keywords-3)
+                                        tex-font-lock-keywords-2 tex-font-lock-keywords-3)
 		nil nil nil nil
 		;; Who ever uses that anyway ???
 		(font-lock-mark-block-function . mark-paragraph)
@@ -1254,6 +1258,9 @@ Entering SliTeX mode runs the hook `text-mode-hook', then the hook
 		 . tex-font-lock-syntactic-face-function)
 		(font-lock-unfontify-region-function
 		 . tex-font-lock-unfontify-region)))
+  (setq-local prettify-symbols-alist tex--prettify-symbols-alist)
+  (add-function :override (local 'prettify-symbols-compose-predicate)
+                #'tex--prettify-symbols-compose-p)
   (setq-local syntax-propertize-function
 	      (syntax-propertize-rules latex-syntax-propertize-rules))
   ;; TABs in verbatim environments don't do what you think.
@@ -1296,14 +1303,15 @@ Entering SliTeX mode runs the hook `text-mode-hook', then the hook
 
 (defun tex-insert-quote (arg)
   "Insert the appropriate quote marks for TeX.
-Inserts the value of `tex-open-quote' (normally ``) or `tex-close-quote'
-\(normally '') depending on the context.  With prefix argument, always
+Inserts the value of `tex-open-quote' (normally \\=`\\=`) or `tex-close-quote'
+\(normally \\='\\=') depending on the context.  With prefix argument, always
 inserts \" characters."
   (interactive "*P")
   ;; Discover if we'll be inserting normal double quotes.
   ;;
   (if (or arg (memq (char-syntax (preceding-char)) '(?/ ?\\))
           (eq (get-text-property (point) 'face) 'tex-verbatim)
+          (nth 4 (syntax-ppss)) ; non-nil if point is in a TeX comment
           ;; Discover if a preceding occurrence of `tex-open-quote'
           ;; should be morphed to a normal double quote.
           ;;
@@ -1455,6 +1463,17 @@ area if a mismatch is found."
     (if failure-point (goto-char failure-point))
     (not failure-point)))
 
+(defun tex-handle-newline (inhibit-validation)
+  "Break a TeX paragraph with two newlines, or continue a comment.
+If not in a comment, insert two newlines, breaking a paragraph for TeX,
+and check for mismatched braces or $s in the paragraph being terminated
+unless prefix arg INHIBIT-VALIDATION is non-nil to inhibit the checking.
+Otherwise (in a comment), just insert a single continued comment line."
+  (interactive "*P")
+  (if (nth 4 (syntax-ppss)) ; non-nil if point is in a TeX comment
+      (comment-indent-new-line)
+    (tex-terminate-paragraph inhibit-validation)))
+
 (defun tex-terminate-paragraph (inhibit-validation)
   "Insert two newlines, breaking a paragraph for TeX.
 Check for mismatched braces or $s in paragraph being terminated.
@@ -1530,8 +1549,7 @@ a skeleton (see `skeleton-insert').")
 Puts point on a blank line between them."
   (let ((choice (completing-read (format "LaTeX block name [%s]: "
 					 latex-block-default)
-				 (append latex-block-names
-					 latex-standard-block-names)
+                                 (latex-complete-envnames)
 				 nil nil nil nil latex-block-default)))
     (setq latex-block-default choice)
     (unless (or (member choice latex-standard-block-names)
@@ -1546,7 +1564,7 @@ Puts point on a blank line between them."
   "\\end{" str "}" > \n)
 
 (define-skeleton latex-insert-item
-  "Insert a \item macro."
+  "Insert an \\item macro."
   nil
   \n "\\item " >)
 
@@ -1588,17 +1606,32 @@ Puts point on a blank line between them."
         (complete-with-action action keys key pred)))))
 
 (defun latex-complete-envnames ()
-  (append latex-block-names latex-standard-block-names))
+  (completion-table-in-turn
+   (append latex-block-names latex-standard-block-names)
+   (completion-table-dynamic
+    (lambda (str)
+      (with-current-buffer (if (and (minibufferp) (minibuffer-selected-window))
+                               (window-buffer (minibuffer-selected-window))
+                             (current-buffer))
+        (save-excursion
+          (let ((comps '())
+                (pos (point)))
+            (goto-char (point-min))
+            (while (re-search-forward (concat "\\\\begin{\\(" str "[^}\n ]*\\)")
+                                      nil t)
+              (unless (and (<= (match-beginning 0) pos)
+                           (>= (match-end 0) pos))
+                (push (match-string 1) comps)))
+            comps)))))))
 
 (defun latex-complete-refkeys ()
   (when (boundp 'reftex-docstruct-symbol)
     (symbol-value reftex-docstruct-symbol)))
 
 (defvar latex-complete-alist
-  ;; TODO: Add \begin, \end, \ref, ...
-  '(("\\`\\\\\\(short\\)?cite\\'" . latex-complete-bibtex-keys)
-    ("\\`\\\\\\(begin\\|end\\)\\'" . latex-complete-envnames)
-    ("\\`\\\\[vf]?ref\\'" . latex-complete-refkeys)))
+  `(("\\`\\\\\\(short\\)?cite\\'" . ,#'latex-complete-bibtex-keys)
+    ("\\`\\\\\\(begin\\|end\\)\\'" . ,#'latex-complete-envnames)
+    ("\\`\\\\[vf]?ref\\'" . ,#'latex-complete-refkeys)))
 
 (defun latex-complete-data ()
   "Get completion-data at point."
@@ -1978,7 +2011,7 @@ In the tex shell buffer this command behaves like `comint-send-input'."
   (display-buffer (tex-shell-buf))
   (tex-recenter-output-buffer nil))
 
-(defun tex-shell-sentinel (proc msg)
+(defun tex-shell-sentinel (proc _msg)
   (cond ((null (buffer-name (process-buffer proc)))
 	 ;; buffer killed
 	 (set-process-buffer proc nil)
@@ -2080,13 +2113,17 @@ If NOT-ALL is non-nil, save the `.dvi' file."
   :group 'tex)
 
 (defvar tex-compile-commands
-  '(((concat "pdf" tex-command
-	     " " (if (< 0 (length tex-start-commands))
-		     (shell-quote-argument tex-start-commands)) " %f")
-     t "%r.pdf")
+  `(,@(mapcar (lambda (prefix)
+                `((concat ,prefix tex-command
+                          " " (if (< 0 (length tex-start-commands))
+                                  (shell-quote-argument tex-start-commands))
+                          " %f")
+                  t "%r.pdf"))
+              '("pdf" "xe" "lua"))
     ((concat tex-command
 	     " " (if (< 0 (length tex-start-commands))
-		     (shell-quote-argument tex-start-commands)) " %f")
+		     (shell-quote-argument tex-start-commands))
+             " %f")
      t "%r.dvi")
     ("xdvi %r &" "%r.dvi")
     ("\\doc-view \"%r.pdf\"" "%r.pdf")
@@ -2181,7 +2218,7 @@ of the current buffer."
 
 (defun tex-summarize-command (cmd)
   (if (not (stringp cmd)) ""
-    (mapconcat 'identity
+    (mapconcat #'identity
 	       (mapcar (lambda (s) (car (split-string s)))
 		       (split-string cmd "\\s-*\\(?:;\\|&&\\)\\s-*"))
 	       "&")))
@@ -2363,7 +2400,8 @@ Only applies the FSPEC to the args part of FORMAT."
       ;; Substitute and return.
       (if (and hist-cmd
 	       (string-match (concat "[' \t\"]" (format-spec "%r" fspec)
-				     "\\([;&' \t\"]\\|\\'\\)") hist-cmd))
+				     "\\([;&' \t\"]\\|\\'\\)")
+                             hist-cmd))
 	  ;; The history command was already applied to the same file,
 	  ;; so just reuse it.
 	  hist-cmd
@@ -2748,7 +2786,7 @@ Runs the shell command defined by `tex-show-queue-command'."
 (defvar tex-indent-item-re "\\\\\\(bib\\)?item\\>")
 (defvar latex-noindent-environments '("document"))
 (put 'latex-noindent-environments 'safe-local-variable
-     (lambda (x) (null (delq t (mapcar 'stringp x)))))
+     (lambda (x) (null (delq t (mapcar #'stringp x)))))
 
 (defvar tex-latex-indent-syntax-table
   (let ((st (make-syntax-table tex-mode-syntax-table)))
@@ -2758,10 +2796,11 @@ Runs the shell command defined by `tex-show-queue-command'."
     st)
   "Syntax table used while computing indentation.")
 
-(defun latex-indent (&optional arg)
+(defun latex-indent (&optional _arg)
   (if (and (eq (get-text-property (if (and (eobp) (bolp))
                                       (max (point-min) (1- (point)))
-                                    (line-beginning-position)) 'face)
+                                    (line-beginning-position))
+                                  'face)
 	       'tex-verbatim))
       'noindent
     (with-syntax-table tex-latex-indent-syntax-table
@@ -2942,6 +2981,489 @@ There might be text before point."
 	       (cdr font-lock-defaults))))
   (setq-local syntax-propertize-function
 	      (syntax-propertize-rules doctex-syntax-propertize-rules)))
+
+;;; Prettify Symbols Support
+
+(defvar tex--prettify-symbols-alist
+  '( ;; Lowercase Greek letters.
+    ("\\alpha" . ?α)
+    ("\\beta" . ?β)
+    ("\\gamma" . ?γ)
+    ("\\delta" . ?δ)
+    ("\\epsilon" . ?ϵ)
+    ("\\zeta" . ?ζ)
+    ("\\eta" . ?η)
+    ("\\theta" . ?θ)
+    ("\\iota" . ?ι)
+    ("\\kappa" . ?κ)
+    ("\\lambda" . ?λ)
+    ("\\mu" . ?μ)
+    ("\\nu" . ?ν)
+    ("\\xi" . ?ξ)
+    ;; There is no \omicron because it looks like a latin o.
+    ("\\pi" . ?π)
+    ("\\rho" . ?ρ)
+    ("\\sigma" . ?σ)
+    ("\\tau" . ?τ)
+    ("\\upsilon" . ?υ)
+    ("\\phi" . ?ϕ)
+    ("\\chi" . ?χ)
+    ("\\psi" . ?ψ)
+    ("\\omega" . ?ω)
+    ;; Uppercase Greek letters.
+    ("\\Gamma" . ?Γ)
+    ("\\Delta" . ?Δ)
+    ("\\Lambda" . ?Λ)
+    ("\\Phi" . ?Φ)
+    ("\\Pi" . ?Π)
+    ("\\Psi" . ?Ψ)
+    ("\\Sigma" . ?Σ)
+    ("\\Theta" . ?Θ)
+    ("\\Upsilon" . ?Υ)
+    ("\\Xi" . ?Ξ)
+    ("\\Omega" . ?Ω)
+
+    ;; Other math symbols (taken from leim/quail/latin-ltx.el).
+    ("\\Box" . ?□)
+    ("\\Bumpeq" . ?≎)
+    ("\\Cap" . ?⋒)
+    ("\\Cup" . ?⋓)
+    ("\\Diamond" . ?◇)
+    ("\\Downarrow" . ?⇓)
+    ("\\H{o}" . ?ő)
+    ("\\Im" . ?ℑ)
+    ("\\Join" . ?⋈)
+    ("\\Leftarrow" . ?⇐)
+    ("\\Leftrightarrow" . ?⇔)
+    ("\\Ll" . ?⋘)
+    ("\\Lleftarrow" . ?⇚)
+    ("\\Longleftarrow" . ?⇐)
+    ("\\Longleftrightarrow" . ?⇔)
+    ("\\Longrightarrow" . ?⇒)
+    ("\\Lsh" . ?↰)
+    ("\\Re" . ?ℜ)
+    ("\\Rightarrow" . ?⇒)
+    ("\\Rrightarrow" . ?⇛)
+    ("\\Rsh" . ?↱)
+    ("\\Subset" . ?⋐)
+    ("\\Supset" . ?⋑)
+    ("\\Uparrow" . ?⇑)
+    ("\\Updownarrow" . ?⇕)
+    ("\\Vdash" . ?⊩)
+    ("\\Vert" . ?‖)
+    ("\\Vvdash" . ?⊪)
+    ("\\aleph" . ?ℵ)
+    ("\\amalg" . ?∐)
+    ("\\angle" . ?∠)
+    ("\\approx" . ?≈)
+    ("\\approxeq" . ?≊)
+    ("\\ast" . ?∗)
+    ("\\asymp" . ?≍)
+    ("\\backcong" . ?≌)
+    ("\\backepsilon" . ?∍)
+    ("\\backprime" . ?‵)
+    ("\\backsim" . ?∽)
+    ("\\backsimeq" . ?⋍)
+    ("\\backslash" . ?\\)
+    ("\\barwedge" . ?⊼)
+    ("\\because" . ?∵)
+    ("\\beth" . ?ℶ)
+    ("\\between" . ?≬)
+    ("\\bigcap" . ?⋂)
+    ("\\bigcirc" . ?◯)
+    ("\\bigcup" . ?⋃)
+    ("\\bigstar" . ?★)
+    ("\\bigtriangledown" . ?▽)
+    ("\\bigtriangleup" . ?△)
+    ("\\bigvee" . ?⋁)
+    ("\\bigwedge" . ?⋀)
+    ("\\blacklozenge" . ?✦)
+    ("\\blacksquare" . ?▪)
+    ("\\blacktriangle" . ?▴)
+    ("\\blacktriangledown" . ?▾)
+    ("\\blacktriangleleft" . ?◂)
+    ("\\blacktriangleright" . ?▸)
+    ("\\bot" . ?⊥)
+    ("\\bowtie" . ?⋈)
+    ("\\boxminus" . ?⊟)
+    ("\\boxplus" . ?⊞)
+    ("\\boxtimes" . ?⊠)
+    ("\\bullet" . ?•)
+    ("\\bumpeq" . ?≏)
+    ("\\cap" . ?∩)
+    ("\\cdots" . ?⋯)
+    ("\\centerdot" . ?·)
+    ("\\checkmark" . ?✓)
+    ("\\chi" . ?χ)
+    ("\\cdot" . ?⋅)
+    ("\\cdots" . ?⋯)
+    ("\\circ" . ?∘)
+    ("\\circeq" . ?≗)
+    ("\\circlearrowleft" . ?↺)
+    ("\\circlearrowright" . ?↻)
+    ("\\circledR" . ?®)
+    ("\\circledS" . ?Ⓢ)
+    ("\\circledast" . ?⊛)
+    ("\\circledcirc" . ?⊚)
+    ("\\circleddash" . ?⊝)
+    ("\\clubsuit" . ?♣)
+    ("\\coloneq" . ?≔)
+    ("\\complement" . ?∁)
+    ("\\cong" . ?≅)
+    ("\\coprod" . ?∐)
+    ("\\cup" . ?∪)
+    ("\\curlyeqprec" . ?⋞)
+    ("\\curlyeqsucc" . ?⋟)
+    ("\\curlypreceq" . ?≼)
+    ("\\curlyvee" . ?⋎)
+    ("\\curlywedge" . ?⋏)
+    ("\\curvearrowleft" . ?↶)
+    ("\\curvearrowright" . ?↷)
+    ("\\dag" . ?†)
+    ("\\dagger" . ?†)
+    ("\\daleth" . ?ℸ)
+    ("\\dashv" . ?⊣)
+    ("\\ddag" . ?‡)
+    ("\\ddagger" . ?‡)
+    ("\\ddots" . ?⋱)
+    ("\\diamond" . ?⋄)
+    ("\\diamondsuit" . ?♢)
+    ("\\divideontimes" . ?⋇)
+    ("\\doteq" . ?≐)
+    ("\\doteqdot" . ?≑)
+    ("\\dotplus" . ?∔)
+    ("\\dotsquare" . ?⊡)
+    ("\\downarrow" . ?↓)
+    ("\\downdownarrows" . ?⇊)
+    ("\\downleftharpoon" . ?⇃)
+    ("\\downrightharpoon" . ?⇂)
+    ("\\ell" . ?ℓ)
+    ("\\emptyset" . ?∅)
+    ("\\eqcirc" . ?≖)
+    ("\\eqcolon" . ?≕)
+    ("\\eqslantgtr" . ?⋝)
+    ("\\eqslantless" . ?⋜)
+    ("\\equiv" . ?≡)
+    ("\\exists" . ?∃)
+    ("\\fallingdotseq" . ?≒)
+    ("\\flat" . ?♭)
+    ("\\forall" . ?∀)
+    ("\\frown" . ?⌢)
+    ("\\ge" . ?≥)
+    ("\\geq" . ?≥)
+    ("\\geqq" . ?≧)
+    ("\\geqslant" . ?≥)
+    ("\\gets" . ?←)
+    ("\\gg" . ?≫)
+    ("\\ggg" . ?⋙)
+    ("\\gimel" . ?ℷ)
+    ("\\gnapprox" . ?⋧)
+    ("\\gneq" . ?≩)
+    ("\\gneqq" . ?≩)
+    ("\\gnsim" . ?⋧)
+    ("\\gtrapprox" . ?≳)
+    ("\\gtrdot" . ?⋗)
+    ("\\gtreqless" . ?⋛)
+    ("\\gtreqqless" . ?⋛)
+    ("\\gtrless" . ?≷)
+    ("\\gtrsim" . ?≳)
+    ("\\gvertneqq" . ?≩)
+    ("\\hbar" . ?ℏ)
+    ("\\heartsuit" . ?♥)
+    ("\\hookleftarrow" . ?↩)
+    ("\\hookrightarrow" . ?↪)
+    ("\\iff" . ?⇔)
+    ("\\imath" . ?ı)
+    ("\\in" . ?∈)
+    ("\\infty" . ?∞)
+    ("\\int" . ?∫)
+    ("\\intercal" . ?⊺)
+    ("\\langle" . 10216)          ; Literal ?⟨ breaks indentation.
+    ("\\lbrace" . ?{)
+    ("\\lbrack" . ?\[)
+    ("\\lceil" . ?⌈)
+    ("\\ldots" . ?…)
+    ("\\le" . ?≤)
+    ("\\leadsto" . ?↝)
+    ("\\leftarrow" . ?←)
+    ("\\leftarrowtail" . ?↢)
+    ("\\leftharpoondown" . ?↽)
+    ("\\leftharpoonup" . ?↼)
+    ("\\leftleftarrows" . ?⇇)
+    ;; ("\\leftparengtr" ?〈), see bug#12948.
+    ("\\leftrightarrow" . ?↔)
+    ("\\leftrightarrows" . ?⇆)
+    ("\\leftrightharpoons" . ?⇋)
+    ("\\leftrightsquigarrow" . ?↭)
+    ("\\leftthreetimes" . ?⋋)
+    ("\\leq" . ?≤)
+    ("\\leqq" . ?≦)
+    ("\\leqslant" . ?≤)
+    ("\\lessapprox" . ?≲)
+    ("\\lessdot" . ?⋖)
+    ("\\lesseqgtr" . ?⋚)
+    ("\\lesseqqgtr" . ?⋚)
+    ("\\lessgtr" . ?≶)
+    ("\\lesssim" . ?≲)
+    ("\\lfloor" . ?⌊)
+    ("\\lhd" . ?◁)
+    ("\\rhd" . ?▷)
+    ("\\ll" . ?≪)
+    ("\\llcorner" . ?⌞)
+    ("\\lnapprox" . ?⋦)
+    ("\\lneq" . ?≨)
+    ("\\lneqq" . ?≨)
+    ("\\lnsim" . ?⋦)
+    ("\\longleftarrow" . ?←)
+    ("\\longleftrightarrow" . ?↔)
+    ("\\longmapsto" . ?↦)
+    ("\\longrightarrow" . ?→)
+    ("\\looparrowleft" . ?↫)
+    ("\\looparrowright" . ?↬)
+    ("\\lozenge" . ?✧)
+    ("\\lq" . ?‘)
+    ("\\lrcorner" . ?⌟)
+    ("\\ltimes" . ?⋉)
+    ("\\lvertneqq" . ?≨)
+    ("\\maltese" . ?✠)
+    ("\\mapsto" . ?↦)
+    ("\\measuredangle" . ?∡)
+    ("\\mho" . ?℧)
+    ("\\mid" . ?∣)
+    ("\\models" . ?⊧)
+    ("\\mp" . ?∓)
+    ("\\multimap" . ?⊸)
+    ("\\nLeftarrow" . ?⇍)
+    ("\\nLeftrightarrow" . ?⇎)
+    ("\\nRightarrow" . ?⇏)
+    ("\\nVDash" . ?⊯)
+    ("\\nVdash" . ?⊮)
+    ("\\nabla" . ?∇)
+    ("\\napprox" . ?≉)
+    ("\\natural" . ?♮)
+    ("\\ncong" . ?≇)
+    ("\\ne" . ?≠)
+    ("\\nearrow" . ?↗)
+    ("\\neg" . ?¬)
+    ("\\neq" . ?≠)
+    ("\\nequiv" . ?≢)
+    ("\\newline" . ? )
+    ("\\nexists" . ?∄)
+    ("\\ngeq" . ?≱)
+    ("\\ngeqq" . ?≱)
+    ("\\ngeqslant" . ?≱)
+    ("\\ngtr" . ?≯)
+    ("\\ni" . ?∋)
+    ("\\nleftarrow" . ?↚)
+    ("\\nleftrightarrow" . ?↮)
+    ("\\nleq" . ?≰)
+    ("\\nleqq" . ?≰)
+    ("\\nleqslant" . ?≰)
+    ("\\nless" . ?≮)
+    ("\\nmid" . ?∤)
+    ;; ("\\not" ?̸)              ;FIXME: conflict with "NOT SIGN" ¬.
+    ("\\notin" . ?∉)
+    ("\\nparallel" . ?∦)
+    ("\\nprec" . ?⊀)
+    ("\\npreceq" . ?⋠)
+    ("\\nrightarrow" . ?↛)
+    ("\\nshortmid" . ?∤)
+    ("\\nshortparallel" . ?∦)
+    ("\\nsim" . ?≁)
+    ("\\nsimeq" . ?≄)
+    ("\\nsubset" . ?⊄)
+    ("\\nsubseteq" . ?⊈)
+    ("\\nsubseteqq" . ?⊈)
+    ("\\nsucc" . ?⊁)
+    ("\\nsucceq" . ?⋡)
+    ("\\nsupset" . ?⊅)
+    ("\\nsupseteq" . ?⊉)
+    ("\\nsupseteqq" . ?⊉)
+    ("\\ntriangleleft" . ?⋪)
+    ("\\ntrianglelefteq" . ?⋬)
+    ("\\ntriangleright" . ?⋫)
+    ("\\ntrianglerighteq" . ?⋭)
+    ("\\nvDash" . ?⊭)
+    ("\\nvdash" . ?⊬)
+    ("\\nwarrow" . ?↖)
+    ("\\odot" . ?⊙)
+    ("\\oint" . ?∮)
+    ("\\ominus" . ?⊖)
+    ("\\oplus" . ?⊕)
+    ("\\oslash" . ?⊘)
+    ("\\otimes" . ?⊗)
+    ("\\par" . ? )
+    ("\\parallel" . ?∥)
+    ("\\partial" . ?∂)
+    ("\\perp" . ?⊥)
+    ("\\pitchfork" . ?⋔)
+    ("\\prec" . ?≺)
+    ("\\precapprox" . ?≾)
+    ("\\preceq" . ?≼)
+    ("\\precnapprox" . ?⋨)
+    ("\\precnsim" . ?⋨)
+    ("\\precsim" . ?≾)
+    ("\\prime" . ?′)
+    ("\\prod" . ?∏)
+    ("\\propto" . ?∝)
+    ("\\qed" . ?∎)
+    ("\\qquad" . ?⧢)
+    ("\\quad" . ?␣)
+    ("\\rangle" . 10217)            ; Literal ?⟩ breaks indentation.
+    ("\\rbrace" . ?})
+    ("\\rbrack" . ?\])
+    ("\\rceil" . ?⌉)
+    ("\\rfloor" . ?⌋)
+    ("\\rightarrow" . ?→)
+    ("\\rightarrowtail" . ?↣)
+    ("\\rightharpoondown" . ?⇁)
+    ("\\rightharpoonup" . ?⇀)
+    ("\\rightleftarrows" . ?⇄)
+    ("\\rightleftharpoons" . ?⇌)
+    ;; ("\\rightparengtr" ?⦔) ;; Was ?〉, see bug#12948.
+    ("\\rightrightarrows" . ?⇉)
+    ("\\rightthreetimes" . ?⋌)
+    ("\\risingdotseq" . ?≓)
+    ("\\rtimes" . ?⋊)
+    ("\\times" . ?×)
+    ("\\sbs" . ?﹨)
+    ("\\searrow" . ?↘)
+    ("\\setminus" . ?∖)
+    ("\\sharp" . ?♯)
+    ("\\shortmid" . ?∣)
+    ("\\shortparallel" . ?∥)
+    ("\\sim" . ?∼)
+    ("\\simeq" . ?≃)
+    ("\\smallamalg" . ?∐)
+    ("\\smallsetminus" . ?∖)
+    ("\\smallsmile" . ?⌣)
+    ("\\smile" . ?⌣)
+    ("\\spadesuit" . ?♠)
+    ("\\sphericalangle" . ?∢)
+    ("\\sqcap" . ?⊓)
+    ("\\sqcup" . ?⊔)
+    ("\\sqsubset" . ?⊏)
+    ("\\sqsubseteq" . ?⊑)
+    ("\\sqsupset" . ?⊐)
+    ("\\sqsupseteq" . ?⊒)
+    ("\\square" . ?□)
+    ("\\squigarrowright" . ?⇝)
+    ("\\star" . ?⋆)
+    ("\\straightphi" . ?φ)
+    ("\\subset" . ?⊂)
+    ("\\subseteq" . ?⊆)
+    ("\\subseteqq" . ?⊆)
+    ("\\subsetneq" . ?⊊)
+    ("\\subsetneqq" . ?⊊)
+    ("\\succ" . ?≻)
+    ("\\succapprox" . ?≿)
+    ("\\succcurlyeq" . ?≽)
+    ("\\succeq" . ?≽)
+    ("\\succnapprox" . ?⋩)
+    ("\\succnsim" . ?⋩)
+    ("\\succsim" . ?≿)
+    ("\\sum" . ?∑)
+    ("\\supset" . ?⊃)
+    ("\\supseteq" . ?⊇)
+    ("\\supseteqq" . ?⊇)
+    ("\\supsetneq" . ?⊋)
+    ("\\supsetneqq" . ?⊋)
+    ("\\surd" . ?√)
+    ("\\swarrow" . ?↙)
+    ("\\therefore" . ?∴)
+    ("\\thickapprox" . ?≈)
+    ("\\thicksim" . ?∼)
+    ("\\to" . ?→)
+    ("\\top" . ?⊤)
+    ("\\triangle" . ?▵)
+    ("\\triangledown" . ?▿)
+    ("\\triangleleft" . ?◃)
+    ("\\trianglelefteq" . ?⊴)
+    ("\\triangleq" . ?≜)
+    ("\\triangleright" . ?▹)
+    ("\\trianglerighteq" . ?⊵)
+    ("\\twoheadleftarrow" . ?↞)
+    ("\\twoheadrightarrow" . ?↠)
+    ("\\ulcorner" . ?⌜)
+    ("\\uparrow" . ?↑)
+    ("\\updownarrow" . ?↕)
+    ("\\upleftharpoon" . ?↿)
+    ("\\uplus" . ?⊎)
+    ("\\uprightharpoon" . ?↾)
+    ("\\upuparrows" . ?⇈)
+    ("\\urcorner" . ?⌝)
+    ("\\u{i}" . ?ĭ)
+    ("\\vDash" . ?⊨)
+    ("\\varepsilon" . ?ε)
+    ("\\varphi" . ?φ)
+    ("\\varprime" . ?′)
+    ("\\varpropto" . ?∝)
+    ("\\varrho" . ?ϱ)
+    ("\\varsigma" ?ς)
+    ("\\vartriangleleft" . ?⊲)
+    ("\\vartriangleright" . ?⊳)
+    ("\\vdash" . ?⊢)
+    ("\\vdots" . ?⋮)
+    ("\\vee" . ?∨)
+    ("\\veebar" . ?⊻)
+    ("\\vert" . ?|)
+    ("\\wedge" . ?∧)
+    ("\\wp" . ?℘)
+    ("\\wr" . ?≀)
+    ("\\Bbb{N}" . ?ℕ)			; AMS commands for blackboard bold
+    ("\\Bbb{P}" . ?ℙ)			; Also sometimes \mathbb.
+    ("\\Bbb{Q}" . ?ℚ)
+    ("\\Bbb{R}" . ?ℝ)
+    ("\\Bbb{Z}" . ?ℤ)
+    ("--" . ?–)
+    ("---" . ?—)
+    ("\\ordfeminine" . ?ª)
+    ("\\ordmasculine" . ?º)
+    ("\\lambdabar" . ?ƛ)
+    ("\\celsius" . ?℃)
+    ("\\textmu" . ?µ)
+    ("\\textfractionsolidus" . ?⁄)
+    ("\\textbigcircle" . ?⃝)
+    ("\\textmusicalnote" . ?♪)
+    ("\\textdied" . ?✝)
+    ("\\textcolonmonetary" . ?₡)
+    ("\\textwon" . ?₩)
+    ("\\textnaira" . ?₦)
+    ("\\textpeso" . ?₱)
+    ("\\textlira" . ?₤)
+    ("\\textrecipe" . ?℞)
+    ("\\textinterrobang" . ?‽)
+    ("\\textpertenthousand" . ?‱)
+    ("\\textbaht" . ?฿)
+    ("\\textnumero" . ?№)
+    ("\\textdiscount" . ?⁒)
+    ("\\textestimated" . ?℮)
+    ("\\textopenbullet" . ?◦)
+    ("\\textlquill" . 8261)		; Literal ?⁅ breaks indentation.
+    ("\\textrquill" . 8262)             ; Literal ?⁆ breaks indentation.
+    ("\\textcircledP" . ?℗)
+    ("\\textreferencemark" . ?※))
+  "A `prettify-symbols-alist' usable for (La)TeX modes.")
+
+(defun tex--prettify-symbols-compose-p (_start end _match)
+  (or
+   ;; If the matched symbol doesn't end in a word character, then we
+   ;; simply allow composition.  The symbol is probably something like
+   ;; \|, \(, etc.
+   (not (eq ?w (char-syntax (char-before end))))
+   ;; Else we look at what follows the match in order to decide.
+   (let* ((after-char (char-after end))
+          (after-syntax (char-syntax after-char)))
+     (not (or
+           ;; Don't compose \alpha@foo.
+           (eq after-char ?@)
+           ;; The \alpha in \alpha2 or \alpha-\beta may be composed but
+           ;; of course \alphax may not.
+           (and (eq after-syntax ?w)
+                (not (memq after-char
+                           '(?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?+ ?- ?' ?\"))))
+           ;; Don't compose inside verbatim blocks.
+           (eq 2 (nth 7 (syntax-ppss))))))))
 
 (run-hooks 'tex-mode-load-hook)
 

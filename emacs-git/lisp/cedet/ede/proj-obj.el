@@ -1,6 +1,6 @@
 ;;; ede/proj-obj.el --- EDE Generic Project Object code generation support
 
-;;; Copyright (C) 1998-2000, 2005, 2008-2015 Free Software Foundation,
+;;; Copyright (C) 1998-2000, 2005, 2008-2017 Free Software Foundation,
 ;;; Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
@@ -126,7 +126,7 @@ file.")
 (defvar ede-source-c++
   (ede-sourcecode "ede-source-c++"
 		  :name "C++"
-		  :sourcepattern "\\.\\(c\\(pp?\\|c\\|xx\\|++\\)\\|C\\\(PP\\)?\\)$"
+		  :sourcepattern "\\.\\(c\\(pp?\\|c\\|xx\\|++\\)\\|C\\(PP\\)?\\)$"
 		  :auxsourcepattern "\\.\\(hpp?\\|hh?\\|hxx\\|H\\)$"
 		  :garbagepattern '("*.o" "*.obj" ".deps/*.P" ".lo"))
   "C++ source code definition.")

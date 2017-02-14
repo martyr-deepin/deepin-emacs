@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2017 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Glossary
@@ -135,7 +135,7 @@ X}).  Borders are not the same as fringes (q.v.).
 @item Buffer
 The buffer is the basic editing unit; one buffer corresponds to one text
 being edited.  You normally have several buffers, but at any time you are
-editing only one, the ``current buffer'', though several can be visible
+editing only one, the current buffer, though several can be visible
 when you are using multiple windows or frames (q.v.).  Most buffers
 are visiting (q.v.@:) some file.  @xref{Buffers}.
 
@@ -175,10 +175,21 @@ corresponding Control character.  @xref{User Input,C-M-}.
 Case conversion means changing text from upper case to lower case or
 vice versa.  @xref{Case}.
 
+@item Case Folding
+Case folding means ignoring the differences between case variants of
+the same letter: upper-case, lower-case, and title-case.  Emacs
+performs case folding by default in text search.  @xref{Lax Search}.
+
 @item Character
 Characters form the contents of an Emacs buffer.  Also, key sequences
 (q.v.@:) are usually made up of characters (though they may include
 other input events as well).  @xref{User Input}.
+
+@item Character Folding
+Character folding means ignoring differences between similarly looking
+characters, such as between @code{a}, and @code{@:a} and @code{@'a}.
+Emacs performs character folding by default in text search.  @xref{Lax
+Search}.
 
 @item Character Set
 Emacs supports a number of character sets, each of which represents a
@@ -265,7 +276,7 @@ normally (but see @ref{Glossary---Truncation}) takes up more than one
 screen line when displayed.  We say that the text line is continued, and all
 screen lines used for it after the first are called continuation
 lines.  @xref{Continuation Lines}.  A related Emacs feature is
-``filling'' (q.v.).
+filling (q.v.).
 
 @item Control Character
 A control character is a character that you type by holding down the
@@ -285,7 +296,7 @@ The particular form of copyleft used by the GNU project is called the
 GNU General Public License.  @xref{Copying}.
 
 @item @key{Ctrl}
-The @key{Ctrl} or ``control'' key is what you hold down
+The @key{Ctrl} or control key is what you hold down
 in order to enter a control character (q.v.).  @xref{Glossary---C-}.
 
 @item Current Buffer
@@ -327,8 +338,8 @@ or by rebinding key sequences (@pxref{Keymaps}).
 @item Daemon
 A daemon is a standard term for a system-level process that runs in the
 background.  Daemons are often started when the system first starts up.
-When Emacs runs in daemon-mode, it runs in the background and does not
-open a display.  You can then connect to it with the
+When Emacs runs in daemon-mode, it does not
+open a display.  You connect to it with the
 @command{emacsclient} program.  @xref{Emacs Server}.
 
 @item Default Argument
@@ -367,8 +378,8 @@ Deletion means erasing text without copying it into the kill ring
 @anchor{Glossary---Deletion of Files}
 @item Deletion of Files
 Deleting a file means erasing it from the file system.
-(Note that some systems use the concept of a ``trash can'', or ``recycle
-bin'', to allow you to ``undelete'' files.)
+(Note that some systems use the concept of a trash can, or recycle
+bin, to allow you to undelete files.)
 @xref{Misc File Ops,Misc File Ops,Miscellaneous File Operations}.
 
 @item Deletion of Messages
@@ -1076,7 +1087,7 @@ command, using @kbd{C-g} (or @kbd{C-@key{BREAK}} on MS-DOS).  @xref{Quitting}.
 Quoting means depriving a character of its usual special significance.
 The most common kind of quoting in Emacs is with @kbd{C-q}.  What
 constitutes special significance depends on the context and on
-convention.  For example, an ``ordinary'' character as an Emacs command
+convention.  For example, an ordinary character as an Emacs command
 inserts itself; so in this context, a special character is any character
 that does not normally insert itself (such as @key{DEL}, for example),
 and quoting it makes it insert itself as if it were not special.  Not
@@ -1121,7 +1132,7 @@ Many commands operate on the text of the region.  @xref{Mark,Region}.
 @item Register
 Registers are named slots in which text, buffer positions, or
 rectangles can be saved for later use.  @xref{Registers}.  A related
-Emacs feature is ``bookmarks'' (q.v.).
+Emacs feature is bookmarks (q.v.).
 
 @anchor{Glossary---Regular Expression}
 @item Regular Expression
@@ -1318,7 +1329,7 @@ indentation or completion.
 @anchor{Glossary---Tags Table}
 @item Tags Table
 A tags table is a file that serves as an index to the function
-definitions in one or more other files.  @xref{Tags}.
+definitions in one or more other files.  @xref{Tags Tables}.
 
 @item Termscript File
 A termscript file contains a record of all characters sent by Emacs to

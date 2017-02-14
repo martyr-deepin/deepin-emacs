@@ -5,7 +5,7 @@ Instructions to create pretest or release tarballs. -*- coding: utf-8 -*-
 
 Steps to take before starting on the first pretest in any release sequence:
 
-0.  The release branch (e.g. emacs-24) should already have been made
+0.  The release branch (e.g. emacs-25) should already have been made
     and you should use it for all that follows.  Diffs from this
     branch should be going to the emacs-diffs mailing list.
 
@@ -13,55 +13,62 @@ Steps to take before starting on the first pretest in any release sequence:
     have them available for the duration of the release process.
 
 2.  Consider increasing the value of the variable
-    `customize-changed-options-previous-release' in cus-edit.el to
+    'customize-changed-options-previous-release' in cus-edit.el to
     refer to a newer version of Emacs.  (This is probably needed only
     when preparing the first pretest for a major Emacs release.)
     Commit cus-edit.el if changed.
 
 3.  Remove any old pretests from ftp://alpha.gnu.org/gnu/emacs/pretest.
-    You can use `gnupload --delete' (see below for more gnupload details).
+    You can use 'gnupload --delete' (see below for more gnupload details).
 
 General steps (for each step, check for possible errors):
 
 1.   git pull     # fetch from the repository
      git status   # check for locally modified files
 
+    Ensure that you have a clean, unmodified state.
+    If you switched in-place from another branch to the release branch,
+    there could be inappropriate generated ignored files left over.
+    You might want to use "git status --ignored" to check for such files,
+    or some form of "git clean -x".  It's probably simpler and safer to
+    make a new working directory exclusively for the release branch.
+
 2.  Regenerate the etc/AUTHORS file:
       M-: (require 'authors) RET
       M-x authors RET
 
+    (This first updates the current versioned ChangeLog.N)
+
     If there is an "*Authors Errors*" buffer, address the issues.
-    If there was a ChangeLog typo, run "make change-history" and then
-    fix the newest ChangeLog history file.  If a file was deleted or
-    renamed, consider adding an appropriate entry to
-    authors-ignored-files, authors-valid-file-names, or
+    If there was a ChangeLog typo, fix the relevant entry.
+    If a file was deleted or renamed, consider adding an appropriate
+    entry to authors-ignored-files, authors-valid-file-names, or
     authors-renamed-files-alist.
 
-    If necessary, repeat M-x authors after making those changes.
+    If necessary, repeat 'C-u M-x authors' after making those changes.
     Save the "*Authors*" buffer as etc/AUTHORS.
     Check the diff looks reasonable.  Maybe add entries to
     authors-ambiguous-files or authors-aliases, and repeat.
     Commit any fixes to authors.el.
 
 3.  Set the version number (M-x load-file RET admin/admin.el RET, then
-    M-x set-version RET).  For a release, add released ChangeLog
-    entries (create a ChangeLog symlink a la vc-dwim, then run M-x
-    add-release-logs RET, then run the shell command 'vc-dwim --commit').
-
-    For a pretest, start at version .90.  After .99, use .990 (so that
-    it sorts).
+    M-x set-version RET).  For a pretest, start at version .90.  After
+    .99, use .990 (so that it sorts).
 
     The final pretest should be a release candidate.  Set the version
     number to that of the actual release.  Pick a date about a week
-    from now when you intend to make the release.  Use vc-dwim and
-    M-x add-release-logs as described above to add commit messages
-    that will appear in the tarball's automatically-generated ChangeLog
-    file as entries for that date.
+    from now when you intend to make the release.  Use M-x
+    add-release-logs to add entries to etc/HISTORY and the ChangeLog
+    file.  It's best not to commit these files until the release is
+    actually made.  Merge the entries from (unversioned) ChangeLog
+    into the top of the current versioned ChangeLog.N and commit that
+    along with etc/HISTORY.  Then you can tag that commit as the
+    release.
 
     Name the tar file as emacs-XX.Y-rc1.tar.  If all goes well in the
     following week, you can simply rename the file and use it for the
     actual release.  If you need another release candidate, remember
-    to adjust the ChangeLog entries.
+    to adjust the ChangeLog and etc/HISTORY entries.
 
     If you need to change only a file(s) that cannot possibly affect
     the build (README, ChangeLog, NEWS, etc.) then rather than doing
@@ -77,10 +84,8 @@ General steps (for each step, check for possible errors):
      make -C etc/refcards
      make -C etc/refcards clean
 
-5.  Copy lisp/loaddefs.el to lisp/ldefs-boot.el.
-
-    Commit etc/AUTHORS, lisp/ldefs-boot.el, and the files changed
-    by M-x set-version.
+5.  Commit ChangeLog.N, etc/AUTHORS, lisp/ldefs-boot.el, and the
+    files changed by M-x set-version.
 
     If someone else made a commit between step 1 and now,
     you need to repeat from step 4 onwards.  (You can commit the files
@@ -96,12 +101,12 @@ General steps (for each step, check for possible errors):
 
     If this is the first pretest of a major release, just comparing
     with the previous release may overlook many new files.  You can try
-    something like `find . | sort' in a clean repository, and compare the
+    something like 'find . | sort' in a clean repository, and compare the
     results against the new tar contents.
 
 7.   tar -xf emacs-NEW.tar; cd emacs-NEW
      ./configure --prefix=/tmp/emacs && make && make install
-    Use `script' or M-x compile to save the compilation log in
+    Use 'script' or M-x compile to save the compilation log in
     compile-NEW.log and compare it against an old one.  The easiest way
     to do that is to visit the old log in Emacs, change the version
     number of the old Emacs to __, do the same with the new log and do

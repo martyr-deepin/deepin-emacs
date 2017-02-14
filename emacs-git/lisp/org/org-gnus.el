@@ -1,6 +1,6 @@
 ;;; org-gnus.el --- Support for links to Gnus groups and messages from within Org-mode
 
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;         Tassilo Horn <tassilo at member dot fsf dot org>
@@ -38,7 +38,6 @@
 ;; Declare external functions and variables
 (declare-function message-fetch-field "message" (header &optional not-all))
 (declare-function message-narrow-to-head-1 "message" nil)
-(declare-function nnimap-group-overview-filename "nnimap" (group server))
 ;; The following line suppresses a compiler warning stemming from gnus-sum.el
 (declare-function gnus-summary-last-subject "gnus-sum" nil)
 ;; Customization variables
@@ -60,7 +59,7 @@ Normally, this translation is done by querying the IMAP server,
 which is usually very fast.  Unfortunately, some (maybe badly
 configured) IMAP servers don't support this operation quickly.
 So if following a link to a Gnus article takes ages, try setting
-this variable to `t'."
+this variable to t."
   :group 'org-link-store
   :version "24.1"
   :type 'boolean)
@@ -78,6 +77,8 @@ this variable to `t'."
 
 ;; Implementation
 
+;; FIXME: nnimap-group-overview-filename was removed from Gnus in
+;; September 2010.  Perhaps remove this function?
 (defun org-gnus-nnimap-cached-article-number (group server message-id)
   "Return cached article number (uid) of message in GROUP on SERVER.
 MESSAGE-ID is the message-id header field that identifies the
@@ -291,7 +292,7 @@ If `org-store-link' was called with a prefix arg the meaning of
 	(group (gnus-group-jump-to-group group))))
 
 (defun org-gnus-no-new-news ()
-  "Like `M-x gnus' but doesn't check for new news."
+  "Like `\\[gnus]' but doesn't check for new news."
   (if (not (gnus-alive-p)) (if org-gnus-no-server (gnus-no-server) (gnus))))
 
 (provide 'org-gnus)

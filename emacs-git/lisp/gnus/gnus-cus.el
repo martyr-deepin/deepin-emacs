@@ -1,6 +1,6 @@
 ;;; gnus-cus.el --- customization commands for Gnus
 
-;; Copyright (C) 1996, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996, 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Keywords: news
@@ -272,7 +272,7 @@ DOC is a documentation string for the parameter.")
                (repeat (list (string :format "%v" :tag "File name"))))
        "Which score files to use when using score to select articles to fetch.
 
-    `nil'
+    nil
          All articles will be scored to zero (0).
 
     `file'
@@ -416,7 +416,7 @@ category."))
       ;; Decode values posting-style holds.
       (dolist (style (cdr (assq 'posting-style values)))
 	(when (stringp (cadr style))
-	  (setcdr style (list (mm-decode-coding-string (cadr style) 'utf-8)))))
+	  (setcdr style (list (decode-coding-string (cadr style) 'utf-8)))))
 
       (setq gnus-custom-params
             (apply 'widget-create 'group
@@ -436,7 +436,7 @@ to the groups in this topic, then edit the value to suit your taste."
                                        :greedy t
                                        :tag "Agent Parameters"
                                        :format "%t:\n%h%v"
-                                       :doc "\ These agent parameters are
+                                       :doc "These agent parameters are
 recognized by Gnus.  They control article selection and expiration for
 use in the unplugged cache.  Check the [ ] for the parameters you want
 to apply to this group or to the groups in this topic, then edit the
@@ -492,7 +492,7 @@ form, but who cares?"
     ;; Encode values posting-style holds.
     (dolist (style (cdr (assq 'posting-style params)))
       (when (stringp (cadr style))
-	(setcdr style (list (mm-encode-coding-string (cadr style) 'utf-8)))))
+	(setcdr style (list (encode-coding-string (cadr style) 'utf-8)))))
     (if gnus-custom-topic
 	(gnus-topic-set-parameters gnus-custom-topic params)
       (gnus-group-edit-group-done 'params gnus-custom-group params)

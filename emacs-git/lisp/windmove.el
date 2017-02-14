@@ -1,6 +1,6 @@
 ;;; windmove.el --- directional window-selection routines
 ;;
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Hovav Shacham (hovav@cs.stanford.edu)
 ;; Created: 17 October 1998
@@ -488,8 +488,8 @@ If no window is at direction DIR, an error is signaled."
 
 
 ;;; end-user functions
-;; these are all simple interactive wrappers to `windmove-do-
-;; window-select', meant to be bound to keys.
+;; these are all simple interactive wrappers to
+;; `windmove-do-window-select', meant to be bound to keys.
 
 ;;;###autoload
 (defun windmove-left (&optional arg)
@@ -546,7 +546,7 @@ If no window is at the desired location, an error is signaled."
 (defun windmove-default-keybindings (&optional modifier)
   "Set up keybindings for `windmove'.
 Keybindings are of the form MODIFIER-{left,right,up,down}.
-Default MODIFIER is 'shift."
+Default MODIFIER is `shift'."
   (interactive)
   (unless modifier (setq modifier 'shift))
   (global-set-key (vector (list modifier 'left))  'windmove-left)

@@ -1254,7 +1254,7 @@
 2015-03-01  Lars Magne Ingebrigtsen  <larsi@gnus.org>
 
 	* net/shr.el (shr-insert): Remove soft hyphens.
-	(shr-insert): Also remove soft hypens from non-folded text.
+	(shr-insert): Also remove soft hyphens from non-folded text.
 
 2015-02-28  Eli Zaretskii  <eliz@gnu.org>
 
@@ -1758,7 +1758,7 @@
 
 	* net/shr.el (shr-insert): Make sure the space inserted has the
 	right font (for width).
-	(shr-fill-line): Preserve background colours when indenting/folding.
+	(shr-fill-line): Preserve background colors when indenting/folding.
 	(shr-ensure-paragraph): Don't insert a new paragraph as the first
 	item in a <li>.
 
@@ -3737,7 +3737,7 @@
 	* net/tramp.el (tramp-read-passwd): Ignore errors from `auth-source-*'.
 
 	* net/tramp-sh.el (tramp-do-copy-or-rename-file-out-of-band): Use "\n"
-	as end-of-line delimeter for passwords, when running on MS Windows.
+	as end-of-line delimiter for passwords, when running on MS Windows.
 
 2014-12-27  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -3951,7 +3951,8 @@
 
 2014-12-22  Artur Malabarba  <bruce.connor.am@gmail.com>
 
-	* let-alist.el (let-alist): Use `make-symbol' instead of `gensym'.
+	* emacs-lisp/let-alist.el (let-alist): Use `make-symbol'
+	instead of `gensym'.
 
 2014-12-20  Michael Albinus  <michael.albinus@gmx.de>
 
@@ -3963,7 +3964,7 @@
 
 2014-12-19  Artur Malabarba  <bruce.connor.am@gmail.com>
 
-	* let-alist.el (let-alist): Enable access to deeper alists by
+	* emacs-lisp/let-alist.el (let-alist): Enable access to deeper alists by
 	using dots inside the dotted symbols.
 
 2014-12-19  Alan Mackenzie  <acm@muc.de>
@@ -4005,7 +4006,7 @@
 
 2014-12-18  Artur Malabarba  <bruce.connor.am@gmail.com>
 
-	* let-alist.el (let-alist): Evaluate the `alist' argument only once.
+	* emacs-lisp/let-alist.el (let-alist): Evaluate the `alist' argument only once.
 
 2014-12-18  Sam Steingold  <sds@gnu.org>
 
@@ -4141,12 +4142,12 @@
 
 2014-12-14  Artur Malabarba  <bruce.connor.am@gmail.com>
 
-	* let-alist.el: Add lexical binding.
+	* emacs-lisp/let-alist.el: Add lexical binding.
 
 2014-12-14  Steve Purcell  <steve@sanityinc.com>  (tiny change)
 
 	* emacs-lisp/package.el (package-menu-mode): Use an extra column
-	for the "Version" column, to accomodate date-and-time-based versions.
+	for the "Version" column, to accommodate date-and-time-based versions.
 
 2014-12-14  Cameron Desautels  <camdez@gmail.com>
 
@@ -4273,7 +4274,7 @@
 
 2014-12-10  Artur Malabarba  <bruce.connor.am@gmail.com>
 
-	* let-alist.el: Add new package and macro.
+	* emacs-lisp/let-alist.el: Add new package and macro.
 
 2014-12-10  Eric S. Raymond  <esr@snark.thyrsus.com>
 
@@ -4436,7 +4437,7 @@
 
 2014-12-07  Lars Magne Ingebrigtsen  <larsi@gnus.org>
 
-	* net/eww.el (eww-follow-link): Revert prefix behaviour to
+	* net/eww.el (eww-follow-link): Revert prefix behavior to
 	previous behavior.
 	(eww-copy-page-url): Add doc string.
 
@@ -6025,7 +6026,7 @@
 
 2014-11-01  Michael R. Mauger  <michael@mauger.com>
 
-	* sql.el (sql-mode-oracle-font-lock-keywords): Correct regexp
+	* progmodes/sql.el (sql-mode-oracle-font-lock-keywords): Correct regexp
 	syntax, add new keywords, and parse longer keywords first.
 	(sql-redirect-one): Protect against empty command.
 	(sql-mode, sql-interactive-mode): Set `custom-mode-group' property
@@ -6033,7 +6034,7 @@
 
 2014-11-01  Michael R. Mauger  <michael@mauger.com>
 
-	* sql.el (sql-interactive-mode, sql-stop): Correct fix for
+	* progmodes/sql.el (sql-interactive-mode, sql-stop): Correct fix for
 	Bug#16814 with let-bind of comint-input-ring variables around read
 	and save functions.
 
@@ -6834,7 +6835,7 @@
 	console as well (bug#18629).
 	* w32-common-fns.el: Remove.
 	* loadup.el: Don't load w32-common-fns.el.
-	* w32-fns.elc: Don't require w32-common-fns.
+	* w32-fns.el: Don't require w32-common-fns.
 
 	* icomplete.el: Move Iswitchb autoload here.  Much simpler.
 	* obsolete/iswitchb.el (iswitchb-mode): Use normal autoload cookie.
@@ -8032,7 +8033,7 @@
 2014-08-24  Alan Mackenzie  <acm@muc.de>
 
 	Handle C++11's "auto" and "decltype" constructions.
-	* progmodes/cc-engine.el (c-forward-type): Enhance to recognise
+	* progmodes/cc-engine.el (c-forward-type): Enhance to recognize
 	and return 'decltype.
 	(c-forward-decl-or-cast-1): New let variables backup-kwd-sym,
 	prev-kwd-sym, new-style-auto.  Enhance to handle the new "auto"
@@ -8700,9 +8701,9 @@
 	(python-shell-prompt-detect)
 	(python-shell-prompt-validate-regexps): New functions.
 	(python-shell-prompt-set-calculated-regexps): New function.
-	(inferior-python-mode): Use it.  Also honor overriden
+	(inferior-python-mode): Use it.  Also honor overridden
 	python-shell-interpreter and python-shell-interpreter-args.
-	(python-shell-make-comint): Honor overriden
+	(python-shell-make-comint): Honor overridden
 	python-shell-interpreter and python-shell-interpreter-args.
 	(python-shell-get-or-create-process): Make it testable by allowing
 	to call run-python non-interactively.
@@ -9139,7 +9140,7 @@
 2014-06-30  Grégoire Jadi  <daimrod@gmail.com>
 
 	* net/rcirc.el (rcirc-buffer-process): Restore previous
-	behaviour.  (Bug#17772)
+	behavior.  (Bug#17772)
 
 2014-06-29  Alan Mackenzie  <acm@muc.de>
 
@@ -10383,13 +10384,13 @@
 	(todo-move-category): Keep the moved category's name unless the
 	file moved to already has a category with that name.  If the
 	numerically last category of the source file was moved, make the
-	first category current to avoid selecting a nonexisting category.
+	first category current to avoid selecting a nonexistent category.
 	(todo-merge-category): Fix implementation to make merging to a
 	category in another file work as documented.  Eliminate now
 	insufficient and unnecessary renaming of archive category, correct
 	document string accordingly, and clarify it.  If the numerically
 	last category of the source file was merged, make the first
-	category current to avoid selecting a nonexisting category.
+	category current to avoid selecting a nonexistent category.
 	(todo-archive-done-item): When there are marked items and point
 	happens to be on an unmarked item, ignore the latter.  Don't leave
 	point below last item after archiving marked items.
@@ -10975,9 +10976,9 @@
 
 	* faces.el (face-spec-recalc): Apply X resources only after the
 	defface spec has been applied. Thus, X resources are no longer
-	overriden by the defface spec which also fixes issues on win32 where
+	overridden by the defface spec which also fixes issues on win32 where
 	the toolbar coloring was wrong because it is set through X resources
-	and was (wrongfully) overriden.  (Bug#16694)
+	and was (wrongfully) overridden.  (Bug#16694)
 
 2014-04-30  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -13541,7 +13542,7 @@
 
 	c-parse-state.  Don't "append-lower-brace-pair" in certain
 	circumstances.  Also fix an obscure bug where "\\s!" shouldn't be
-	recognised as a comment.
+	recognized as a comment.
 
 	* progmodes/cc-engine.el (c-state-pp-to-literal): Check for "\\s!"
 	as well as normal comment starter.
@@ -17479,7 +17480,7 @@
 	after a function declaration with only types (no identifiers) in
 	the parentheses.  Also, accept a function declaration with just a
 	type inside the parentheses, if this type can be positively
-	recognised as such, or if a prefix keyword like "explicit" nails
+	recognized as such, or if a prefix keyword like "explicit" nails
 	down the construct as a declaration.
 
 2013-10-19  Eli Zaretskii  <eliz@gnu.org>
@@ -26293,7 +26294,7 @@ See ChangeLog.16 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2015 Free Software Foundation, Inc.
+  Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

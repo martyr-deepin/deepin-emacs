@@ -1,9 +1,8 @@
 ;;; calc-misc.el --- miscellaneous functions for Calc
 
-;; Copyright (C) 1990-1993, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
-;; Maintainer: Jay Belanger <jay.p.belanger@gmail.com>
 
 ;; This file is part of GNU Emacs.
 
@@ -89,7 +88,7 @@ For use with Embedded mode:
   N  calc-embedded-next.  Advance cursor to next known formula in buffer.
   P  calc-embedded-previous.  Advance cursor to previous known formula.
   U  calc-embedded-update-formula.  Re-evaluate formula at point.
-  `  calc-embedded-edit.  Use calc-edit to edit formula at point.
+  \\=`  calc-embedded-edit.  Use calc-edit to edit formula at point.
 
 Documentation:
   I  calc-info.  Read the Calculator manual in the Emacs Info system.
@@ -225,7 +224,7 @@ Calc user interface as before (either C-x * C or C-x * K; initially C-x * C).
 	   "Letter keys: SHIFT + Num-eval; More-recn; eXec-kbd-macro; Keep-args"
 	   "Other keys: +, -, *, /, ^, \\ (int div), : (frac div)"
 	   "Other keys: & (1/x), | (concat), % (modulo), ! (factorial)"
-	   "Other keys: ' (alg-entry), = (eval), ` (edit); M-RET (last-args)"
+	   "Other keys: \\=' (alg-entry), = (eval), \\=` (edit); M-RET (last-args)"
 	   "Other keys: SPC/RET (enter/dup), LFD (over); < > (scroll horiz)"
 	   "Other keys: DEL (drop), M-DEL (drop-above); { } (scroll vert)"
 	   "Other keys: TAB (swap/roll-dn), M-TAB (roll-up)"
@@ -253,11 +252,12 @@ Calc user interface as before (either C-x * C or C-x * K; initially C-x * C).
                   0))
           (let ((msg (nth calc-help-phase msgs)))
             (message "%s" (if msg
-                              (concat msg ":"
+                              (concat (substitute-command-keys msg) ":"
                                       (make-string (- (apply 'max
                                                              (mapcar 'length
                                                                      msgs))
-                                                      (length msg)) 32)
+                                                      (length msg))
+						   ?\ )
                                       "  [?=MORE]")
                             ""))))))))
 
@@ -623,7 +623,7 @@ loaded and the keystroke automatically re-typed."
       (unwind-protect
 	  (progn
 	    (sit-for 2)
-	    (identity 1)   ; this forces a call to QUIT; in bytecode.c.
+	    (identity 1)   ; This forces a call to maybe_quit in bytecode.c.
 	    (setq okay t))
 	(progn
 	  (delete-region savemax (point-max))
@@ -952,7 +952,7 @@ Prompts for bug subject.  Leaves you in a mail buffer."
 				nil nil nil
 				"Please describe exactly what actions triggered the bug and the
 precise symptoms of the bug.  If possible, include a backtrace by
-doing 'M-x toggle-debug-on-error', then reproducing the bug.
+doing `\\[toggle-debug-on-error]', then reproducing the bug.
 " )))
 ;;;###autoload
 (defalias 'calc-report-bug 'report-calc-bug)

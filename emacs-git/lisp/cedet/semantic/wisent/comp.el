@@ -1,6 +1,6 @@
 ;;; semantic/wisent/comp.el --- GNU Bison for Emacs - Grammar compiler
 
-;; Copyright (C) 1984, 1986, 1989, 1992, 1995, 2000-2007, 2009-2015 Free
+;; Copyright (C) 1984, 1986, 1989, 1992, 1995, 2000-2007, 2009-2017 Free
 ;; Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
@@ -187,8 +187,10 @@ If optional LEFT is non-nil insert spaces on left."
 (defvar wisent-new-log-flag nil
   "Non-nil means to start a new report.")
 
-(defvar wisent-verbose-flag nil
-  "*Non-nil means to report verbose information on generated parser.")
+(defcustom wisent-verbose-flag nil
+  "Non-nil means to report verbose information on generated parser."
+  :group 'wisent
+  :type 'boolean)
 
 (defun wisent-toggle-verbose-flag ()
   "Toggle whether to report verbose information on generated parser."
@@ -230,11 +232,11 @@ Its name is defined in constant `wisent-log-buffer-name'."
 
 (defsubst wisent-log (&rest args)
   "Insert text into the log buffer.
-`format' is applied to ARGS and the result string is inserted into the
+`format-message' is applied to ARGS and the result string is inserted into the
 log buffer returned by the function `wisent-log-buffer'."
   (and wisent-new-log-flag (wisent-new-log))
   (with-current-buffer (wisent-log-buffer)
-    (insert (apply 'format args))))
+    (insert (apply #'format-message args))))
 
 (defconst wisent-log-file "wisent.output"
   "The log file.
@@ -915,7 +917,7 @@ An NVARS by NRULES matrix of bits indicating which rules can help
 derive the beginning of the data for each nonterminal.  For example,
 if symbol 5 can be derived as the sequence of symbols 8 3 20, and one
 of the rules for deriving symbol 8 is rule 4, then the
-\[5 - NTOKENS, 4] bit in FDERIVES is set."
+[5 - NTOKENS, 4] bit in FDERIVES is set."
   (let (i j k)
     (setq fderives (make-vector nvars nil))
     (setq i 0)
@@ -2261,12 +2263,14 @@ tables so that there is no longer a conflict."
         (setq i (1+ i))))
     rrc-count))
 
-(defvar wisent-expected-conflicts nil
-  "*If non-nil suppress the warning about shift/reduce conflicts.
+(defcustom wisent-expected-conflicts nil
+  "If non-nil suppress the warning about shift/reduce conflicts.
 It is a decimal integer N that says there should be no warning if
 there are N shift/reduce conflicts and no reduce/reduce conflicts.  A
 warning is given if there are either more or fewer conflicts, or if
-there are any reduce/reduce conflicts.")
+there are any reduce/reduce conflicts."
+  :group 'wisent
+  :type '(choice (const nil) integer))
 
 (defun wisent-total-conflicts ()
   "Report the total number of conflicts."
@@ -2892,7 +2896,7 @@ Also warn if X is a $N or $regionN symbol with N < 1 or N > M."
   "Parse BODY of semantic action.
 N is the maximum number of $N variables that can be referenced in
 BODY.  Warn on references out of permitted range.
-Optional argument FOUND is the accumulated list of '$N' references
+Optional argument FOUND is the accumulated list of $N references
 encountered so far.
 Return a cons (FOUND . XBODY), where FOUND is the list of $N
 references found in BODY, and XBODY is BODY expression with

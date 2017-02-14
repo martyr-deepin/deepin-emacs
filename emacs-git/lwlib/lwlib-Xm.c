@@ -1,6 +1,6 @@
 /* The lwlib interface to Motif widgets.
 
-Copyright (C) 1994-1997, 1999-2015 Free Software Foundation, Inc.
+Copyright (C) 1994-1997, 1999-2017 Free Software Foundation, Inc.
 Copyright (C) 1992 Lucid, Inc.
 
 This file is part of the Lucid Widget Library.
@@ -22,6 +22,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <setjmp.h>
 
 #include <X11/StringDefs.h>

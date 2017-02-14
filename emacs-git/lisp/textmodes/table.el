@@ -1,6 +1,6 @@
 ;;; table.el --- create and edit WYSIWYG text based embedded tables  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Keywords: wp, convenience
 ;; Author: Takaaki Ota <Takaaki.Ota@am.sony.com>
@@ -570,7 +570,7 @@
 ;; Maybe provide complete XEmacs support in the future however the
 ;; "extent" is the single largest obstacle lying ahead, read the
 ;; document in Emacs info.
-;; (eval '(progn (require 'info) (Info-find-node "elisp" "Not Intervals")))
+;; (progn (require 'info) (Info-find-node "elisp" "Not Intervals"))
 ;;
 ;;
 ;; ---------------
@@ -641,7 +641,7 @@
   "Text based table manipulation utilities."
   :tag "Table"
   :prefix "table-"
-  :group 'wp
+  :group 'text
   :version "22.1")
 
 (defgroup table-hooks nil
@@ -936,6 +936,7 @@ This is always set to nil at the entry to `table-with-cache-buffer' before execu
     ([(shift backtab)]	. table-backward-cell) ; for HPUX console keyboard
     ([(shift iso-lefttab)]    . table-backward-cell) ; shift-tab on a microsoft natural keyboard and redhat linux
     ([(shift tab)]	. table-backward-cell)
+    ([backtab]          . table-backward-cell) ; for terminals (e.g., xterm)
     ([return]		. *table--cell-newline)
     ([(control m)]	. *table--cell-newline)
     ([(control j)]	. *table--cell-newline-and-indent)
@@ -1893,7 +1894,9 @@ all the table specific features."
 	    (while (and (re-search-forward border3 (point-max) t)
 			(not (and (input-pending-p)
 				  table-abort-recognition-when-input-pending)))
-	      (message "Recognizing tables...(%d%%)" (/ (* 100 (match-beginning 0)) (- (point-max) (point-min))))
+	      (message "Recognizing tables...(%d%%)"
+		       (floor (* 100.0 (match-beginning 0))
+			      (- (point-max) (point-min))))
 	      (let ((beg (match-beginning 0))
 		    end)
 		(if (re-search-forward non-border (point-max) t)
@@ -2804,8 +2807,8 @@ ORIENTATION is a symbol either horizontally or vertically."
 ;;;###autoload
 (defun table-justify (what justify)
   "Justify contents of a cell, a row of cells or a column of cells.
-WHAT is a symbol 'cell, 'row or 'column.  JUSTIFY is a symbol 'left,
-'center, 'right, 'top, 'middle, 'bottom or 'none."
+WHAT is a symbol `cell', `row' or `column'.  JUSTIFY is a symbol
+`left', `center', `right', `top', `middle', `bottom' or `none'."
   (interactive
    (list (let* ((_ (barf-if-buffer-read-only))
 		(completion-ignore-case t)
@@ -2820,8 +2823,8 @@ WHAT is a symbol 'cell, 'row or 'column.  JUSTIFY is a symbol 'left,
 ;;;###autoload
 (defun table-justify-cell (justify &optional paragraph)
   "Justify cell contents.
-JUSTIFY is a symbol 'left, 'center or 'right for horizontal, or 'top,
-'middle, 'bottom or 'none for vertical.  When optional PARAGRAPH is
+JUSTIFY is a symbol `left', `center' or `right' for horizontal, or `top',
+`middle', `bottom' or `none' for vertical.  When optional PARAGRAPH is
 non-nil the justify operation is limited to the current paragraph,
 otherwise the entire cell contents is justified."
   (interactive
@@ -2833,8 +2836,8 @@ otherwise the entire cell contents is justified."
 ;;;###autoload
 (defun table-justify-row (justify)
   "Justify cells of a row.
-JUSTIFY is a symbol 'left, 'center or 'right for horizontal, or top,
-'middle, 'bottom or 'none for vertical."
+JUSTIFY is a symbol `left', `center' or `right' for horizontal,
+or `top', `middle', `bottom' or `none' for vertical."
   (interactive
    (list (table--query-justification)))
   (let((cell-list (table--horizontal-cell-list nil nil 'top)))
@@ -2850,8 +2853,8 @@ JUSTIFY is a symbol 'left, 'center or 'right for horizontal, or top,
 ;;;###autoload
 (defun table-justify-column (justify)
   "Justify cells of a column.
-JUSTIFY is a symbol 'left, 'center or 'right for horizontal, or top,
-'middle, 'bottom or 'none for vertical."
+JUSTIFY is a symbol `left', `center' or `right' for horizontal,
+or `top', `middle', `bottom' or `none' for vertical."
   (interactive
    (list (table--query-justification)))
   (let((cell-list (table--vertical-cell-list nil nil 'left)))
@@ -2936,7 +2939,7 @@ WHERE is provided the cell and table at that location is reported."
 (defun table-generate-source (language &optional dest-buffer caption)
   "Generate source of the current table in the specified language.
 LANGUAGE is a symbol that specifies the language to describe the
-structure of the table.  It must be either 'html, 'latex or 'cals.
+structure of the table.  It must be either `html', `latex' or `cals'.
 The resulted source text is inserted into DEST-BUFFER and the buffer
 object is returned.  When DEST-BUFFER is omitted or nil the default
 buffer specified in `table-dest-buffer-name' is used.  In this case
@@ -2965,8 +2968,7 @@ CALS (DocBook DTD):
 	  (default (car table-source-language-history))
 	  (language (downcase (completing-read
 			       (format "Language (default %s): " default)
-			       (mapcar (lambda (s) (list (symbol-name s)))
-				       table-source-languages)
+			       table-source-languages
 			       nil t nil 'table-source-language-history default))))
      (list
       (intern language)
@@ -3339,25 +3341,25 @@ INTERVAL is the number of cells to travel between sequence element
 insertion which is normally 1.  When zero or less is given for
 INTERVAL it is interpreted as number of cells per row so that sequence
 is placed straight down vertically as long as the table's cell
-structure is uniform.  JUSTIFY is one of the symbol 'left, 'center or
-'right, that specifies justification of the inserted string.
+structure is uniform.  JUSTIFY is a symbol `left', `center' or
+`right' that specifies justification of the inserted string.
 
 Example:
 
   (progn
     (table-insert 16 3 5 1)
     (table-forward-cell 15)
-    (table-insert-sequence \"D0\" -16 1 1 'center)
+    (table-insert-sequence \"D0\" -16 1 1 \\='center)
     (table-forward-cell 16)
-    (table-insert-sequence \"A[0]\" -16 1 1 'center)
+    (table-insert-sequence \"A[0]\" -16 1 1 \\='center)
     (table-forward-cell 1)
-    (table-insert-sequence \"-\" 16 0 1 'center))
+    (table-insert-sequence \"-\" 16 0 1 \\='center))
 
   (progn
     (table-insert 16 8 5 1)
-    (table-insert-sequence \"@\" 0 1 2 'right)
+    (table-insert-sequence \"@\" 0 1 2 \\='right)
     (table-forward-cell 1)
-    (table-insert-sequence \"64\" 0 1 2 'left))"
+    (table-insert-sequence \"64\" 0 1 2 \\='left))"
   (interactive
    (progn
      (barf-if-buffer-read-only)
@@ -3559,7 +3561,7 @@ delimiter regular expressions.  This parsing determines the number of
 columns and rows of the table automatically.  If COL-DELIM-REGEXP and
 ROW-DELIM-REGEXP are omitted the result table has only one cell and
 the entire region contents is placed in that cell.  Optional JUSTIFY
-is one of 'left, 'center or 'right, which specifies the cell
+is one of `left', `center' or `right', which specifies the cell
 justification.  Optional MIN-CELL-WIDTH specifies the minimum cell
 width.  Optional COLUMNS specify the number of columns when
 ROW-DELIM-REGEXP is not specified.
@@ -4459,8 +4461,8 @@ looking at the appearance of the CELL contents."
 
 (defun table--justify-cell-contents (justify &optional paragraph)
   "Justify the current cell contents.
-JUSTIFY is a symbol 'left, 'center or 'right for horizontal, or 'top,
-'middle, 'bottom or 'none for vertical.  When PARAGRAPH is non-nil the
+JUSTIFY is a symbol `left', `center' or `right' for horizontal, or `top',
+`middle', `bottom' or `none' for vertical.  When PARAGRAPH is non-nil the
 justify operation is limited to the current paragraph."
   (table-with-cache-buffer
     (let ((beg (point-min))

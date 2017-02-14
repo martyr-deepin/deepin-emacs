@@ -1,12 +1,12 @@
 /* Utility and Unix shadow routines for GNU Emacs support programs on NT.
-   Copyright (C) 1994, 2002-2015 Free Software Foundation, Inc.
+   Copyright (C) 1994, 2002-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -34,15 +34,12 @@ char *getwd (char *dir);
 int getppid (void);
 char * getlogin (void);
 char * cuserid (char * s);
-unsigned getuid (void);
-unsigned geteuid (void);
 unsigned getegid (void);
 unsigned getgid (void);
 int setuid (unsigned uid);
 int setregid (unsigned rgid, unsigned gid);
 char * getpass (const char * prompt);
 int fchown (int fd, unsigned uid, unsigned gid);
-int mkostemp (char * template, int flags);
 
 /* redirect or undo interceptions created by config.h */
 #undef access
@@ -102,4 +99,3 @@ int mkostemp (char * template, int flags);
 #undef _WINSOCK_H
 
 /* end of ntlib.h */
-

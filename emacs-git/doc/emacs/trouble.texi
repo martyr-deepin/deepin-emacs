@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2017 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @iftex
@@ -78,8 +78,8 @@ actually executed as a command if you type it while Emacs is waiting for
 input.  In that case, the command it runs is @code{keyboard-quit}.
 
   On a text terminal, if you quit with @kbd{C-g} a second time before
-the first @kbd{C-g} is recognized, you activate the ``emergency
-escape'' feature and return to the shell.  @xref{Emergency Escape}.
+the first @kbd{C-g} is recognized, you activate the emergency-escape
+feature and return to the shell.  @xref{Emergency Escape}.
 
 @cindex NFS and quitting
   There are some situations where you cannot quit.  When Emacs is
@@ -118,7 +118,7 @@ it executes as an ordinary command, and Emacs doesn't notice it until
 it is ready for the next command.
 
 @findex top-level
-  The command @kbd{M-x top-level} is equivalent to ``enough''
+  The command @kbd{M-x top-level} is equivalent to enough
 @kbd{C-]} commands to get you out of all the levels of recursive edits
 that you are in; it also exits the minibuffer if it is active.
 @kbd{C-]} gets you out one level at a time, but @kbd{M-x top-level}
@@ -417,19 +417,22 @@ first @kbd{C-g} properly, then the second one will get you back to the
 shell.
 
   When you resume Emacs after a suspension caused by emergency escape,
-it asks two questions before going back to what it had been doing:
+it reports the resumption and asks a question or two before going back
+to what it had been doing:
 
 @example
+Emacs is resuming after an emergency escape.
 Auto-save? (y or n)
 Abort (and dump core)? (y or n)
 @end example
 
 @noindent
-Answer each one with @kbd{y} or @kbd{n} followed by @key{RET}.
+Answer each question with @kbd{y} or @kbd{n} followed by @key{RET}.
 
   Saying @kbd{y} to @samp{Auto-save?} causes immediate auto-saving of
 all modified buffers in which auto-saving is enabled.  Saying @kbd{n}
-skips this.
+skips this.  This question is omitted if Emacs is in a state where
+auto-saving cannot be done safely.
 
   Saying @kbd{y} to @samp{Abort (and dump core)?} causes Emacs to
 crash, dumping core.  This is to enable a wizard to figure out why
@@ -486,10 +489,6 @@ file contains a list of particularly well-known issues that have been
 encountered in compiling, installing and running Emacs.  Often, there
 are suggestions for workarounds and solutions.
 
-@item
-Some additional user-level problems can be found in @ref{Bugs and
-problems, , Bugs and problems, efaq, GNU Emacs FAQ}.
-
 @cindex bug tracker
 @item
 The GNU Bug Tracker at @url{http://debbugs.gnu.org}.  Emacs bugs are
@@ -511,7 +510,7 @@ by the Emacs maintainers, are shown by @kbd{M-x debbugs-gnu-usertags}.
 The @samp{bug-gnu-emacs} mailing list (also available as the newsgroup
 @samp{gnu.emacs.bug}).  You can read the list archives at
 @url{http://lists.gnu.org/mailman/listinfo/bug-gnu-emacs}.  This list
-works as a ``mirror'' of the Emacs bug reports and follow-up messages
+works as a mirror of the Emacs bug reports and follow-up messages
 which are sent to the bug tracker.  It also contains old bug reports
 from before the bug tracker was introduced (in early 2008).
 
@@ -542,10 +541,10 @@ not feel obliged to read this list before reporting a bug.
 @cindex bug criteria
 @cindex what constitutes an Emacs bug
 
-  If Emacs accesses an invalid memory location (``segmentation
-fault''), or exits with an operating system error message that
-indicates a problem in the program (as opposed to something like
-``disk full''), then it is certainly a bug.
+  If Emacs accesses an invalid memory location (a.k.a.@:
+``segmentation fault'') or exits with an operating system error
+message that indicates a problem in the program (as opposed to
+something like ``disk full''), then it is certainly a bug.
 
   If the Emacs display does not correspond properly to the contents of
 the buffer, then it is a bug.  But you should check that features like
@@ -622,7 +621,7 @@ large file, and Emacs displayed @samp{I feel pretty today}.''  This is
 what we mean by ``guessing explanations''.  The problem might be due
 to the fact that there is a @samp{z} in the file name.  If this is so,
 then when we got your report, we would try out the problem with some
-``large file'', probably with no @samp{z} in its name, and not see any
+large file, probably with no @samp{z} in its name, and not see any
 problem.  There is no way we could guess that we should try visiting a
 file with a @samp{z} in its name.
 
@@ -1069,7 +1068,7 @@ send it to the developers.  Sending it to
 recommended, because that list is coupled to a tracking system that
 makes it easier to locate patches.  If your patch is not complete and
 you think it needs more discussion, you might want to send it to
-@email{emacs-devel@@gnu@@gnu.org} instead.  If you revise your patch,
+@email{emacs-devel@@gnu.org} instead.  If you revise your patch,
 send it as a followup to the initial topic.
 
 We prefer to get the patches as plain text, either inline (be careful
@@ -1134,7 +1133,8 @@ The patch itself.
 Use @samp{diff -u} to make your diffs.  Diffs without context are hard
 to install reliably.  More than that, they are hard to study; we must
 always study a patch to decide whether we want to install it.  Context
-format is better than contextless diffs, but we prefer we unified format.
+format is better than contextless diffs, but we prefer the unified
+format.
 
 If you have GNU diff, use @samp{diff -u -F'^[_a-zA-Z0-9$]\+ *('} when
 making diffs of C code.  This shows the name of the function that each
@@ -1179,7 +1179,7 @@ see
 @url{http://www.gnu.org/prep/standards/html_node/Change-Log-Concepts.html},
 @end ifset
 @xref{Change Log Concepts, Change Log Concepts,
-Change Log Concepts, gnu-coding-standards, GNU Coding Standards}.
+Change Log Concepts, standards, GNU Coding Standards}.
 
 @item
 When you write the fix, keep in mind that we can't install a change that
@@ -1349,21 +1349,21 @@ Emacs has additional style and coding conventions:
 @item
 @ifset WWW_GNU_ORG
 @ifhtml
-the "Tips" Appendix in the Emacs Lisp Reference
+the ``Tips and Conventions'' Appendix in the Emacs Lisp Reference
 @url{http://www.gnu.org/software/emacs/manual/html_node/elisp/Tips.html}.
 @end ifhtml
 @ifnothtml
-@xref{Tips, "Tips" Appendix in the Emacs Lisp Reference, Tips
+@xref{Tips, ``Tips and Conventions'' Appendix in the Emacs Lisp Reference, Tips
 Appendix, elisp, Emacs Lisp Reference}.
 @end ifnothtml
 @end ifset
 @ifclear WWW_GNU_ORG
-@xref{Tips, "Tips" Appendix in the Emacs Lisp Reference, Tips
+@xref{Tips, ``Tips and Conventions'' Appendix in the Emacs Lisp Reference, Tips
 Appendix, elisp, Emacs Lisp Reference}.
 @end ifclear
 
 @item
-Avoid using @code{defadvice} or @code{eval-after-load} for Lisp code
+Avoid using @code{defadvice} or @code{with-eval-after-load} for Lisp code
 to be included in Emacs.
 
 @item
@@ -1402,7 +1402,7 @@ See gnu-misc-discuss instead.)
 
 A copyright disclaimer is also a possibility, but we prefer an assignment.
 Note that the disclaimer, like an assignment, involves you sending
-signed paperwork to the FSF (simply saying "this is in the public domain"
+signed paperwork to the FSF (simply saying ``this is in the public domain''
 is not enough).  Also, a disclaimer cannot be applied to future work, it
 has to be repeated each time you want to send something new.
 

@@ -1,13 +1,13 @@
 /* Interfaces to system-dependent kernel and library entries.
-   Copyright (C) 1985-1988, 1993-1995, 1999-2015 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1999-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -19,14 +19,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
-/* If HYBRID_GET_CURRENT_DIR_NAME is defined in conf_post.h, then we
-   need the following before including unistd.h, in order to pick up
-   the right prototype for gget_current_dir_name.  */
-#ifdef HYBRID_GET_CURRENT_DIR_NAME
-#undef get_current_dir_name
-#define get_current_dir_name gget_current_dir_name
-#endif
-
 #include <execinfo.h>
 #include "sysstdio.h"
 #ifdef HAVE_PWD_H
@@ -34,12 +26,14 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <grp.h>
 #endif /* HAVE_PWD_H */
 #include <limits.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include <c-ctype.h>
 #include <utimens.h>
 
 #include "lisp.h"
+#include "sheap.h"
 #include "sysselect.h"
 #include "blockinput.h"
 
@@ -57,14 +51,19 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 # include <math.h>
 #endif
 
+#ifdef HAVE_SOCKETS
+#include <sys/socket.h>
+#include <netdb.h>
+#endif /* HAVE_SOCKETS */
+
 #ifdef WINDOWSNT
 #define read sys_read
 #define write sys_write
 #ifndef STDERR_FILENO
 #define STDERR_FILENO fileno(GetStdHandle(STD_ERROR_HANDLE))
 #endif
-#include <windows.h>
-#endif /* not WINDOWSNT */
+#include "w32.h"
+#endif /* WINDOWSNT */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -79,9 +78,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "msdos.h"
 #endif
 
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
-#endif
 #include <sys/param.h>
 #include <sys/file.h>
 #include <fcntl.h>
@@ -96,20 +92,27 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "keyboard.h"
 #include "frame.h"
-#include "window.h"
 #include "termhooks.h"
 #include "termchar.h"
 #include "termopts.h"
-#include "dispextern.h"
 #include "process.h"
-#include "cm.h"  /* for reset_sys_modes */
+#include "cm.h"
+
+#include "gnutls.h"
+/* MS-Windows loads GnuTLS at run time, if available; we don't want to
+   do that during startup just to call gnutls_rnd.  */
+#if defined HAVE_GNUTLS && !defined WINDOWSNT
+# include <gnutls/crypto.h>
+#else
+# define emacs_gnutls_global_init() Qnil
+# define gnutls_rnd(level, data, len) (-1)
+#endif
 
 #ifdef WINDOWSNT
 #include <direct.h>
 /* In process.h which conflicts with the local copy.  */
 #define _P_WAIT 0
 int _cdecl _spawnlp (int, const char *, const char *, ...);
-int _cdecl _getpid (void);
 /* The following is needed for O_CLOEXEC, F_SETFD, FD_CLOEXEC, and
    several prototypes of functions called below.  */
 #include <sys/socket.h>
@@ -132,14 +135,97 @@ static const int baud_convert[] =
     1800, 2400, 4800, 9600, 19200, 38400
   };
 
-#if !defined HAVE_GET_CURRENT_DIR_NAME || defined BROKEN_GET_CURRENT_DIR_NAME \
-  || (defined HYBRID_GET_CURRENT_DIR_NAME)
-/* Return the current working directory.  Returns NULL on errors.
-   Any other returned value must be freed with free. This is used
-   only when get_current_dir_name is not defined on the system.  */
-char *
-get_current_dir_name (void)
+#ifdef HAVE_PERSONALITY_ADDR_NO_RANDOMIZE
+# include <sys/personality.h>
+
+/* Disable address randomization in the current process.  Return true
+   if addresses were randomized but this has been disabled, false
+   otherwise. */
+bool
+disable_address_randomization (void)
 {
+  int pers = personality (0xffffffff);
+  if (pers < 0)
+    return false;
+  int desired_pers = pers | ADDR_NO_RANDOMIZE;
+
+  /* Call 'personality' twice, to detect buggy platforms like WSL
+     where 'personality' always returns 0.  */
+  return (pers != desired_pers
+	  && personality (desired_pers) == pers
+	  && personality (0xffffffff) == desired_pers);
+}
+#endif
+
+/* Execute the program in FILE, with argument vector ARGV and environ
+   ENVP.  Return an error number if unsuccessful.  This is like execve
+   except it reenables ASLR in the executed program if necessary, and
+   on error it returns an error number rather than -1.  */
+int
+emacs_exec_file (char const *file, char *const *argv, char *const *envp)
+{
+#ifdef HAVE_PERSONALITY_ADDR_NO_RANDOMIZE
+  int pers = getenv ("EMACS_HEAP_EXEC") ? personality (0xffffffff) : -1;
+  bool change_personality = 0 <= pers && pers & ADDR_NO_RANDOMIZE;
+  if (change_personality)
+    personality (pers & ~ADDR_NO_RANDOMIZE);
+#endif
+
+  execve (file, argv, envp);
+  int err = errno;
+
+#ifdef HAVE_PERSONALITY_ADDR_NO_RANDOMIZE
+  if (change_personality)
+    personality (pers);
+#endif
+
+  return err;
+}
+
+/* If FD is not already open, arrange for it to be open with FLAGS.  */
+static void
+force_open (int fd, int flags)
+{
+  if (dup2 (fd, fd) < 0 && errno == EBADF)
+    {
+      int n = open (NULL_DEVICE, flags);
+      if (n < 0 || (fd != n && (dup2 (n, fd) < 0 || emacs_close (n) != 0)))
+	{
+	  emacs_perror (NULL_DEVICE);
+	  exit (EXIT_FAILURE);
+	}
+    }
+}
+
+/* Make sure stdin, stdout, and stderr are open to something, so that
+   their file descriptors are not hijacked by later system calls.  */
+void
+init_standard_fds (void)
+{
+  /* Open stdin for *writing*, and stdout and stderr for *reading*.
+     That way, any attempt to do normal I/O will result in an error,
+     just as if the files were closed, and the file descriptors will
+     not be reused by later opens.  */
+  force_open (STDIN_FILENO, O_WRONLY);
+  force_open (STDOUT_FILENO, O_RDONLY);
+  force_open (STDERR_FILENO, O_RDONLY);
+}
+
+/* Return the current working directory.  The result should be freed
+   with 'free'.  Return NULL on errors.  */
+char *
+emacs_get_current_dir_name (void)
+{
+# if HAVE_GET_CURRENT_DIR_NAME && !BROKEN_GET_CURRENT_DIR_NAME
+#  ifdef HYBRID_MALLOC
+  bool use_libc = bss_sbrk_did_unexec;
+#  else
+  bool use_libc = true;
+#  endif
+  if (use_libc)
+    return get_current_dir_name ();
+# endif
+
   char *buf;
   char *pwd = getenv ("PWD");
   struct stat dotstat, pwdstat;
@@ -187,7 +273,6 @@ get_current_dir_name (void)
     }
   return buf;
 }
-#endif
 
 
 /* Discard pending input on all input descriptors.  */
@@ -297,19 +382,23 @@ get_child_status (pid_t child, int *status, int options, bool interruptible)
      so that another thread running glib won't find them.  */
   eassert (child > 0);
 
-  while ((pid = waitpid (child, status, options)) < 0)
+  while (true)
     {
+      /* Note: the MS-Windows emulation of waitpid calls maybe_quit
+	 internally.  */
+      if (interruptible)
+	maybe_quit ();
+
+      pid = waitpid (child, status, options);
+      if (0 <= pid)
+	break;
+
       /* Check that CHILD is a child process that has not been reaped,
 	 and that STATUS and OPTIONS are valid.  Otherwise abort,
 	 as continuing after this internal error could cause Emacs to
 	 become confused and kill innocent-victim processes.  */
       if (errno != EINTR)
 	emacs_abort ();
-
-      /* Note: the MS-Windows emulation of waitpid calls QUIT
-	 internally.  */
-      if (interruptible)
-	QUIT;
     }
 
   /* If successful and status is requested, tell wait_reading_process_output
@@ -474,15 +563,16 @@ void
 sys_subshell (void)
 {
 #ifdef DOS_NT	/* Demacs 1.1.2 91/10/20 Manabu Higashida */
-  int st;
 #ifdef MSDOS
+  int st;
   char oldwd[MAXPATHLEN+1]; /* Fixed length is safe on MSDOS.  */
 #else
   char oldwd[MAX_UTF8_PATH];
-#endif
+#endif	/* MSDOS */
+#else	/* !DOS_NT */
+  int status;
 #endif
   pid_t pid;
-  int status;
   struct save_signal saved_handlers[5];
   char *str = SSDATA (encode_current_directory ());
 
@@ -662,14 +752,6 @@ unrequest_sigio (void)
   interrupts_deferred = 1;
 #endif
 }
-
-void
-ignore_sigio (void)
-{
-#ifdef USABLE_SIGIO
-  signal (SIGIO, SIG_IGN);
-#endif
-}
 
 #ifndef MSDOS
 /* Block SIGCHLD.  */
@@ -688,6 +770,23 @@ block_child_signal (sigset_t *oldset)
 
 void
 unblock_child_signal (sigset_t const *oldset)
+{
+  pthread_sigmask (SIG_SETMASK, oldset, 0);
+}
+
+/* Block SIGINT.  */
+void
+block_interrupt_signal (sigset_t *oldset)
+{
+  sigset_t blocked;
+  sigemptyset (&blocked);
+  sigaddset (&blocked, SIGINT);
+  pthread_sigmask (SIG_BLOCK, &blocked, oldset);
+}
+
+/* Restore previously saved signal mask.  */
+void
+restore_signal_mask (sigset_t const *oldset)
 {
   pthread_sigmask (SIG_SETMASK, oldset, 0);
 }
@@ -913,7 +1012,9 @@ void
 init_sys_modes (struct tty_display_info *tty_out)
 {
   struct emacs_tty tty;
+#ifndef DOS_NT
   Lisp_Object terminal;
+#endif
 
   Vtty_erase_char = Qnil;
 
@@ -1412,6 +1513,12 @@ setup_pty (int fd)
 void
 init_system_name (void)
 {
+  if (!build_details)
+    {
+      /* Set system-name to nil so that the build is deterministic.  */
+      Vsystem_name = Qnil;
+      return;
+    }
   char *hostname_alloc = NULL;
   char *hostname;
 #ifndef HAVE_GETHOSTNAME
@@ -1509,18 +1616,21 @@ emacs_sigaction_init (struct sigaction *action, signal_handler_t handler)
 }
 
 #ifdef FORWARD_SIGNAL_TO_MAIN_THREAD
-static pthread_t main_thread;
+pthread_t main_thread_id;
 #endif
 
 /* SIG has arrived at the current process.  Deliver it to the main
-   thread, which should handle it with HANDLER.
+   thread, which should handle it with HANDLER.  (Delivering the
+   signal to some other thread might not work if the other thread is
+   about to exit.)
 
    If we are on the main thread, handle the signal SIG with HANDLER.
    Otherwise, redirect the signal to the main thread, blocking it from
    this thread.  POSIX says any thread can receive a signal that is
    associated with a process, process group, or asynchronous event.
-   On GNU/Linux that is not true, but for other systems (FreeBSD at
-   least) it is.  */
+   On GNU/Linux the main thread typically gets a process signal unless
+   it's blocked, but other systems (FreeBSD at least) can deliver the
+   signal to other threads.  */
 void
 deliver_process_signal (int sig, signal_handler_t handler)
 {
@@ -1530,13 +1640,13 @@ deliver_process_signal (int sig, signal_handler_t handler)
 
   bool on_main_thread = true;
 #ifdef FORWARD_SIGNAL_TO_MAIN_THREAD
-  if (! pthread_equal (pthread_self (), main_thread))
+  if (! pthread_equal (pthread_self (), main_thread_id))
     {
       sigset_t blocked;
       sigemptyset (&blocked);
       sigaddset (&blocked, sig);
       pthread_sigmask (SIG_BLOCK, &blocked, 0);
-      pthread_kill (main_thread, sig);
+      pthread_kill (main_thread_id, sig);
       on_main_thread = false;
     }
 #endif
@@ -1562,12 +1672,12 @@ deliver_thread_signal (int sig, signal_handler_t handler)
   int old_errno = errno;
 
 #ifdef FORWARD_SIGNAL_TO_MAIN_THREAD
-  if (! pthread_equal (pthread_self (), main_thread))
+  if (! pthread_equal (pthread_self (), main_thread_id))
     {
       thread_backtrace_npointers
 	= backtrace (thread_backtrace_buffer, BACKTRACE_LIMIT_MAX);
       sigaction (sig, &process_fatal_action, 0);
-      pthread_kill (main_thread, sig);
+      pthread_kill (main_thread_id, sig);
 
       /* Avoid further damage while the main thread is exiting.  */
       while (1)
@@ -1623,15 +1733,62 @@ handle_arith_signal (int sig)
   xsignal0 (Qarith_error);
 }
 
-#ifdef HAVE_STACK_OVERFLOW_HANDLING
-
-/* -1 if stack grows down as expected on most OS/ABI variants, 1 otherwise.  */
-
-static int stack_direction;
+#if defined HAVE_STACK_OVERFLOW_HANDLING && !defined WINDOWSNT
 
 /* Alternate stack used by SIGSEGV handler below.  */
 
 static unsigned char sigsegv_stack[SIGSTKSZ];
+
+
+/* Return true if SIGINFO indicates a stack overflow.  */
+
+static bool
+stack_overflow (siginfo_t *siginfo)
+{
+  if (!attempt_stack_overflow_recovery)
+    return false;
+
+  /* In theory, a more-accurate heuristic can be obtained by using
+     GNU/Linux pthread_getattr_np along with POSIX pthread_attr_getstack
+     and pthread_attr_getguardsize to find the location and size of the
+     guard area.  In practice, though, these functions are so hard to
+     use reliably that they're not worth bothering with.  E.g., see:
+     https://sourceware.org/bugzilla/show_bug.cgi?id=16291
+     Other operating systems also have problems, e.g., Solaris's
+     stack_violation function is tailor-made for this problem, but it
+     doesn't work on Solaris 11.2 x86-64 with a 32-bit executable.
+
+     GNU libsigsegv is overkill for Emacs; otherwise it might be a
+     candidate here.  */
+
+  if (!siginfo)
+    return false;
+
+  /* The faulting address.  */
+  char *addr = siginfo->si_addr;
+  if (!addr)
+    return false;
+
+  /* The known top and bottom of the stack.  The actual stack may
+     extend a bit beyond these boundaries.  */
+  char *bot = stack_bottom;
+  char *top = near_C_stack_top ();
+
+  /* Log base 2 of the stack heuristic ratio.  This ratio is the size
+     of the known stack divided by the size of the guard area past the
+     end of the stack top.  The heuristic is that a bad address is
+     considered to be a stack overflow if it occurs within
+     stacksize>>LG_STACK_HEURISTIC bytes above the top of the known
+     stack.  This heuristic is not exactly correct but it's good
+     enough in practice.  */
+  enum { LG_STACK_HEURISTIC = 8 };
+
+  if (bot < top)
+    return 0 <= addr - top && addr - top < (top - bot) >> LG_STACK_HEURISTIC;
+  else
+    return 0 <= top - addr && top - addr < (bot - top) >> LG_STACK_HEURISTIC;
+}
+
 
 /* Attempt to recover from SIGSEGV caused by C stack overflow.  */
 
@@ -1640,28 +1797,15 @@ handle_sigsegv (int sig, siginfo_t *siginfo, void *arg)
 {
   /* Hard GC error may lead to stack overflow caused by
      too nested calls to mark_object.  No way to survive.  */
-  if (!gc_in_progress)
-    {
-      struct rlimit rlim;
+  bool fatal = gc_in_progress;
 
-      if (!getrlimit (RLIMIT_STACK, &rlim))
-	{
-	  enum { STACK_DANGER_ZONE = 16 * 1024 };
-	  char *beg, *end, *addr;
+#ifdef FORWARD_SIGNAL_TO_MAIN_THREAD
+  if (!fatal && !pthread_equal (pthread_self (), main_thread_id))
+    fatal = true;
+#endif
 
-	  beg = stack_bottom;
-	  end = stack_bottom + stack_direction * rlim.rlim_cur;
-	  if (beg > end)
-	    addr = beg, beg = end, end = addr;
-	  addr = (char *) siginfo->si_addr;
-	  /* If we're somewhere on stack and too close to
-	     one of its boundaries, most likely this is it.  */
-	  if (beg < addr && addr < end
-	      && (addr - beg < STACK_DANGER_ZONE
-		  || end - addr < STACK_DANGER_ZONE))
-	    siglongjmp (return_to_command_loop, 1);
-	}
-    }
+  if (!fatal && stack_overflow (siginfo))
+    siglongjmp (return_to_command_loop, 1);
 
   /* Otherwise we can't do anything with this.  */
   deliver_fatal_thread_signal (sig);
@@ -1676,8 +1820,6 @@ init_sigsegv (void)
   struct sigaction sa;
   stack_t ss;
 
-  stack_direction = ((char *) &ss < stack_bottom) ? -1 : 1;
-
   ss.ss_sp = sigsegv_stack;
   ss.ss_size = sizeof (sigsegv_stack);
   ss.ss_flags = 0;
@@ -1690,7 +1832,7 @@ init_sigsegv (void)
   return sigaction (SIGSEGV, &sa, NULL) < 0 ? 0 : 1;
 }
 
-#else /* not HAVE_STACK_OVERFLOW_HANDLING */
+#else /* not HAVE_STACK_OVERFLOW_HANDLING or WINDOWSNT */
 
 static bool
 init_sigsegv (void)
@@ -1698,7 +1840,7 @@ init_sigsegv (void)
   return 0;
 }
 
-#endif /* HAVE_STACK_OVERFLOW_HANDLING */
+#endif /* HAVE_STACK_OVERFLOW_HANDLING && !WINDOWSNT */
 
 static void
 deliver_arith_signal (int sig)
@@ -1750,7 +1892,7 @@ init_signals (bool dumping)
   sigemptyset (&empty_mask);
 
 #ifdef FORWARD_SIGNAL_TO_MAIN_THREAD
-  main_thread = pthread_self ();
+  main_thread_id = pthread_self ();
 #endif
 
 #if !HAVE_DECL_SYS_SIGLIST && !defined _sys_siglist
@@ -2052,36 +2194,64 @@ init_signals (bool dumping)
 # endif /* !HAVE_RANDOM */
 #endif /* !RAND_BITS */
 
+#ifdef HAVE_RANDOM
+typedef unsigned int random_seed;
+static void set_random_seed (random_seed arg) { srandom (arg); }
+#elif defined HAVE_LRAND48
+/* Although srand48 uses a long seed, this is unsigned long to avoid
+   undefined behavior on signed integer overflow in init_random.  */
+typedef unsigned long int random_seed;
+static void set_random_seed (random_seed arg) { srand48 (arg); }
+#else
+typedef unsigned int random_seed;
+static void set_random_seed (random_seed arg) { srand (arg); }
+#endif
+
 void
 seed_random (void *seed, ptrdiff_t seed_size)
 {
-#if defined HAVE_RANDOM || ! defined HAVE_LRAND48
-  unsigned int arg = 0;
-#else
-  long int arg = 0;
-#endif
+  random_seed arg = 0;
   unsigned char *argp = (unsigned char *) &arg;
   unsigned char *seedp = seed;
-  ptrdiff_t i;
-  for (i = 0; i < seed_size; i++)
+  for (ptrdiff_t i = 0; i < seed_size; i++)
     argp[i % sizeof arg] ^= seedp[i];
-#ifdef HAVE_RANDOM
-  srandom (arg);
-#else
-# ifdef HAVE_LRAND48
-  srand48 (arg);
-# else
-  srand (arg);
-# endif
-#endif
+  set_random_seed (arg);
 }
 
 void
 init_random (void)
 {
-  struct timespec t = current_timespec ();
-  uintmax_t v = getpid () ^ t.tv_sec ^ t.tv_nsec;
-  seed_random (&v, sizeof v);
+  random_seed v;
+  bool success = false;
+
+  /* First, try seeding the PRNG from the operating system's entropy
+     source.  This approach is both fast and secure.  */
+#ifdef WINDOWSNT
+  success = w32_init_random (&v, sizeof v) == 0;
+#else
+  int fd = emacs_open ("/dev/urandom", O_RDONLY, 0);
+  if (0 <= fd)
+    {
+      success = emacs_read (fd, &v, sizeof v) == sizeof v;
+      close (fd);
+    }
+#endif
+
+  /* If that didn't work, try using GnuTLS, which is secure, but on
+     some systems, can be somewhat slow.  */
+  if (!success)
+    success = EQ (emacs_gnutls_global_init (), Qt)
+      && gnutls_rnd (GNUTLS_RND_NONCE, &v, sizeof v) == 0;
+
+  /* If _that_ didn't work, just use the current time value and PID.
+     It's at least better than XKCD 221.  */
+  if (!success)
+    {
+      struct timespec t = current_timespec ();
+      v = getpid () ^ t.tv_sec ^ t.tv_nsec;
+    }
+
+  set_random_seed (v);
 }
 
 /*
@@ -2096,8 +2266,8 @@ get_random (void)
   int i;
   for (i = 0; i < (FIXNUM_BITS + RAND_BITS - 1) / RAND_BITS; i++)
     val = (random () ^ (val << RAND_BITS)
-	   ^ (val >> (BITS_PER_EMACS_INT - RAND_BITS)));
-  val ^= val >> (BITS_PER_EMACS_INT - FIXNUM_BITS);
+	   ^ (val >> (EMACS_INT_WIDTH - RAND_BITS)));
+  val ^= val >> (EMACS_INT_WIDTH - FIXNUM_BITS);
   return val & INTMASK;
 }
 
@@ -2217,7 +2387,7 @@ emacs_open (const char *file, int oflags, int mode)
     oflags |= O_BINARY;
   oflags |= O_CLOEXEC;
   while ((fd = open (file, oflags, mode)) < 0 && errno == EINTR)
-    QUIT;
+    maybe_quit ();
   if (! O_CLOEXEC && 0 <= fd)
     fcntl (fd, F_SETFD, FD_CLOEXEC);
   return fd;
@@ -2245,7 +2415,6 @@ emacs_fopen (char const *file, char const *mode)
     switch (*m++)
       {
       case '+': omode = O_RDWR; break;
-      case 'b': bflag = O_BINARY; break;
       case 't': bflag = O_TEXT; break;
       default: /* Ignore.  */ break;
       }
@@ -2291,7 +2460,7 @@ posix_close (int fd, int flag)
      closed, and retrying the close could inadvertently close a file
      descriptor allocated by some other thread.  In other systems
      (e.g., HP/UX) FD is not closed.  And in still other systems
-     (e.g., OS X, Solaris), maybe FD is closed, maybe not, and in a
+     (e.g., macOS, Solaris), maybe FD is closed, maybe not, and in a
      multithreaded program there can be no way to tell.
 
      So, in this case, pretend that the close succeeded.  This works
@@ -2338,83 +2507,118 @@ emacs_close (int fd)
 #define MAX_RW_COUNT (INT_MAX >> 18 << 18)
 #endif
 
-/* Read from FILEDESC to a buffer BUF with size NBYTE, retrying if interrupted.
+/* Read from FD to a buffer BUF with size NBYTE.
+   If interrupted, process any quits and pending signals immediately
+   if INTERRUPTIBLE, and then retry the read unless quitting.
    Return the number of bytes read, which might be less than NBYTE.
-   On error, set errno and return -1.  */
-ptrdiff_t
-emacs_read (int fildes, void *buf, ptrdiff_t nbyte)
+   On error, set errno to a value other than EINTR, and return -1.  */
+static ptrdiff_t
+emacs_intr_read (int fd, void *buf, ptrdiff_t nbyte, bool interruptible)
 {
-  ssize_t rtnval;
+  ssize_t result;
 
   /* There is no need to check against MAX_RW_COUNT, since no caller ever
      passes a size that large to emacs_read.  */
+  do
+    {
+      if (interruptible)
+	maybe_quit ();
+      result = read (fd, buf, nbyte);
+    }
+  while (result < 0 && errno == EINTR);
 
-  while ((rtnval = read (fildes, buf, nbyte)) == -1
-	 && (errno == EINTR))
-    QUIT;
-  return (rtnval);
+  return result;
 }
 
-/* Write to FILEDES from a buffer BUF with size NBYTE, retrying if interrupted
-   or if a partial write occurs.  If interrupted, process pending
-   signals if PROCESS SIGNALS.  Return the number of bytes written, setting
-   errno if this is less than NBYTE.  */
+/* Read from FD to a buffer BUF with size NBYTE.
+   If interrupted, retry the read.  Return the number of bytes read,
+   which might be less than NBYTE.  On error, set errno to a value
+   other than EINTR, and return -1.  */
+ptrdiff_t
+emacs_read (int fd, void *buf, ptrdiff_t nbyte)
+{
+  return emacs_intr_read (fd, buf, nbyte, false);
+}
+
+/* Like emacs_read, but also process quits and pending signals.  */
+ptrdiff_t
+emacs_read_quit (int fd, void *buf, ptrdiff_t nbyte)
+{
+  return emacs_intr_read (fd, buf, nbyte, true);
+}
+
+/* Write to FILEDES from a buffer BUF with size NBYTE, retrying if
+   interrupted or if a partial write occurs.  Process any quits
+   immediately if INTERRUPTIBLE is positive, and process any pending
+   signals immediately if INTERRUPTIBLE is nonzero.  Return the number
+   of bytes written; if this is less than NBYTE, set errno to a value
+   other than EINTR.  */
 static ptrdiff_t
-emacs_full_write (int fildes, char const *buf, ptrdiff_t nbyte,
-		  bool process_signals)
+emacs_full_write (int fd, char const *buf, ptrdiff_t nbyte,
+		  int interruptible)
 {
   ptrdiff_t bytes_written = 0;
 
   while (nbyte > 0)
     {
-      ssize_t n = write (fildes, buf, min (nbyte, MAX_RW_COUNT));
+      ssize_t n = write (fd, buf, min (nbyte, MAX_RW_COUNT));
 
       if (n < 0)
 	{
-	  if (errno == EINTR)
-	    {
-	      /* I originally used `QUIT' but that might cause files to
-		 be truncated if you hit C-g in the middle of it.  --Stef  */
-	      if (process_signals && pending_signals)
-		process_pending_signals ();
-	      continue;
-	    }
-	  else
+	  if (errno != EINTR)
 	    break;
-	}
 
-      buf += n;
-      nbyte -= n;
-      bytes_written += n;
+	  if (interruptible)
+	    {
+	      if (0 < interruptible)
+		maybe_quit ();
+	      if (pending_signals)
+		process_pending_signals ();
+	    }
+	}
+      else
+	{
+	  buf += n;
+	  nbyte -= n;
+	  bytes_written += n;
+	}
     }
 
   return bytes_written;
 }
 
-/* Write to FILEDES from a buffer BUF with size NBYTE, retrying if
-   interrupted or if a partial write occurs.  Return the number of
-   bytes written, setting errno if this is less than NBYTE.  */
+/* Write to FD from a buffer BUF with size NBYTE, retrying if
+   interrupted or if a partial write occurs.  Do not process quits or
+   pending signals.  Return the number of bytes written, setting errno
+   if this is less than NBYTE.  */
 ptrdiff_t
-emacs_write (int fildes, void const *buf, ptrdiff_t nbyte)
+emacs_write (int fd, void const *buf, ptrdiff_t nbyte)
 {
-  return emacs_full_write (fildes, buf, nbyte, 0);
+  return emacs_full_write (fd, buf, nbyte, 0);
 }
 
-/* Like emacs_write, but also process pending signals if interrupted.  */
+/* Like emacs_write, but also process pending signals.  */
 ptrdiff_t
-emacs_write_sig (int fildes, void const *buf, ptrdiff_t nbyte)
+emacs_write_sig (int fd, void const *buf, ptrdiff_t nbyte)
 {
-  return emacs_full_write (fildes, buf, nbyte, 1);
+  return emacs_full_write (fd, buf, nbyte, -1);
+}
+
+/* Like emacs_write, but also process quits and pending signals.  */
+ptrdiff_t
+emacs_write_quit (int fd, void const *buf, ptrdiff_t nbyte)
+{
+  return emacs_full_write (fd, buf, nbyte, 1);
 }
 
 /* Write a diagnostic to standard error that contains MESSAGE and a
    string derived from errno.  Preserve errno.  Do not buffer stderr.
-   Do not process pending signals if interrupted.  */
+   Do not process quits or pending signals if interrupted.  */
 void
 emacs_perror (char const *message)
 {
   int err = errno;
-  char const *error_string = strerror (err);
+  char const *error_string = emacs_strerror (err);
   char const *command = (initial_argv && initial_argv[0]
 			 ? initial_argv[0] : "emacs");
   /* Write it out all at once, if it's short; this is less likely to
@@ -2701,10 +2905,8 @@ Lisp_Object
 list_system_processes (void)
 {
   Lisp_Object procdir, match, proclist, next;
-  struct gcpro gcpro1, gcpro2;
-  register Lisp_Object tail;
+  Lisp_Object tail;
 
-  GCPRO2 (procdir, match);
   /* For every process on the system, there's a directory in the
      "/proc" pseudo-directory whose name is the numeric ID of that
      process.  */
@@ -2719,7 +2921,6 @@ list_system_processes (void)
       next = XCDR (tail);
       XSETCAR (tail, Fstring_to_number (XCAR (tail), Qnil));
     }
-  UNGCPRO;
 
   /* directory_files_internal returns the files in reverse order; undo
      that.  */
@@ -2741,7 +2942,6 @@ list_system_processes (void)
   struct kinfo_proc *procs;
   size_t i;
 
-  struct gcpro gcpro1;
   Lisp_Object proclist = Qnil;
 
   if (sysctl (mib, 3, NULL, &len, NULL, 0) != 0)
@@ -2754,7 +2954,6 @@ list_system_processes (void)
       return proclist;
     }
 
-  GCPRO1 (proclist);
   len /= sizeof (struct kinfo_proc);
   for (i = 0; i < len; i++)
     {
@@ -2764,7 +2963,6 @@ list_system_processes (void)
       proclist = Fcons (make_fixnum_or_float (procs[i].ki_pid), proclist);
 #endif
     }
-  UNGCPRO;
 
   xfree (procs);
 
@@ -2973,17 +3171,14 @@ system_process_attributes (Lisp_Object pid)
   struct timespec tnow, tstart, tboot, telapsed, us_time;
   double pcpu, pmem;
   Lisp_Object attrs = Qnil;
-  Lisp_Object cmd_str, decoded_cmd;
+  Lisp_Object decoded_cmd;
   ptrdiff_t count;
-  struct gcpro gcpro1, gcpro2;
 
   CHECK_NUMBER_OR_FLOAT (pid);
   CONS_TO_INTEGER (pid, pid_t, proc_id);
   sprintf (procfn, "/proc/%"pMd, proc_id);
   if (stat (procfn, &st) < 0)
     return attrs;
-
-  GCPRO2 (attrs, decoded_cmd);
 
   /* euid egid */
   uid = st.st_uid;
@@ -3012,7 +3207,7 @@ system_process_attributes (Lisp_Object pid)
   else
     {
       record_unwind_protect_int (close_file_unwind, fd);
-      nread = emacs_read (fd, procbuf, sizeof procbuf - 1);
+      nread = emacs_read_quit (fd, procbuf, sizeof procbuf - 1);
     }
   if (0 < nread)
     {
@@ -3033,7 +3228,7 @@ system_process_attributes (Lisp_Object pid)
       else
 	q = NULL;
       /* Command name is encoded in locale-coding-system; decode it.  */
-      cmd_str = make_unibyte_string (cmd, cmdsize);
+      AUTO_STRING_WITH_LEN (cmd_str, cmd, cmdsize);
       decoded_cmd = code_convert_string_norecord (cmd_str,
 						  Vlocale_coding_system, 0);
       attrs = Fcons (Fcons (Qcomm, decoded_cmd), attrs);
@@ -3133,7 +3328,7 @@ system_process_attributes (Lisp_Object pid)
 	  /* Leave room even if every byte needs escaping below.  */
 	  readsize = (cmdline_size >> 1) - nread;
 
-	  nread_incr = emacs_read (fd, cmdline + nread, readsize);
+	  nread_incr = emacs_read_quit (fd, cmdline + nread, readsize);
 	  nread += max (0, nread_incr);
 	}
       while (nread_incr == readsize);
@@ -3166,14 +3361,13 @@ system_process_attributes (Lisp_Object pid)
 	  sprintf (cmdline, "[%.*s]", cmdsize, cmd);
 	}
       /* Command line is encoded in locale-coding-system; decode it.  */
-      cmd_str = make_unibyte_string (q, nread);
+      AUTO_STRING_WITH_LEN (cmd_str, q, nread);
       decoded_cmd = code_convert_string_norecord (cmd_str,
 						  Vlocale_coding_system, 0);
       unbind_to (count, Qnil);
       attrs = Fcons (Fcons (Qargs, decoded_cmd), attrs);
     }
 
-  UNGCPRO;
   return attrs;
 }
 
@@ -3212,7 +3406,6 @@ system_process_attributes (Lisp_Object pid)
   gid_t gid;
   Lisp_Object attrs = Qnil;
   Lisp_Object decoded_cmd;
-  struct gcpro gcpro1, gcpro2;
   ptrdiff_t count;
 
   CHECK_NUMBER_OR_FLOAT (pid);
@@ -3220,8 +3413,6 @@ system_process_attributes (Lisp_Object pid)
   sprintf (procfn, "/proc/%"pMd, proc_id);
   if (stat (procfn, &st) < 0)
     return attrs;
-
-  GCPRO2 (attrs, decoded_cmd);
 
   /* euid egid */
   uid = st.st_uid;
@@ -3249,8 +3440,8 @@ system_process_attributes (Lisp_Object pid)
     nread = 0;
   else
     {
-      record_unwind_protect (close_file_unwind, fd);
-      nread = emacs_read (fd, &pinfo, sizeof pinfo);
+      record_unwind_protect_int (close_file_unwind, fd);
+      nread = emacs_read_quit (fd, &pinfo, sizeof pinfo);
     }
 
   if (nread == sizeof pinfo)
@@ -3305,17 +3496,16 @@ system_process_attributes (Lisp_Object pid)
 			    make_float (100.0 / 0x8000 * pinfo.pr_pctmem)),
 		     attrs);
 
-      decoded_cmd = (code_convert_string_norecord
-		     (build_unibyte_string (pinfo.pr_fname),
-		      Vlocale_coding_system, 0));
+      AUTO_STRING (fname, pinfo.pr_fname);
+      decoded_cmd = code_convert_string_norecord (fname,
+						  Vlocale_coding_system, 0);
       attrs = Fcons (Fcons (Qcomm, decoded_cmd), attrs);
-      decoded_cmd = (code_convert_string_norecord
-		     (build_unibyte_string (pinfo.pr_psargs),
-		      Vlocale_coding_system, 0));
+      AUTO_STRING (psargs, pinfo.pr_psargs);
+      decoded_cmd = code_convert_string_norecord (psargs,
+						  Vlocale_coding_system, 0);
       attrs = Fcons (Fcons (Qargs, decoded_cmd), attrs);
     }
   unbind_to (count, Qnil);
-  UNGCPRO;
   return attrs;
 }
 
@@ -3351,7 +3541,6 @@ system_process_attributes (Lisp_Object pid)
   struct kinfo_proc proc;
   size_t proclen = sizeof proc;
 
-  struct gcpro gcpro1, gcpro2;
   Lisp_Object attrs = Qnil;
   Lisp_Object decoded_comm;
 
@@ -3361,8 +3550,6 @@ system_process_attributes (Lisp_Object pid)
 
   if (sysctl (mib, 4, &proc, &proclen, NULL, 0) != 0)
     return attrs;
-
-  GCPRO2 (attrs, decoded_comm);
 
   attrs = Fcons (Fcons (Qeuid, make_fixnum_or_float (proc.ki_uid)), attrs);
 
@@ -3380,9 +3567,8 @@ system_process_attributes (Lisp_Object pid)
   if (gr)
     attrs = Fcons (Fcons (Qgroup, build_string (gr->gr_name)), attrs);
 
-  decoded_comm = (code_convert_string_norecord
-		  (build_unibyte_string (proc.ki_comm),
-		   Vlocale_coding_system, 0));
+  AUTO_STRING (comm, proc.ki_comm);
+  decoded_comm = code_convert_string_norecord (comm, Vlocale_coding_system, 0);
 
   attrs = Fcons (Fcons (Qcomm, decoded_comm), attrs);
   {
@@ -3493,15 +3679,153 @@ system_process_attributes (Lisp_Object pid)
 	    args[i] = ' ';
 	}
 
-      decoded_comm =
-	(code_convert_string_norecord
-	 (build_unibyte_string (args),
-	  Vlocale_coding_system, 0));
+      AUTO_STRING (comm, args);
+      decoded_comm = code_convert_string_norecord (comm,
+						   Vlocale_coding_system, 0);
 
       attrs = Fcons (Fcons (Qargs, decoded_comm), attrs);
     }
 
-  UNGCPRO;
+  return attrs;
+}
+
+#elif defined DARWIN_OS
+
+static struct timespec
+timeval_to_timespec (struct timeval t)
+{
+  return make_timespec (t.tv_sec, t.tv_usec * 1000);
+}
+
+static Lisp_Object
+make_lisp_timeval (struct timeval t)
+{
+  return make_lisp_time (timeval_to_timespec (t));
+}
+
+Lisp_Object
+system_process_attributes (Lisp_Object pid)
+{
+  int proc_id;
+  int pagesize = getpagesize ();
+  unsigned long npages;
+  int fscale;
+  struct passwd *pw;
+  struct group  *gr;
+  char *ttyname;
+  size_t len;
+  char args[MAXPATHLEN];
+  struct timeval starttime;
+  struct timespec t, now;
+  struct rusage *rusage;
+  dev_t tdev;
+  uid_t uid;
+  gid_t gid;
+
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID};
+  struct kinfo_proc proc;
+  size_t proclen = sizeof proc;
+
+  Lisp_Object attrs = Qnil;
+  Lisp_Object decoded_comm;
+
+  CHECK_NUMBER_OR_FLOAT (pid);
+  CONS_TO_INTEGER (pid, int, proc_id);
+  mib[3] = proc_id;
+
+  if (sysctl (mib, 4, &proc, &proclen, NULL, 0) != 0)
+    return attrs;
+
+  uid = proc.kp_eproc.e_ucred.cr_uid;
+  attrs = Fcons (Fcons (Qeuid, make_fixnum_or_float (uid)), attrs);
+
+  block_input ();
+  pw = getpwuid (uid);
+  unblock_input ();
+  if (pw)
+    attrs = Fcons (Fcons (Quser, build_string (pw->pw_name)), attrs);
+
+  gid = proc.kp_eproc.e_pcred.p_svgid;
+  attrs = Fcons (Fcons (Qegid, make_fixnum_or_float (gid)), attrs);
+
+  block_input ();
+  gr = getgrgid (gid);
+  unblock_input ();
+  if (gr)
+    attrs = Fcons (Fcons (Qgroup, build_string (gr->gr_name)), attrs);
+
+  decoded_comm = (code_convert_string_norecord
+		  (build_unibyte_string (proc.kp_proc.p_comm),
+		   Vlocale_coding_system, 0));
+
+  attrs = Fcons (Fcons (Qcomm, decoded_comm), attrs);
+  {
+    char state[2] = {'\0', '\0'};
+    switch (proc.kp_proc.p_stat)
+      {
+      case SRUN:
+	state[0] = 'R';
+	break;
+
+      case SSLEEP:
+	state[0] = 'S';
+	break;
+
+      case SZOMB:
+	state[0] = 'Z';
+	break;
+
+      case SSTOP:
+	state[0] = 'T';
+	break;
+
+      case SIDL:
+	state[0] = 'I';
+	break;
+      }
+    attrs = Fcons (Fcons (Qstate, build_string (state)), attrs);
+  }
+
+  attrs = Fcons (Fcons (Qppid, make_fixnum_or_float (proc.kp_eproc.e_ppid)),
+		 attrs);
+  attrs = Fcons (Fcons (Qpgrp, make_fixnum_or_float (proc.kp_eproc.e_pgid)),
+		 attrs);
+
+  tdev = proc.kp_eproc.e_tdev;
+  block_input ();
+  ttyname = tdev == NODEV ? NULL : devname (tdev, S_IFCHR);
+  unblock_input ();
+  if (ttyname)
+    attrs = Fcons (Fcons (Qtty, build_string (ttyname)), attrs);
+
+  attrs = Fcons (Fcons (Qtpgid,   make_fixnum_or_float (proc.kp_eproc.e_tpgid)),
+		 attrs);
+
+  rusage = proc.kp_proc.p_ru;
+  if (rusage)
+    {
+      attrs = Fcons (Fcons (Qminflt,  make_fixnum_or_float (rusage->ru_minflt)),
+		     attrs);
+      attrs = Fcons (Fcons (Qmajflt,  make_fixnum_or_float (rusage->ru_majflt)),
+		     attrs);
+
+      attrs = Fcons (Fcons (Qutime, make_lisp_timeval (rusage->ru_utime)),
+		     attrs);
+      attrs = Fcons (Fcons (Qstime, make_lisp_timeval (rusage->ru_stime)),
+		     attrs);
+      t = timespec_add (timeval_to_timespec (rusage->ru_utime),
+			timeval_to_timespec (rusage->ru_stime));
+      attrs = Fcons (Fcons (Qtime, make_lisp_time (t)), attrs);
+    }
+
+  starttime = proc.kp_proc.p_starttime;
+  attrs = Fcons (Fcons (Qnice,  make_number (proc.kp_proc.p_nice)), attrs);
+  attrs = Fcons (Fcons (Qstart, make_lisp_timeval (starttime)), attrs);
+
+  now = current_timespec ();
+  t = timespec_sub (now, timeval_to_timespec (starttime));
+  attrs = Fcons (Fcons (Qetime, make_lisp_time (t)), attrs);
+
   return attrs;
 }
 
@@ -3661,7 +3985,7 @@ str_collate (Lisp_Object s1, Lisp_Object s2,
       locale_t loc = newlocale (LC_COLLATE_MASK | LC_CTYPE_MASK,
 				SSDATA (locale), 0);
       if (!loc)
-	error ("Invalid locale %s: %s", SSDATA (locale), strerror (errno));
+	error ("Invalid locale %s: %s", SSDATA (locale), emacs_strerror (errno));
 
       if (! NILP (ignore_case))
 	for (int i = 1; i < 3; i++)
@@ -3692,10 +4016,10 @@ str_collate (Lisp_Object s1, Lisp_Object s2,
     }
 #  ifndef HAVE_NEWLOCALE
   if (err)
-    error ("Invalid locale or string for collation: %s", strerror (err));
+    error ("Invalid locale or string for collation: %s", emacs_strerror (err));
 #  else
   if (err)
-    error ("Invalid string for collation: %s", strerror (err));
+    error ("Invalid string for collation: %s", emacs_strerror (err));
 #  endif
 
   SAFE_FREE ();
@@ -3713,7 +4037,7 @@ str_collate (Lisp_Object s1, Lisp_Object s2,
   int res, err = errno;
 
   errno = 0;
-  res = w32_compare_strings (SDATA (s1), SDATA (s2), loc, !NILP (ignore_case));
+  res = w32_compare_strings (SSDATA (s1), SSDATA (s2), loc, !NILP (ignore_case));
   if (errno)
     error ("Invalid string for collation: %s", strerror (errno));
 

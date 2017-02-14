@@ -1,6 +1,6 @@
 ;;; semantic/lex-spp.el --- Semantic Lexical Pre-processor
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -919,7 +919,7 @@ STR occurs in the current buffer between BEG and END."
     ))
 
 (define-lex-regex-analyzer semantic-lex-spp-replace-or-symbol-or-keyword
-  "Like 'semantic-lex-symbol-or-keyword' plus preprocessor macro replacement."
+  "Like `semantic-lex-symbol-or-keyword' plus preprocessor macro replacement."
   "\\(\\sw\\|\\s_\\)+"
   (let ((str (match-string 0))
 	(beg (match-beginning 0))
@@ -1239,7 +1239,7 @@ of type `spp-macro-undef' is to be created."
 ;; written yet.
 ;;
 (defcustom semantic-lex-spp-use-headers-flag nil
-  "*Non-nil means to pre-parse headers as we go.
+  "Non-nil means to pre-parse headers as we go.
 For languages that use the Semantic pre-processor, this can
 improve the accuracy of parsed files where include files
 can change the state of what's parsed in the current file.
@@ -1306,8 +1306,10 @@ where a valid symbol is 'system, or nil."
 ;;
 ;; These routines are for saving macro lists into an EIEIO persistent
 ;; file.
-(defvar semantic-lex-spp-macro-max-length-to-save 200
-  "*Maximum length of an SPP macro before we opt to not save it.")
+(defcustom semantic-lex-spp-macro-max-length-to-save 200
+  "Maximum length of an SPP macro before we opt to not save it."
+  :type 'integer
+  :group 'semantic)
 
 ;;;###autoload
 (defun semantic-lex-spp-table-write-slot-value (value)

@@ -1,6 +1,6 @@
-;;; xml.el --- XML parser
+;;; xml.el --- XML parser -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Emmanuel Briot  <briot@gnat.com>
 ;; Maintainer: Mark A. Hershberger <mah@everybody.org>
@@ -126,9 +126,9 @@ tag.  For example,
 
 would be represented by
 
-    '(\"\" . \"foo\").
+    (\"\" . \"foo\").
 
-If you'd just like a plain symbol instead, use 'symbol-qnames in
+If you'd just like a plain symbol instead, use `symbol-qnames' in
 the PARSE-NS argument."
 
   (car node))
@@ -326,8 +326,8 @@ URIs, and expanded names will be returned as a cons
 If PARSE-NS is an alist, it will be used as the mapping from
 namespace to URIs instead.
 
-If it is the symbol 'symbol-qnames, expanded names will be
-returned as a plain symbol 'namespace:foo instead of a cons.
+If it is the symbol `symbol-qnames', expanded names will be
+returned as a plain symbol `namespace:foo' instead of a cons.
 
 Both features can be combined by providing a cons cell
 
@@ -356,8 +356,8 @@ URIs, and expanded names will be returned as a cons
 If PARSE-NS is an alist, it will be used as the mapping from
 namespace to URIs instead.
 
-If it is the symbol 'symbol-qnames, expanded names will be
-returned as a plain symbol 'namespace:foo instead of a cons.
+If it is the symbol `symbol-qnames', expanded names will be
+returned as a plain symbol `namespace:foo' instead of a cons.
 
 Both features can be combined by providing a cons cell
 
@@ -401,9 +401,9 @@ Both features can be combined by providing a cons cell
 		     parse-dtd)
 		(setq dtd (car result))
 		(if (cdr result)	; possible leading comment
-		    (add-to-list 'xml (cdr result))))
+		    (push (cdr result) xml)))
 	       (t
-		(add-to-list 'xml result))))
+		(push result xml))))
 	  (goto-char (point-max))))
       (if parse-dtd
 	  (cons dtd (nreverse xml))
@@ -579,7 +579,14 @@ Return one of:
 	(error "XML: (Well-Formed) Invalid character"))
       ;; However, if we're parsing incrementally, then we need to deal
       ;; with stray CDATA.
-      (xml-parse-string)))))
+      (let ((s (xml-parse-string)))
+        (when (zerop (length s))
+          ;; We haven't consumed any input! We must throw an error in
+          ;; order to prevent looping forever.
+          (error "XML: (Not Well-Formed) Could not parse: %s"
+                 (buffer-substring-no-properties
+                  (point) (min (+ (point) 10) (point-max)))))
+        s)))))
 
 (defun xml-parse-string ()
   "Parse character data at point, and return it as a string.
@@ -639,8 +646,10 @@ surpassed `xml-entity-expansion-limit'"))))
 (defun xml-parse-attlist (&optional xml-ns)
   "Return the attribute-list after point.
 Leave point at the first non-blank character after the tag."
-  (let ((attlist ())
-	end-pos name)
+  (let* ((attlist ())
+	 (symbol-qnames (eq (car-safe xml-ns) 'symbol-qnames))
+	 (xml-ns (if symbol-qnames (cdr xml-ns) xml-ns))
+	 end-pos name)
     (skip-syntax-forward " ")
     (while (looking-at (eval-when-compile
 			 (concat "\\(" xml-name-re "\\)\\s-*=\\s-*")))
@@ -1010,12 +1019,12 @@ The first line is indented with the optional INDENT-STRING."
 
 (defun xml-escape-string (string)
   "Convert STRING into a string containing valid XML character data.
-Replace occurrences of &<>'\" in STRING with their default XML
-entity references (e.g. replace each & with &amp;).
+Replace occurrences of &<>\\='\" in STRING with their default XML
+entity references (e.g., replace each & with &amp;).
 
 XML character data must not contain & or < characters, nor the >
 character under some circumstances.  The XML spec does not impose
-restriction on \" or ', but we just substitute for these too
+restriction on \" or \\=', but we just substitute for these too
 \(as is permitted by the spec)."
   (with-temp-buffer
     (insert string)

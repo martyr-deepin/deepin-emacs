@@ -1,13 +1,13 @@
 /* Definitions and headers for GTK widgets.
 
-Copyright (C) 2003-2015 Free Software Foundation, Inc.
+Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,7 +25,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <gtk/gtk.h>
 #include "../lwlib/lwlib-widget.h"
-#include "frame.h"
 #include "xterm.h"
 
 /* Minimum and maximum values used for GTK scroll bars  */
@@ -179,6 +178,12 @@ extern bool xg_prepare_tooltip (struct frame *f,
 				int *height);
 extern void xg_show_tooltip (struct frame *f, int root_x, int root_y);
 extern bool xg_hide_tooltip (struct frame *f);
+
+#ifdef USE_CAIRO
+extern void xg_page_setup_dialog (void);
+extern Lisp_Object xg_get_page_setup (void);
+extern void xg_print_frames_dialog (Lisp_Object);
+#endif
 
 /* Mark all callback data that are Lisp_object:s during GC.  */
 extern void xg_mark_data (void);

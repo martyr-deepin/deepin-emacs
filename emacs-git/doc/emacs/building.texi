@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2017 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Building
@@ -322,7 +322,7 @@ nohup @var{command}; sleep 1
 @end example
 
 @ifnottex
-  On the MS-DOS ``operating system'', asynchronous subprocesses are
+  On MS-DOS, asynchronous subprocesses are
 not supported, so @kbd{M-x compile} runs the compilation command
 synchronously (i.e., you must wait until the command finishes before
 you can do anything else in Emacs).  @xref{MS-DOS}.
@@ -334,7 +334,7 @@ you can do anything else in Emacs).  @xref{MS-DOS}.
   Just as you can run a compiler from Emacs and then visit the lines
 with compilation errors, you can also run @command{grep} and then
 visit the lines on which matches were found.  This works by treating
-the matches reported by @command{grep} as if they were ``errors''.
+the matches reported by @command{grep} as if they were errors.
 The output buffer uses Grep mode, which is a variant of Compilation
 mode (@pxref{Compilation Mode}).
 
@@ -360,8 +360,8 @@ that specifies how to run @command{grep}.  Use the same arguments you
 would give @command{grep} when running it normally: a @command{grep}-style
 regexp (usually in single-quotes to quote the shell's special
 characters) followed by file names, which may use wildcards.  If you
-specify a prefix argument for @kbd{M-x grep}, it finds the tag
-(@pxref{Tags}) in the buffer around point, and puts that into the
+specify a prefix argument for @kbd{M-x grep}, it finds the identifier
+(@pxref{Xref}) in the buffer around point, and puts that into the
 default @command{grep} command.
 
   Your command need not simply run @command{grep}; you can use any shell
@@ -381,6 +381,14 @@ markers around matches for the purpose of highlighting.  You can make
 use of this feature by setting @code{grep-highlight-matches} to
 @code{t}.  When displaying a match in the source buffer, the exact
 match will be highlighted, instead of the entire source line.
+
+  The @command{grep} commands will offer to save buffers before
+running.  This is controlled by the @code{grep-save-buffers} variable.
+The possible values are either @code{nil} (don't save), @code{ask}
+(ask before saving), a function which will be used as a predicate (and
+is called with the file name as the parameter and should return
+non-nil if the buffer is to be saved), and any other non-@code{nil}
+value means that all buffers should be saved without asking.
 
 @findex grep-find
 @findex find-grep
@@ -800,12 +808,12 @@ the command to @kbd{C-c @var{binding}} in the GUD buffer's mode and to
 @table @samp
 @item %f
 The name of the current source file.  If the current buffer is the GUD
-buffer, then the ``current source file'' is the file that the program
+buffer, then the current source file is the file that the program
 stopped in.
 
 @item %l
 The number of the current source line.  If the current buffer is the GUD
-buffer, then the ``current source line'' is the line that the program
+buffer, then the current source line is the line that the program
 stopped in.
 
 @item %e
@@ -848,7 +856,7 @@ GUD}).  You must use this if you want to debug multiple programs
 within one Emacs session, as that is currently unsupported by @kbd{M-x
 gdb}.
 
-  Internally, @kbd{M-x gdb} informs GDB that its ``screen size'' is
+  Internally, @kbd{M-x gdb} informs GDB that its screen size is
 unlimited; for correct operation, you must not change GDB's screen
 height and width values during the debugging session.
 
@@ -893,8 +901,8 @@ displays the following frame layout:
 
 @findex gdb-restore-windows
 @findex gdb-many-windows
-  If you ever change the window layout, you can restore the ``many
-windows'' layout by typing @kbd{M-x gdb-restore-windows}.  To toggle
+  If you ever change the window layout, you can restore the many-windows
+layout by typing @kbd{M-x gdb-restore-windows}.  To toggle
 between the many windows layout and a simple layout with just the GUD
 interaction buffer and a source file, type @kbd{M-x gdb-many-windows}.
 
@@ -921,23 +929,23 @@ still in the right places.
 @cindex fringes, for debugging
 
 @table @asis
-@item @kbd{Mouse-1} (in fringe)
+@item @kbd{mouse-1} (in fringe)
 Set or clear a breakpoint on that line.
 
-@item @kbd{C-Mouse-1} (in fringe)
+@item @kbd{C-mouse-1} (in fringe)
 Enable or disable a breakpoint on that line.
 
-@item @kbd{Mouse-3} (in fringe)
+@item @kbd{mouse-3} (in fringe)
 Continue execution to that line.
 
-@item @kbd{C-Mouse-3} (in fringe)
+@item @kbd{C-mouse-3} (in fringe)
 Jump to that line.
 @end table
 
-  On a graphical display, you can click @kbd{Mouse-1} in the fringe of
+  On a graphical display, you can click @kbd{mouse-1} in the fringe of
 a source buffer, to set a breakpoint on that line (@pxref{Fringes}).
 A red dot appears in the fringe, where you clicked.  If a breakpoint
-already exists there, the click removes it.  A @kbd{C-Mouse-1} click
+already exists there, the click removes it.  A @kbd{C-mouse-1} click
 enables or disables an existing breakpoint; a breakpoint that is
 disabled, but not unset, is indicated by a gray dot.
 
@@ -949,10 +957,10 @@ of the window.  Disabled breakpoints are indicated with @samp{b}.
   A solid arrow in the left fringe of a source buffer indicates the
 line of the innermost frame where the debugged program has stopped.  A
 hollow arrow indicates the current execution line of a higher-level
-frame.  If you drag the arrow in the fringe with @kbd{Mouse-1}, that
+frame.  If you drag the arrow in the fringe with @kbd{mouse-1}, that
 causes execution to advance to the line where you release the button.
-Alternatively, you can click @kbd{Mouse-3} in the fringe to advance to
-that line.  You can click @kbd{C-Mouse-3} in the fringe to jump to
+Alternatively, you can click @kbd{mouse-3} in the fringe to advance to
+that line.  You can click @kbd{C-mouse-3} in the fringe to jump to
 that line without executing the intermediate lines.  This command
 allows you to go backwards, which can be useful for running through
 code that has already executed, in order to examine its execution in
@@ -986,15 +994,15 @@ Delete the current breakpoint (@code{gdb-delete-breakpoint}).
 Visit the source line for the current breakpoint
 (@code{gdb-goto-breakpoint}).
 
-@item Mouse-2
-@kindex Mouse-2 @r{(GDB Breakpoints buffer)}
+@item mouse-2
+@kindex mouse-2 @r{(GDB Breakpoints buffer)}
 Visit the source line for the breakpoint you click on.
 @end table
 
 @vindex gdb-show-threads-by-default
   When @code{gdb-many-windows} is non-@code{nil}, the GDB Breakpoints
 buffer shares its window with the GDB Threads buffer.  To switch from
-one to the other click with @kbd{Mouse-1} on the relevant button in
+one to the other click with @kbd{mouse-1} on the relevant button in
 the header line.  If @code{gdb-show-threads-by-default} is
 non-@code{nil}, the GDB Threads buffer is the one shown by default.
 
@@ -1006,7 +1014,7 @@ non-@code{nil}, the GDB Threads buffer is the one shown by default.
 debugged program.  @xref{Threads, Threads, Debugging programs with
 multiple threads, gdb, The GNU debugger}.  To select a thread, move
 point there and press @key{RET} (@code{gdb-select-thread}), or click on
-it with @kbd{Mouse-2}.  This also displays the associated source
+it with @kbd{mouse-2}.  This also displays the associated source
 buffer, and updates the contents of the other GDB buffers.
 
   You can customize variables under @code{gdb-buffers} group to select
@@ -1087,7 +1095,7 @@ debugger}.
 arrow in the fringe.  On text terminals, or when fringes are disabled,
 the selected stack frame is displayed in reverse contrast.  To select
 a stack frame, move point in its line and type @key{RET}
-(@code{gdb-frames-select}), or click @kbd{Mouse-2} on it.  Doing so
+(@code{gdb-frames-select}), or click @kbd{mouse-2} on it.  Doing so
 also updates the Locals buffer
 @ifnottex
 (@pxref{Other GDB Buffers}).
@@ -1104,19 +1112,19 @@ also updates the Locals buffer
 This buffer displays the values of local variables of the current
 frame for simple data types (@pxref{Frame Info, Frame Info,
 Information on a frame, gdb, The GNU debugger}).  Press @key{RET} or
-click @kbd{Mouse-2} on the value if you want to edit it.
+click @kbd{mouse-2} on the value if you want to edit it.
 
 Arrays and structures display their type only.  With GDB 6.4 or later,
 you can examine the value of the local variable at point by typing
-@key{RET}, or with a @kbd{Mouse-2} click.  With earlier versions of
-GDB, use @key{RET} or @kbd{Mouse-2} on the type description
+@key{RET}, or with a @kbd{mouse-2} click.  With earlier versions of
+GDB, use @key{RET} or @kbd{mouse-2} on the type description
 (@samp{[struct/union]} or @samp{[array]}).  @xref{Watch Expressions}.
 
 @item Registers Buffer
 @findex toggle-gdb-all-registers
 This buffer displays the values held by the registers
 (@pxref{Registers,,, gdb, The GNU debugger}).  Press @key{RET} or
-click @kbd{Mouse-2} on a register if you want to edit its value.  With
+click @kbd{mouse-2} on a register if you want to edit its value.  With
 GDB 6.4 or later, recently changed register values display with
 @code{font-lock-warning-face}.
 
@@ -1129,17 +1137,17 @@ the fringe or margin.
 @item Memory Buffer
 The memory buffer lets you examine sections of program memory
 (@pxref{Memory, Memory, Examining memory, gdb, The GNU debugger}).
-Click @kbd{Mouse-1} on the appropriate part of the header line to
+Click @kbd{mouse-1} on the appropriate part of the header line to
 change the starting address or number of data items that the buffer
 displays.  Alternatively, use @kbd{S} or @kbd{N} respectively.  Click
-@kbd{Mouse-3} on the header line to select the display format or unit
+@kbd{mouse-3} on the header line to select the display format or unit
 size for these data items.
 @end table
 
 When @code{gdb-many-windows} is non-@code{nil}, the locals buffer
 shares its window with the registers buffer, just like breakpoints and
 threads buffers.  To switch from one to the other, click with
-@kbd{Mouse-1} on the relevant button in the header line.
+@kbd{mouse-1} on the relevant button in the header line.
 
 @node Watch Expressions
 @subsubsection Watch Expressions
@@ -1163,7 +1171,7 @@ name and type otherwise.  Root expressions also display the frame
 address as a tooltip to help identify the frame in which they were
 defined.
 
-  To expand or contract a complex data type, click @kbd{Mouse-2} or
+  To expand or contract a complex data type, click @kbd{mouse-2} or
 press @key{SPC} on the tag to the left of the expression.  Emacs asks
 for confirmation before expanding the expression if its number of
 immediate children exceeds the value of the variable
@@ -1178,7 +1186,7 @@ expression in the speedbar and type @kbd{D} (@code{gdb-var-delete}).
 @findex gdb-edit-value
   To edit a variable with a simple data type, or a simple element of a
 complex data type, move point there in the speedbar and type @key{RET}
-(@code{gdb-edit-value}).  Or you can click @kbd{Mouse-2} on a value to
+(@code{gdb-edit-value}).  Or you can click @kbd{mouse-2} on a value to
 edit it.  Either way, this reads the new value using the minibuffer.
 
 @vindex gdb-show-changed-values
@@ -1549,7 +1557,7 @@ mode are the same as in Emacs Lisp mode.
   At startup, the @file{*scratch*} buffer contains a short message, in
 the form of a Lisp comment, that explains what it is for.  This
 message is controlled by the variable @code{initial-scratch-message},
-which should be either a string, or @code{nil} (which means to
+which should be either a documentation string, or @code{nil} (which means to
 suppress the message).
 
 @findex ielm

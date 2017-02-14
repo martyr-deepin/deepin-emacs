@@ -1,9 +1,8 @@
 ;;; calc-map.el --- higher-order functions for Calc
 
-;; Copyright (C) 1990-1993, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
-;; Maintainer: Jay Belanger <jay.p.belanger@gmail.com>
 
 ;; This file is part of GNU Emacs.
 
@@ -417,6 +416,7 @@
 				( ?G 1 calcFunc-vgmean )
 				( ?M 1 calcFunc-vmean )
 				( ?N 1 calcFunc-vmin )
+                                ( ?R 1 calcFunc-rms )
 				( ?S 1 calcFunc-vsdev )
 				( ?X 1 calcFunc-vmax ) )
 			      ( ( ?C 2 calcFunc-vpcov )

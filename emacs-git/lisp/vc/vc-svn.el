@@ -1,6 +1,6 @@
 ;;; vc-svn.el --- non-resident support for Subversion version-control  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
 ;; Author:      FSF (see vc.el for full credits)
 ;; Maintainer:  Stefan Monnier <monnier@gnu.org>
@@ -83,7 +83,7 @@ If t, use no switches."
   t			   ;`svn' doesn't support common args like -c or -b.
   "String or list of strings specifying extra switches for svn diff under VC.
 If nil, use the value of `vc-diff-switches' (or `diff-switches'),
-together with \"-x --diff-cmd=\"`diff-command' (since 'svn diff'
+together with \"-x --diff-cmd=\"`diff-command' (since `svn diff'
 does not support the default \"-c\" value of `diff-switches').
 If you want to force an empty list of arguments, use t."
   :type '(choice (const :tag "Unspecified" nil)
@@ -106,7 +106,7 @@ switches."
   :version "25.1"
   :group 'vc-svn)
 
-(defcustom vc-svn-header '("\$Id\$")
+(defcustom vc-svn-header '("$Id\ $")
   "Header keywords to be inserted by `vc-insert-headers'."
   :version "24.1"     ; no longer consult the obsolete vc-header-alist
   :type '(repeat string)
@@ -147,7 +147,8 @@ switches."
 (defun vc-svn-registered (file)
   "Check if FILE is SVN registered."
   (setq file (expand-file-name file))
-  (when (vc-svn-root file)
+  (when (and (vc-svn-root file)
+             (file-accessible-directory-p (file-name-directory file)))
     (with-temp-buffer
       (cd (file-name-directory file))
       (let* (process-file-side-effects
@@ -279,7 +280,21 @@ RESULT is a list of conses (FILE . STATE) for directory DIR."
   ;; Expand default-directory because svn gets confused by eg
   ;; file://~/path/to/file.  (Bug#15446).
   (vc-svn-command "*vc*" 0 "." "checkout"
-                  (concat "file://" (expand-file-name default-directory) "SVN")))
+                  (let ((defdir (expand-file-name default-directory))
+                        (svn-prog (executable-find "svn")))
+                    (when (and (fboundp 'w32-application-type)
+                               (eq (w32-application-type svn-prog) 'msys))
+                      (setq defdir
+                            (replace-regexp-in-string "^\\(.\\):/" "/\\1/"
+                                                      defdir)))
+                    (concat (if (and (stringp defdir)
+                                     (eq (aref defdir 0) ?/))
+                                "file://"
+                              ;; MS-Windows files d:/foo/bar need to
+                              ;; begin with 3 leading slashes.
+                              "file:///")
+                            defdir
+                            "SVN"))))
 
 (autoload 'vc-switches "vc")
 
@@ -295,11 +310,14 @@ to the SVN command."
 
 (defalias 'vc-svn-responsible-p 'vc-svn-root)
 
+(declare-function log-edit-extract-headers "log-edit" (headers string))
+
 (defun vc-svn-checkin (files comment &optional _extra-args-ignored)
   "SVN-specific version of `vc-backend-checkin'."
   (let ((status (apply
                  'vc-svn-command nil 1 files "ci"
-                 (nconc (list "-m" comment) (vc-switches 'SVN 'checkin)))))
+                 (nconc (cons "-m" (log-edit-extract-headers nil comment))
+                        (vc-switches 'SVN 'checkin)))))
     (set-buffer "*vc*")
     (goto-char (point-min))
     (unless (equal status 0)
@@ -385,6 +403,8 @@ FILE is a file wildcard, relative to the root directory of DIRECTORY."
   "Revert FILE to the version it was based on."
   (unless contents-done
     (vc-svn-command nil 0 file "revert")))
+
+(autoload 'vc-read-revision "vc")
 
 (defun vc-svn-merge-file (file)
   "Accept a file merge request, prompting for revisions."
@@ -672,7 +692,7 @@ and that it passes `vc-svn-global-switches' to it before FLAGS."
       ;; use conflict markers in which case we don't really know what to do.
       ;; So let's just punt for now.
       nil)
-    (message "There are unresolved conflicts in this file")))
+    (vc-message-unresolved-conflicts buffer-file-name)))
 
 (defun vc-svn-parse-status (&optional filename)
   "Parse output of \"svn status\" command in the current buffer.

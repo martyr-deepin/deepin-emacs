@@ -1,6 +1,6 @@
 ;;; gnus-agent.el --- unplugged support for Gnus
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; This file is part of GNU Emacs.
@@ -30,10 +30,8 @@
 (require 'gnus-score)
 (require 'gnus-srvr)
 (require 'gnus-util)
+(require 'timer)
 (eval-when-compile
-  (if (featurep 'xemacs)
-      (require 'itimer)
-    (require 'timer))
   (require 'cl))
 
 (autoload 'gnus-server-update-server "gnus-srvr")
@@ -82,27 +80,15 @@ If nil, only read articles will be expired."
   :group 'gnus-agent
   :type 'hook)
 
-;; Extracted from gnus-xmas-redefine in order to preserve user settings
-(when (featurep 'xemacs)
-  (add-hook 'gnus-agent-group-mode-hook 'gnus-xmas-agent-group-menu-add))
-
 (defcustom gnus-agent-summary-mode-hook nil
   "Hook run in Agent summary minor modes."
   :group 'gnus-agent
   :type 'hook)
 
-;; Extracted from gnus-xmas-redefine in order to preserve user settings
-(when (featurep 'xemacs)
-  (add-hook 'gnus-agent-summary-mode-hook 'gnus-xmas-agent-summary-menu-add))
-
 (defcustom gnus-agent-server-mode-hook nil
   "Hook run in Agent summary minor modes."
   :group 'gnus-agent
   :type 'hook)
-
-;; Extracted from gnus-xmas-redefine in order to preserve user settings
-(when (featurep 'xemacs)
-  (add-hook 'gnus-agent-server-mode-hook 'gnus-xmas-agent-server-menu-add))
 
 (defcustom gnus-agent-confirmation-function 'y-or-n-p
   "Function to confirm when error happens."
@@ -175,7 +161,7 @@ enable expiration per categories, topics, and groups."
                 (const :format "Disable " DISABLE)))
 
 (defcustom gnus-agent-expire-unagentized-dirs t
-  "*Whether expiration should expire in unagentized directories.
+  "Whether expiration should expire in unagentized directories.
 Have gnus-agent-expire scan the directories under
 \(gnus-agent-directory) for groups that are no longer agentized.
 When found, offer to remove them."
@@ -251,16 +237,6 @@ NOTES:
 ;; Dynamic variables
 (defvar gnus-headers)
 (defvar gnus-score)
-
-;; Added to support XEmacs
-(eval-and-compile
-  (unless (fboundp 'directory-files-and-attributes)
-    (defun directory-files-and-attributes (directory
-					   &optional full match nosort)
-      (let (result)
-	(dolist (file (directory-files directory full match nosort))
-	  (push (cons file (file-attributes file)) result))
-	(nreverse result)))))
 
 ;;;
 ;;; Setup
@@ -571,19 +547,9 @@ manipulated as follows:
        ["Remove" gnus-agent-remove-server t]))))
 
 (defun gnus-agent-make-mode-line-string (string mouse-button mouse-func)
-  (if (and (fboundp 'propertize)
-	   (fboundp 'make-mode-line-mouse-map))
-      (propertize string 'local-map
-		  (make-mode-line-mouse-map mouse-button mouse-func)
-		  'mouse-face
-		  (if (and (featurep 'xemacs)
-			   ;; XEmacs's `facep' only checks for a face
-			   ;; object, not for a face name, so it's useless
-			   ;; to check with `facep'.
-			   (find-face 'modeline))
-		      'modeline
-		    'mode-line-highlight))
-    string))
+  (propertize string 'local-map
+	      (make-mode-line-mouse-map mouse-button mouse-func)
+	      'mouse-face 'mode-line-highlight))
 
 (defun gnus-agent-toggle-plugged (set-to)
   "Toggle whether Gnus is unplugged or not."
@@ -680,7 +646,7 @@ minor mode in all Gnus buffers."
 
 (defun gnus-agent-queue-setup (&optional group-name)
   "Make sure the queue group exists.
-Optional arg GROUP-NAME allows to specify another group."
+Optional arg GROUP-NAME allows another group to be specified."
   (unless (gnus-gethash (format "nndraft:%s" (or group-name "queue"))
 			gnus-newsrc-hashtb)
     (gnus-request-create-group (or group-name "queue") '(nndraft ""))
@@ -868,8 +834,9 @@ be a select method."
 		      (not (eq gnus-agent-synchronize-flags 'ask)))
 		 (and (eq gnus-agent-synchronize-flags 'ask)
 		      (gnus-y-or-n-p
-		       (format "Synchronize flags on server `%s'? "
-			       (cadr method))))))
+		       (format-message
+			"Synchronize flags on server `%s'? "
+			(cadr method))))))
     (gnus-agent-synchronize-flags-server method)))
 
 ;;;###autoload
@@ -1721,7 +1688,7 @@ and that there are no duplicates."
               (or backed-up
                   (setq backed-up (gnus-agent-backup-overview-buffer)))
 	      (gnus-message 1
-			    "Overview buffer contains garbage '%s'."
+			    "Overview buffer contains garbage `%s'."
 			    (buffer-substring
 			     p (point-at-eol))))
 	     ((= cur prev-num)
@@ -1901,7 +1868,7 @@ article numbers will be returned."
 
       (when articles
 	(gnus-message
-	 10 "gnus-agent-fetch-headers: undownloaded articles are '%s'"
+	 10 "gnus-agent-fetch-headers: undownloaded articles are `%s'"
 	 (gnus-compress-sequence articles t)))
 
       (with-current-buffer nntp-server-buffer
@@ -2666,8 +2633,10 @@ General format specifiers can also be used.  See Info node
     "\C-c\C-i" gnus-info-find-node
     "\C-c\C-b" gnus-bug))
 
-(defvar gnus-category-menu-hook nil
-  "*Hook run after the creation of the menu.")
+(defcustom gnus-category-menu-hook nil
+  "Hook run after the creation of the menu."
+  :group 'gnus-agent
+  :type 'hook)
 
 (defun gnus-category-make-menu-bar ()
   (gnus-turn-off-edit-menu 'category)
@@ -2712,7 +2681,7 @@ The following commands are available:
   (let* ((gnus-tmp-name (format "%s" (car category)))
 	 (gnus-tmp-groups (length (gnus-agent-cat-groups category))))
     (beginning-of-line)
-    (gnus-add-text-properties
+    (add-text-properties
      (point)
      (prog1 (1+ (point))
        ;; Insert the text.

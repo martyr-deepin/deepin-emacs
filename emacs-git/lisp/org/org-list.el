@@ -1,6 +1,6 @@
 ;;; org-list.el --- Plain lists for Org-mode
 ;;
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;	   Bastien Guerry <bzg@gnu.org>
@@ -115,7 +115,7 @@
 (declare-function org-level-increment "org" ())
 (declare-function org-narrow-to-subtree "org" ())
 (declare-function org-at-heading-p "org" (&optional invisible-ok))
-(declare-function org-previous-line-empty-p "org" ())
+(declare-function org-previous-line-empty-p "org" (&optional next))
 (declare-function org-remove-if "org" (predicate seq))
 (declare-function org-reduced-level "org" (L))
 (declare-function org-show-subtree "org" ())
@@ -174,7 +174,7 @@ to the bullet that should be used when this item is demoted.
 For example,
 
  (setq org-list-demote-modify-bullet
-       '((\"+\" . \"-\") (\"-\" . \"+\") (\"*\" . \"+\")))
+       \\='((\"+\" . \"-\") (\"-\" . \"+\") (\"*\" . \"+\")))
 
 will make
 
@@ -230,7 +230,7 @@ This variable needs to be set before org.el is loaded.  If you
 need to make a change while Emacs is running, use the customize
 interface or run the following code after updating it:
 
-  \(when (featurep 'org-element) (load \"org-element\" t t))"
+  (when (featurep \\='org-element) (load \"org-element\" t t))"
   :group 'org-plain-lists
   :version "24.1"
   :type 'boolean
@@ -620,11 +620,11 @@ point-at-bol:
 
 will get the following structure:
 
-\(\(1 0 \"- \"  nil \"[X]\" nil 97\)
- \(18 2 \"1. \"  nil nil nil 34\)
- \(34 2 \"5. \" \"5\" nil nil 55\)
- \(97 0 \"- \"  nil nil nil 131\)
- \(109 2 \"+ \" nil nil \"tag\" 131\)
+ ((1 0 \"- \"  nil \"[X]\" nil 97)
+  (18 2 \"1. \"  nil nil nil 34)
+  (34 2 \"5. \" \"5\" nil nil 55)
+  (97 0 \"- \"  nil nil nil 131)
+  (109 2 \"+ \" nil nil \"tag\" 131))
 
 Assume point is at an item."
   (save-excursion
@@ -2015,7 +2015,7 @@ previous item, plus ARGS extra arguments.
 
 FUNCTION is applied on items in reverse order.
 
-As an example, \(org-apply-on-list \(lambda \(result\) \(1+ result\)\) 0\)
+As an example, \(org-apply-on-list \(lambda \(result) \(1+ result)) 0)
 will return the number of items in the current list.
 
 Sublists of the list are skipped.  Cursor is always at the
@@ -2555,8 +2555,8 @@ With optional prefix argument ALL, do this for the whole buffer."
 		     (checked (car (nth 3 cookie)))
 		     (total (cdr (nth 3 cookie)))
 		     (new (if percentp
-			      (format "[%d%%]" (/ (* 100 checked)
-						  (max 1 total)))
+			      (format "[%d%%]" (floor (* 100.0 checked)
+						      (max 1 total)))
 			    (format "[%d/%d]" checked total))))
 		(goto-char beg)
 		(insert new)
@@ -2884,7 +2884,7 @@ ignores hidden links."
 			  (save-excursion (re-search-forward org-ts-regexp-both
 							     (point-at-eol) t)))
 		      (org-time-string-to-seconds (match-string 0)))
-		     (t (org-float-time now))))
+		     (t (float-time now))))
 		   ((= dcst ?x) (or (and (stringp (match-string 1))
 					 (match-string 1))
 				    ""))
@@ -2931,13 +2931,13 @@ For example, the following list:
 
 will be parsed as:
 
-\(ordered
-  \(nil \"first item\"
-  \(unordered
-    \(nil \"sub-item one\"\)
-    \(nil \"[CBON] sub-item two\"\)\)
-  \"more text in first item\"\)
-  \(3 \"last item\"\)\)
+ (ordered
+  (nil \"first item\"
+  (unordered
+    (nil \"sub-item one\")
+    (nil \"[CBON] sub-item two\"))
+  \"more text in first item\")
+  (3 \"last item\"))
 
 Point is left at list end."
   (defvar parse-item)                   ;FIXME: Or use `cl-labels' or `letrec'.

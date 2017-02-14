@@ -1,6 +1,6 @@
 ;;; vt100.el --- define VT100 function key sequences in function-key-map
 
-;; Copyright (C) 1989, 1993, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1989, 1993, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: FSF
 ;; Keywords: terminals
@@ -47,5 +47,7 @@ switch to 132-column mode if ARG is omitted or nil."
   :group 'terminals
   (send-string-to-terminal (if vt100-wide-mode "\e[?3h" "\e[?3l"))
   (set-frame-width terminal-frame (if vt100-wide-mode 132 80)))
+
+(provide 'term/vt100)
 
 ;;; vt100.el ends here

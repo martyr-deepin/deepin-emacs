@@ -1,6 +1,6 @@
 ;;; canlock.el --- functions for Cancel-Lock feature
 
-;; Copyright (C) 1998-1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-1999, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Katsumi Yamaoka <yamaoka@jpl.org>
 ;; Keywords: news, cancel-lock, hmac, sha1, rfc2104
@@ -35,8 +35,9 @@
 ;; Verifying Cancel-Lock is mainly a function of news servers, however,
 ;; you can verify your own article using the command `canlock-verify' in
 ;; the (raw) article buffer.  You will be prompted for the password for
-;; each time if the option `canlock-password' or `canlock-password-for-
-;; verify' is nil.  Note that setting these options is a bit unsafe.
+;; each time if the option `canlock-password' or
+;; `canlock-password-for-verify' is nil.  Note that setting these
+;; options is a bit unsafe.
 
 ;;; Code:
 
@@ -69,13 +70,6 @@ buffer does not look like a news message."
   :type 'boolean
   :group 'canlock)
 
-(eval-when-compile
-  (defmacro canlock-string-as-unibyte (string)
-    "Return a unibyte string with the same individual bytes as STRING."
-    (if (fboundp 'string-as-unibyte)
-	(list 'string-as-unibyte string)
-      string)))
-
 (defun canlock-sha1 (message)
   "Make a SHA-1 digest of MESSAGE as a unibyte string of length 20 bytes."
   (let (sha1-maximum-internal-length)
@@ -96,7 +90,7 @@ buffer does not look like a news message."
      (canlock-sha1
       (concat opad
 	      (canlock-sha1
-	       (concat ipad (canlock-string-as-unibyte message-id))))))))
+	       (concat ipad (string-as-unibyte message-id))))))))
 
 (defun canlock-narrow-to-header ()
   "Narrow the buffer to the head of the message."

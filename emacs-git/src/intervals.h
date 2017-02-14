@@ -1,12 +1,12 @@
 /* Definitions and global variables for intervals.
-   Copyright (C) 1993-1994, 2000-2015 Free Software Foundation, Inc.
+   Copyright (C) 1993-1994, 2000-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,7 +16,11 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "dispextern.h"
+#ifndef EMACS_INTERVALS_H
+#define EMACS_INTERVALS_H
+
+#include "buffer.h"
+#include "lisp.h"
 
 INLINE_HEADER_BEGIN
 
@@ -196,12 +200,12 @@ set_interval_plist (INTERVAL i, Lisp_Object plist)
 
 /* Is this interval writable?  Replace later with cache access.  */
 #define INTERVAL_WRITABLE_P(i)					\
-  (i && (NILP (textget ((i)->plist, Qread_only))		\
-         || !NILP (textget ((i)->plist, Qinhibit_read_only))	\
-	 || ((CONSP (Vinhibit_read_only)			\
-	      ? !NILP (Fmemq (textget ((i)->plist, Qread_only),	\
-			      Vinhibit_read_only))		\
-	      : !NILP (Vinhibit_read_only)))))			\
+  (NILP (textget ((i)->plist, Qread_only))			\
+   || !NILP (textget ((i)->plist, Qinhibit_read_only))		\
+   || ((CONSP (Vinhibit_read_only)				\
+	? !NILP (Fmemq (textget ((i)->plist, Qread_only),	\
+			Vinhibit_read_only))			\
+	: !NILP (Vinhibit_read_only))))
 
 /* Macros to tell whether insertions before or after this interval
    should stick to it.  Now we have Vtext_property_default_nonsticky,
@@ -284,7 +288,7 @@ extern void set_text_properties_1 (Lisp_Object, Lisp_Object,
 Lisp_Object text_property_list (Lisp_Object, Lisp_Object, Lisp_Object,
                                 Lisp_Object);
 void add_text_properties_from_list (Lisp_Object, Lisp_Object, Lisp_Object);
-Lisp_Object extend_property_ranges (Lisp_Object, Lisp_Object);
+Lisp_Object extend_property_ranges (Lisp_Object, Lisp_Object, Lisp_Object);
 Lisp_Object get_char_property_and_overlay (Lisp_Object, Lisp_Object,
                                            Lisp_Object, Lisp_Object*);
 extern int text_property_stickiness (Lisp_Object prop, Lisp_Object pos,
@@ -292,6 +296,6 @@ extern int text_property_stickiness (Lisp_Object prop, Lisp_Object pos,
 
 extern void syms_of_textprop (void);
 
-#include "composite.h"
-
 INLINE_HEADER_END
+
+#endif /* EMACS_INTERVALS_H */

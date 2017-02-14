@@ -1,6 +1,6 @@
 ;;; align.el --- align text to a specific column, by regexp -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -577,7 +577,7 @@ The possible settings for `align-region-separate' are:
 		     (eq '- current-prefix-arg)))))
 
     (css-declaration
-     (regexp . "^\\s-*\\w+:\\(\\s-*\\).*;")
+     (regexp . "^\\s-*\\(?:\\w-?\\)+:\\(\\s-*\\).*;")
      (group . (1))
      (modes . '(css-mode html-mode))))
   "A list describing all of the available alignment rules.
@@ -802,6 +802,9 @@ See the variable `align-exclude-rules-list' for more details.")
 (defvar align-highlight-overlays nil
   "The current overlays highlighting the text matched by a rule.")
 
+(defvar align-regexp-history nil
+  "Input history for the full user-entered regex in `align-regexp'")
+
 ;; Sample extension rule set, for vhdl-mode.  This should properly be
 ;; in vhdl-mode.el itself.
 
@@ -888,15 +891,15 @@ on the format of these lists."
       (let ((sec-first end)
 	    (sec-last beg))
 	(align-region beg end
-		      (or exclude-rules
-			  align-mode-exclude-rules-list
-			  align-exclude-rules-list) nil
 		      separator
-		      (function
-		       (lambda (b e mode)
-			 (when (and mode (listp mode))
-			   (setq sec-first (min sec-first b)
-				 sec-last  (max sec-last e))))))
+		      nil ; rules
+                      (or exclude-rules
+			  align-mode-exclude-rules-list
+			  align-exclude-rules-list)
+                      (lambda (b e mode)
+                        (when (consp mode)
+                          (setq sec-first (min sec-first b)
+                                sec-last  (max sec-last e)))))
 	(if (< sec-first sec-last)
 	    (align-region sec-first sec-last 'entire
 			  (or rules align-mode-rules-list align-rules-list)
@@ -946,7 +949,7 @@ construct a rule to pass to `align-region', which does the real work."
     (list (region-beginning) (region-end))
     (if current-prefix-arg
 	(list (read-string "Complex align using regexp: "
-			   "\\(\\s-*\\)")
+                          "\\(\\s-*\\)" 'align-regexp-history)
 	      (string-to-number
 	       (read-string
 		"Parenthesis group to modify (justify if negative): " "1"))
@@ -1051,7 +1054,9 @@ to be colored."
 
 ;;;###autoload
 (defun align-newline-and-indent ()
-  "A replacement function for `newline-and-indent', aligning as it goes."
+  "A replacement function for `newline-and-indent', aligning as it goes.
+The alignment is done by calling `align' on the region that was
+indented."
   (interactive)
   (let ((separate (or (if (and (symbolp align-region-separate)
 			       (boundp align-region-separate))
@@ -1348,7 +1353,7 @@ aligner would have dealt with are."
 	      (if real-beg
 		  (goto-char beg)
 		(if (or (not thissep) (eq thissep 'entire))
-		    (error "Cannot determine alignment region for '%s'"
+		    (error "Cannot determine alignment region for `%s'"
 			   (symbol-name (cdr (assq 'title rule)))))
 		(beginning-of-line)
 		(while (and (not (eobp))
@@ -1437,12 +1442,12 @@ aligner would have dealt with are."
                               (message
                                "Aligning `%s' (rule %d of %d) %d%%..."
                                (symbol-name symbol) rule-index rule-count
-                               (/ (* (- (point) real-beg) 100)
-                                  (- end-mark real-beg)))
+                               (floor (* (- (point) real-beg) 100.0)
+                                      (- end-mark real-beg)))
                             (message
                              "Aligning %d%%..."
-                             (/ (* (- (point) real-beg) 100)
-                                (- end-mark real-beg))))))
+                             (floor (* (- (point) real-beg) 100.0)
+                                    (- end-mark real-beg))))))
 
                     ;; if the search ended us on the beginning of
                     ;; the next line, move back to the end of the

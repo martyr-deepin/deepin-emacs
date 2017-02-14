@@ -1,6 +1,6 @@
-;;; mail-extr.el --- extract full name and address from RFC 822 mail header -*- coding: utf-8 -*-
+;;; mail-extr.el --- extract full name and address from RFC 822 mail header
 
-;; Copyright (C) 1991-1994, 1997, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1991-1994, 1997, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Joe Wells <jbw@cs.bu.edu>
@@ -234,7 +234,7 @@ we will act as though we couldn't find a full name in the address."
   :group 'mail-extr)
 
 (defcustom mail-extr-ignore-realname-equals-mailbox-name t
-"*Whether to ignore a name that is equal to the mailbox name.
+"Whether to ignore a name that is equal to the mailbox name.
 If true, then when the address is like \"Single <single@address.com>\"
 we will act as though we couldn't find a full name in the address."
   :type 'boolean
@@ -329,7 +329,7 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 ;; Matches an embedded or leading nickname that should be removed.
 ;; (defconst mail-extr-nickname-pattern
 ;;   (purecopy
-;;    (format "\\([ .]\\|\\`\\)[\"'`\[\(]\\([ .%s]+\\)[\]\"'\)] "
+;;    (format "\\([ .]\\|\\`\\)[\"'`[(]\\([ .%s]+\\)[]\"')] "
 ;;            mail-extr-all-letters)))
 
 ;; Matches the occurrence of a generational name suffix, and the last
@@ -369,7 +369,7 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 ;; Matches a variety of trailing comments not including comma-delimited
 ;; comments.
 (defconst mail-extr-trailing-comment-start-pattern
-  (purecopy " [-{]\\|--\\|[+@#></\;]"))
+  (purecopy " [-{]\\|--\\|[+@#></;]"))
 
 ;; Matches a name (not an initial).
 ;; This doesn't force a word boundary at the end because sometimes a
@@ -456,7 +456,7 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
 ;; mode from GB back to ASCII.  (Note that the escape-from-GB code '~}'
 ;; ($7E7D) is outside the defined GB range.)
 (defconst mail-extr-hz-embedded-gb-encoded-chinese-pattern
-  (purecopy "~{\\([^~].\\|~[^\}]\\)+~}"))
+  (purecopy "~{\\([^~].\\|~[^}]\\)+~}"))
 
 ;; The leading optional lowercase letters are for a bastardized version of
 ;; the encoding, as is the optional nature of the final slash.
@@ -543,8 +543,8 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
     (?\t " ")
     (?\r " ")
     (?\n " ")
-    (?\( "\(\)")
-    (?\) "\)\(")
+    (?\( "()")
+    (?\) ")(")
     (?\\ "\\"))
    (mail-extr-address-domain-literal-syntax-table
     (?\000 ?\377 "w")
@@ -553,8 +553,8 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
     (?\t " ")
     (?\r " ")
     (?\n " ")
-    (?\[ "\(\]")			;??????
-    (?\] "\)\[")			;??????
+    (?\[ "(]")			;??????
+    (?\] ")[")			;??????
     (?\\ "\\"))
    (mail-extr-address-text-comment-syntax-table
     (?\000 ?\377 "w")
@@ -563,16 +563,16 @@ by translating things like \"foo!bar!baz@host\" into \"baz@bar.UUCP\"."
     (?\t " ")
     (?\r " ")
     (?\n " ")
-    (?\( "\(\)")
-    (?\) "\)\(")
-    (?\[ "\(\]")
-    (?\] "\)\[")
-    (?\{ "\(\}")
-    (?\} "\)\{")
+    (?\( "()")
+    (?\) ")(")
+    (?\[ "(]")
+    (?\] ")[")
+    (?\{ "(}")
+    (?\} "){")
     (?\\ "\\")
     (?\" "\"")
-    ;; (?\' "\)\`")
-    ;; (?\` "\(\'")
+    ;; (?\' ")`")
+    ;; (?\` "('")
     )
    (mail-extr-address-text-syntax-table
     (?\000 ?\177 ".")
@@ -880,7 +880,7 @@ consing a string.)"
 		       (and (not (eobp))
 			    (eq ?w (char-syntax (char-after)))
 			    (progn
-			      (forward-word 1)
+			      (forward-word-strictly 1)
 			      (and (not (eobp))
 				   (> (char-after) ?\177)
 				   (not (eq (char-after) ? )))))))))
@@ -1312,7 +1312,7 @@ consing a string.)"
 		     )
 		    (t
 		     (setq atom-beg (point))
-		     (forward-word 1)
+		     (forward-word-strictly 1)
 		     (setq atom-end (point))
 		     (goto-char atom-beg)
 		     (save-restriction
@@ -1406,25 +1406,26 @@ consing a string.)"
 	      (insert (upcase mi) ". ")))
 
 	  ;; Nuke name if it is the same as mailbox name.
-	  (let ((buffer-length (- (point-max) (point-min)))
-		(i 0)
-		(names-match-flag t))
-	    (when (and (> buffer-length 0)
-		       (eq buffer-length (- mbox-end mbox-beg)))
-	      (goto-char (point-max))
-	      (insert-buffer-substring canonicalization-buffer
-				       mbox-beg mbox-end)
-	      (while (and names-match-flag
-			  (< i buffer-length))
-		(or (eq (downcase (char-after (+ i (point-min))))
-			(downcase
-			 (char-after (+ i buffer-length (point-min)))))
-		    (setq names-match-flag nil))
-		(setq i (1+ i)))
-	      (delete-region (+ (point-min) buffer-length) (point-max))
-	      (and names-match-flag
-			   mail-extr-ignore-realname-equals-mailbox-name
-			   (narrow-to-region (point) (point)))))
+          (when mail-extr-ignore-single-names
+            (let ((buffer-length (- (point-max) (point-min)))
+                  (i 0)
+                  (names-match-flag t))
+              (when (and (> buffer-length 0)
+                         (eq buffer-length (- mbox-end mbox-beg)))
+                (goto-char (point-max))
+                (insert-buffer-substring canonicalization-buffer
+                                         mbox-beg mbox-end)
+                (while (and names-match-flag
+                            (< i buffer-length))
+                  (or (eq (downcase (char-after (+ i (point-min))))
+                          (downcase
+                           (char-after (+ i buffer-length (point-min)))))
+                      (setq names-match-flag nil))
+                  (setq i (1+ i)))
+                (delete-region (+ (point-min) buffer-length) (point-max))
+                (and names-match-flag
+                     mail-extr-ignore-realname-equals-mailbox-name
+                     (narrow-to-region (point) (point))))))
 
 	  ;; Nuke name if it's just one word.
 	  (goto-char (point-min))

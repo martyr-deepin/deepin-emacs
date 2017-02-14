@@ -1,13 +1,13 @@
 /* Code for doing intervals.
-   Copyright (C) 1993-1995, 1997-1998, 2001-2015 Free Software
+   Copyright (C) 1993-1995, 1997-1998, 2001-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -43,10 +43,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <intprops.h>
 #include "lisp.h"
 #include "intervals.h"
-#include "character.h"
 #include "buffer.h"
 #include "puresize.h"
-#include "keyboard.h"
 #include "keymap.h"
 
 /* Test for membership, allowing for t (actually any non-cons) to mean the
@@ -91,11 +89,9 @@ create_root_interval (Lisp_Object parent)
 {
   INTERVAL new;
 
-  CHECK_IMPURE (parent);
-
   new = make_interval ();
 
-  if (BUFFERP (parent))
+  if (! STRINGP (parent))
     {
       new->total_length = (BUF_Z (XBUFFER (parent))
 			   - BUF_BEG (XBUFFER (parent)));
@@ -103,15 +99,16 @@ create_root_interval (Lisp_Object parent)
       set_buffer_intervals (XBUFFER (parent), new);
       new->position = BEG;
     }
-  else if (STRINGP (parent))
+  else
     {
+      CHECK_IMPURE (parent, XSTRING (parent));
       new->total_length = SCHARS (parent);
       eassert (TOTAL_LENGTH (new) >= 0);
       set_string_intervals (parent, new);
       new->position = 0;
     }
   eassert (LENGTH (new) > 0);
-  
+
   set_interval_object (new, parent);
 
   return new;
@@ -1824,11 +1821,16 @@ set_point (ptrdiff_t charpos)
 void
 set_point_from_marker (Lisp_Object marker)
 {
+  ptrdiff_t charpos = clip_to_bounds (BEGV, marker_position (marker), ZV);
+  ptrdiff_t bytepos = marker_byte_position (marker);
+
+  /* Don't trust the byte position if the marker belongs to a
+     different buffer.  */
   if (XMARKER (marker)->buffer != current_buffer)
-    signal_error ("Marker points into wrong buffer", marker);
-  set_point_both
-    (clip_to_bounds (BEGV, marker_position (marker), ZV),
-     clip_to_bounds (BEGV_BYTE, marker_byte_position (marker), ZV_BYTE));
+    bytepos = buf_charpos_to_bytepos (current_buffer, charpos);
+  else
+    bytepos = clip_to_bounds (BEGV_BYTE, bytepos, ZV_BYTE);
+  set_point_both (charpos, bytepos);
 }
 
 /* If there's an invisible character at position POS + TEST_OFFS in the

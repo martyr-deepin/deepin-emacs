@@ -1,6 +1,6 @@
 ;;; ediff.el --- a comprehensive visual interface to diff & patch
 
-;; Copyright (C) 1994-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2017 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Created: February 2, 1994
@@ -553,9 +553,9 @@ expression; only file names that match the regexp are considered."
 			   nil 'must-match)
 	   (read-string
 	    (if (stringp default-regexp)
-		(format "Filter through regular expression (default %s): "
+		(format "Filter filenames through regular expression (default %s): "
 			 default-regexp)
-	      "Filter through regular expression: ")
+	      "Filter filenames through regular expression: ")
 	    nil
 	    'ediff-filtering-regexp-history
 	    (eval ediff-default-filtering-regexp))
@@ -581,9 +581,9 @@ names.  Only the files that are under revision control are taken into account."
 	    "Directory to compare with revision:" dir-A nil 'must-match)
 	   (read-string
 	    (if (stringp default-regexp)
-		(format "Filter through regular expression (default %s): "
+		(format "Filter filenames through regular expression (default %s): "
 			 default-regexp)
-	      "Filter through regular expression: ")
+	      "Filter filenames through regular expression: ")
 	    nil
 	    'ediff-filtering-regexp-history
 	    (eval ediff-default-filtering-regexp))
@@ -619,9 +619,9 @@ regular expression; only file names that match the regexp are considered."
 			   nil 'must-match)
 	   (read-string
 	    (if (stringp default-regexp)
-		(format "Filter through regular expression (default %s): "
+		(format "Filter filenames through regular expression (default %s): "
 			 default-regexp)
-	      "Filter through regular expression: ")
+	      "Filter filenames through regular expression: ")
 	    nil
 	    'ediff-filtering-regexp-history
 	    (eval ediff-default-filtering-regexp))
@@ -651,9 +651,9 @@ expression; only file names that match the regexp are considered."
 			   nil 'must-match)
 	   (read-string
 	    (if (stringp default-regexp)
-		(format "Filter through regular expression (default %s): "
+		(format "Filter filenames through regular expression (default %s): "
 			 default-regexp)
-	      "Filter through regular expression: ")
+	      "Filter filenames through regular expression: ")
 	    nil
 	    'ediff-filtering-regexp-history
 	    (eval ediff-default-filtering-regexp))
@@ -692,9 +692,9 @@ only file names that match the regexp are considered."
 				 nil 'must-match)
 	   (read-string
 	    (if (stringp default-regexp)
-		(format "Filter through regular expression (default %s): "
+		(format "Filter filenames through regular expression (default %s): "
 			 default-regexp)
-	      "Filter through regular expression: ")
+	      "Filter filenames through regular expression: ")
 	    nil
 	    'ediff-filtering-regexp-history
 	    (eval ediff-default-filtering-regexp))
@@ -719,9 +719,9 @@ names.  Only the files that are under revision control are taken into account."
 	    "Directory to merge with revisions:" dir-A nil 'must-match)
 	   (read-string
 	    (if (stringp default-regexp)
-		(format "Filter through regular expression (default %s): "
+		(format "Filter filenames through regular expression (default %s): "
 			 default-regexp)
-	      "Filter through regular expression: ")
+	      "Filter filenames through regular expression: ")
 	    nil
 	    'ediff-filtering-regexp-history
 	    (eval ediff-default-filtering-regexp))
@@ -750,9 +750,9 @@ names.  Only the files that are under revision control are taken into account."
 	    dir-A nil 'must-match)
 	   (read-string
 	    (if (stringp default-regexp)
-		(format "Filter through regular expression (default %s): "
+		(format "Filter filenames through regular expression (default %s): "
 			 default-regexp)
-	      "Filter through regular expression: ")
+	      "Filter filenames through regular expression: ")
 	    nil
 	    'ediff-filtering-regexp-history
 	    (eval ediff-default-filtering-regexp))
@@ -963,7 +963,7 @@ If WIND-B is nil, use window next to WIND-A."
 ;;;###autoload
 (defun ediff-regions-wordwise (buffer-A buffer-B &optional startup-hooks)
   "Run Ediff on a pair of regions in specified buffers.
-Regions \(i.e., point and mark\) can be set in advance or marked interactively.
+Regions (i.e., point and mark) can be set in advance or marked interactively.
 This function is effective only for relatively small regions, up to 200
 lines.  For large regions, use `ediff-regions-linewise'."
   (interactive
@@ -1003,7 +1003,7 @@ lines.  For large regions, use `ediff-regions-linewise'."
 ;;;###autoload
 (defun ediff-regions-linewise (buffer-A buffer-B &optional startup-hooks)
   "Run Ediff on a pair of regions in specified buffers.
-Regions \(i.e., point and mark\) can be set in advance or marked interactively.
+Regions (i.e., point and mark) can be set in advance or marked interactively.
 Each region is enlarged to contain full lines.
 This function is effective for large regions, over 100-200
 lines.  For small regions, use `ediff-regions-wordwise'."
@@ -1294,7 +1294,7 @@ buffer."
   (let (rev1 rev2)
     (setq rev1
 	  (read-string
-	   (format
+	   (format-message
 	    "Version 1 to merge (default %s's working version): "
 	    (if (stringp file)
 		(file-name-nondirectory file) "current buffer")))
@@ -1326,7 +1326,7 @@ buffer."
   (let (rev1 rev2 ancestor-rev)
     (setq rev1
 	  (read-string
-	   (format
+	   (format-message
 	    "Version 1 to merge (default %s's working version): "
 	    (if (stringp file)
 		(file-name-nondirectory file) "current buffer")))
@@ -1338,7 +1338,7 @@ buffer."
 		(file-name-nondirectory file) "current buffer")))
 	  ancestor-rev
 	  (read-string
-	   (format
+	   (format-message
 	    "Ancestor version (default %s's base revision): "
 	    (if (stringp file)
 		(file-name-nondirectory file) "current buffer"))))
@@ -1367,7 +1367,8 @@ buffer. If odd -- assume it is in a file."
     (require 'ediff-ptch)
     (setq patch-buf
 	  (ediff-get-patch-buffer
-	   (if arg (prefix-numeric-value arg)) patch-buf))
+	   (and arg (prefix-numeric-value arg))
+           (and patch-buf (get-buffer patch-buf))))
     (setq source-dir (cond (ediff-use-last-dir ediff-last-dir-patch)
 			   ((and (not ediff-patch-default-directory)
 				 (buffer-file-name patch-buf))
@@ -1401,9 +1402,8 @@ patch. If not given, the user is prompted according to the prefix argument."
 	 (if arg (prefix-numeric-value arg)) patch-buf))
   (ediff-patch-buffer-internal
    patch-buf
-   (read-buffer
-    "Which buffer to patch? "
-    (ediff-other-buffer patch-buf))))
+   (read-buffer "Which buffer to patch? " (ediff-other-buffer patch-buf)
+                'require-match)))
 
 
 ;;;###autoload

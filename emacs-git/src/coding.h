@@ -1,5 +1,5 @@
 /* Header for coding system handler.
-   Copyright (C) 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 2001-2017 Free Software Foundation, Inc.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
      2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
@@ -12,8 +12,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,6 +25,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #ifndef EMACS_CODING_H
 #define EMACS_CODING_H
+
+#include "lisp.h"
 
 /* Index to arguments of Fdefine_coding_system_internal.  */
 
@@ -765,8 +767,6 @@ extern Lisp_Object preferred_coding_system (void);
 
 
 #ifdef emacs
-
-extern char *emacs_strerror (int);
 
 /* Coding system to be used to encode text for terminal display when
    terminal coding system is nil.  */

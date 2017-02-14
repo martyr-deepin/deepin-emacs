@@ -1,6 +1,6 @@
 ;;; semantic/ia.el --- Interactive Analysis functions
 
-;;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: syntax
@@ -146,7 +146,7 @@ Completion options are calculated with `semantic-analyze-possible-completions'."
 
 (defcustom semantic-ia-completion-menu-format-tag-function
   'semantic-format-tag-uml-concise-prototype
-  "*Function used to convert a tag to a string during completion."
+  "Function used to convert a tag to a string during completion."
   :group 'semantic
   :type semantic-format-tag-custom-list)
 
@@ -364,15 +364,17 @@ origin of the code at point."
       (let ((secondclass (car (reverse (oref ctxt prefixtypes)))))
 	(cond
 	 ((and (semantic-tag-with-position-p secondclass)
-	       (y-or-n-p (format "Could not find `%s'.  Jump to %s? "
-				 first (semantic-tag-name secondclass))))
+	       (y-or-n-p (format-message
+			  "Could not find `%s'.  Jump to %s? "
+			  first (semantic-tag-name secondclass))))
 	  (semantic-ia--fast-jump-helper secondclass)
 	  )
 	 ;; If we missed out on the class of the second item, then
 	 ;; just visit SECOND.
 	 ((and (semantic-tag-p second)
-	       (y-or-n-p (format "Could not find `%s'.  Jump to %s? "
-				 first (semantic-tag-name second))))
+	       (y-or-n-p (format-message
+			  "Could not find `%s'.  Jump to %s? "
+			  first (semantic-tag-name second))))
 	  (semantic-ia--fast-jump-helper second)
 	  ))))
 

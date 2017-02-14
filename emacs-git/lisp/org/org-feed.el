@@ -1,6 +1,6 @@
 ;;; org-feed.el --- Add RSS feed items to Org files
 ;;
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -24,7 +24,7 @@
 ;;
 ;;; Commentary:
 ;;
-;;  This module allows to create and change entries in an Org-mode
+;;  This module allows entries to be created and changed in an Org-mode
 ;;  file triggered by items in an RSS feed.  The basic functionality is
 ;;  geared toward simply adding new items found in a feed as outline nodes
 ;;  to an Org file.  Using hooks, arbitrary actions can be triggered for
@@ -93,7 +93,8 @@
 (require 'org)
 (require 'sha1)
 
-(declare-function url-retrieve-synchronously "url" (url))
+(declare-function url-retrieve-synchronously "url"
+                  (url &optional silent inhibit-cookies timeout))
 (declare-function xml-node-children "xml" (node))
 (declare-function xml-get-children "xml" (node child-name))
 (declare-function xml-get-attribute "xml" (node attribute))
@@ -690,7 +691,8 @@ formatted as a string, not the original XML data."
 				  (xml-node-children content)))))
 	 (t
 	  (setq entry (plist-put entry :description
-				 (format "Unknown '%s' content." type)))))))
+				 (format-message
+                                  "Unknown `%s' content." type)))))))
     entry))
 
 (provide 'org-feed)

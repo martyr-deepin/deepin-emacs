@@ -1,6 +1,6 @@
 ;;; wyse50.el --- terminal support code for Wyse 50
 
-;; Copyright (C) 1989, 1993-1994, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1989, 1993-1994, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Daniel Pfeiffer <occitan@esperanto.org>,
@@ -154,5 +154,7 @@ M-r	M-x move-to-window-line, Funct up-arrow or down-arrow are similar"
   ;;   (global-set-key (car key-definition)
   ;;                   (nth 1 key-definition)))
   (fset 'enable-arrow-keys nil))
+
+(provide 'term/wyse50)
 
 ;;; wyse50.el ends here

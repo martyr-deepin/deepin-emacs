@@ -1,5 +1,5 @@
 /* Composite sequence support.
-   Copyright (C) 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 2001-2017 Free Software Foundation, Inc.
    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
      Registration Number H14PRO021
@@ -11,8 +11,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,13 +26,12 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "lisp.h"
 #include "character.h"
+#include "composite.h"
 #include "buffer.h"
 #include "coding.h"
 #include "intervals.h"
-#include "window.h"
 #include "frame.h"
 #include "dispextern.h"
-#include "font.h"
 #include "termhooks.h"
 
 
@@ -336,7 +335,7 @@ get_composition_id (ptrdiff_t charpos, ptrdiff_t bytepos, ptrdiff_t nchars,
 	  ch = XINT (key_contents[i]);
 	  /* TAB in a composition means display glyphs with padding
 	     space on the left or right.  */
-	  this_width = (ch == '\t' ? 1 : CHAR_WIDTH (ch));
+	  this_width = (ch == '\t' ? 1 : CHARACTER_WIDTH (ch));
 	  if (cmp->width < this_width)
 	    cmp->width = this_width;
 	}
@@ -347,7 +346,7 @@ get_composition_id (ptrdiff_t charpos, ptrdiff_t bytepos, ptrdiff_t nchars,
       double leftmost = 0.0, rightmost;
 
       ch = XINT (key_contents[0]);
-      rightmost = ch != '\t' ? CHAR_WIDTH (ch) : 1;
+      rightmost = ch != '\t' ? CHARACTER_WIDTH (ch) : 1;
 
       for (i = 1; i < glyph_len; i += 2)
 	{
@@ -357,7 +356,7 @@ get_composition_id (ptrdiff_t charpos, ptrdiff_t bytepos, ptrdiff_t nchars,
 
 	  rule = XINT (key_contents[i]);
 	  ch = XINT (key_contents[i + 1]);
-	  this_width = ch != '\t' ? CHAR_WIDTH (ch) : 1;
+	  this_width = ch != '\t' ? CHARACTER_WIDTH (ch) : 1;
 
 	  /* A composition rule is specified by an integer value
 	     that encodes global and new reference points (GREF and
@@ -732,9 +731,11 @@ composition_gstring_width (Lisp_Object gstring, ptrdiff_t from, ptrdiff_t to,
       if (FONT_OBJECT_P (font_object))
 	{
 	  struct font *font = XFONT_OBJECT (font_object);
+	  int font_ascent, font_descent;
 
-	  metrics->ascent = font->ascent;
-	  metrics->descent = font->descent;
+	  get_font_ascent_descent (font, &font_ascent, &font_descent);
+	  metrics->ascent = font_ascent;
+	  metrics->descent = font_descent;
 	}
       else
 	{
@@ -890,6 +891,7 @@ autocmp_chars (Lisp_Object rule, ptrdiff_t charpos, ptrdiff_t bytepos,
   if (len <= 0)
     return unbind_to (count, Qnil);
   to = limit = charpos + len;
+  font_object = win->frame;
 #ifdef HAVE_WINDOW_SYSTEM
   if (FRAME_WINDOW_P (f))
     {
@@ -900,9 +902,7 @@ autocmp_chars (Lisp_Object rule, ptrdiff_t charpos, ptrdiff_t bytepos,
 	      && (fast_looking_at (re, charpos, bytepos, to, -1, string) <= 0)))
 	return unbind_to (count, Qnil);
     }
-  else
-#endif	/* not HAVE_WINDOW_SYSTEM */
-    font_object = win->frame;
+#endif
   lgstring = Fcomposition_get_gstring (pos, make_number (to), font_object,
 				       string);
   if (NILP (LGSTRING_ID (lgstring)))
@@ -925,7 +925,7 @@ char_composable_p (int c)
 {
   Lisp_Object val;
   return (c > ' '
-	  && (c == 0x200C || c == 0x200D
+	  && (c == ZERO_WIDTH_NON_JOINER || c == ZERO_WIDTH_JOINER
 	      || (val = CHAR_TABLE_REF (Vunicode_category_table, c),
 		  (INTEGERP (val) && (XINT (val) <= UNICODE_CATEGORY_So)))));
 }
@@ -1012,7 +1012,7 @@ composition_compute_stop_pos (struct composition_it *cmp_it, ptrdiff_t charpos, 
 	  val = CHAR_TABLE_REF (Vcomposition_function_table, c);
 	  if (! NILP (val))
 	    {
-	      for (int ridx = 0; CONSP (val); val = XCDR (val), ridx++)
+	      for (EMACS_INT ridx = 0; CONSP (val); val = XCDR (val), ridx++)
 		{
 		  Lisp_Object elt = XCAR (val);
 		  if (VECTORP (elt) && ASIZE (elt) == 3
@@ -1063,54 +1063,48 @@ composition_compute_stop_pos (struct composition_it *cmp_it, ptrdiff_t charpos, 
       while (char_composable_p (c))
 	{
 	  val = CHAR_TABLE_REF (Vcomposition_function_table, c);
-	  if (! NILP (val))
+	  for (EMACS_INT ridx = 0; CONSP (val); val = XCDR (val), ridx++)
 	    {
-	      Lisp_Object elt;
-	      int ridx, blen;
-
-	      for (ridx = 0; CONSP (val); val = XCDR (val), ridx++)
+	      Lisp_Object elt = XCAR (val);
+	      if (VECTORP (elt) && ASIZE (elt) == 3
+		  && NATNUMP (AREF (elt, 1))
+		  && charpos - XFASTINT (AREF (elt, 1)) > endpos)
 		{
-		  elt = XCAR (val);
-		  if (VECTORP (elt) && ASIZE (elt) == 3
-		      && NATNUMP (AREF (elt, 1))
-		      && charpos - XFASTINT (AREF (elt, 1)) > endpos)
-		    {
-		      ptrdiff_t back = XFASTINT (AREF (elt, 1));
-		      ptrdiff_t cpos = charpos - back, bpos;
+		  ptrdiff_t back = XFASTINT (AREF (elt, 1));
+		  ptrdiff_t cpos = charpos - back, bpos;
 
-		      if (back == 0)
-			bpos = bytepos;
-		      else
-			bpos = (NILP (string) ? CHAR_TO_BYTE (cpos)
-				: string_char_to_byte (string, cpos));
-		      if (STRINGP (AREF (elt, 0)))
-			blen = fast_looking_at (AREF (elt, 0), cpos, bpos,
-						start + 1, limit, string);
-		      else
-			blen = 1;
-		      if (blen > 0)
+		  if (back == 0)
+		    bpos = bytepos;
+		  else
+		    bpos = (NILP (string) ? CHAR_TO_BYTE (cpos)
+			    : string_char_to_byte (string, cpos));
+		  ptrdiff_t blen
+		    = (STRINGP (AREF (elt, 0))
+		       ? fast_looking_at (AREF (elt, 0), cpos, bpos,
+					  start + 1, limit, string)
+		       : 1);
+		  if (blen > 0)
+		    {
+		      /* Make CPOS point to the last character of
+			 match.  Note that BLEN is byte-length.  */
+		      if (blen > 1)
 			{
-			  /* Make CPOS point to the last character of
-			     match.  Note that BLEN is byte-length.  */
-			  if (blen > 1)
-			    {
-			      bpos += blen;
-			      if (NILP (string))
-				cpos = BYTE_TO_CHAR (bpos) - 1;
-			      else
-				cpos = string_byte_to_char (string, bpos) - 1;
-			    }
-			  back = cpos - (charpos - back);
-			  if (cmp_it->stop_pos < cpos
-			      || (cmp_it->stop_pos == cpos
-				  && cmp_it->lookback < back))
-			    {
-			      cmp_it->rule_idx = ridx;
-			      cmp_it->stop_pos = cpos;
-			      cmp_it->ch = c;
-			      cmp_it->lookback = back;
-			      cmp_it->nchars = back + 1;
-			    }
+			  bpos += blen;
+			  if (NILP (string))
+			    cpos = BYTE_TO_CHAR (bpos) - 1;
+			  else
+			    cpos = string_byte_to_char (string, bpos) - 1;
+			}
+		      back = cpos - (charpos - back);
+		      if (cmp_it->stop_pos < cpos
+			  || (cmp_it->stop_pos == cpos
+			      && cmp_it->lookback < back))
+			{
+			  cmp_it->rule_idx = ridx;
+			  cmp_it->stop_pos = cpos;
+			  cmp_it->ch = c;
+			  cmp_it->lookback = back;
+			  cmp_it->nchars = back + 1;
 			}
 		    }
 		}
@@ -1203,10 +1197,10 @@ composition_reseat_it (struct composition_it *cmp_it, ptrdiff_t charpos,
     {
       Lisp_Object lgstring = Qnil;
       Lisp_Object val, elt;
-      ptrdiff_t i;
 
       val = CHAR_TABLE_REF (Vcomposition_function_table, cmp_it->ch);
-      for (i = 0; i < cmp_it->rule_idx; i++, val = XCDR (val));
+      for (EMACS_INT i = 0; i < cmp_it->rule_idx; i++, val = XCDR (val))
+	continue;
       if (charpos < endpos)
 	{
 	  for (; CONSP (val); val = XCDR (val))
@@ -1255,6 +1249,7 @@ composition_reseat_it (struct composition_it *cmp_it, ptrdiff_t charpos,
       if (NILP (LGSTRING_ID (lgstring)))
 	lgstring = composition_gstring_put_cache (lgstring, -1);
       cmp_it->id = XINT (LGSTRING_ID (lgstring));
+      int i;
       for (i = 0; i < LGSTRING_GLYPH_LEN (lgstring); i++)
 	if (NILP (LGSTRING_GLYPH (lgstring, i)))
 	  break;
@@ -1307,7 +1302,8 @@ composition_reseat_it (struct composition_it *cmp_it, ptrdiff_t charpos,
 int
 composition_update_it (struct composition_it *cmp_it, ptrdiff_t charpos, ptrdiff_t bytepos, Lisp_Object string)
 {
-  int i, c IF_LINT (= 0);
+  int i;
+  int c UNINIT;
 
   if (cmp_it->ch < 0)
     {
@@ -1383,7 +1379,7 @@ composition_update_it (struct composition_it *cmp_it, ptrdiff_t charpos, ptrdiff
 	{
 	  c = XINT (LGSTRING_CHAR (gstring, from + i));
 	  cmp_it->nbytes += CHAR_BYTES (c);
-	  cmp_it->width += CHAR_WIDTH (c);
+	  cmp_it->width += CHARACTER_WIDTH (c);
 	}
     }
   return c;
@@ -1930,7 +1926,6 @@ The default value is the function `compose-chars-after'.  */);
   Vcompose_chars_after_function = intern_c_string ("compose-chars-after");
 
   DEFSYM (Qauto_composed, "auto-composed");
-  DEFSYM (Qauto_composition_function, "auto-composition-function");
 
   DEFVAR_LISP ("auto-composition-mode", Vauto_composition_mode,
 	       doc: /* Non-nil if Auto-Composition mode is enabled.

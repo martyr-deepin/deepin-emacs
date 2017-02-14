@@ -1,6 +1,6 @@
 ;;; semantic/sb.el --- Semantic tag display for speedbar
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: syntax
@@ -38,7 +38,7 @@
 (declare-function semanticdb-file-stream "semantic/db")
 
 (defcustom semantic-sb-autoexpand-length 1
-  "*Length of a semantic bucket to autoexpand in place.
+  "Length of a semantic bucket to autoexpand in place.
 This will replace the named bucket that would have usually occurred here."
   :group 'speedbar
   :type 'integer)
@@ -49,12 +49,12 @@ Make this buffer local for modes that have different types of tags
 that should be ignored.")
 
 (defcustom semantic-sb-button-format-tag-function 'semantic-format-tag-abbreviate
-  "*Function called to create the text for a but from a token."
+  "Function called to create the text for a but from a token."
   :group 'speedbar
   :type semantic-format-tag-custom-list)
 
 (defcustom semantic-sb-info-format-tag-function 'semantic-format-tag-summarize
-  "*Function called to create the text for info display from a token."
+  "Function called to create the text for info display from a token."
   :group 'speedbar
   :type semantic-format-tag-custom-list)
 

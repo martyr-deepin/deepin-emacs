@@ -1,4 +1,4 @@
-Copyright (C) 2008-2015 Free Software Foundation, Inc.
+Copyright (C) 2008-2017 Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 
@@ -18,6 +18,8 @@ Compilation
 In the top-level directory, use:
 
   ./configure --with-ns
+
+(On macOS, --with-ns is enabled by default.)
 
 This will compile all the files, but emacs will not be able to be run except
 in -nw (terminal) mode.

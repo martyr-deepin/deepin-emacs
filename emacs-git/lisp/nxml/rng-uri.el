@@ -1,6 +1,6 @@
-;;; rng-uri.el --- URI parsing and manipulation
+;;; rng-uri.el --- URI parsing and manipulation  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: James Clark
 ;; Keywords: wp, hypermedia, languages, XML
@@ -125,7 +125,7 @@ Signal an error if URI is not a valid file URL."
 	  (t path))))
 
 (defun rng-uri-error (&rest args)
-  (signal 'rng-uri-error (list (apply 'format args))))
+  (signal 'rng-uri-error (list (apply #'format-message args))))
 
 (define-error 'rng-uri-error "Invalid URI")
 

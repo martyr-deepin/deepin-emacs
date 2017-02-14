@@ -1,6 +1,6 @@
 ;;; mh-search  ---  MH-Search mode
 
-;; Copyright (C) 1993, 1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 1995, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Indexed search by Satyaki Das <satyaki@theforce.stanford.edu>
 ;; Maintainer: Bill Wohler <wohler@newt.com>
@@ -1160,7 +1160,7 @@ the file \"/home/user/Mail/.namazu/mknmzrc\" with the following
 contents:
 
      package conf;  # Don't remove this line!
-     $ADDRESS = 'user@localhost';
+     $ADDRESS = \\='user@localhost\\=';
      $ALLOW_FILE = \"[0-9]*\";
      $EXCLUDE_PATH = \"^/home/user/Mail/(mhe-index|spam)\";
 
@@ -1247,7 +1247,7 @@ is used to search."
   (prog1
       (block nil
         (when (eobp) (return nil))
-        (when (search-forward-regexp "^\+" (mh-line-end-position) t)
+        (when (search-forward-regexp "^\\+" (mh-line-end-position) t)
           (setq mh-index-pick-folder
                 (buffer-substring-no-properties (mh-line-beginning-position)
                                                 (mh-line-end-position)))
@@ -1262,7 +1262,7 @@ is used to search."
     (forward-line)))
 
 ;; All implementations of pick have special options -cc, -date, -from and
-;; -subject that allow to search for corresponding components. Any other
+;; -subject that allow searching for corresponding components. Any other
 ;; component is searched using option --COMPNAME, for example: `pick
 ;; --x-mailer mh-e'. Mailutils "pick" supports this option using a certain
 ;; kludge, but it prefers the following syntax for this purpose:
@@ -1859,7 +1859,7 @@ PROC is used to convert the value to actual data."
 (defun mh-index-update-maps (folder &optional origin-map)
   "Annotate all as yet unannotated messages in FOLDER with their MD5 hash.
 As a side effect msg -> checksum map is updated. Optional
-argument ORIGIN-MAP is a hashtable which maps each message in the
+argument ORIGIN-MAP is a hash table which maps each message in the
 index folder to the original folder and message from whence it
 was copied. If present the checksum -> (origin-folder,
 origin-index) map is updated too."
@@ -1913,7 +1913,7 @@ origin-index) map is updated too."
 (defun mh-index-update-single-msg (msg checksum origin-map)
   "Update various maps for one message.
 MSG is a index folder message, CHECKSUM its MD5 hash and
-ORIGIN-MAP, if non-nil, a hashtable containing which maps each
+ORIGIN-MAP, if non-nil, a hash table containing which maps each
 message in the index folder to the folder and message that it was
 copied from. The function updates the hash tables
 `mh-index-msg-checksum-map' and `mh-index-checksum-origin-map'.

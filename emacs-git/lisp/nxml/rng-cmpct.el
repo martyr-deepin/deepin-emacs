@@ -1,6 +1,6 @@
-;;; rng-cmpct.el --- parsing of RELAX NG Compact Syntax schemas
+;;; rng-cmpct.el --- parsing of RELAX NG Compact Syntax schemas  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: James Clark
 ;; Keywords: wp, hypermedia, languages, XML, RelaxNG
@@ -400,7 +400,7 @@ OVERRIDE is either nil, require or t."
 (defun rng-c-error (&rest args)
   (rng-c-signal-incorrect-schema rng-c-file-name
 				 (rng-c-translate-position (point))
-				 (apply 'format args)))
+				 (apply #'format-message args)))
 
 (defun rng-c-parse-top-level (context)
   (let ((rng-c-namespace-decls nil)
@@ -674,13 +674,7 @@ the primary expression."
      (substring rng-c-current-token n (- n)))))
 
 (defun rng-c-fix-escaped-newlines (str)
-  (let ((pos 0))
-    (while (progn
-	     (let ((n (string-match "\C-@" str pos)))
-	       (and n
-		    (aset str n ?\n)
-		    (setq pos (1+ n)))))))
-  str)
+  (subst-char-in-string ?\C-@ ?\n str))
 
 (defun rng-c-parse-identifier-or-keyword ()
   (cond ((rng-c-current-token-ncname-p)

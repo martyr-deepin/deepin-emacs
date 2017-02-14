@@ -1,6 +1,6 @@
 ;;; vc.el --- drive a version-control system from within Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1998, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author:     FSF (see below for full credits)
 ;; Maintainer: Andre Spiegel <spiegel@gnu.org>
@@ -233,12 +233,13 @@
 ;;   Unregister FILE from this backend.  This is only needed if this
 ;;   backend may be used as a "more local" backend for temporary editing.
 ;;
-;; * checkin (files comment)
+;; * checkin (files comment &optional rev)
 ;;
 ;;   Commit changes in FILES to this backend. COMMENT is used as a
 ;;   check-in comment.  The implementation should pass the value of
-;;   vc-checkin-switches to the backend command.  The revision argument
-;;   of some older VC versions is no longer supported.
+;;   vc-checkin-switches to the backend command.  The optional REV
+;;   revision argument is only supported with some older VCSes, like
+;;   RCS and CVS, and is otherwise silently ignored.
 ;;
 ;; * find-revision (file rev buffer)
 ;;
@@ -367,7 +368,8 @@
 ;;   BUFFER is nil.  If ASYNC is non-nil, run asynchronously.  If REV1
 ;;   and REV2 are non-nil, report differences from REV1 to REV2.  If
 ;;   REV1 is nil, use the working revision (as found in the
-;;   repository) as the older revision; if REV2 is nil, use the
+;;   repository) as the older revision if REV2 is nil as well;
+;;   otherwise, diff against an empty tree.  If REV2 is nil, use the
 ;;   current working-copy contents as the newer revision.  This
 ;;   function should pass the value of (vc-switches BACKEND 'diff) to
 ;;   the backend command.  It should return a status of either 0 (no
@@ -550,7 +552,7 @@
 ;;   argument, since on no system since RCS has setting the initial
 ;;   revision been even possible, let alone sane.
 ;;
-;;   INCOMPATIBLE CHANGE: In older versions of the API, vc-diff did
+;; - INCOMPATIBLE CHANGE: In older versions of the API, vc-diff did
 ;;   not take an async-mode flag as a fourth optional argument.  (This
 ;;   change eliminated a particularly ugly global.)
 ;;
@@ -561,12 +563,12 @@
 ;;   SVN.)
 ;;
 ;; - INCOMPATIBLE CHANGE: The old fourth 'default-state' argument of
-;;   vc-dir-status-files is gone; none of the back ends actually used it.
+;;   dir-status-files is gone; none of the back ends actually used it.
 ;;
-;; - vc-dir-status is no longer a public method; it has been replaced
-;;   by vc-dir-status-files.
+;; - dir-status is no longer a public method; it has been replaced by
+;;   dir-status-files.
 ;;
-;; - vc-state-heuristic is no longer a public method (the CVS backend
+;; - state-heuristic is no longer a public method (the CVS backend
 ;;   retains it as a private one).
 ;;
 ;; - the vc-mistrust-permissions configuration variable is gone; the
@@ -575,8 +577,8 @@
 ;;   only affected back ends were SCCS and RCS.
 ;;
 ;; - vc-stay-local-p and repository-hostname are no longer part
-;;   of the public API. The vc-stay-local configuration variable
-;;   remains but only affects the CVS back end.
+;;   of the public API. The vc-cvs-stay-local configuration variable
+;;   remains and only affects the CVS back end.
 ;;
 ;; - The init-revision function and the default-initial-revision
 ;;   variable are gone.  These have't made sense on anything shipped
@@ -849,9 +851,9 @@ See `run-hooks'."
 
 (defcustom vc-static-header-alist
   '(("\\.c\\'" .
-     "\n#ifndef lint\nstatic char vcid[] = \"\%s\";\n#endif /* lint */\n"))
+     "\n#ifndef lint\nstatic char vcid[] = \"%s\";\n#endif /* lint */\n"))
   "Associate static header string templates with file types.
-A \%s in the template is replaced with the first string associated with
+A %s in the template is replaced with the first string associated with
 the file's version control type in `vc-BACKEND-header'."
   :type '(repeat (cons :format "%v"
 		       (regexp :tag "File Type")
@@ -957,7 +959,11 @@ use."
 If FILE is already registered, return the
 backend of FILE.  If FILE is not registered, then the
 first backend in `vc-handled-backends' that declares itself
-responsible for FILE is returned."
+responsible for FILE is returned.
+
+Note that if FILE is a symbolic link, it will not be resolved --
+the responsible backend system for the symbolic link itself will
+be reported."
   (or (and (not (file-directory-p file)) (vc-backend file))
       (catch 'found
 	;; First try: find a responsible backend.  If this is for registration,
@@ -1024,9 +1030,6 @@ BEWARE: this function may change the current buffer."
       (if observer
 	  (vc-dired-deduce-fileset)
 	(error "State changing VC operations not supported in `dired-mode'")))
-     ((and (derived-mode-p 'log-view-mode)
-	   (setq backend (vc-responsible-backend default-directory)))
-      (list backend default-directory))
      ((setq backend (vc-backend buffer-file-name))
       (if state-model-only-files
 	(list backend (list buffer-file-name)
@@ -1042,6 +1045,9 @@ BEWARE: this function may change the current buffer."
       (progn                  ;FIXME: Why not `with-current-buffer'? --Stef.
 	(set-buffer vc-parent-buffer)
 	(vc-deduce-fileset observer allow-unregistered state-model-only-files)))
+     ((and (derived-mode-p 'log-view-mode)
+	   (setq backend (vc-responsible-backend default-directory)))
+      (list backend nil))
      ((not buffer-file-name)
        (error "Buffer %s is not associated with a file" (buffer-name)))
      ((and allow-unregistered (not (vc-registered buffer-file-name)))
@@ -1220,10 +1226,15 @@ For old-style locking-based version control systems, like RCS:
 	    (message "No files remain to be committed")
 	  (if (not verbose)
 	      (vc-checkin ready-for-commit backend)
-            (let ((new-backend (vc-read-backend "New backend: ")))
-	      (if new-backend
-                  (dolist (file files)
-                    (vc-transfer-file file new-backend))))))))
+	    (let* ((revision (read-string "New revision or backend: "))
+                   (revision-downcase (downcase revision)))
+	      (if (member
+		   revision-downcase
+		   (mapcar (lambda (arg) (downcase (symbol-name arg)))
+			   vc-handled-backends))
+		  (let ((vsym (intern revision-downcase)))
+		    (dolist (file files) (vc-transfer-file file vsym)))
+		(vc-checkin ready-for-commit backend nil nil revision)))))))
      ;; locked by somebody else (locking VCSes only)
      ((stringp state)
       ;; In the old days, we computed the revision once and used it on
@@ -1422,8 +1433,13 @@ Argument BACKEND is the backend you are using."
 
 (defun vc-default-ignore-completion-table (backend file)
   "Return the list of ignored files under BACKEND."
-  (vc--read-lines
-   (vc-call-backend backend 'find-ignore-file file)))
+  (cl-delete-if
+   (lambda (str)
+     ;; Commented or empty lines.
+     (string-match-p "\\`\\(?:#\\|[ \t\r\n]*\\'\\)" str))
+   (let ((file (vc-call-backend backend 'find-ignore-file file)))
+     (and (file-exists-p file)
+          (vc--read-lines file)))))
 
 (defun vc--read-lines (file)
   "Return a list of lines of FILE."
@@ -1517,11 +1533,13 @@ Type \\[vc-next-action] to check in changes.")
      ".\n")
     (message "Please explain why you stole the lock.  Type C-c C-c when done.")))
 
-(defun vc-checkin (files backend &optional comment initial-contents)
+(defun vc-checkin (files backend &optional comment initial-contents rev)
   "Check in FILES. COMMENT is a comment string; if omitted, a
 buffer is popped up to accept a comment.  If INITIAL-CONTENTS is
 non-nil, then COMMENT is used as the initial contents of the log
 entry buffer.
+The optional argument REV may be a string specifying the new revision
+level (only supported for some older VCSes, like RCS and CVS).
 
 Runs the normal hooks `vc-before-checkin-hook' and `vc-checkin-hook'."
   (when vc-before-checkin-hook
@@ -1544,7 +1562,7 @@ Runs the normal hooks `vc-before-checkin-hook' and `vc-checkin-hook'."
        ;; vc-checkin-switches, but 'the' local buffer is
        ;; not a well-defined concept for filesets.
        (progn
-         (vc-call-backend backend 'checkin files comment)
+         (vc-call-backend backend 'checkin files comment rev)
          (mapc 'vc-delete-automatic-version-backups files))
        `((vc-state . up-to-date)
          (vc-checkout-time . ,(nth 5 (file-attributes file)))
@@ -2055,6 +2073,13 @@ changes from the current branch."
     (message "File contains conflicts.")))
 
 ;;;###autoload
+(defun vc-message-unresolved-conflicts (filename)
+  "Display a message indicating unresolved conflicts in FILENAME."
+  ;; This enables all VC backends to give a standard, recognizable
+  ;; conflict message that indicates which file is conflicted.
+  (message "There are unresolved conflicts in %s" filename))
+
+;;;###autoload
 (defalias 'vc-resolve-conflicts 'smerge-ediff)
 
 ;; TODO: This is OK but maybe we could integrate it better.
@@ -2088,7 +2113,7 @@ changes from the current branch."
 (defun vc-tag-precondition (dir)
   "Scan the tree below DIR, looking for files not up-to-date.
 If any file is not up-to-date, return the name of the first such file.
-\(This means, neither tag creation nor retrieval is allowed.\)
+\(This means, neither tag creation nor retrieval is allowed.)
 If one or more of the files are currently visited, return `visited'.
 Otherwise, return nil."
   (let ((status nil))
@@ -2179,7 +2204,7 @@ Not all VC backends support short logs!")
 In the new log, leave point at WORKING-REVISION (if non-nil).
 LIMIT is the number of entries currently shown.
 Does nothing if IS-START-REVISION is non-nil, or if LIMIT is nil,
-or if PL-RETURN is 'limit-unsupported."
+or if PL-RETURN is `limit-unsupported'."
   (when (and limit (not (eq 'limit-unsupported pl-return))
 	     (not is-start-revision))
     (goto-char (point-max))
@@ -2372,7 +2397,7 @@ When called interactively with a prefix argument, prompt for REMOTE-LOCATION."
   "Show the history of the region FROM..TO."
   (interactive "r")
   (let* ((lfrom (line-number-at-pos from))
-         (lto   (line-number-at-pos to))
+         (lto   (line-number-at-pos (1- to)))
          (file buffer-file-name)
          (backend (vc-backend file))
          (buf (get-buffer-create "*VC-history*")))
@@ -2446,7 +2471,8 @@ to the working revision (except for keyword expansion)."
 You must be visiting a version controlled file, or in a `vc-dir' buffer.
 On a distributed version control system, this runs a \"pull\"
 operation to update the current branch, prompting for an argument
-list if required.  Optional prefix ARG forces a prompt.
+list if required.  Optional prefix ARG forces a prompt for the VCS
+command to run.
 
 On a non-distributed version control system, update the current
 fileset to the tip revisions.  For each unchanged and unlocked
@@ -2490,8 +2516,11 @@ tip revision are merged into the working file."
 You must be visiting a version controlled file, or in a `vc-dir' buffer.
 On a distributed version control system, this runs a \"push\"
 operation on the current branch, prompting for the precise command
-if required.  Optional prefix ARG non-nil forces a prompt.
-On a non-distributed version control system, this signals an error."
+if required.  Optional prefix ARG non-nil forces a prompt for the
+VCS command to run.
+
+On a non-distributed version control system, this signals an error.
+It also signals an error in a Bazaar bound branch."
   (interactive "P")
   (let* ((vc-fileset (vc-deduce-fileset t))
 	 (backend (car vc-fileset)))

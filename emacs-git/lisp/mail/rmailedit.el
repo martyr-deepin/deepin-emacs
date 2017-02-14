@@ -1,6 +1,6 @@
 ;;; rmailedit.el --- "RMAIL edit mode"  Edit the current message
 
-;; Copyright (C) 1985, 1994, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1994, 2001-2017 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: mail
@@ -448,7 +448,7 @@ HEADER-DIFF should be a return value from `rmail-edit-diff-headers'."
 (provide 'rmailedit)
 
 ;; Local Variables:
-;; generated-autoload-file: "rmail.el"
+;; generated-autoload-file: "rmail-loaddefs.el"
 ;; End:
 
 ;;; rmailedit.el ends here

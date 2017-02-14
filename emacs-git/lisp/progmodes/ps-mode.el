@@ -1,6 +1,6 @@
 ;;; ps-mode.el --- PostScript mode for GNU Emacs
 
-;; Copyright (C) 1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author:     Peter Kleiweg <p.c.j.kleiweg@rug.nl>
 ;; Maintainer: Peter Kleiweg <p.c.j.kleiweg@rug.nl>
@@ -113,7 +113,7 @@ When the figure is finished these values should be replaced."
 (defcustom ps-mode-print-function
   (lambda ()
      (let ((lpr-switches nil)
-	   (lpr-command (if (memq system-type '(usg-unix-v hpux irix))
+	   (lpr-command (if (memq system-type '(usg-unix-v hpux))
 			    "lp" "lpr")))
        (lpr-buffer)))
   "Lisp function to print current buffer as PostScript."
@@ -1082,7 +1082,7 @@ Use line numbers if `ps-run-error-line-numbers' is not nil"
       (goto-char (max 1 (1- (point)))))
     (when (looking-at "[0-9]")
       (forward-char 1)
-      (forward-word -1)
+      (forward-word-strictly -1)
       (when (looking-at "[0-9]+")
 	(let (i)
 	  (setq

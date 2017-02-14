@@ -1,6 +1,6 @@
 ;;; tls.el --- TLS/SSL support via wrapper around GnuTLS
 
-;; Copyright (C) 1996-1999, 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2002-2017 Free Software Foundation, Inc.
 
 ;; Author: Simon Josefsson <simon@josefsson.org>
 ;; Keywords: comm, tls, gnutls, ssl
@@ -44,6 +44,8 @@
 
 ;;; Code:
 
+(require 'gnutls)
+
 (autoload 'format-spec "format-spec")
 (autoload 'format-spec-make "format-spec")
 
@@ -74,12 +76,14 @@ and `gnutls-cli' (version 2.0.1) output."
   :type 'regexp
   :group 'tls)
 
-(defcustom tls-program '("gnutls-cli --insecure -p %p %h"
-			 "gnutls-cli --insecure -p %p %h --protocols ssl3"
-			 "openssl s_client -connect %h:%p -no_ssl2 -ign_eof")
+(defcustom tls-program
+  '("gnutls-cli --x509cafile %t -p %p %h"
+    "gnutls-cli --x509cafile %t -p %p %h --protocols ssl3"
+    "openssl s_client -connect %h:%p -no_ssl2 -ign_eof")
   "List of strings containing commands to start TLS stream to a host.
 Each entry in the list is tried until a connection is successful.
-%h is replaced with server hostname, %p with port to connect to.
+%h is replaced with the server hostname, %p with the port to
+connect to, and %t with a file name containing trusted certificates.
 The program should read input on stdin and write output to stdout.
 
 See `tls-checktrust' on how to check trusted root certs.
@@ -89,21 +93,17 @@ successful negotiation."
   :type
   '(choice
     (const :tag "Default list of commands"
-	   ("gnutls-cli --insecure -p %p %h"
-	    "gnutls-cli --insecure -p %p %h --protocols ssl3"
-	    "openssl s_client -connect %h:%p -no_ssl2 -ign_eof"))
+	   ("gnutls-cli --x509cafile %t -p %p %h"
+	    "gnutls-cli --x509cafile %t -p %p %h --protocols ssl3"
+	    "openssl s_client -CAfile %t -connect %h:%p -no_ssl2 -ign_eof"))
     (list :tag "Choose commands"
 	  :value
-	  ("gnutls-cli --insecure -p %p %h"
-	   "gnutls-cli --insecure -p %p %h --protocols ssl3"
+	  ("gnutls-cli --x509cafile %t -p %p %h"
+	   "gnutls-cli --x509cafile %t -p %p %h --protocols ssl3"
 	   "openssl s_client -connect %h:%p -no_ssl2 -ign_eof")
 	  (set :inline t
 	       ;; FIXME: add brief `:tag "..."' descriptions.
 	       ;; (repeat :inline t :tag "Other" (string))
-	       ;; See `tls-checktrust':
-	       (const "gnutls-cli --x509cafile /etc/ssl/certs/ca-certificates.crt -p %p %h")
-	       (const "gnutls-cli --x509cafile /etc/ssl/certs/ca-certificates.crt -p %p %h --protocols ssl3")
-	       (const "openssl s_client -connect %h:%p -CAfile /etc/ssl/certs/ca-certificates.crt -no_ssl2 -ign_eof")
 	       ;; No trust check:
 	       (const "gnutls-cli --insecure -p %p %h")
 	       (const "gnutls-cli --insecure -p %p %h --protocols ssl3")
@@ -137,7 +137,7 @@ the external program knows about the root certificates you
 consider trustworthy, e.g.:
 
 \(setq tls-program
-      '(\"gnutls-cli --x509cafile /etc/ssl/certs/ca-certificates.crt -p %p %h\"
+      \\='(\"gnutls-cli --x509cafile /etc/ssl/certs/ca-certificates.crt -p %p %h\"
 	\"gnutls-cli --x509cafile /etc/ssl/certs/ca-certificates.crt -p %p %h --protocols ssl3\"
 	\"openssl s_client -connect %h:%p -CAfile /etc/ssl/certs/ca-certificates.crt -no_ssl2 -ign_eof\"))"
   :type '(choice (const :tag "Always" t)
@@ -173,6 +173,11 @@ Used by `tls-certificate-information'."
   :version "22.1"
   :type 'string
   :group 'tls)
+
+(defalias 'tls-format-message
+  (if (fboundp 'format-message) 'format-message
+    ;; for Emacs < 25, and XEmacs, don't worry about quote translation.
+    'format))
 
 (defun tls-certificate-information (der)
   "Parse X.509 certificate in DER format into an assoc list."
@@ -227,6 +232,7 @@ Fourth arg PORT is an integer specifying a port to connect to."
 	       (format-spec
 		cmd
 		(format-spec-make
+                 ?t (car (gnutls-trustfiles))
 		 ?h host
 		 ?p (if (integerp port)
 			(int-to-string port)
@@ -275,8 +281,8 @@ Fourth arg PORT is an integer specifying a port to connect to."
 			     (message "The certificate presented by `%s' is \
 NOT trusted." host))
 			(not (yes-or-no-p
-			      (format "The certificate presented by `%s' is \
-NOT trusted. Accept anyway? " host)))))
+			      (tls-format-message "\
+The certificate presented by `%s' is NOT trusted. Accept anyway? " host)))))
 		  (and tls-hostmismatch
 		       (save-excursion
 			 (goto-char (point-min))

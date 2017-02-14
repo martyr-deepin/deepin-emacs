@@ -1,13 +1,13 @@
 /* Indentation functions.
-   Copyright (C) 1985-1988, 1993-1995, 1998, 2000-2015 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1998, 2000-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,10 +26,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "category.h"
 #include "composite.h"
 #include "indent.h"
-#include "keyboard.h"
 #include "frame.h"
 #include "window.h"
-#include "termchar.h"
 #include "disptab.h"
 #include "intervals.h"
 #include "dispextern.h"
@@ -298,7 +296,7 @@ skip_invisible (ptrdiff_t pos, ptrdiff_t *next_boundary_p, ptrdiff_t to, Lisp_Ob
 	if (dp != 0 && VECTORP (DISP_CHAR_VECTOR (dp, ch)))		\
 	  width = sanitize_char_width (ASIZE (DISP_CHAR_VECTOR (dp, ch))); \
 	else								\
-	  width = CHAR_WIDTH (ch);					\
+	  width = CHARACTER_WIDTH (ch);					\
       }									\
   } while (0)
 
@@ -485,7 +483,9 @@ check_display_width (ptrdiff_t pos, ptrdiff_t col, ptrdiff_t *endpos)
 	 : MOST_POSITIVE_FIXNUM);
 
       if ((prop = Fplist_get (plist, QCwidth),
-	   RANGED_INTEGERP (0, prop, INT_MAX)))
+	   RANGED_INTEGERP (0, prop, INT_MAX))
+	  || (prop = Fplist_get (plist, QCrelative_width),
+	      RANGED_INTEGERP (0, prop, INT_MAX)))
 	width = XINT (prop);
       else if (FLOATP (prop) && 0 <= XFLOAT_DATA (prop)
 	       && XFLOAT_DATA (prop) <= INT_MAX)
@@ -504,6 +504,18 @@ check_display_width (ptrdiff_t pos, ptrdiff_t col, ptrdiff_t *endpos)
 	    *endpos = OVERLAY_POSITION (OVERLAY_END (overlay));
 	  else
 	    get_property_and_range (pos, Qdisplay, &val, &start, endpos, Qnil);
+
+	  /* For :relative-width, we need to multiply by the column
+	     width of the character at POS, if it is greater than 1.  */
+	  if (!NILP (Fplist_get (plist, QCrelative_width))
+	      && !NILP (BVAR (current_buffer, enable_multibyte_characters)))
+	    {
+	      int b, wd;
+	      unsigned char *p = BYTE_POS_ADDR (CHAR_TO_BYTE (pos));
+
+	      MULTIBYTE_BYTES_WIDTH (p, buffer_display_table (), b, wd);
+	      width *= wd;
+	    }
 	  return width;
 	}
     }
@@ -1150,7 +1162,7 @@ compute_motion (ptrdiff_t from, ptrdiff_t frombyte, EMACS_INT fromvpos,
   int prev_tab_offset;		/* Previous tab offset.  */
   int continuation_glyph_width;
   struct buffer *cache_buffer = current_buffer;
-  struct region_cache *width_cache;
+  struct region_cache *width_cache = NULL;
 
   struct composition_it cmp_it;
 
@@ -1158,11 +1170,14 @@ compute_motion (ptrdiff_t from, ptrdiff_t frombyte, EMACS_INT fromvpos,
 
   if (cache_buffer->base_buffer)
     cache_buffer = cache_buffer->base_buffer;
-  width_cache = width_run_cache_on_off ();
   if (dp == buffer_display_table ())
-    width_table = (VECTORP (BVAR (current_buffer, width_table))
-                   ? XVECTOR (BVAR (current_buffer, width_table))->contents
-                   : 0);
+    {
+      width_table = (VECTORP (BVAR (current_buffer, width_table))
+		     ? XVECTOR (BVAR (current_buffer, width_table))->contents
+		     : 0);
+      if (width_table)
+	width_cache = width_run_cache_on_off ();
+    }
   else
     /* If the window has its own display table, we can't use the width
        run cache, because that's based on the buffer's display table.  */
@@ -1185,9 +1200,6 @@ compute_motion (ptrdiff_t from, ptrdiff_t frombyte, EMACS_INT fromvpos,
     continuation_glyph_width = 0;  /* In the fringe.  */
 #endif
 
-  immediate_quit = 1;
-  QUIT;
-
   /* It's just impossible to be too paranoid here.  */
   eassert (from == BYTE_TO_CHAR (frombyte) && frombyte == CHAR_TO_BYTE (from));
 
@@ -1199,8 +1211,12 @@ compute_motion (ptrdiff_t from, ptrdiff_t frombyte, EMACS_INT fromvpos,
   cmp_it.id = -1;
   composition_compute_stop_pos (&cmp_it, pos, pos_byte, to, Qnil);
 
-  while (1)
+  unsigned short int quit_count = 0;
+
+  while (true)
     {
+      rarely_quit (++quit_count);
+
       while (pos == next_boundary)
 	{
 	  ptrdiff_t pos_here = pos;
@@ -1265,6 +1281,8 @@ compute_motion (ptrdiff_t from, ptrdiff_t frombyte, EMACS_INT fromvpos,
 	      pos = newpos;
 	      pos_byte = CHAR_TO_BYTE (pos);
 	    }
+
+	  rarely_quit (++quit_count);
 	}
 
       /* Handle right margin.  */
@@ -1587,6 +1605,7 @@ compute_motion (ptrdiff_t from, ptrdiff_t frombyte, EMACS_INT fromvpos,
 			      pos = find_before_next_newline (pos, to, 1, &pos_byte);
 			      if (pos < to)
 				INC_BOTH (pos, pos_byte);
+			      rarely_quit (++quit_count);
 			    }
 			  while (pos < to
 				 && indented_beyond_p (pos, pos_byte,
@@ -1679,7 +1698,6 @@ compute_motion (ptrdiff_t from, ptrdiff_t frombyte, EMACS_INT fromvpos,
   /* Nonzero if have just continued a line */
   val_compute_motion.contin = (contin_hpos && prev_hpos == 0);
 
-  immediate_quit = 0;
   return &val_compute_motion;
 }
 
@@ -1861,9 +1879,9 @@ vmotion (register ptrdiff_t from, register ptrdiff_t from_byte,
 	    }
 	  pos = *compute_motion (prevline, bytepos, 0, lmargin, 0, from,
 				 /* Don't care for VPOS...  */
-				 1 << (BITS_PER_SHORT - 1),
+				 1 << (SHRT_WIDTH - 1),
 				 /* ... nor HPOS.  */
-				 1 << (BITS_PER_SHORT - 1),
+				 1 << (SHRT_WIDTH - 1),
 				 -1, hscroll, 0, w);
 	  vpos -= pos.vpos;
 	  first = 0;
@@ -1911,9 +1929,9 @@ vmotion (register ptrdiff_t from, register ptrdiff_t from_byte,
 	}
       pos = *compute_motion (prevline, bytepos, 0, lmargin, 0, from,
 			     /* Don't care for VPOS...  */
-			     1 << (BITS_PER_SHORT - 1),
+			     1 << (SHRT_WIDTH - 1),
 			     /* ... nor HPOS.  */
-			     1 << (BITS_PER_SHORT - 1),
+			     1 << (SHRT_WIDTH - 1),
 			     -1, hscroll, 0, w);
       did_motion = 1;
     }
@@ -1924,7 +1942,7 @@ vmotion (register ptrdiff_t from, register ptrdiff_t from_byte,
       did_motion = 0;
     }
   return compute_motion (from, from_byte, vpos, pos.hpos, did_motion,
-			 ZV, vtarget, - (1 << (BITS_PER_SHORT - 1)),
+			 ZV, vtarget, - (1 << (SHRT_WIDTH - 1)),
 			 -1, hscroll, 0, w);
 }
 
@@ -1941,6 +1959,20 @@ window_column_x (struct window *w, Lisp_Object window,
     args_out_of_range (window, column);
 
   return x;
+}
+
+/* Restore window's buffer and point.  */
+
+static void
+restore_window_buffer (Lisp_Object list)
+{
+  struct window *w = decode_live_window (XCAR (list));
+  list = XCDR (list);
+  wset_buffer (w, XCAR (list));
+  list = XCDR (list);
+  set_marker_both (w->pointm, w->contents,
+		   XFASTINT (XCAR (list)),
+		   XFASTINT (XCAR (XCDR (list))));
 }
 
 DEFUN ("vertical-motion", Fvertical_motion, Svertical_motion, 1, 3, 0,
@@ -1982,11 +2014,9 @@ whether or not it is currently displayed in some window.  */)
   struct it it;
   struct text_pos pt;
   struct window *w;
-  Lisp_Object old_buffer;
-  EMACS_INT old_charpos IF_LINT (= 0), old_bytepos IF_LINT (= 0);
-  struct gcpro gcpro1;
   Lisp_Object lcols;
   void *itdata = NULL;
+  ptrdiff_t count = SPECPDL_INDEX ();
 
   /* Allow LINES to be of the form (HPOS . VPOS) aka (COLUMNS . LINES).  */
   bool lcols_given = CONSP (lines);
@@ -1999,14 +2029,13 @@ whether or not it is currently displayed in some window.  */)
   CHECK_NUMBER (lines);
   w = decode_live_window (window);
 
-  old_buffer = Qnil;
-  GCPRO1 (old_buffer);
   if (XBUFFER (w->contents) != current_buffer)
     {
       /* Set the window's buffer temporarily to the current buffer.  */
-      old_buffer = w->contents;
-      old_charpos = marker_position (w->pointm);
-      old_bytepos = marker_byte_position (w->pointm);
+      Lisp_Object old = list4 (window, w->contents,
+			       make_number (marker_position (w->pointm)),
+			       make_number (marker_byte_position (w->pointm)));
+      record_unwind_protect (restore_window_buffer, old);
       wset_buffer (w, Fcurrent_buffer ());
       set_marker_both (w->pointm, w->contents,
 		       BUF_PT (current_buffer), BUF_PT_BYTE (current_buffer));
@@ -2017,6 +2046,7 @@ whether or not it is currently displayed in some window.  */)
       struct position pos;
       pos = *vmotion (PT, PT_BYTE, XINT (lines), w);
       SET_PT_BOTH (pos.bufpos, pos.bytepos);
+      it.vpos = pos.vpos;
     }
   else
     {
@@ -2026,8 +2056,8 @@ whether or not it is currently displayed in some window.  */)
       bool disp_string_at_start_p = 0;
       ptrdiff_t nlines = XINT (lines);
       int vpos_init = 0;
-      double start_col;
-      int start_x IF_LINT (= 0);
+      double start_col UNINIT;
+      int start_x UNINIT;
       int to_x = -1;
 
       bool start_x_given = !NILP (cur_col);
@@ -2120,6 +2150,15 @@ whether or not it is currently displayed in some window.  */)
 	      && it.method == GET_FROM_BUFFER
 	      && it.c == '\n')
 	    it_overshoot_count = 1;
+	  else if (it_overshoot_count == 1 && it.vpos == 0
+		   && it.current_x < it.last_visible_x)
+	    {
+	      /* If we came to the same screen line as the one where
+		 we started, we didn't overshoot the line, and won't
+		 need to backtrack after all.  This happens, for
+		 example, when PT is in the middle of a composition.  */
+	      it_overshoot_count = 0;
+	    }
 	  else if (disp_string_at_start_p && it.vpos > 0)
 	    {
 	      /* This is the case of a display string that spans
@@ -2128,29 +2167,38 @@ whether or not it is currently displayed in some window.  */)
 		 screen lines we need to backtrack.  */
 	      it_overshoot_count = it.vpos;
 	    }
+	  /* We will overshoot if lines are truncated and point lies
+	     beyond the right margin of the window.  */
+	  if (it.line_wrap == TRUNCATE && it.current_x >= it.last_visible_x
+	      && it_overshoot_count == 0)
+	    it_overshoot_count = 1;
 	  if (it_overshoot_count > 0)
 	    move_it_by_lines (&it, -it_overshoot_count);
 
 	  overshoot_handled = 1;
 	}
       else if (IT_CHARPOS (it) == PT - 1
-	       && FETCH_BYTE (PT - 1) == '\n'
-	       && nlines < 0)
+	       && FETCH_BYTE (PT_BYTE - 1) == '\n'
+	       && nlines <= 0)
 	{
 	  /* The position we started from was covered by a display
 	     property, so we moved to position before the string, and
-	     backed up one line, because the character at PT - 1 is a
-	     newline.  So we need one less line to go up.  */
+	     backed up one line, because the character at PT - 1 is
+	     a newline.  So we need one less line to go up (or exactly
+	     one line to go down if nlines == 0).  */
 	  nlines++;
 	  /* But we still need to record that one line, in order to
 	     return the correct value to the caller.  */
 	  vpos_init = -1;
+
+	  overshoot_handled = 1;
 	}
       if (lcols_given)
 	to_x = window_column_x (w, window, extract_float (lcols), lcols);
       if (nlines <= 0)
 	{
 	  it.vpos = vpos_init;
+	  it.current_y = 0;
 	  /* Do this even if LINES is 0, so that we move back to the
 	     beginning of the current line as we ought.  */
 	  if ((nlines < 0 && IT_CHARPOS (it) > 0)
@@ -2159,7 +2207,8 @@ whether or not it is currently displayed in some window.  */)
 	}
       else if (overshoot_handled)
 	{
-	  it.vpos = 0;
+	  it.vpos = vpos_init;
+	  it.current_y = 0;
 	  move_it_by_lines (&it, min (PTRDIFF_MAX, nlines));
 	}
       else
@@ -2173,6 +2222,7 @@ whether or not it is currently displayed in some window.  */)
 	      while (IT_CHARPOS (it) <= it_start)
 		{
 		  it.vpos = 0;
+		  it.current_y = 0;
 		  move_it_by_lines (&it, 1);
 		}
 	      if (nlines > 1)
@@ -2181,6 +2231,7 @@ whether or not it is currently displayed in some window.  */)
 	  else	/* it_start = ZV */
 	    {
 	      it.vpos = 0;
+	      it.current_y = 0;
 	      move_it_by_lines (&it, min (PTRDIFF_MAX, nlines));
 	      /* We could have some display or overlay string at ZV,
 		 in which case it.vpos will be nonzero now, while
@@ -2194,20 +2245,35 @@ whether or not it is currently displayed in some window.  */)
 	 was originally hscrolled, the goal column is interpreted as
 	 an addition to the hscroll amount.  */
       if (lcols_given)
-	move_it_in_display_line (&it, ZV, first_x + to_x, MOVE_TO_X);
+	{
+	  move_it_in_display_line (&it, ZV, first_x + to_x, MOVE_TO_X);
+	  /* If we find ourselves in the middle of an overlay string
+	     which includes a newline after current string position,
+	     we need to move by lines until we get out of the string,
+	     and then reposition point at the requested X coordinate;
+	     if we don't, the cursor will be placed just after the
+	     string, which might not be the requested column.  */
+	  if (nlines > 0 && it.area == TEXT_AREA)
+	    {
+	      while (it.method == GET_FROM_STRING
+		     && !it.string_from_display_prop_p
+		     && memchr (SSDATA (it.string) + IT_STRING_BYTEPOS (it),
+				'\n',
+				SBYTES (it.string) - IT_STRING_BYTEPOS (it)))
+		{
+		  move_it_by_lines (&it, 1);
+		  move_it_in_display_line (&it, ZV, first_x + to_x, MOVE_TO_X);
+		}
+	    }
+	}
 
       SET_PT_BOTH (IT_CHARPOS (it), IT_BYTEPOS (it));
       bidi_unshelve_cache (itdata, 0);
     }
 
-  if (BUFFERP (old_buffer))
-    {
-      wset_buffer (w, old_buffer);
-      set_marker_both (w->pointm, w->contents,
-		       old_charpos, old_bytepos);
-    }
+  unbind_to (count, Qnil);
 
-  RETURN_UNGCPRO (make_number (it.vpos));
+  return make_number (it.vpos);
 }
 
 

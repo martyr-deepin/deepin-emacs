@@ -1,13 +1,13 @@
 /* Definitions and headers for communication with X protocol.
-   Copyright (C) 1989, 1993-1994, 1998-2015 Free Software Foundation,
+   Copyright (C) 1989, 1993-1994, 1998-2017 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -38,6 +38,10 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <X11/CoreP.h>		/* foul, but we need this to use our own
 				   window inside a widget instead of one
 				   that Xt creates... */
+#ifdef X_TOOLKIT_EDITRES
+#include <X11/Xmu/Editres.h>
+#endif
+
 typedef Widget xt_or_gtk_widget;
 #endif
 
@@ -70,8 +74,25 @@ typedef GtkWidget *xt_or_gtk_widget;
 #define USE_GTK_TOOLTIP
 #endif
 
+#ifdef USE_CAIRO
+#include <cairo-xlib.h>
+#ifdef CAIRO_HAS_PDF_SURFACE
+#include <cairo-pdf.h>
+#endif
+#ifdef CAIRO_HAS_PS_SURFACE
+#include <cairo-ps.h>
+#endif
+#ifdef CAIRO_HAS_SVG_SURFACE
+#include <cairo-svg.h>
+#endif
+#endif
+
 #ifdef HAVE_X_I18N
 #include <X11/Xlocale.h>
+#endif
+
+#ifdef USE_XCB
+#include <X11/Xlib-xcb.h>
 #endif
 
 #include "dispextern.h"
@@ -115,6 +136,9 @@ struct xim_inst_t
 
 struct x_bitmap_record
 {
+#ifdef USE_CAIRO
+  void *img;
+#endif
   Pixmap pixmap;
   bool have_mask;
   Pixmap mask;
@@ -123,6 +147,30 @@ struct x_bitmap_record
   /* Record some info about this pixmap.  */
   int height, width, depth;
 };
+
+#ifdef USE_CAIRO
+struct x_gc_ext_data
+{
+#define MAX_CLIP_RECTS 2
+  /* Number of clipping rectangles.  */
+  int n_clip_rects;
+
+  /* Clipping rectangles.  */
+  XRectangle clip_rects[MAX_CLIP_RECTS];
+};
+#endif
+
+
+struct color_name_cache_entry
+{
+  struct color_name_cache_entry *next;
+  XColor rgb;
+  char *name;
+};
+
+Status x_parse_color (struct frame *f, const char *color_name,
+		      XColor *color);
+
 
 /* For each X display, we have a structure that records
    information about it.  */
@@ -356,6 +404,9 @@ struct x_display_info
   struct xim_inst_t *xim_callback_data;
 #endif
 
+  /* A cache mapping color names to RGB values.  */
+  struct color_name_cache_entry *color_names;
+
   /* If non-null, a cache of the colors in the color map.  Don't
      use this directly, call x_color_cells instead.  */
   XColor *color_cells;
@@ -411,6 +462,23 @@ struct x_display_info
 
   /* SM */
   Atom Xatom_SM_CLIENT_ID;
+
+#ifdef HAVE_XRANDR
+  int xrandr_major_version;
+  int xrandr_minor_version;
+#endif
+
+#ifdef USE_CAIRO
+  XExtCodes *ext_codes;
+#endif
+
+#ifdef USE_XCB
+  xcb_connection_t *xcb_connection;
+#endif
+
+#ifdef HAVE_XDBE
+  bool supports_xdbe;
+#endif
 };
 
 #ifdef HAVE_X_I18N
@@ -462,6 +530,16 @@ struct x_output
      May be zero while the frame object is being created
      and the X window has not yet been created.  */
   Window window_desc;
+
+  /* The drawable to which we're rendering.  In the single-buffered
+     base, the window itself.  In the double-buffered case, the
+     window's back buffer.  */
+  Drawable draw_desc;
+
+  /* Flag that indicates whether we've modified the back buffer and
+     need to publish our modifications to the front buffer at a
+     convenient time.  */
+  bool need_buffer_flip;
 
   /* The X window used for the bitmap icon;
      or 0 if we don't have a bitmap icon.  */
@@ -636,7 +714,6 @@ struct x_output
   /* The offset we need to add to compensate for type A WMs.  */
   int move_offset_top;
   int move_offset_left;
-};
 
 /* Extreme 'short' and 'long' values suitable for libX11.  */
 #define X_SHRT_MAX 0x7fff
@@ -644,6 +721,14 @@ struct x_output
 #define X_LONG_MAX 0x7fffffff
 #define X_LONG_MIN (-1 - X_LONG_MAX)
 #define X_ULONG_MAX 0xffffffffUL
+
+#ifdef USE_CAIRO
+  /* Cairo drawing context.  */
+  cairo_t *cr_context;
+  /* Cairo surface for double buffering */
+  cairo_surface_t *cr_surface;
+#endif
+};
 
 #define No_Cursor (None)
 
@@ -665,6 +750,24 @@ enum
 
 /* Return the X window used for displaying data in frame F.  */
 #define FRAME_X_WINDOW(f) ((f)->output_data.x->window_desc)
+
+/* Return the drawable used for rendering to frame F.  */
+#define FRAME_X_RAW_DRAWABLE(f) ((f)->output_data.x->draw_desc)
+
+extern void x_mark_frame_dirty (struct frame *f);
+
+/* Return the drawable used for rendering to frame F and mark the
+   frame as needing a buffer flip later.  There's no easy way to run
+   code after any drawing command, but we can run code whenever
+   someone asks for the handle necessary to draw.  */
+#define FRAME_X_DRAWABLE(f)                             \
+  (x_mark_frame_dirty((f)), FRAME_X_RAW_DRAWABLE ((f)))
+
+#define FRAME_X_DOUBLE_BUFFERED_P(f)            \
+  (FRAME_X_WINDOW (f) != FRAME_X_RAW_DRAWABLE (f))
+
+/* Return the need-buffer-flip flag for frame F.  */
+#define FRAME_X_NEED_BUFFER_FLIP(f) ((f)->output_data.x->need_buffer_flip)
 
 /* Return the outermost X window associated with the frame F.  */
 #ifdef USE_X_TOOLKIT
@@ -920,7 +1023,7 @@ struct scroll_bar
 
 struct selection_input_event
 {
-  int kind;
+  ENUM_BF (event_kind) kind : EVENT_KIND_WIDTH;
   struct x_display_info *dpyinfo;
   /* We spell it with an "o" here because X does.  */
   Window requestor;
@@ -930,23 +1033,23 @@ struct selection_input_event
 
 /* Unlike macros below, this can't be used as an lvalue.  */
 INLINE Display *
-SELECTION_EVENT_DISPLAY (struct input_event *ev)
+SELECTION_EVENT_DISPLAY (struct selection_input_event *ev)
 {
-  return ((struct selection_input_event *) ev)->dpyinfo->display;
+  return ev->dpyinfo->display;
 }
 #define SELECTION_EVENT_DPYINFO(eventp) \
-  (((struct selection_input_event *) (eventp))->dpyinfo)
+  ((eventp)->dpyinfo)
 /* We spell it with an "o" here because X does.  */
 #define SELECTION_EVENT_REQUESTOR(eventp)	\
-  (((struct selection_input_event *) (eventp))->requestor)
+  ((eventp)->requestor)
 #define SELECTION_EVENT_SELECTION(eventp)	\
-  (((struct selection_input_event *) (eventp))->selection)
+  ((eventp)->selection)
 #define SELECTION_EVENT_TARGET(eventp)	\
-  (((struct selection_input_event *) (eventp))->target)
+  ((eventp)->target)
 #define SELECTION_EVENT_PROPERTY(eventp)	\
-  (((struct selection_input_event *) (eventp))->property)
+  ((eventp)->property)
 #define SELECTION_EVENT_TIME(eventp)	\
-  (((struct selection_input_event *) (eventp))->time)
+  ((eventp)->time)
 
 /* From xfns.c.  */
 
@@ -970,12 +1073,18 @@ XrmDatabase x_load_resources (Display *, const char *, const char *,
 
 /* Defined in xterm.c */
 
+typedef void (*x_special_error_handler)(Display *, XErrorEvent *, char *,
+					void *);
+
 extern bool x_text_icon (struct frame *, const char *);
 extern void x_catch_errors (Display *);
+extern void x_catch_errors_with_handler (Display *, x_special_error_handler,
+					 void *);
 extern void x_check_errors (Display *, const char *)
   ATTRIBUTE_FORMAT_PRINTF (2, 0);
 extern bool x_had_errors_p (Display *);
 extern void x_uncatch_errors (void);
+extern void x_uncatch_errors_after_check (void);
 extern void x_clear_errors (Display *);
 extern void xembed_request_focus (struct frame *);
 extern void x_ewmh_activate_frame (struct frame *);
@@ -991,7 +1100,8 @@ extern bool x_alloc_lighter_color_for_widget (Widget, Display *, Colormap,
 					      double, int);
 #endif
 extern bool x_alloc_nearest_color (struct frame *, Colormap, XColor *);
-extern void x_clear_area (Display *, Window, int, int, int, int);
+extern void x_query_color (struct frame *f, XColor *);
+extern void x_clear_area (struct frame *f, int, int, int, int);
 #if !defined USE_X_TOOLKIT && !defined USE_GTK
 extern void x_mouse_leave (struct x_display_info *);
 #endif
@@ -1000,6 +1110,14 @@ extern void x_mouse_leave (struct x_display_info *);
 extern int x_dispatch_event (XEvent *, Display *);
 #endif
 extern int x_x_to_emacs_modifiers (struct x_display_info *, int);
+#ifdef USE_CAIRO
+extern cairo_t *x_begin_cr_clip (struct frame *, GC);
+extern void x_end_cr_clip (struct frame *);
+extern void x_set_cr_source_with_gc_foreground (struct frame *, GC);
+extern void x_set_cr_source_with_gc_background (struct frame *, GC);
+extern void x_cr_draw_frame (cairo_t *, struct frame *);
+extern Lisp_Object x_cr_export_frames (Lisp_Object, cairo_surface_type_t);
+#endif
 
 INLINE int
 x_display_pixel_height (struct x_display_info *dpyinfo)
@@ -1022,15 +1140,46 @@ x_display_set_last_user_time (struct x_display_info *dpyinfo, Time t)
   dpyinfo->last_user_time = t;
 }
 
+INLINE unsigned long
+x_make_truecolor_pixel (struct x_display_info *dpyinfo, int r, int g, int b)
+{
+  unsigned long pr, pg, pb;
+
+  /* Scale down RGB values to the visual's bits per RGB, and shift
+     them to the right position in the pixel color.  Note that the
+     original RGB values are 16-bit values, as usual in X.  */
+  pr = (r >> (16 - dpyinfo->red_bits))   << dpyinfo->red_offset;
+  pg = (g >> (16 - dpyinfo->green_bits)) << dpyinfo->green_offset;
+  pb = (b >> (16 - dpyinfo->blue_bits))  << dpyinfo->blue_offset;
+
+  /* Assemble the pixel color.  */
+  return pr | pg | pb;
+}
+
+/* If display has an immutable color map, freeing colors is not
+   necessary and some servers don't allow it, so we won't do it.  That
+   also allows us to make other optimizations relating to server-side
+   reference counts.  */
+INLINE bool
+x_mutable_colormap (Visual *visual)
+{
+  int class = visual->class;
+  return (class != StaticColor && class != StaticGray && class != TrueColor);
+}
+
 extern void x_set_sticky (struct frame *, Lisp_Object, Lisp_Object);
+extern bool x_wm_supports (struct frame *, Atom);
 extern void x_wait_for_event (struct frame *, int);
 extern void x_clear_under_internal_border (struct frame *f);
+
+extern void tear_down_x_back_buffer (struct frame *f);
+extern void initial_set_up_x_back_buffer (struct frame *f);
 
 /* Defined in xselect.c.  */
 
 extern void x_handle_property_notify (const XPropertyEvent *);
 extern void x_handle_selection_notify (const XSelectionEvent *);
-extern void x_handle_selection_event (struct input_event *);
+extern void x_handle_selection_event (struct selection_input_event *);
 extern void x_clear_frame_selections (struct frame *);
 
 extern void x_send_client_event (Lisp_Object display,

@@ -1,12 +1,12 @@
 /* Definitions for asynchronous process control in GNU Emacs.
-   Copyright (C) 1985, 1994, 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 1985, 1994, 2001-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -15,6 +15,9 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef EMACS_PROCESS_H
+#define EMACS_PROCESS_H
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -43,25 +46,25 @@ struct Lisp_Process
     /* Name of subprocess terminal.  */
     Lisp_Object tty_name;
 
-    /* Name of this process */
+    /* Name of this process.  */
     Lisp_Object name;
 
     /* List of command arguments that this process was run with.
-       Is set to t for a stopped network process; nil otherwise. */
+       Is set to t for a stopped network process; nil otherwise.  */
     Lisp_Object command;
 
     /* (funcall FILTER PROC STRING)  (if FILTER is non-nil)
-       to dispose of a bunch of chars from the process all at once */
+       to dispose of a bunch of chars from the process all at once.  */
     Lisp_Object filter;
 
-    /* (funcall SENTINEL PROCESS) when process state changes */
+    /* (funcall SENTINEL PROCESS) when process state changes.  */
     Lisp_Object sentinel;
 
     /* (funcall LOG SERVER CLIENT MESSAGE) when a server process
        accepts a connection from a client.  */
     Lisp_Object log;
 
-    /* Buffer that output is going to */
+    /* Buffer that output is going to.  */
     Lisp_Object buffer;
 
     /* t if this is a real child process.  For a network or serial
@@ -73,14 +76,17 @@ struct Lisp_Process
     /* Plist for programs to keep per-process state information, parameters, etc.  */
     Lisp_Object plist;
 
-    /* Symbol indicating the type of process: real, network, serial  */
+    /* Symbol indicating the type of process: real, network, serial.  */
     Lisp_Object type;
 
-    /* Marker set to end of last buffer-inserted output from this process */
+    /* Marker set to end of last buffer-inserted output from this process.  */
     Lisp_Object mark;
 
     /* Symbol indicating status of process.
-       This may be a symbol: run, open, or closed.
+       This may be a symbol: run, open, closed, listen, or failed.
+       Or it may be a pair (connect . ADDRINFOS) where ADDRINFOS is
+       a list of remaining (PROTOCOL . ADDRINFO) pairs to try.
+       Or it may be (failed ERR) where ERR is an integer, string or symbol.
        Or it may be a list, whose car is stop, exit or signal
        and whose cdr is a pair (EXIT_CODE . COREDUMP_FLAG)
        or (SIGNAL_NUMBER . COREDUMP_FLAG).  */
@@ -98,27 +104,32 @@ struct Lisp_Process
     /* Working buffer for encoding.  */
     Lisp_Object encoding_buf;
 
-    /* Queue for storing waiting writes */
+    /* Queue for storing waiting writes.  */
     Lisp_Object write_queue;
 
 #ifdef HAVE_GNUTLS
     Lisp_Object gnutls_cred_type;
+    Lisp_Object gnutls_boot_parameters;
 #endif
 
     /* Pipe process attached to the standard error of this process.  */
     Lisp_Object stderrproc;
 
+    /* The thread a process is linked to, or nil for any thread.  */
+    Lisp_Object thread;
+
     /* After this point, there are no Lisp_Objects any more.  */
     /* alloc.c assumes that `pid' is the first such non-Lisp slot.  */
 
-    /* Number of this process.
-       allocate_process assumes this is the first non-Lisp_Object field.
-       A value 0 is used for pseudo-processes such as network or serial
-       connections.  */
+    /* Process ID.  A positive value is a child process ID.
+       Zero is for pseudo-processes such as network or serial connections,
+       or for processes that have not been fully created yet.
+       -1 is for a process that was not created successfully.
+       -2 is for a pty with no process, e.g., for GDB.  */
     pid_t pid;
-    /* Descriptor by which we read from this process */
+    /* Descriptor by which we read from this process.  */
     int infd;
-    /* Descriptor by which we write to this process */
+    /* Descriptor by which we write to this process.  */
     int outfd;
     /* Descriptors that were created for this process and that need
        closing.  Unused entries are negative.  */
@@ -158,7 +169,23 @@ struct Lisp_Process
        flag indicates that `raw_status' contains a new status that still
        needs to be synced to `status'.  */
     bool_bf raw_status_new : 1;
+    /* Whether this is a nonblocking socket. */
+    bool_bf is_non_blocking_client : 1;
+    /* Whether this is a server or a client socket. */
+    bool_bf is_server : 1;
     int raw_status;
+    /* The length of the socket backlog. */
+    int backlog;
+    /* The port number. */
+    int port;
+    /* The socket type. */
+    int socktype;
+
+#ifdef HAVE_GETADDRINFO_A
+    /* Whether the socket is waiting for response from an asynchronous
+       DNS call. */
+    struct gaicb *dns_request;
+#endif
 
 #ifdef HAVE_GNUTLS
     gnutls_initstage_t gnutls_initstage;
@@ -171,8 +198,28 @@ struct Lisp_Process
     int gnutls_log_level;
     int gnutls_handshakes_tried;
     bool_bf gnutls_p : 1;
+    bool_bf gnutls_complete_negotiation_p : 1;
 #endif
 };
+
+INLINE bool
+PROCESSP (Lisp_Object a)
+{
+  return PSEUDOVECTORP (a, PVEC_PROCESS);
+}
+
+INLINE void
+CHECK_PROCESS (Lisp_Object x)
+{
+  CHECK_TYPE (PROCESSP (x), Qprocessp, x);
+}
+
+INLINE struct Lisp_Process *
+XPROCESS (Lisp_Object a)
+{
+  eassert (PROCESSP (a));
+  return XUNTAG (a, Lisp_Vectorlike);
+}
 
 /* Every field in the preceding structure except for the first two
    must be a Lisp_Object, for GC's sake.  */
@@ -186,6 +233,12 @@ INLINE void
 pset_childp (struct Lisp_Process *p, Lisp_Object val)
 {
   p->childp = val;
+}
+
+INLINE void
+pset_status (struct Lisp_Process *p, Lisp_Object val)
+{
+  p->status = val;
 }
 
 #ifdef HAVE_GNUTLS
@@ -222,7 +275,7 @@ extern Lisp_Object system_process_attributes (Lisp_Object);
 
 extern void record_deleted_pid (pid_t, Lisp_Object);
 struct sockaddr;
-extern Lisp_Object conv_sockaddr_to_lisp (struct sockaddr *, int);
+extern Lisp_Object conv_sockaddr_to_lisp (struct sockaddr *, ptrdiff_t);
 extern void hold_keyboard_input (void);
 extern void unhold_keyboard_input (void);
 extern bool kbd_on_hold_p (void);
@@ -234,6 +287,7 @@ extern void delete_read_fd (int fd);
 extern void add_write_fd (int fd, fd_callback func, void *data);
 extern void delete_write_fd (int fd);
 extern void catch_child_signal (void);
+extern void restore_nofile_limit (void);
 
 #ifdef WINDOWSNT
 extern Lisp_Object network_interface_list (void);
@@ -242,4 +296,8 @@ extern Lisp_Object network_interface_info (Lisp_Object);
 
 extern Lisp_Object remove_slash_colon (Lisp_Object);
 
+extern void update_processes_for_thread_death (Lisp_Object);
+
 INLINE_HEADER_END
+
+#endif /* EMACS_PROCESS_H */

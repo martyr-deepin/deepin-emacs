@@ -1,6 +1,6 @@
 ;;; rx.el --- sexp notation for regular expressions
 
-;; Copyright (C) 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Gerd Moellmann <gerd@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -521,7 +521,7 @@ ARG is optional."
 	     (setq args (nconc (delq ?- args) (list ?-))))
 	    ((setq m (assq ?- args))
 	     ;; next to the bracket's range, make the second range
-	     (setcdr args (cons m (delq m args))))))
+	     (setcdr args (cons m (delq m (cdr args)))))))
      ;; bracket in the end range
      ;;	 => "[]...-]"
      ((setq m (rassq ?\] args))
@@ -768,8 +768,8 @@ of all atomic regexps."
      ((= l 3) (string-match "\\`\\(?:\\\\[cCsS_]\\|\\[[^^]\\]\\)" r))
      ((null lax)
       (cond
-       ((string-match "\\`\\[^?\]?\\(?:\\[:[a-z]+:]\\|[^\]]\\)*\\]\\'" r))
-       ((string-match "\\`\\\\(\\(?:[^\\]\\|\\\\[^\)]\\)*\\\\)\\'" r)))))))
+       ((string-match "\\`\\[^?\]?\\(?:\\[:[a-z]+:]\\|[^]]\\)*\\]\\'" r))
+       ((string-match "\\`\\\\(\\(?:[^\\]\\|\\\\[^)]\\)*\\\\)\\'" r)))))))
 
 
 (defun rx-syntax (form)
@@ -815,9 +815,9 @@ of all atomic regexps."
 
 (defun rx-greedy (form)
   "Parse and produce code from FORM.
-If FORM is '(minimal-match FORM1)', non-greedy versions of `*',
+If FORM is `(minimal-match FORM1)', non-greedy versions of `*',
 `+', and `?' operators will be used in FORM1.  If FORM is
-'(maximal-match FORM1)', greedy operators will be used."
+`(maximal-match FORM1)', greedy operators will be used."
   (rx-check form)
   (let ((rx-greedy-flag (eq (car form) 'maximal-match)))
     (rx-form (cadr form) rx-parent)))

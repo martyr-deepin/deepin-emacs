@@ -1,6 +1,6 @@
 ;;; enriched.el --- read and save files in text/enriched format
 
-;; Copyright (C) 1994-1996, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1996, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Boris Goldowsky <boris@gnu.org>
 ;; Keywords: wp, faces
@@ -46,7 +46,7 @@
 
 (defgroup enriched nil
   "Read and save files in text/enriched format."
-  :group 'wp)
+  :group 'text)
 
 (defcustom enriched-verbose t
   "If non-nil, give status messages when reading and writing files."

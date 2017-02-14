@@ -1,13 +1,13 @@
 /* Window definitions for GNU Emacs.
-   Copyright (C) 1985-1986, 1993, 1995, 1997-2015 Free Software
+   Copyright (C) 1985-1986, 1993, 1995, 1997-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -214,6 +214,11 @@ struct window
     int pixel_width;
     int pixel_height;
 
+    /* The pixel sizes of the window at the last time
+       `window-size-change-functions' was run.  */
+    int pixel_width_before_size_change;
+    int pixel_height_before_size_change;
+
     /* The size of the window.  */
     int total_cols;
     int total_lines;
@@ -392,6 +397,25 @@ struct window
     ptrdiff_t window_end_bytepos;
   };
 
+INLINE bool
+WINDOWP (Lisp_Object a)
+{
+  return PSEUDOVECTORP (a, PVEC_WINDOW);
+}
+
+INLINE void
+CHECK_WINDOW (Lisp_Object x)
+{
+  CHECK_TYPE (WINDOWP (x), Qwindowp, x);
+}
+
+INLINE struct window *
+XWINDOW (Lisp_Object a)
+{
+  eassert (WINDOWP (a));
+  return XUNTAG (a, Lisp_Vectorlike);
+}
+
 /* Most code should use these functions to set Lisp fields in struct
    window.  */
 INLINE void
@@ -499,15 +523,17 @@ wset_next_buffers (struct window *w, Lisp_Object val)
 #define WINDOW_LEAF_P(W) \
   (BUFFERP ((W)->contents))
 
-/* True if W is a member of horizontal combination.  */
+/* Non-nil if W is internal.  */
+#define WINDOW_INTERNAL_P(W) \
+  (WINDOWP ((W)->contents))
 
+/* True if W is a member of horizontal combination.  */
 #define WINDOW_HORIZONTAL_COMBINATION_P(W) \
-  (WINDOWP ((W)->contents) && (W)->horizontal)
+  (WINDOW_INTERNAL_P (W) && (W)->horizontal)
 
 /* True if W is a member of vertical combination.  */
-
 #define WINDOW_VERTICAL_COMBINATION_P(W) \
-  (WINDOWP ((W)->contents) && !(W)->horizontal)
+  (WINDOW_INTERNAL_P (W) && !(W)->horizontal)
 
 /* WINDOW's XFRAME.  */
 #define WINDOW_XFRAME(W) (XFRAME (WINDOW_FRAME ((W))))
@@ -786,7 +812,7 @@ wset_next_buffers (struct window *w, Lisp_Object val)
    || WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_RIGHT (W))
 
 #if (defined (HAVE_WINDOW_SYSTEM)					\
-     && ((defined (USE_TOOLKIT_SCROLL_BARS) && !defined (HAVE_NS))	\
+     && ((defined (USE_TOOLKIT_SCROLL_BARS))	\
 	 || defined (HAVE_NTGUI)))
 # define USE_HORIZONTAL_SCROLL_BARS true
 #else
@@ -913,7 +939,7 @@ wset_next_buffers (struct window *w, Lisp_Object val)
    ? WINDOW_CONFIG_SCROLL_BAR_HEIGHT (W)	\
    : 0)
 
-/* Height in pixels, and in lines, of the mode line.
+/* Height in pixels of the mode line.
    May be zero if W doesn't have a mode line.  */
 #define WINDOW_MODE_LINE_HEIGHT(W)	\
   (WINDOW_WANTS_MODELINE_P ((W))	\
@@ -923,7 +949,7 @@ wset_next_buffers (struct window *w, Lisp_Object val)
 #define WINDOW_MODE_LINE_LINES(W)	\
   WINDOW_WANTS_MODELINE_P (W)
 
-/* Height in pixels, and in lines, of the header line.
+/* Height in pixels of the header line.
    Zero if W doesn't have a header line.  */
 #define WINDOW_HEADER_LINE_HEIGHT(W)	\
   (WINDOW_WANTS_HEADER_LINE_P (W)	\
@@ -1013,7 +1039,7 @@ extern void grow_mini_window (struct window *, int, bool);
 extern void shrink_mini_window (struct window *, bool);
 extern int window_relative_x_coord (struct window *, enum window_part, int);
 
-void run_window_configuration_change_hook (struct frame *f);
+void run_window_size_change_functions (Lisp_Object);
 
 /* Make WINDOW display BUFFER.  RUN_HOOKS_P means it's allowed
    to run hooks.  See make_frame for a case where it's not allowed.  */
@@ -1094,10 +1120,12 @@ extern bool compare_window_configurations (Lisp_Object, Lisp_Object, bool);
 extern void mark_window_cursors_off (struct window *);
 extern int window_internal_height (struct window *);
 extern int window_body_width (struct window *w, bool);
+enum margin_unit { MARGIN_IN_LINES, MARGIN_IN_PIXELS };
+extern int window_scroll_margin (struct window *, enum margin_unit);
 extern void temp_output_buffer_show (Lisp_Object);
 extern void replace_buffer_in_windows (Lisp_Object);
 extern void replace_buffer_in_windows_safely (Lisp_Object);
-extern Lisp_Object sanitize_window_sizes (Lisp_Object, Lisp_Object);
+extern void sanitize_window_sizes (Lisp_Object horizontal);
 /* This looks like a setter, but it is a bit special.  */
 extern void wset_buffer (struct window *, Lisp_Object);
 extern bool window_outdated (struct window *);

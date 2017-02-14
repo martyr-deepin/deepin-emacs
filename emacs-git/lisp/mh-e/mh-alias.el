@@ -1,6 +1,6 @@
 ;;; mh-alias.el --- MH-E mail alias completion and expansion
 
-;; Copyright (C) 1994-1997, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1997, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Peter S. Galbraith <psg@debian.org>
 ;; Maintainer: Bill Wohler <wohler@newt.com>
@@ -48,16 +48,18 @@
     (define-key map " " 'self-insert-command)
     map))
 
-(defvar mh-alias-system-aliases
+(defcustom mh-alias-system-aliases
   '("/etc/nmh/MailAliases" "/etc/mh/MailAliases"
     "/usr/lib/mh/MailAliases" "/usr/share/mailutils/mh/MailAliases"
     "/etc/passwd")
-  "*A list of system files which are a source of aliases.
+  "A list of system files which are a source of aliases.
 If these files are modified, they are automatically reread. This list
 need include only system aliases and the passwd file, since personal
 alias files listed in your \"Aliasfile:\" MH profile component are
 automatically included. You can update the alias list manually using
-\\[mh-alias-reload].")
+\\[mh-alias-reload]."
+  :type '(repeat file)
+  :group 'mh-alias)
 
 
 
@@ -417,7 +419,7 @@ string is converted to lower case."
 
 (defun mh-alias-insert-file (&optional alias)
   "Return filename which should be used to add ALIAS.
-The value of the option `mh-alias-insert-file' is used if non-nil\;
+The value of the option `mh-alias-insert-file' is used if non-nil;
 otherwise the value of the \"Aliasfile:\" profile component is used.
 If the alias already exists, try to return the name of the file that
 contains it."

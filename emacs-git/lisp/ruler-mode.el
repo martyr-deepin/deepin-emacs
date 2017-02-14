@@ -1,6 +1,6 @@
 ;;; ruler-mode.el --- display a ruler in the header line
 
-;; Copyright (C) 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
 ;; Maintainer: David Ponce <david@dponce.com>
@@ -437,6 +437,8 @@ the mouse has been clicked."
   (let ((drags 0)
         event)
     (track-mouse
+      ;; Signal the display engine to freeze the mouse pointer shape.
+      (setq track-mouse 'dragging)
       (while (mouse-movement-p (setq event (read-event)))
         (setq drags (1+ drags))
         (when (eq window (posn-window (event-end event)))
@@ -772,9 +774,5 @@ Optional argument PROPS specifies other text properties to apply."
             ruler rf rm (and (eq 'right sbvt) sb)))))
 
 (provide 'ruler-mode)
-
-;; Local Variables:
-;; coding: utf-8
-;; End:
 
 ;;; ruler-mode.el ends here

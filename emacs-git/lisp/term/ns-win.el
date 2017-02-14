@@ -1,6 +1,6 @@
-;;; ns-win.el --- lisp side of interface with NeXT/Open/GNUstep/MacOS X window system  -*- lexical-binding: t -*-
+;;; ns-win.el --- lisp side of interface with NeXT/Open/GNUstep/macOS window system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1994, 2005-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2005-2017 Free Software Foundation, Inc.
 
 ;; Authors: Carl Edman
 ;;	Christian Limpach
@@ -41,7 +41,7 @@
 ;;; Code:
 (eval-when-compile (require 'cl-lib))
 (or (featurep 'ns)
-    (error "%s: Loading ns-win.el but not compiled for GNUstep/MacOS"
+    (error "%s: Loading ns-win.el but not compiled for GNUstep/macOS"
            (invocation-name)))
 
 ;; Documentation-purposes only: actually loaded in loadup.el.
@@ -51,9 +51,10 @@
 (require 'menu-bar)
 (require 'fontset)
 (require 'dnd)
+(require 'ucs-normalize)
 
 (defgroup ns nil
-  "GNUstep/Mac OS X specific features."
+  "GNUstep/macOS specific features."
   :group 'environment)
 
 ;;;; Command line argument handling.
@@ -243,7 +244,7 @@ The properties returned may include `top', `left', `height', and `width'."
 	 (insert ns-input-spi-arg))
 	((string-equal ns-input-spi-name "mail-to")
 	 (compose-mail ns-input-spi-arg))
-	(t (error (concat "Service " ns-input-spi-name " not recognized")))))
+	(t (error "Service %s not recognized" ns-input-spi-name))))
 
 
 ;; Composed key sequence handling for Nextstep system input methods.
@@ -337,29 +338,12 @@ See `ns-insert-working-text'."
   (setq ns-working-overlay nil))
 
 
-(declare-function ns-convert-utf8-nfd-to-nfc "nsfns.m" (str))
-
-;;;; OS X file system Unicode UTF-8 NFD (decomposed form) support
-;; Lisp code based on utf-8m.el, by Seiji Zenitani, Eiji Honjoh, and
-;; Carsten Bormann.
+;; macOS file system Unicode UTF-8 NFD (decomposed form) support.
 (when (eq system-type 'darwin)
-  (defun ns-utf8-nfd-post-read-conversion (length)
-    "Calls `ns-convert-utf8-nfd-to-nfc' to compose char sequences."
-    (save-excursion
-      (save-restriction
-        (narrow-to-region (point) (+ (point) length))
-        (let ((str (buffer-string)))
-          (delete-region (point-min) (point-max))
-          (insert (ns-convert-utf8-nfd-to-nfc str))
-          (- (point-max) (point-min))))))
+  ;; Used prior to Emacs 25.
+  (define-coding-system-alias 'utf-8-nfd 'utf-8-hfs)
 
-  (define-coding-system 'utf-8-nfd
-    "UTF-8 NFD (decomposed) encoding."
-    :coding-type 'utf-8
-    :mnemonic ?U
-    :charset-list '(unicode)
-    :post-read-conversion 'ns-utf8-nfd-post-read-conversion)
-  (set-file-name-coding-system 'utf-8-nfd))
+  (set-file-name-coding-system 'utf-8-hfs))
 
 ;;;; Inter-app communications support.
 
@@ -657,7 +641,7 @@ This function has been overloaded in Nextstep.")
   (set-frame-font ns-input-font))
 
 
-;; Default fontset for Mac OS X.  This is mainly here to show how a fontset
+;; Default fontset for macOS.  This is mainly here to show how a fontset
 ;; can be set up manually.  Ordinarily, fontsets are auto-created whenever
 ;; a font is chosen by
 (defvar ns-standard-fontset-spec
@@ -671,7 +655,7 @@ This function has been overloaded in Nextstep.")
              ",")
   "String of fontset spec of the standard fontset.
 This defines a fontset consisting of the Courier and other fonts that
-come with OS X.
+come with macOS.
 See the documentation of `create-fontset-from-fontset-spec' for the format.")
 
 (defvar ns-reg-to-script)               ; nsfont.m
@@ -733,60 +717,12 @@ See the documentation of `create-fontset-from-fontset-spec' for the format.")
 
 ;;;; Scrollbar handling.
 
-(global-set-key [vertical-scroll-bar down-mouse-1] 'ns-handle-scroll-bar-event)
+(global-set-key [vertical-scroll-bar down-mouse-1] 'scroll-bar-toolkit-scroll)
+(global-set-key [horizontal-scroll-bar down-mouse-1] 'scroll-bar-toolkit-horizontal-scroll)
 (global-unset-key [vertical-scroll-bar mouse-1])
 (global-unset-key [vertical-scroll-bar drag-mouse-1])
-
-(declare-function scroll-bar-scale "scroll-bar" (num-denom whole))
-
-(defun ns-scroll-bar-move (event)
-  "Scroll the frame according to a Nextstep scroller event."
-  (interactive "e")
-  (let* ((pos (event-end event))
-         (window (nth 0 pos))
-         (scale (nth 2 pos)))
-    (with-current-buffer (window-buffer window)
-      (cond
-       ((eq (car scale) (cdr scale))
-	(goto-char (point-max)))
-       ((= (car scale) 0)
-	(goto-char (point-min)))
-       (t
-	(goto-char (+ (point-min) 1
-		      (scroll-bar-scale scale (- (point-max) (point-min)))))))
-      (beginning-of-line)
-      (set-window-start window (point))
-      (vertical-motion (/ (window-height window) 2) window))))
-
-(defun ns-handle-scroll-bar-event (event)
-  "Handle scroll bar EVENT to emulate Nextstep style scrolling."
-  (interactive "e")
-  (let* ((position (event-start event))
-	 (bar-part (nth 4 position))
-	 (window (nth 0 position))
-	 (old-window (selected-window)))
-    (cond
-     ((eq bar-part 'ratio)
-      (ns-scroll-bar-move event))
-     ((eq bar-part 'handle)
-      (if (eq window (selected-window))
-	  (track-mouse (ns-scroll-bar-move event))
-        ;; track-mouse faster for selected window, slower for unselected.
-	(ns-scroll-bar-move event)))
-     (t
-      (select-window window)
-      (cond
-       ((eq bar-part 'up)
-	(goto-char (window-start window))
-	(scroll-down 1))
-       ((eq bar-part 'above-handle)
-	(scroll-down))
-       ((eq bar-part 'below-handle)
-	(scroll-up))
-       ((eq bar-part 'down)
-	(goto-char (window-start window))
-	(scroll-up 1)))
-      (select-window old-window)))))
+(global-unset-key [horizontal-scroll-bar mouse-1])
+(global-unset-key [horizontal-scroll-bar drag-mouse-1])
 
 
 ;;;; Color support.
@@ -848,7 +784,8 @@ See the documentation of `create-fontset-from-fontset-spec' for the format.")
 
 ;; Do the actual Nextstep Windows setup here; the above code just
 ;; defines functions and variables that we use now.
-(defun ns-initialize-window-system (&optional _display)
+(cl-defmethod window-system-initialization (&context (window-system ns)
+                                            &optional _display)
   "Initialize Emacs for Nextstep (Cocoa / GNUstep) windowing."
   (cl-assert (not ns-initialized))
 
@@ -907,7 +844,7 @@ See the documentation of `create-fontset-from-fontset-spec' for the format.")
                     (setq default-process-coding-system
                           '(utf-8-unix . utf-8-unix)))))
 
-  ;; OS X Lion introduces PressAndHold, which is unsupported by this port.
+  ;; Mac OS X Lion introduces PressAndHold, which is unsupported by this port.
   ;; See this thread for more details:
   ;; http://lists.gnu.org/archive/html/emacs-devel/2011-06/msg00505.html
   (ns-set-resource nil "ApplePressAndHoldEnabled" "NO")
@@ -921,28 +858,36 @@ See the documentation of `create-fontset-from-fontset-spec' for the format.")
 
 ;; Any display name is OK.
 (add-to-list 'display-format-alist '(".*" . ns))
-(gui-method-define handle-args-function ns #'x-handle-args)
-(gui-method-define frame-creation-function ns #'x-create-frame-with-faces)
-(gui-method-define window-system-initialization ns
-                   #'ns-initialize-window-system)
+(cl-defmethod handle-args-function (args &context (window-system ns))
+  (x-handle-args args))
+
+(cl-defmethod frame-creation-function (params &context (window-system ns))
+  (x-create-frame-with-faces params))
 
 (declare-function ns-own-selection-internal "nsselect.m" (selection value))
 (declare-function ns-disown-selection-internal "nsselect.m" (selection))
-(declare-function ns-selection-owner-p "nsselect.m"
-                  (&optional selection terminal))
-(declare-function ns-selection-exists-p "nsselect.m"
-                  (&optional selection terminal))
-(declare-function ns-get-selection "nsselect.m"
-                  (selection-symbol target-type &optional time-stamp terminal))
+(declare-function ns-selection-owner-p "nsselect.m" (&optional selection))
+(declare-function ns-selection-exists-p "nsselect.m" (&optional selection))
+(declare-function ns-get-selection "nsselect.m" (selection-symbol target-type))
 
-(gui-method-define gui-set-selection ns
-                   (lambda (selection value)
-                     (if value (ns-own-selection-internal selection value)
-                       (ns-disown-selection-internal selection))))
-(gui-method-define gui-selection-owner-p ns #'ns-selection-owner-p)
-(gui-method-define gui-selection-exists-p ns #'ns-selection-exists-p)
-(gui-method-define gui-get-selection ns #'ns-get-selection)
+(cl-defmethod gui-backend-set-selection (selection value
+                                         &context (window-system ns))
+  (if value (ns-own-selection-internal selection value)
+    (ns-disown-selection-internal selection)))
+
+(cl-defmethod gui-backend-selection-owner-p (selection
+                                             &context (window-system ns))
+  (ns-selection-owner-p selection))
+
+(cl-defmethod gui-backend-selection-exists-p (selection
+                                              &context (window-system ns))
+  (ns-selection-exists-p selection))
+
+(cl-defmethod gui-backend-get-selection (selection-symbol target-type
+                                         &context (window-system ns))
+  (ns-get-selection selection-symbol target-type))
 
 (provide 'ns-win)
+(provide 'term/ns-win)
 
 ;;; ns-win.el ends here

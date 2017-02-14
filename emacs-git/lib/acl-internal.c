@@ -1,6 +1,6 @@
-/* Test whether a file has a nontrivial access control list.
+/* Test whether a file has a nontrivial ACL.  -*- coding: utf-8 -*-
 
-   Copyright (C) 2002-2003, 2005-2015 Free Software Foundation, Inc.
+   Copyright (C) 2002-2003, 2005-2017 Free Software Foundation, Inc.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -113,6 +113,13 @@ acl_access_nontrivial (acl_t acl)
   errno = ENOSYS;
   return -1;
 #  endif
+}
+
+int
+acl_default_nontrivial (acl_t acl)
+{
+  /* acl is non-trivial if it is non-empty.  */
+  return (acl_entries (acl) > 0);
 }
 
 # endif
@@ -467,3 +474,34 @@ acl_nontrivial (int count, struct acl *entries)
 }
 
 #endif
+
+void
+free_permission_context (struct permission_context *ctx)
+{
+#if USE_ACL
+# if HAVE_ACL_GET_FILE /* Linux, FreeBSD, Mac OS X, IRIX, Tru64 */
+  if (ctx->acl)
+    acl_free (ctx->acl);
+#  if !HAVE_ACL_TYPE_EXTENDED
+  if (ctx->default_acl)
+    acl_free (ctx->default_acl);
+#  endif
+
+# elif defined GETACL /* Solaris, Cygwin */
+  free (ctx->entries);
+#  ifdef ACE_GETACL
+  free (ctx->ace_entries);
+#  endif
+
+# elif HAVE_GETACL /* HP-UX */
+
+#  if HAVE_ACLV_H
+#  endif
+
+# elif HAVE_STATACL /* older AIX */
+
+# elif HAVE_ACLSORT /* NonStop Kernel */
+
+# endif
+#endif
+}

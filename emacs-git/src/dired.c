@@ -1,13 +1,13 @@
 /* Lisp functions for making directory listings.
-   Copyright (C) 1985-1986, 1993-1994, 1999-2015 Free Software
+   Copyright (C) 1985-1986, 1993-1994, 1999-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,7 +21,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <config.h>
 
 #include <stdio.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 
 #ifdef HAVE_PWD_H
@@ -39,16 +38,16 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "lisp.h"
 #include "systime.h"
-#include "character.h"
 #include "buffer.h"
-#include "commands.h"
-#include "charset.h"
 #include "coding.h"
 #include "regex.h"
-#include "blockinput.h"
 
 #ifdef MSDOS
 #include "msdos.h"	/* for fstatat */
+#endif
+
+#ifdef WINDOWSNT
+extern int is_slow_fs (const char *);
 #endif
 
 static ptrdiff_t scmp (const char *, const char *, ptrdiff_t);
@@ -71,8 +70,6 @@ open_directory (Lisp_Object dirname, int *fdp)
   char *name = SSDATA (dirname);
   DIR *d;
   int fd, opendir_errno;
-
-  block_input ();
 
 #ifdef DOS_NT
   /* Directories cannot be opened.  The emulation assumes that any
@@ -97,8 +94,6 @@ open_directory (Lisp_Object dirname, int *fdp)
     }
 #endif
 
-  unblock_input ();
-
   if (!d)
     report_file_errno ("Opening directory", dirname, opendir_errno);
   *fdp = fd;
@@ -106,7 +101,7 @@ open_directory (Lisp_Object dirname, int *fdp)
 }
 
 #ifdef WINDOWSNT
-void
+static void
 directory_files_internal_w32_unwind (Lisp_Object arg)
 {
   Vw32_get_true_file_attributes = arg;
@@ -114,12 +109,9 @@ directory_files_internal_w32_unwind (Lisp_Object arg)
 #endif
 
 static void
-directory_files_internal_unwind (void *dh)
+directory_files_internal_unwind (void *d)
 {
-  DIR *d = dh;
-  block_input ();
   closedir (d);
-  unblock_input ();
 }
 
 /* Return the next directory entry from DIR; DIR's name is DIRNAME.
@@ -147,7 +139,7 @@ read_dirent (DIR *dir, Lisp_Object dirname)
 #endif
 	  report_file_error ("Reading directory", dirname);
 	}
-      QUIT;
+      maybe_quit ();
     }
 }
 
@@ -166,21 +158,17 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
   struct re_pattern_buffer *bufp = NULL;
   bool needsep = 0;
   ptrdiff_t count = SPECPDL_INDEX ();
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4, gcpro5;
 #ifdef WINDOWSNT
   Lisp_Object w32_save = Qnil;
 #endif
 
   /* Don't let the compiler optimize away all copies of DIRECTORY,
-     which would break GC; see Bug#16986.  Although this is required
-     only in the common case where GC_MARK_STACK == GC_MAKE_GCPROS_NOOPS,
-     it shouldn't break anything in the other cases.  */
+     which would break GC; see Bug#16986.  */
   Lisp_Object volatile directory_volatile = directory;
 
   /* Because of file name handlers, these functions might call
      Ffuncall, and cause a GC.  */
   list = encoded_directory = dirfilename = Qnil;
-  GCPRO5 (match, directory, list, dirfilename, encoded_directory);
   dirfilename = Fdirectory_file_name (directory);
 
   if (!NILP (match))
@@ -221,8 +209,6 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 #ifdef WINDOWSNT
   if (attrs)
     {
-      extern int is_slow_fs (const char *);
-
       /* Do this only once to avoid doing it (in w32.c:stat) for each
 	 file in the directory, when we call Ffile_attributes below.  */
       record_unwind_protect (directory_files_internal_w32_unwind,
@@ -232,7 +218,7 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 	{
 	  /* w32.c:stat will notice these bindings and avoid calling
 	     GetDriveType for each file.  */
-	  if (is_slow_fs (SDATA (dirfilename)))
+	  if (is_slow_fs (SSDATA (dirfilename)))
 	    Vw32_get_true_file_attributes = Qnil;
 	  else
 	    Vw32_get_true_file_attributes = Qt;
@@ -254,8 +240,6 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
       ptrdiff_t len = dirent_namelen (dp);
       Lisp_Object name = make_unibyte_string (dp->d_name, len);
       Lisp_Object finalname = name;
-      struct gcpro gcpro1, gcpro2;
-      GCPRO2 (finalname, name);
 
       /* Note: DECODE_FILE can GC; it should protect its argument,
 	 though.  */
@@ -264,13 +248,10 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 
       /* Now that we have unwind_protect in place, we might as well
 	 allow matching to be interrupted.  */
-      immediate_quit = 1;
-      QUIT;
+      maybe_quit ();
 
       bool wanted = (NILP (match)
 		     || re_search (bufp, SSDATA (name), len, 0, len, 0) >= 0);
-
-      immediate_quit = 0;
 
       if (wanted)
 	{
@@ -314,13 +295,9 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 	  else
 	    list = Fcons (finalname, list);
 	}
-
-      UNGCPRO;
     }
 
-  block_input ();
   closedir (d);
-  unblock_input ();
 #ifdef WINDOWSNT
   if (attrs)
     Vw32_get_true_file_attributes = w32_save;
@@ -334,7 +311,7 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 		  attrs ? Qfile_attributes_lessp : Qstring_lessp);
 
   (void) directory_volatile;
-  RETURN_UNGCPRO (list);
+  return list;
 }
 
 
@@ -405,8 +382,10 @@ Returns nil if DIRECTORY contains no name starting with FILE.
 If PREDICATE is non-nil, call PREDICATE with each possible
 completion (in absolute form) and ignore it if PREDICATE returns nil.
 
-This function ignores some of the possible completions as
-determined by the variable `completion-ignored-extensions', which see.  */)
+This function ignores some of the possible completions as determined
+by the variables `completion-regexp-list' and
+`completion-ignored-extensions', which see.  `completion-regexp-list'
+is matched against file and directory names relative to DIRECTORY.  */)
   (Lisp_Object file, Lisp_Object directory, Lisp_Object predicate)
 {
   Lisp_Object handler;
@@ -430,7 +409,11 @@ determined by the variable `completion-ignored-extensions', which see.  */)
 DEFUN ("file-name-all-completions", Ffile_name_all_completions,
        Sfile_name_all_completions, 2, 2, 0,
        doc: /* Return a list of all completions of file name FILE in directory DIRECTORY.
-These are all file names in directory DIRECTORY which begin with FILE.  */)
+These are all file names in directory DIRECTORY which begin with FILE.
+
+This function ignores some of the possible completions as determined
+by `completion-regexp-list', which see.  `completion-regexp-list'
+is matched against file and directory names relative to DIRECTORY.  */)
   (Lisp_Object file, Lisp_Object directory)
 {
   Lisp_Object handler;
@@ -471,8 +454,8 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
      well as "." and "..".  Until shown otherwise, assume we can't exclude
      anything.  */
   bool includeall = 1;
+  bool check_decoded = false;
   ptrdiff_t count = SPECPDL_INDEX ();
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4, gcpro5;
 
   elt = Qnil;
 
@@ -480,7 +463,6 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 
   bestmatch = Qnil;
   encoded_file = encoded_dir = Qnil;
-  GCPRO5 (file, dirname, bestmatch, encoded_file, encoded_dir);
   specbind (Qdefault_directory, dirname);
 
   /* Do completion on the encoded file name
@@ -491,6 +473,28 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
      on the encoded file name.  */
   encoded_file = ENCODE_FILE (file);
   encoded_dir = ENCODE_FILE (Fdirectory_file_name (dirname));
+
+  Lisp_Object file_encoding = Vfile_name_coding_system;
+  if (NILP (Vfile_name_coding_system))
+    file_encoding = Vdefault_file_name_coding_system;
+  /* If the file-name encoding decomposes characters, as we do for
+     HFS+ filesystems, we need to make an additional comparison of
+     decoded names in order to filter false positives, such as "a"
+     falsely matching "a-ring".  */
+  if (!NILP (file_encoding)
+      && !NILP (Fplist_get (Fcoding_system_plist (file_encoding),
+			    Qdecomposed_characters)))
+    {
+      check_decoded = true;
+      if (STRING_MULTIBYTE (file))
+	{
+	  /* Recompute FILE to make sure any decomposed characters in
+	     it are re-composed by the post-read-conversion.
+	     Otherwise, any decomposed characters will be rejected by
+	     the additional check below.  */
+	  file = DECODE_FILE (encoded_file);
+	}
+    }
   int fd;
   DIR *d = open_directory (encoded_dir, &fd);
   record_unwind_protect_ptr (directory_files_internal_unwind, d);
@@ -501,7 +505,7 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
       ptrdiff_t len = dirent_namelen (dp);
       bool canexclude = 0;
 
-      QUIT;
+      maybe_quit ();
       if (len < SCHARS (encoded_file)
 	  || (scmp (dp->d_name, SSDATA (encoded_file),
 		    SCHARS (encoded_file))
@@ -640,16 +644,23 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 	name = Ffile_name_as_directory (name);
 
       /* Test the predicate, if any.  */
-      if (!NILP (predicate))
+      if (!NILP (predicate) && NILP (call1 (predicate, name)))
+	continue;
+
+      /* Reject entries where the encoded strings match, but the
+         decoded don't.  For example, "a" should not match "a-ring" on
+         file systems that store decomposed characters. */
+      Lisp_Object zero = make_number (0);
+
+      if (check_decoded && SCHARS (file) <= SCHARS (name))
 	{
-	  Lisp_Object val;
-	  struct gcpro gcpro1;
-
-	  GCPRO1 (name);
-	  val = call1 (predicate, name);
-	  UNGCPRO;
-
-	  if (NILP (val))
+	  /* FIXME: This is a copy of the code below.  */
+	  ptrdiff_t compare = SCHARS (file);
+	  Lisp_Object cmp
+	    = Fcompare_strings (name, zero, make_number (compare),
+				file, zero, make_number (compare),
+				completion_ignore_case ? Qt : Qnil);
+	  if (!EQ (cmp, Qt))
 	    continue;
 	}
 
@@ -666,14 +677,11 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 	}
       else
 	{
-	  Lisp_Object zero = make_number (0);
 	  /* FIXME: This is a copy of the code in Ftry_completion.  */
 	  ptrdiff_t compare = min (bestmatchsize, SCHARS (name));
 	  Lisp_Object cmp
-	    = Fcompare_strings (bestmatch, zero,
-				make_number (compare),
-				name, zero,
-				make_number (compare),
+	    = Fcompare_strings (bestmatch, zero, make_number (compare),
+				name, zero, make_number (compare),
 				completion_ignore_case ? Qt : Qnil);
 	  ptrdiff_t matchsize = EQ (cmp, Qt) ? compare : eabs (XINT (cmp)) - 1;
 
@@ -731,7 +739,6 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 	}
     }
 
-  UNGCPRO;
   /* This closes the directory.  */
   bestmatch = unbind_to (count, bestmatch);
 
@@ -837,9 +844,17 @@ DEFUN ("file-attributes", Ffile_attributes, Sfile_attributes, 1, 2, 0,
 Value is nil if specified file cannot be opened.
 
 ID-FORMAT specifies the preferred format of attributes uid and gid (see
-below) - valid values are 'string and 'integer.  The latter is the
+below) - valid values are `string' and `integer'.  The latter is the
 default, but we plan to change that, so you should specify a non-nil value
 for ID-FORMAT if you use the returned uid or gid.
+
+To access the elements returned, the following access functions are
+provided: `file-attribute-type', `file-attribute-link-number',
+`file-attribute-user-id', `file-attribute-group-id',
+`file-attribute-access-time', `file-attribute-modification-time',
+`file-attribute-status-change-time', `file-attribute-size',
+`file-attribute-modes', `file-attribute-inode-number', and
+`file-attribute-device-number'.
 
 Elements of the attribute list are:
  0. t for directory, string (name linked to) for symbolic link, or nil.
@@ -931,10 +946,8 @@ file_attributes (int fd, char const *name, Lisp_Object id_format)
 
   if (!(NILP (id_format) || EQ (id_format, Qinteger)))
     {
-      block_input ();
       uname = stat_uname (&s);
       gname = stat_gname (&s);
-      unblock_input ();
     }
 
   filemodestring (&s, modes);
@@ -1024,6 +1037,7 @@ syms_of_dired (void)
   DEFSYM (Qfile_attributes, "file-attributes");
   DEFSYM (Qfile_attributes_lessp, "file-attributes-lessp");
   DEFSYM (Qdefault_directory, "default-directory");
+  DEFSYM (Qdecomposed_characters, "decomposed-characters");
 
   defsubr (&Sdirectory_files);
   defsubr (&Sdirectory_files_and_attributes);

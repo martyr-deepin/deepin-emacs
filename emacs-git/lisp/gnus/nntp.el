@@ -1,6 +1,6 @@
 ;;; nntp.el --- nntp access for Gnus
 
-;; Copyright (C) 1987-1990, 1992-1998, 2000-2015 Free Software
+;; Copyright (C) 1987-1990, 1992-1998, 2000-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
@@ -24,12 +24,6 @@
 ;;; Commentary:
 
 ;;; Code:
-
-(eval-and-compile
-  ;; In Emacs 24, `open-protocol-stream' is an autoloaded alias for
-  ;; `make-network-stream'.
-  (unless (fboundp 'open-protocol-stream)
-    (require 'proto-stream)))
 
 (require 'nnheader)
 (require 'nnoo)
@@ -72,7 +66,7 @@ For instance, if you want Gnus to beep every time you connect
 to innd, you could say something like:
 
 \(setq nntp-server-action-alist
-       '((\"innd\" (ding))))
+       \\='((\"innd\" (ding))))
 
 You probably don't want to do that, though.")
 
@@ -175,7 +169,7 @@ This variable is used by the various nntp-open-via-* methods.")
   "*Whether both telnet client and server support the ENVIRON option.
 If non-nil, there will be no prompt for a login name.")
 
-(defvoo nntp-via-shell-prompt "bash\\|\$ *\r?$\\|> *\r?"
+(defvoo nntp-via-shell-prompt "bash\\|[$>] *\r?$"
   "*Regular expression to match the shell prompt on an intermediate host.
 This variable is used by the `nntp-open-via-telnet-and-telnet' method.")
 
@@ -244,8 +238,7 @@ server there that you can connect to.  See also
 
 (defvoo nntp-connection-timeout nil
   "*Number of seconds to wait before an nntp connection times out.
-If this variable is nil, which is the default, no timers are set.
-NOTE: This variable is never seen to work in Emacs 20 and XEmacs 21.")
+If this variable is nil, which is the default, no timers are set.")
 
 (defvoo nntp-prepare-post-hook nil
   "*Hook run just before posting an article.  It is supposed to be used
@@ -259,8 +252,10 @@ update their active files often, this can help.")
 ;;; Internal variables.
 
 (defvoo nntp-retrieval-in-progress nil)
-(defvar nntp-record-commands nil
-  "*If non-nil, nntp will record all commands in the \"*nntp-log*\" buffer.")
+(defcustom nntp-record-commands nil
+  "If non-nil, nntp will record all commands in the \"*nntp-log*\" buffer."
+  :group 'nntp
+  :type 'boolean)
 
 (defvar nntp-have-messaged nil)
 
@@ -291,7 +286,7 @@ update their active files often, this can help.")
 (defvar nntp-async-process-list nil)
 
 (defvar nntp-authinfo-rejected nil
-"A custom error condition used to report 'Authentication Rejected' errors.
+"A custom error condition used to report `Authentication Rejected' errors.
 Condition handlers that match just this condition ensure that the nntp
 backend doesn't catch this error.")
 (put 'nntp-authinfo-rejected 'error-conditions '(error nntp-authinfo-rejected))
@@ -344,16 +339,14 @@ retried once before actually displaying the error report."
 
 (defmacro nntp-copy-to-buffer (buffer start end)
   "Copy string from unibyte current buffer to multibyte buffer."
-  (if (featurep 'xemacs)
-      `(copy-to-buffer ,buffer ,start ,end)
-    `(let ((string (buffer-substring ,start ,end)))
-       (with-current-buffer ,buffer
-	 (erase-buffer)
-	 (insert (if enable-multibyte-characters
-		     (mm-string-to-multibyte string)
-		   string))
-	 (goto-char (point-min))
-	 nil))))
+  `(let ((string (buffer-substring ,start ,end)))
+     (with-current-buffer ,buffer
+       (erase-buffer)
+       (insert (if enable-multibyte-characters
+		   (string-to-multibyte string)
+		 string))
+       (goto-char (point-min))
+       nil)))
 
 (defsubst nntp-wait-for (process wait-for buffer &optional decode discard)
   "Wait for WAIT-FOR to arrive from PROCESS."
@@ -728,7 +721,7 @@ command whose response triggered the error."
                     (> number nntp-large-newsgroup)
                     (zerop (% received 20))
                     (nnheader-message 6 "NNTP: Receiving headers... %d%%"
-                                      (/ (* received 100) number)))
+                                      (floor (* received 100.0) number)))
                (nntp-accept-response))))
          (and (numberp nntp-large-newsgroup)
               (> number nntp-large-newsgroup)
@@ -965,7 +958,7 @@ command whose response triggered the error."
                   (> number nntp-large-newsgroup)
                   (zerop (% received 20))
                   (nnheader-message 6 "NNTP: Receiving articles... %d%%"
-                                    (/ (* received 100) number)))
+                                    (floor (* received 100.0) number)))
              (nntp-accept-response))))
        (and (numberp nntp-large-newsgroup)
             (> number nntp-large-newsgroup)
@@ -1115,24 +1108,14 @@ command whose response triggered the error."
 
 (deffoo nntp-request-newgroups (date &optional server)
   (nntp-with-open-group
-   nil server
-   (with-current-buffer nntp-server-buffer
-     (let* ((time (date-to-time date))
-            (ls (- (cadr time) (nth 8 (decode-time time)))))
-       (cond ((< ls 0)
-              (setcar time (1- (car time)))
-              (setcar (cdr time) (+ ls 65536)))
-             ((>= ls 65536)
-              (setcar time (1+ (car time)))
-              (setcar (cdr time) (- ls 65536)))
-             (t
-              (setcar (cdr time) ls)))
-       (prog1
-           (nntp-send-command
-            "^\\.\r?\n" "NEWGROUPS"
-            (format-time-string "%y%m%d %H%M%S" time)
-            "GMT")
-         (nntp-decode-text))))))
+      nil server
+    (with-current-buffer nntp-server-buffer
+      (prog1
+	  (nntp-send-command
+	   "^\\.\r?\n" "NEWGROUPS"
+	   (format-time-string "%y%m%d %H%M%S" (date-to-time date) t)
+	   "GMT")
+	(nntp-decode-text)))))
 
 (deffoo nntp-request-post (&optional server)
   (nntp-with-open-group
@@ -1279,7 +1262,7 @@ If SEND-IF-FORCE, only send authinfo to the server if the
 			   (nntp-open-ssl-stream tls)
 			   (nntp-open-tls-stream tls))))
 		(if (assoc nntp-open-connection-function map)
-		    (open-protocol-stream
+		    (open-network-stream
 		     "nntpd" pbuffer nntp-address nntp-port-number
 		     :type (cadr (assoc nntp-open-connection-function map))
 		     :end-of-command "^\\([2345]\\|[.]\\).*\n"
@@ -1311,13 +1294,11 @@ If SEND-IF-FORCE, only send authinfo to the server if the
       (nntp-kill-buffer pbuffer))
     (when (and (buffer-name pbuffer)
 	       process)
-      (when (and (fboundp 'set-network-process-option) ;; Unavailable in XEmacs.
-		 (fboundp 'process-type) ;; Emacs 22 doesn't provide it.
-                 (eq (process-type process) 'network))
+      (when (eq (process-type process) 'network)
         ;; Use TCP-keepalive so that connections that pass through a NAT router
         ;; don't hang when left idle.
         (set-network-process-option process :keepalive t))
-      (gnus-set-process-query-on-exit-flag process nil)
+      (set-process-query-on-exit-flag process nil)
       (if (and (nntp-wait-for process "^2.*\n" buffer nil t)
 	       (memq (process-status process) '(open run)))
 	  (prog1
@@ -1764,7 +1745,7 @@ If SEND-IF-FORCE, only send authinfo to the server if the
 (defvoo nntp-open-telnet-envuser nil
   "*If non-nil, telnet session (client and server both) will support the ENVIRON option and not prompt for login name.")
 
-(defvoo nntp-telnet-shell-prompt "bash\\|\$ *\r?$\\|> *\r?"
+(defvoo nntp-telnet-shell-prompt "bash\\|[$>] *\r?$"
   "*Regular expression to match the shell prompt on the remote machine.")
 
 (defvoo nntp-rlogin-program "rsh"

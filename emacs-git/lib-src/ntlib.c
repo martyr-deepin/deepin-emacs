@@ -1,6 +1,6 @@
 /* Utility and Unix shadow routines for GNU Emacs support programs on NT.
 
-Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 1994, 2001-2017 Free Software Foundation, Inc.
 
 Author: Geoff Voelker (voelker@cs.washington.edu)
 Created: 10-8-94
@@ -9,8 +9,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -34,6 +34,12 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "ntlib.h"
 
+char *sys_ctime (const time_t *);
+FILE *sys_fopen (const char *, const char *);
+int sys_chdir (const char *);
+int mkostemp (char *, int);
+int sys_rename (const char *, const char *);
+
 /* MinGW64 defines _TIMEZONE_DEFINED and defines 'struct timespec' in
    its system headers.  */
 #ifndef _TIMEZONE_DEFINED
@@ -43,6 +49,8 @@ struct timezone
   int		tz_dsttime;	/* type of dst correction */
 };
 #endif
+
+void gettimeofday (struct timeval *, struct timezone *);
 
 #define MAXPATHLEN _MAX_PATH
 
@@ -90,7 +98,7 @@ getppid (void)
       getppid_parent = OpenProcess (SYNCHRONIZE, FALSE, atoi (ppid));
       if (!getppid_parent)
 	{
-	  printf ("Failed to open handle to parent process: %d\n",
+	  printf ("Failed to open handle to parent process: %lu\n",
 		 GetLastError ());
 	  exit (1);
 	}
@@ -107,7 +115,7 @@ getppid (void)
       return 1;
     case WAIT_FAILED:
     default:
-      printf ("Checking parent status failed: %d\n", GetLastError ());
+      printf ("Checking parent status failed: %lu\n", GetLastError ());
       exit (1);
     }
 }
@@ -250,16 +258,6 @@ fchown (int fd, unsigned uid, unsigned gid)
   return 0;
 }
 
-/* Place a wrapper around the MSVC version of ctime.  It returns NULL
-   on network directories, so we handle that case here.
-   (Ulrich Leodolter, 1/11/95).  */
-char *
-sys_ctime (const time_t *t)
-{
-  char *str = (char *) ctime (t);
-  return (str ? str : "Sun Jan 01 00:00:00 1970");
-}
-
 FILE *
 sys_fopen (const char * path, const char * mode)
 {
@@ -302,7 +300,7 @@ is_exec (const char * name)
 	 stricmp (p, ".cmd") == 0));
 }
 
-/* FIXME?  This is in config.nt now - is this still needed?  */
+/* FIXME?  This is in configure.ac now - is this still needed?  */
 #define IS_DIRECTORY_SEP(x) ((x) == '/' || (x) == '\\')
 
 /* We need this because nt/inc/sys/stat.h defines struct stat that is

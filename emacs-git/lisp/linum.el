@@ -1,6 +1,6 @@
 ;;; linum.el --- display line numbers in the left margin -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Markus Triska <markus.triska@gmx.at>
 ;; Maintainer: emacs-devel@gnu.org
@@ -62,7 +62,7 @@ See also `linum-before-numbering-hook'."
 
 (defcustom linum-eager t
   "Whether line numbers should be updated after each command.
-The conservative setting `nil' might miss some buffer changes,
+The conservative setting nil might miss some buffer changes,
 and you have to scroll or press \\[recenter-top-bottom] to update the numbers."
   :group 'linum
   :type 'boolean)
@@ -120,7 +120,15 @@ Linum mode is a buffer-local minor mode."
   (mapc #'delete-overlay linum-overlays)
   (setq linum-overlays nil)
   (dolist (w (get-buffer-window-list (current-buffer) nil t))
-    (set-window-margins w 0 (cdr (window-margins w)))))
+    ;; restore margins if needed FIXME: This still fails if the
+    ;; "other" mode has incidentally set margins to exactly what linum
+    ;; had: see bug#20674 for a similar workaround in nlinum.el
+    (let ((set-margins (window-parameter w 'linum--set-margins))
+          (current-margins (window-margins w)))
+      (when (and set-margins
+                 (equal set-margins current-margins))
+        (set-window-margins w 0 (cdr current-margins))
+        (set-window-parameter w 'linum--set-margins nil)))))
 
 (defun linum-update-current ()
   "Update line numbers for the current buffer."
@@ -143,10 +151,10 @@ Linum mode is a buffer-local minor mode."
 
 (defun linum--face-width (face)
   (let ((info (font-info (face-font face)))
-	width)
+        width)
     (setq width (aref info 11))
     (if (<= width 0)
-	(setq width (aref info 10)))
+        (setq width (aref info 10)))
     width))
 
 (defun linum-update-window (win)
@@ -170,7 +178,7 @@ Linum mode is a buffer-local minor mode."
              (visited (catch 'visited
                         (dolist (o (overlays-in (point) (point)))
                           (when (equal-including-properties
-				 (overlay-get o 'linum-str) str)
+                                 (overlay-get o 'linum-str) str)
                             (unless (memq o linum-overlays)
                               (push o linum-overlays))
                             (setq linum-available (delq o linum-available))
@@ -193,7 +201,12 @@ Linum mode is a buffer-local minor mode."
       (setq width (ceiling
                    (/ (* width 1.0 (linum--face-width 'linum))
                       (frame-char-width)))))
-    (set-window-margins win width (cdr (window-margins win)))))
+    ;; open up space in the left margin, if needed, and record that
+    ;; fact as the window-parameter `linum--set-margins'
+    (let ((existing-margins (window-margins win)))
+      (when (> width (or (car existing-margins) 0))
+        (set-window-margins win width (cdr existing-margins))
+        (set-window-parameter win 'linum--set-margins (window-margins win))))))
 
 (defun linum-after-change (beg end _len)
   ;; update overlays on deletions, and after newlines are inserted

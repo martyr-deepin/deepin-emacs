@@ -1,6 +1,6 @@
 ;;;; testcover.el -- Visual code-coverage tool  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2017 Free Software Foundation, Inc.
 
 ;; Author: Jonathan Yavner <jyavner@member.fsf.org>
 ;; Maintainer: Jonathan Yavner <jyavner@member.fsf.org>
@@ -184,6 +184,7 @@ call to one of the `testcover-1value-functions'."
 ;;; Add instrumentation to your module
 ;;;=========================================================================
 
+;;;###autoload
 (defun testcover-start (filename &optional byte-compile)
   "Uses edebug to instrument all macros and functions in FILENAME, then
 changes the instrumentation from edebug to testcover--much faster, no

@@ -1,6 +1,6 @@
 ;;; term.el --- general command interpreter in a window stuff
 
-;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2015 Free Software
+;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Per Bothner <per@bothner.com>
@@ -107,19 +107,6 @@
 ;; so easy you could do it yourself...
 ;;
 ;;  Blink, is not supported.  Currently it's mapped as bold.
-;;
-;;             ----------------------------------------
-;;
-;;  If you'd like to check out my complete configuration, you can download
-;; it from http://www.polito.it/~s64912/things.html, it's ~500k in size and
-;; contains my .cshrc, .emacs and my whole site-lisp subdirectory.  (notice
-;; that this term.el may be newer/older than the one in there, please
-;; check!)
-;;
-;;  This complete configuration contains, among other things, a complete
-;; rectangular marking solution (based on rect-mark.el and
-;; pc-bindings.el) and should be a good example of how extensively Emacs
-;; can be configured on a ppp-connected ws.
 ;;
 ;;             ----------------------------------------
 ;;
@@ -245,85 +232,47 @@
 ;;             ----------------------------------------
 ;;
 ;;  Notice: for directory/host/user tracking you need to have something
-;; like this in your shell startup script ( this is for tcsh but should
-;; be quite easy to port to other shells )
+;; like this in your shell startup script (this is for a POSIXish shell
+;; like Bash but should be quite easy to port to other shells)
 ;;
 ;;             ----------------------------------------
 ;;
-;;
-;;  	 set os = `uname`
-;;  	 set host = `hostname`
-;;  	 set date = `date`
+;;  # Set HOSTNAME if not already set.
+;;	: ${HOSTNAME=$(uname -n)}
 ;;
 ;;  # su does not change this but I'd like it to
 ;;
-;;  	 set user = `whoami`
+;;	USER=$(whoami)
 ;;
 ;;  # ...
 ;;
-;;  	 if ( eterm =~ $TERM ) then
+;;	case $TERM in
+;;	    eterm*)
 ;;
-;;  		echo --------------------------------------------------------------
-;;  		echo Hello $user
-;;  		echo Today is $date
-;;  		echo We are on $host running $os under Emacs term mode
-;;  		echo --------------------------------------------------------------
+;;		printf '%s\n' \
+;;		 -------------------------------------------------------------- \
+;;		 "Hello $user" \
+;;		 "Today is $(date)" \
+;;		 "We are on $HOSTNAME running $(uname) under Emacs term mode" \
+;;		 --------------------------------------------------------------
 ;;
-;;  		setenv EDITOR emacsclient
+;;		export EDITOR=emacsclient
 ;;
-;;   # Notice: $host and $user have been set before to 'hostname' and 'whoami'
-;;   # this is necessary because, f.e., certain versions of 'su' do not change
-;;   # $user, YMMV: if you don't want to fiddle with them define a couple
-;;   # of new variables and use these instead.
-;;   # NOTICE that there is a space between "AnSiT?" and $whatever NOTICE
+;;		# The \033 stands for ESC.
+;;		# There is a space between "AnSiT?" and $whatever.
 ;;
-;;   # These are because we want the real cwd in the messages, not the login
-;;   # time one !
+;;		cd()    { command cd    "$@"; printf '\033AnSiTc %s\n' "$PWD"; }
+;;		pushd() { command pushd "$@"; printf '\033AnSiTc %s\n' "$PWD"; }
+;;		popd()  { command popd  "$@"; printf '\033AnSiTc %s\n' "$PWD"; }
 ;;
-;; 		set cwd_hack='$cwd'
-;; 		set host_hack='$host'
-;; 		set user_hack='$user'
+;;		printf '\033AnSiTc %s\n' "$PWD"
+;;		printf '\033AnSiTh %s\n' "$HOSTNAME"
+;;		printf '\033AnSiTu %s\n' "$USER"
 ;;
-;;   # Notice that the ^[ character is an ESC, not two chars.  You can
-;;   # get it in various ways, for example by typing
-;;   # echo -e '\033' > escape.file
-;;   # or by using your favorite editor
-;;
-;; 		foreach temp (cd pushd)
-;; 			alias $temp "$temp \!* ; echo 'AnSiTc' $cwd_hack"
-;; 		end
-;;   		alias popd 'popd ;echo "AnSiTc" $cwd'
-;;
-;;   # Every command that can modify the user/host/directory should be aliased
-;;   # as follows for the tracking mechanism to work.
-;;
-;; 		foreach temp ( rlogin telnet rsh sh ksh csh tcsh zsh bash tcl su )
-;; 			alias $temp "$temp \!* ; echo 'AnSiTh' $host_hack ; \
-;; 					echo 'AnSiTu' $user_hack ;echo 'AnSiTc' $cwd_hack"
-;; 		end
-;;
-;;   # Start up & use color ls
-;;
-;; 		echo "AnSiTh" $host
-;; 		echo "AnSiTu" $user
-;; 		echo "AnSiTc" $cwd
-;;
-;;   # some housekeeping
-;;
-;; 		unset cwd_hack
-;; 		unset host_hack
-;; 		unset user_hack
-;; 		unset temp
-;;
-;; 		eval `/bin/dircolors /home/marco/.emacs_dircolors`
-;;    endif
+;;		eval $(dircolors $HOME/.emacs_dircolors)
+;;	esac
 ;;
 ;;  # ...
-;;
-;;  # Let's not clutter user space
-;;
-;;  	 unset os
-;;  	 unset date
 ;;
 ;;
 
@@ -392,6 +341,7 @@
 (defconst term-protocol-version "0.96")
 
 (eval-when-compile (require 'ange-ftp))
+(eval-when-compile (require 'cl-lib))
 (require 'ring)
 (require 'ehelp)
 
@@ -455,6 +405,7 @@ state 4: term-terminal-parameter contains pending output.")
 (defvar term-kill-echo-list nil
   "A queue of strings whose echo we want suppressed.")
 (defvar term-terminal-parameter)
+(defvar term-terminal-undecoded-bytes nil)
 (defvar term-terminal-previous-parameter)
 (defvar term-current-face 'term)
 (defvar term-scroll-start 0 "Top-most line (inclusive) of scrolling region.")
@@ -885,6 +836,10 @@ is buffer-local."
     (define-key map [down] 'term-send-down)
     (define-key map [right] 'term-send-right)
     (define-key map [left] 'term-send-left)
+    (define-key map [C-up] 'term-send-ctrl-up)
+    (define-key map [C-down] 'term-send-ctrl-down)
+    (define-key map [C-right] 'term-send-ctrl-right)
+    (define-key map [C-left] 'term-send-ctrl-left)
     (define-key map [delete] 'term-send-del)
     (define-key map [deletechar] 'term-send-del)
     (define-key map [backspace] 'term-send-backspace)
@@ -896,6 +851,7 @@ is buffer-local."
     (define-key map [S-insert] 'term-paste)
     (define-key map [prior] 'term-send-prior)
     (define-key map [next] 'term-send-next)
+    (define-key map [xterm-paste] #'term--xterm-paste)
     map)
   "Keyboard map for sending characters directly to the inferior process.")
 
@@ -965,19 +921,6 @@ is buffer-local."
   (define-key term-raw-escape-map term-escape-char 'term-send-raw))
 
 (term-set-escape-char (or term-escape-char ?\C-c))
-
-(defvar overflow-newline-into-fringe)
-
-(defun term-window-width ()
-  (if (and (not (featurep 'xemacs))
-	   (display-graphic-p)
-	   overflow-newline-into-fringe
-	   ;; Subtract 1 from the width when any fringe has zero width,
-	   ;; not just the right fringe.  Bug#18601.
-	   (/= (frame-parameter nil 'left-fringe) 0)
-	   (/= (frame-parameter nil 'right-fringe) 0))
-      (window-body-width)
-    (1- (window-body-width))))
 
 
 (put 'term-mode 'mode-class 'special)
@@ -1065,7 +1008,7 @@ Entry to this mode runs the hooks on `term-mode-hook'."
   (setq buffer-display-table term-display-table)
   (set (make-local-variable 'term-home-marker) (copy-marker 0))
   (set (make-local-variable 'term-height) (1- (window-height)))
-  (set (make-local-variable 'term-width) (term-window-width))
+  (set (make-local-variable 'term-width) (window-max-chars-per-line))
   (set (make-local-variable 'term-last-input-start) (make-marker))
   (set (make-local-variable 'term-last-input-end) (make-marker))
   (set (make-local-variable 'term-last-input-match) "")
@@ -1074,7 +1017,6 @@ Entry to this mode runs the hooks on `term-mode-hook'."
 
   ;; These local variables are set to their local values:
   (make-local-variable 'term-saved-home-marker)
-  (make-local-variable 'term-terminal-parameter)
   (make-local-variable 'term-saved-cursor)
   (make-local-variable 'term-prompt-regexp)
   (make-local-variable 'term-input-ring-size)
@@ -1111,6 +1053,7 @@ Entry to this mode runs the hooks on `term-mode-hook'."
   (make-local-variable 'term-ansi-current-invisible)
 
   (make-local-variable 'term-terminal-parameter)
+  (make-local-variable 'term-terminal-undecoded-bytes)
   (make-local-variable 'term-terminal-previous-parameter)
   (make-local-variable 'term-terminal-previous-parameter-2)
   (make-local-variable 'term-terminal-previous-parameter-3)
@@ -1169,12 +1112,16 @@ Entry to this mode runs the hooks on `term-mode-hook'."
   (term-update-mode-line))
 
 (defun term-reset-size (height width)
-  (setq term-height height)
-  (setq term-width width)
-  (setq term-start-line-column nil)
-  (setq term-current-row nil)
-  (setq term-current-column nil)
-  (term-set-scroll-region 0 height))
+  (when (or (/= height term-height)
+            (/= width term-width))
+    (let ((point (point)))
+      (setq term-height height)
+      (setq term-width width)
+      (setq term-start-line-column nil)
+      (setq term-current-row nil)
+      (setq term-current-column nil)
+      (term-set-scroll-region 0 height)
+      (goto-char point))))
 
 ;; Recursive routine used to check if any string in term-kill-echo-list
 ;; matches part of the buffer before point.
@@ -1260,6 +1207,13 @@ without any interpretation."
   (interactive)
    (term-send-raw-string (current-kill 0)))
 
+(defun term--xterm-paste ()
+  "Insert the text pasted in an XTerm bracketed paste operation."
+  (interactive)
+  (term-send-raw-string (xterm--pasted-text)))
+
+(declare-function xterm--pasted-text "term/xterm" ())
+
 ;; Which would be better:  "\e[A" or "\eOA"? readline accepts either.
 ;; For my configuration it's definitely better \eOA but YMMV. -mm
 ;; For example: vi works with \eOA while elm wants \e[A ...
@@ -1268,6 +1222,10 @@ without any interpretation."
 (defun term-send-down  () (interactive) (term-send-raw-string "\eOB"))
 (defun term-send-right () (interactive) (term-send-raw-string "\eOC"))
 (defun term-send-left  () (interactive) (term-send-raw-string "\eOD"))
+(defun term-send-ctrl-up    () (interactive) (term-send-raw-string "\e[1;5A"))
+(defun term-send-ctrl-down  () (interactive) (term-send-raw-string "\e[1;5B"))
+(defun term-send-ctrl-right () (interactive) (term-send-raw-string "\e[1;5C"))
+(defun term-send-ctrl-left  () (interactive) (term-send-raw-string "\e[1;5D"))
 (defun term-send-home  () (interactive) (term-send-raw-string "\e[1~"))
 (defun term-send-insert() (interactive) (term-send-raw-string "\e[2~"))
 (defun term-send-end   () (interactive) (term-send-raw-string "\e[4~"))
@@ -1483,7 +1441,7 @@ Using \"emacs\" loses, because bash disables editing if $TERM == emacs.")
 :UP=\\E[%%dA:DO=\\E[%%dB:LE=\\E[%%dD:RI=\\E[%%dC\
 :kl=\\EOD:kd=\\EOB:kr=\\EOC:ku=\\EOA:kN=\\E[6~:kP=\\E[5~:@7=\\E[4~:kh=\\E[1~\
 :mk=\\E[8m:cb=\\E[1K:op=\\E[39;49m:Co#8:pa#64:AB=\\E[4%%dm:AF=\\E[3%%dm:cr=^M\
-:bl=^G:do=^J:le=^H:ta=^I:se=\\E[27m:ue=\\E24m\
+:bl=^G:do=^J:le=^H:ta=^I:se=\\E[27m:ue=\\E[24m\
 :kb=^?:kD=^[[3~:sc=\\E7:rc=\\E8:r1=\\Ec:"
   ;; : -undefine ic
   ;; don't define :te=\\E[2J\\E[?47l\\E8:ti=\\E7\\E[?47h\
@@ -1505,6 +1463,13 @@ Using \"emacs\" loses, because bash disables editing if $TERM == emacs.")
 	   (format "TERMINFO=%s" data-directory)
 	   (format term-termcap-format "TERMCAP="
 		   term-term-name term-height term-width)
+
+	   ;; This is for backwards compatibility with Bash 4.3 and earlier.
+	   ;; Remove this hack once Bash 4.4-or-later is common, because
+	   ;; it breaks './configure' of some packages that expect it to
+	   ;; say where to find EMACS.
+	   (format "EMACS=%s (term:%s)" emacs-version term-protocol-version)
+
 	   (format "INSIDE_EMACS=%s,term:%s" emacs-version term-protocol-version)
 	   (format "LINES=%d" term-height)
 	   (format "COLUMNS=%d" term-width))
@@ -1649,7 +1614,7 @@ See also `term-read-input-ring'."
       (let ((ch (read-event)))
 	(if (eq ch ?\s)
 	    (set-window-configuration conf)
-	  (setq unread-command-events (list ch)))))))
+	  (push ch unread-command-events))))))
 
 
 (defun term-regexp-arg (prompt)
@@ -1919,7 +1884,7 @@ A useful command to bind to SPC.  See `term-replace-by-expanded-history'."
 (defun term-within-quotes (beg end)
   "Return t if the number of quotes between BEG and END is odd.
 Quotes are single and double."
-  (let ((countsq (term-how-many-region "\\(^\\|[^\\\\]\\)\'" beg end))
+  (let ((countsq (term-how-many-region "\\(^\\|[^\\\\]\\)'" beg end))
 	(countdq (term-how-many-region "\\(^\\|[^\\\\]\\)\"" beg end)))
     (or (= (mod countsq 2) 1) (= (mod countdq 2) 1))))
 
@@ -2178,7 +2143,7 @@ The prompt skip is done by skipping text matching the regular expression
 (defun term-read-noecho (prompt &optional stars)
   "Read a single line of text from user without echoing, and return it.
 Prompt with argument PROMPT, a string.  Optional argument STARS causes
-input to be echoed with '*' characters on the prompt line.  Input ends with
+input to be echoed with `*' characters on the prompt line.  Input ends with
 RET, LFD, or ESC.  DEL or C-h rubs out.  C-u kills line.  C-g aborts (if
 `inhibit-quit' is set because e.g. this function was called from a process
 filter and C-g is pressed, this function returns nil rather than a string).
@@ -2785,6 +2750,10 @@ See `term-prompt-regexp'."
 
 	  (when term-log-buffer
 	    (princ str term-log-buffer))
+          (when term-terminal-undecoded-bytes
+            (setq str (concat term-terminal-undecoded-bytes str))
+            (setq str-length (length str))
+            (setq term-terminal-undecoded-bytes nil))
 	  (cond ((eq term-terminal-state 4) ;; Have saved pending output.
 		 (setq str (concat term-terminal-parameter str))
 		 (setq term-terminal-parameter nil)
@@ -2800,13 +2769,6 @@ See `term-prompt-regexp'."
 				       str i))
 		   (when (not funny) (setq funny str-length))
 		   (cond ((> funny i)
-			  ;; Decode the string before counting
-			  ;; characters, to avoid garbling of certain
-			  ;; multibyte characters (bug#1006).
-			  (setq decoded-substring
-				(decode-coding-string
-				 (substring str i funny)
-				 locale-coding-system))
 			  (cond ((eq term-terminal-state 1)
 				 ;; We are in state 1, we need to wrap
 				 ;; around.  Go to the beginning of
@@ -2815,7 +2777,31 @@ See `term-prompt-regexp'."
 				 (term-down 1 t)
 				 (term-move-columns (- (term-current-column)))
 				 (setq term-terminal-state 0)))
+			  ;; Decode the string before counting
+			  ;; characters, to avoid garbling of certain
+			  ;; multibyte characters (bug#1006).
+			  (setq decoded-substring
+				(decode-coding-string
+				 (substring str i funny)
+				 locale-coding-system))
 			  (setq count (length decoded-substring))
+                          ;; Check for multibyte characters that ends
+                          ;; before end of string, and save it for
+                          ;; next time.
+                          (when (= funny str-length)
+                            (let ((partial 0))
+                              (while (eq (char-charset (aref decoded-substring
+                                                             (- count 1 partial)))
+                                         'eight-bit)
+                                (cl-incf partial))
+                              (when (> partial 0)
+                                (setq term-terminal-undecoded-bytes
+                                      (substring decoded-substring (- partial)))
+                                (setq decoded-substring
+                                      (substring decoded-substring 0 (- partial)))
+                                (cl-decf str-length partial)
+                                (cl-decf count partial)
+                                (cl-decf funny partial))))
 			  (setq temp (- (+ (term-horizontal-column) count)
 					term-width))
 			  (cond ((or term-suppress-hard-newline (<= temp 0)))
@@ -2915,15 +2901,16 @@ See `term-prompt-regexp'."
 			 ((eq char ?\017))     ; Shift In - ignored
 			 ((eq char ?\^G) ;; (terminfo: bel)
 			  (beep t))
-			 ((and (eq char ?\032)
-                               (not handled-ansi-message))
-			  (let ((end (string-match "\r?$" str i)))
+			 ((eq char ?\032)
+			  (let ((end (string-match "\r?\n" str i)))
 			    (if end
-				(funcall term-command-hook
-					 (decode-coding-string
-					  (prog1 (substring str (1+ i) end)
-					    (setq i (match-end 0)))
-					  locale-coding-system))
+                                (progn
+                                  (unless handled-ansi-message
+                                    (funcall term-command-hook
+                                             (decode-coding-string
+                                              (substring str (1+ i) end)
+                                              locale-coding-system)))
+                                  (setq i (1- (match-end 0))))
 			      (setq term-terminal-parameter (substring str i))
 			      (setq term-terminal-state 4)
 			      (setq i str-length))))
@@ -3296,6 +3283,10 @@ See `term-prompt-regexp'."
    ;; \E[D - cursor left (terminfo: cub)
    ((eq char ?D)
     (term-move-columns (- (max 1 term-terminal-parameter))))
+   ;; \E[G - cursor motion to absolute column (terminfo: hpa)
+   ((eq char ?G)
+    (term-move-columns (- (max 0 (min term-width term-terminal-parameter))
+                          (term-current-column))))
    ;; \E[J - clear to end of screen (terminfo: ed, clear)
    ((eq char ?J)
     (term-erase-in-display term-terminal-parameter))
@@ -4128,7 +4119,9 @@ Typing SPC flushes the help buffer."
 	    (set-window-configuration conf))
 	(if (eq first ?\s)
 	    (set-window-configuration conf)
-	  (setq unread-command-events (listify-key-sequence key)))))))
+	  (setq unread-command-events
+                (nconc (listify-key-sequence key)
+                       unread-command-events)))))))
 
 ;; I need a make-term that doesn't surround with *s -mm
 (defun term-ansi-make-term (name program &optional startfile &rest switches)

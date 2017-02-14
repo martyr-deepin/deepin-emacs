@@ -1,6 +1,6 @@
 ;;; idlw-toolbar.el --- a debugging toolbar for IDLWAVE
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <dominik@astro.uva.nl>
 ;; Maintainer: J.D. Smith <jdsmith@as.arizona.edu>
@@ -439,7 +439,7 @@ static char * file[] = {
 \"                            \",
 \"                            \",
 \"                            \"};")
-  "The Cont icon.")	  
+  "The Cont icon.")
 
 (defvar idlwave-toolbar-to-here-icon
   (idlwave-toolbar-make-button
@@ -918,7 +918,7 @@ static char * file[] = {
 		     (help (aref x 3))
 		     (key (vector 'tool-bar func))
 		     (def (list 'menu-item
-				"a"
+				""
 				func
 				:image (symbol-value icon)
 				:visible show

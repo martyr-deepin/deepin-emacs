@@ -1,6 +1,6 @@
 ;;; iswitchb.el --- switch between buffers using substrings
 
-;; Copyright (C) 1996-1997, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1997, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Stephen Eglen <stephen@gnu.org>
 ;; Maintainer: Stephen Eglen <stephen@gnu.org>
@@ -389,8 +389,8 @@ See documentation of `walk-windows' for useful values."
 
 This hook is run during minibuffer setup if `iswitchb' is active.
 For instance:
-\(add-hook 'iswitchb-minibuffer-setup-hook
-	  '\(lambda () (set (make-local-variable 'max-mini-window-height) 3)))
+\(add-hook \\='iswitchb-minibuffer-setup-hook
+	  \\='\(lambda () (set (make-local-variable \\='max-mini-window-height) 3)))
 will constrain the minibuffer to a maximum height of 3 lines when
 iswitchb is running."
   :type 'hook
@@ -1095,7 +1095,7 @@ Return the modified list with the last element prepended to it."
 
 	      (and iswitchb-prompt-newbuffer
 		   (y-or-n-p
-		    (format
+		    (format-message
 		     "No buffer matching `%s', create one? "
 		     buf)))))
 	;; then create a new buffer

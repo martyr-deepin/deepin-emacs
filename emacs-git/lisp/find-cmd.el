@@ -1,6 +1,6 @@
 ;;; find-cmd.el --- Build a valid find(1) command with sexps
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Philip Jackson <phil@shellarchive.co.uk>
 ;; Version: 0.6
@@ -140,10 +140,10 @@ the string will be quoted).")
   "Initiate the building of a find command.
 For example:
 
-\(find-cmd '\(prune \(name \".svn\" \".git\" \".CVS\"\)\)
-          '\(and \(or \(name \"*.pl\" \"*.pm\" \"*.t\"\)
-                    \(mtime \"+1\"\)\)
-                \(fstype \"nfs\" \"ufs\"\)\)\)\)
+\(find-cmd \\='(prune (name \".svn\" \".git\" \".CVS\"))
+          \\='(and (or (name \"*.pl\" \"*.pm\" \"*.t\")
+                    (mtime \"+1\"))
+                (fstype \"nfs\" \"ufs\"))))
 
 `default-directory' is used as the initial search path.  The
 result is a string that should be ready for the command line."
@@ -159,9 +159,9 @@ result is a string that should be ready for the command line."
 
 (defun find-and (form)
   "And FORMs together, so:
-  \(and \(mtime \"+1\"\) \(name \"something\"\)\)
+  (and (mtime \"+1\") (name \"something\"))
 will produce:
-  find . \\\( -mtime '+1' -and -name 'something' \\\)"
+  find . \\( -mtime +1 -and -name something \\)"
   (if (< (length form) 2)
       (find-to-string (car form))
       (concat "\\( "
@@ -170,9 +170,9 @@ will produce:
 
 (defun find-or (form)
   "Or FORMs together, so:
-  \(or \(mtime \"+1\"\) \(name \"something\"\)\)
+  (or (mtime \"+1\") (name \"something\"))
 will produce:
-  find . \\\( -mtime '+1' -or -name 'something' \\\)"
+  find . \\( -mtime +1 -or -name something \\)"
   (if (< (length form) 2)
       (find-to-string (car form))
       (concat "\\( "
@@ -181,21 +181,21 @@ will produce:
 
 (defun find-not (form)
   "Or FORMs together and prefix with a -not, so:
-  \(not \(mtime \"+1\"\) \(name \"something\"\)\)
+  (not (mtime \"+1\") (name \"something\"))
 will produce:
-  -not \\\( -mtime '+1' -or -name 'something' \\\)
+  -not \\( -mtime +1 -or -name something \\)
 If you wanted the FORMs -and(ed) together instead then this would
 suffice:
-  \(not \(and \(mtime \"+1\"\) \(name \"something\"\)\)\)"
+  (not (and (mtime \"+1\") (name \"something\")))"
   (concat "-not " (find-or (mapcar #'find-to-string form))))
 
 (defun find-prune (form)
-  "-or together FORMs postfix '-prune' and then -or that with a
+  "-or together FORMs postfix `-prune' and then -or that with a
 -true, so:
-  \(prune \(name \".svn\" \".git\"\)\) \(name \"*.pm\"\)
+  ((prune (name \".svn\" \".git\")) (name \"*.pm\"))
 will produce (unwrapped):
-  \\\( \\\( \\\( -name '.svn' -or -name '.git' \\\) /
-  -prune -or -true \\\) -and -name '*.pm' \\\)"
+  \\( \\( \\( -name .svn -or -name .git \\) /
+  -prune -or -true \\) -and -name *.pm \\)"
   (find-or
    (list
     (concat (find-or (mapcar #'find-to-string form)) (find-generic "prune"))
@@ -209,7 +209,7 @@ args that OPTION can receive and ARGS are the arguments for OPTION.
 If DONT-QUOTE is non-nil, arguments are quoted for passing them to
 the shell."
   (when (and (numberp argcount) (< (length args) argcount))
-    (error "'%s' needs at least %d arguments" option argcount))
+    (error "`%s' needs at least %d arguments" option argcount))
   (let ((oper (or oper 'find-or)))
     (if (and args (length args))
         (funcall oper (mapcar (lambda (x)
@@ -247,7 +247,7 @@ them into valid switches.  The result is -and(ed) together."
             (find-to-string
              (find-generic option oper argcnt (cdr form) dont-quote))))
          (t
-          (error "Sorry I don't know how to handle '%s'" (car form))))))))
+          (error "Sorry I don't know how to handle `%s'" (car form))))))))
 
 (provide 'find-cmd)
 

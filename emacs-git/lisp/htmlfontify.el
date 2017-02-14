@@ -1,6 +1,6 @@
-;;; htmlfontify.el --- htmlize a buffer/source tree with optional hyperlinks
+;;; htmlfontify.el --- htmlize a buffer/source tree with optional hyperlinks -*- lexical-binding: t -*-
 
-;; Copyright (C) 2002-2003, 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2003, 2009-2017 Free Software Foundation, Inc.
 
 ;; Emacs Lisp Archive Entry
 ;; Package: htmlfontify
@@ -81,7 +81,7 @@
 ;; Changes: moved to changelog (CHANGES) file.
 
 ;;; Code:
-(eval-when-compile (require 'cl))
+(eval-when-compile (require 'cl-lib))
 (require 'faces)
 ;;  (`facep' `face-attr-construct' `x-color-values' `color-values' `face-name')
 (require 'custom)
@@ -89,6 +89,8 @@
 (require 'font-lock)
 ;;  (`font-lock-fontify-region')
 (require 'cus-edit)
+
+(require 'htmlfontify-loaddefs)
 
 (defconst htmlfontify-version 0.21)
 
@@ -133,10 +135,10 @@ main-content <=MAIN_CONTENT;\\n\" rtfm-section file style rtfm-section file))
 \(defun rtfm-build-source-docs (section srcdir destdir)
   (interactive
    \"s section[eg- emacs / p4-blame]:\\nD source-dir: \\nD output-dir: \")
-  (require 'htmlfontify)
+  (require \\='htmlfontify)
   (hfy-load-tags-cache srcdir)
-  (let ((hfy-page-header  'rtfm-build-page-header)
-        (hfy-page-footer  'rtfm-build-page-footer)
+  (let ((hfy-page-header  \\='rtfm-build-page-header)
+        (hfy-page-footer  \\='rtfm-build-page-footer)
         (rtfm-section                     section)
         (hfy-index-file                   \"index\"))
     (htmlfontify-run-etags srcdir)
@@ -187,13 +189,13 @@ It takes only one argument, the filename."
   :type  '(string))
 
 (defcustom hfy-src-doc-link-style "text-decoration: underline;"
-  "String to add to the '<style> a' variant of an htmlfontify CSS class."
+  "String to add to the `<style> a' variant of an htmlfontify CSS class."
   :group 'htmlfontify
   :tag   "src-doc-link-style"
   :type  '(string))
 
 (defcustom hfy-src-doc-link-unstyle " text-decoration: none;"
-  "Regex to remove from the <style> a variant of an htmlfontify CSS class."
+  "Regex to remove from the `<style> a' variant of an htmlfontify CSS class."
   :group 'htmlfontify
   :tag   "src-doc-link-unstyle"
   :type  '(string))
@@ -260,10 +262,10 @@ These functions will be called with the HTML buffer as the current buffer."
   :type    '(hook))
 
 (defcustom hfy-default-face-def nil
-  "Fallback `defface' specification for the face 'default, used when
+  "Fallback `defface' specification for the face `default', used when
 `hfy-display-class' has been set (the normal htmlfontify way of extracting
 potentially non-current face information doesn't necessarily work for
-'default).\n
+`default').\n
 Example: I customize this to:\n
 \((t :background \"black\" :foreground \"white\" :family \"misc-fixed\"))"
   :group   'htmlfontify
@@ -330,7 +332,7 @@ done;")
 (defcustom hfy-etags-cmd-alist
   hfy-etags-cmd-alist-default
   "Alist of possible shell commands that will generate etags output that
-`htmlfontify' can use.  '%s' will be replaced by `hfy-etags-bin'."
+`htmlfontify' can use.  `%s' will be replaced by `hfy-etags-bin'."
   :group 'htmlfontify
   :tag   "etags-cmd-alist"
   :type  '(alist :key-type (string) :value-type (string)))
@@ -363,9 +365,15 @@ commands in `hfy-etags-cmd-alist'."
 
 (defun hfy-which-etags ()
   "Return a string indicating which flavor of etags we are using."
-  (let ((v (shell-command-to-string (concat hfy-etags-bin " --version"))))
-    (cond ((string-match "exube" v) "exuberant ctags")
-          ((string-match "GNU E" v) "emacs etags"    )) ))
+  (with-temp-buffer
+    (condition-case nil
+        (when (eq (call-process hfy-etags-bin nil t nil "--version") 0)
+          (goto-char (point-min))
+          (cond
+           ((looking-at-p "exube") "exuberant ctags")
+           ((looking-at-p "GNU E") "emacs etags")))
+      ;; Return nil if the etags binary isn't executable (Bug#25468).
+      (file-error nil))))
 
 (defcustom hfy-etags-cmd
   ;; We used to wrap this in a `eval-and-compile', but:
@@ -389,8 +397,8 @@ exuberant-ctags' etags respectively."
 
 (defcustom hfy-istext-command "file %s | sed -e 's@^[^:]*:[ \t]*@@'"
   "Command to run with the name of a file, to see whether it is a text file
-or not.  The command should emit a string containing the word 'text' if
-the file is a text file, and a string not containing 'text' otherwise."
+or not.  The command should emit a string containing the word `text' if
+the file is a text file, and a string not containing `text' otherwise."
   :group 'htmlfontify
   :tag   "istext-command"
   :type  '(string))
@@ -408,23 +416,23 @@ calculating a face's attributes.  This is useful when, for example, you
 are running Emacs on a tty or in batch mode, and want htmlfontify to have
 access to the face spec you would use if you were connected to an X display.\n
 Some valid class specification elements are:\n
-  '(class      color)
-  '(class      grayscale)
-  '(background dark)
-  '(background light)
-  '(type       x-toolkit)
-  '(type       tty)
-  '(type       motif)
-  '(type       lucid)
+  (class      color)
+  (class      grayscale)
+  (background dark)
+  (background light)
+  (type       x-toolkit)
+  (type       tty)
+  (type       motif)
+  (type       lucid)
 Multiple values for a tag may be combined, to indicate that any one or more
 of these values in the specification key constitutes a match, eg:\n
-'((class color grayscale) (type tty)) would match any of:\n
-  '((class color))
-  '((class grayscale))
-  '((class color grayscale))
-  '((class color foo))
-  '((type  tty))
-  '((type  tty) (class color))\n
+((class color grayscale) (type tty)) would match any of:\n
+  ((class color))
+  ((class grayscale))
+  ((class color grayscale))
+  ((class color foo))
+  ((type  tty))
+  ((type  tty) (class color))\n
 and so on."
   :type    '(alist :key-type (symbol) :value-type (symbol))
   :group   'htmlfontify
@@ -500,12 +508,12 @@ tagged items, not the locations of their definitions.")
 (defvar hfy-style-assoc 'please-ignore-this-line
   "An assoc representing/describing an Emacs face.
 Properties may be repeated, in which case later properties should be
-treated as if they were inherited from a 'parent' font.
+treated as if they were inherited from a `parent' font.
 \(For some properties, only the first encountered value is of any importance,
 for others the values might be cumulative, and for others they might be
 cumulative in a complex way.)\n
 Some examples:\n
-\(hfy-face-to-style 'default) =>
+\(hfy-face-to-style \\='default) =>
   ((\"background\"      . \"rgb(0, 0, 0)\")
    (\"color\"           . \"rgb(255, 255, 255)\")
    (\"font-style\"      . \"normal\")
@@ -514,7 +522,7 @@ Some examples:\n
    (\"font-family\"     . \"misc-fixed\")
    (\"font-size\"       . \"13pt\")
    (\"text-decoration\" . \"none\"))\n
-\(hfy-face-to-style 'Info-title-3-face) =>
+\(hfy-face-to-style \\='Info-title-3-face) =>
   ((\"font-weight\"     . \"700\")
    (\"font-family\"     . \"helv\")
    (\"font-size\"       . \"120%\")
@@ -522,19 +530,19 @@ Some examples:\n
 
 (defvar hfy-sheet-assoc 'please-ignore-this-line
   "An assoc with elements of the form (face-name style-name . style-string):\n
-'((default               \"default\" . \"{background: black; color: white}\")
-  (font-lock-string-face \"string\"  . \"{color: rgb(64,224,208)}\"))" )
+\((default               \"default\" . \"{background: black; color: white}\")
+ (font-lock-string-face \"string\"  . \"{color: rgb(64,224,208)}\"))" )
 
 (defvar hfy-facemap-assoc 'please-ignore-this-line
   "An assoc of (point . FACE-SYMBOL) or (point . DEFFACE-LIST)
-and (point . 'end) elements, in descending order of point value
+and (point . \\='end) elements, in descending order of point value
 \(ie from the file's end to its beginning).\n
 The map is in reverse order because inserting a <style> tag (or any other
 string) at `point' invalidates the map for all entries with a greater value of
 point.  By traversing the map from greatest to least point, we still invalidate
 the map as we go, but only those points we have already dealt with (and
 therefore no longer care about) will be invalid at any time.\n
-'((64820 . end)
+\\='((64820 . end)
   (64744 . font-lock-comment-face)
   (64736 . end)
   (64722 . font-lock-string-face)
@@ -816,7 +824,7 @@ regular specifiers."
   (if spec
       (let ((tag (car  spec))
             (val (cadr spec)))
-        (cons (case tag
+        (cons (cl-case tag
                 (:color (cons "colour" val))
                 (:width (cons "width"  val))
                 (:style (cons "style"  val)))
@@ -829,7 +837,7 @@ regular specifiers."
     (list
      (if col (cons "border-color" (cdr (assoc "colour" css))))
      (cons "border-width" (format "%dpx" (or (cdr (assoc "width" css)) 1)))
-     (cons "border-style" (case s
+     (cons "border-style" (cl-case s
                             (released-button "outset")
                             (pressed-button  "inset" )
                             (t               "solid" ))))))
@@ -848,7 +856,7 @@ TAG is an Emacs font attribute key (eg :underline).
 VAL is ignored."
   (list
    ;; FIXME: Why not '("text-decoration" . "underline")?  --Stef
-   (case tag
+   (cl-case tag
      (:underline      (cons "text-decoration" "underline"   ))
      (:overline       (cons "text-decoration" "overline"    ))
      (:strike-through (cons "text-decoration" "line-through")))))
@@ -879,10 +887,10 @@ specify - this matches Emacs's behavior when deciding on which face attributes
 to use, to the best of my understanding).\n
 If CLASS is nil, then you just get whatever `face-attr-construct' returns,
 ie the current specification in effect for FACE.\n
-*NOTE*: This function forces any face that is not 'default and which has
-no :inherit property to inherit from 'default (this is because 'default
+*NOTE*: This function forces any face that is not `default' and which has
+no :inherit property to inherit from `default' (this is because `default'
 is magical in that Emacs's fonts behave as if they inherit implicitly from
-'default, but no such behavior exists in HTML/CSS).\n
+`default', but no such behavior exists in HTML/CSS).\n
 See also `hfy-display-class' for details of valid values for CLASS."
   (let ((face-spec
          (if class
@@ -999,9 +1007,9 @@ merged by the user - `hfy-flatten-style' should do this."
                   (append
                    parent
                    (hfy-face-to-style-i
-                    (hfy-face-attr-for-class v hfy-display-class)) ))))
+                    (hfy-face-attr-for-class v hfy-display-class))))))
         (setq this
-              (if val (case key
+              (if val (cl-case key
                        (:family         (hfy-family    val))
                        (:width          (hfy-width     val))
                        (:weight         (hfy-weight    val))
@@ -1018,7 +1026,7 @@ merged by the user - `hfy-flatten-style' should do this."
                        (:italic         (hfy-slant 'italic))))))
       (setq that (hfy-face-to-style-i next))
       ;;(lwarn t :warning "%S => %S" fn (nconc this that parent))
-      (nconc this that parent))) )
+      (nconc this parent that))) )
 
 (defun hfy-size-to-int (spec)
   "Convert SPEC, a CSS font-size specifier, to an Emacs :height attribute value.
@@ -1056,13 +1064,19 @@ haven't encountered them yet.  Returns a `hfy-style-assoc'."
     (nconc r (hfy-size (if x (round n) (* n 1.0)))) ))
 
 (defun hfy-face-resolve-face (fn)
+  "For FN return a face specification.
+FN may be either a face or a face specification. If the latter,
+then the specification is returned unchanged."
   (cond
    ((facep fn)
     (hfy-face-attr-for-class fn hfy-display-class))
+   ;; FIXME: is this necessary? Faces can be symbols, but
+   ;; not symbols refering to other symbols?
    ((and (symbolp fn)
          (facep (symbol-value fn)))
-    (hfy-face-attr-for-class (symbol-value fn) hfy-display-class))
-   (t nil)))
+    (hfy-face-attr-for-class
+     (symbol-value fn) hfy-display-class))
+   (t fn)))
 
 
 (defun hfy-face-to-style (fn)
@@ -1140,7 +1154,7 @@ See also `hfy-face-to-css'."
 
 (defvar hfy-face-to-css 'hfy-face-to-css-default
   "Handler for mapping faces  to styles.
-The signature of the handler is of the form \(lambda (FN) ...\).
+The signature of the handler is of the form \(lambda (FN) ...).
 FN is a font or `defface' specification (cf
 `face-attr-construct').  The handler should return a cons cell of
 the form (STYLE-NAME . STYLE-SPEC).
@@ -1279,7 +1293,7 @@ return a `defface' style list of face properties instead of a face symbol."
                             (setq fprops (cdr fprops)))
                         ;; ((prop val))
                         (setq p (caar fprops))
-                        (setq v (cadar fprops))
+                        (setq v (cl-cadar fprops))
                         (setq fprops (cdr fprops)))
                     (if (listp (cdr fprops))
                         (progn
@@ -1296,7 +1310,7 @@ return a `defface' style list of face properties instead of a face symbol."
                             (setq v (cdr fprops))
                             (setq fprops nil))
                         (error "Eh... another format! fprops=%s" fprops) )))
-                  (setq p (case p
+                  (setq p (cl-case p
                             ;; These are all the properties handled
                             ;; in `hfy-face-to-style-i'.
                             ;;
@@ -1399,8 +1413,8 @@ Returns a modified copy of FACE-MAP."
     ;;(push (car  tmp-map) reduced-map)
     ;;(push (cadr tmp-map) reduced-map)
     (while tmp-map
-      (setq first-start (cadddr tmp-map)
-            first-stop  (caddr  tmp-map)
+      (setq first-start (cl-cadddr tmp-map)
+            first-stop (cl-caddr tmp-map)
             last-start  (cadr   tmp-map)
             last-stop   (car    tmp-map)
             map-buf      tmp-map
@@ -1413,8 +1427,8 @@ Returns a modified copy of FACE-MAP."
                     (not (re-search-forward "[^ \t\n\r]" (car last-start) t))))
         (setq map-buf     (cddr map-buf)
               span-start  first-start
-              first-start (cadddr map-buf)
-              first-stop  (caddr  map-buf)
+              first-start (cl-cadddr map-buf)
+              first-stop (cl-caddr map-buf)
               last-start  (cadr   map-buf)
               last-stop   (car    map-buf)))
       (push span-stop  reduced-map)
@@ -1598,7 +1612,7 @@ information."
 (defvar hfy-begin-span-handler 'hfy-begin-span
   "Handler to begin a span of text.
 The signature of the handler is \(lambda (STYLE TEXT-BLOCK
-TEXT-ID TEXT-BEGINS-BLOCK-P) ...\).  The handler must insert
+TEXT-ID TEXT-BEGINS-BLOCK-P) ...).  The handler must insert
 appropriate tags to begin a span of text.
 
 STYLE is the name of the style that begins at point.  It is
@@ -1626,7 +1640,7 @@ The default handler is `hfy-begin-span'.")
 
 (defvar hfy-end-span-handler 'hfy-end-span
   "Handler to end a span of text.
-The signature of the handler is \(lambda () ...\).  The handler
+The signature of the handler is \(lambda () ...).  The handler
 must insert appropriate tags to end a span of text.
 
 The default handler is `hfy-end-span'.")
@@ -1754,7 +1768,7 @@ FILE, if set, is the file name."
             (if (not (setq pr (get-text-property pt lp))) nil
               (goto-char pt)
               (remove-text-properties pt (1+ pt) (list lp nil))
-              (case lp
+              (cl-case lp
                 (hfy-link
                  (if (setq rr (get-text-property pt 'hfy-inst))
                      (insert (format "<a name=\"%s\"></a>" rr)))
@@ -1797,8 +1811,7 @@ It is assumed that STRING has text properties that allow it to be
 fontified.  This is a simple convenience wrapper around
 `htmlfontify-buffer'."
   (let* ((hfy-optimizations-1 (copy-sequence hfy-optimizations))
-         (hfy-optimizations (add-to-list 'hfy-optimizations-1
-                                         'skip-refontification)))
+         (hfy-optimizations (cl-pushnew 'skip-refontification hfy-optimizations-1)))
     (with-temp-buffer
       (insert string)
       (htmlfontify-buffer)
@@ -1841,8 +1854,9 @@ Dangerous characters in the existing buffer are turned into HTML
 entities, so you should even be able to do HTML-within-HTML
 fontified display.
 
-You should, however, note that random control or eight-bit
-characters such as ^L (\x0c) or ¤ (\xa4) won't get mapped yet.
+You should, however, note that random control or non-ASCII
+characters such as ^L (U+000C FORM FEED (FF)) or ¤ (U+00A4
+CURRENCY SIGN) won't get mapped yet.
 
 If the SRCDIR and FILE arguments are set, lookup etags derived
 entries in the `hfy-tags-cache' and add HTML anchors and
@@ -1954,7 +1968,7 @@ property, with a value of \"tag.line-number\"."
             (lambda (TLIST)
               (if (string= file (car TLIST))
                   (let* ((line              (cadr TLIST) )
-                         (chr              (caddr TLIST) )
+                         (chr (cl-caddr TLIST))
                          (link (format "%s.%d" TAG line) ))
                     (put-text-property (+ 1 chr)
                                        (+ 2 chr)
@@ -2411,30 +2425,6 @@ You may also want to set `hfy-page-header' and `hfy-page-footer'."
   (let ((file (hfy-initfile)))
     (load file 'NOERROR nil nil) ))
 
-
-;;;### (autoloads nil "hfy-cmap" "hfy-cmap.el" "ce07a28b93c09032fd6b225ad74be0df")
-;;; Generated autoloads from hfy-cmap.el
-
-(autoload 'htmlfontify-load-rgb-file "hfy-cmap" "\
-Load an X11 style rgb.txt FILE.
-Search `hfy-rgb-load-path' if FILE is not specified.
-Loads the variable `hfy-rgb-txt-colour-map', which is used by
-`hfy-fallback-colour-values'.
-
-\(fn &optional FILE)" t nil)
-
-(autoload 'hfy-fallback-colour-values "hfy-cmap" "\
-Use a fallback method for obtaining the rgb values for a color.
-
-\(fn COLOUR-STRING)" nil nil)
-
-;;;***
-
-
 (provide 'htmlfontify)
-
-;; Local Variables:
-;; coding: utf-8
-;; End:
 
 ;;; htmlfontify.el ends here

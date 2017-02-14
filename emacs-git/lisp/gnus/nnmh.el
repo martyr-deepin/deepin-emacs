@@ -1,6 +1,6 @@
 ;;; nnmh.el --- mhspool access for Gnus
 
-;; Copyright (C) 1995-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	Masanobu UMEDA <umerin@flab.flab.fujitsu.junet>
@@ -109,7 +109,7 @@ as unread by Gnus.")
 	  (and large
 	       (zerop (% count 20))
 	       (nnheader-message 5 "nnmh: Receiving headers... %d%%"
-				 (/ (* count 100) number))))
+				 (floor (* count 100.0) number))))
 
 	(when large
 	  (nnheader-message 5 "nnmh: Receiving headers...done"))
@@ -242,8 +242,8 @@ as unread by Gnus.")
 	      (file-truename (file-name-as-directory
 			      (expand-file-name nnmh-toplev))))
 	     dir)
-	    (mm-string-to-multibyte ;Why?  Isn't it multibyte already?
-	     (mm-encode-coding-string
+	    (string-to-multibyte ;Why?  Isn't it multibyte already?
+	     (encode-coding-string
 	      (nnheader-replace-chars-in-string
 	       (substring dir (match-end 0))
 	       ?/ ?.)

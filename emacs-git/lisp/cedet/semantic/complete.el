@@ -1,6 +1,6 @@
 ;;; semantic/complete.el --- Routines for performing tag completion
 
-;; Copyright (C) 2003-2005, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2005, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: syntax
@@ -156,7 +156,7 @@ Presumably if you call this you will insert something new there."
   "Display the string FMT formatted with ARGS at the end of the minibuffer."
   (if semantic-complete-inline-overlay
       (apply 'message fmt args)
-    (message (concat (buffer-string) (apply 'format fmt args)))))
+    (apply 'message (concat "%s" fmt) (buffer-string) args)))
 
 ;;; ------------------------------------------------------------
 ;;; MINIBUFFER: Option Selection harnesses
@@ -568,7 +568,7 @@ if INLINE, then completion is happening inline in a buffer."
      (:underline "yellow"))
     (((class color) (background light))
      (:underline "brown")))
-  "*Face used to show the region being completed inline.
+  "Face used to show the region being completed inline.
 The face is used in `semantic-complete-inline-tag-engine'."
   :group 'semantic-faces)
 
@@ -1370,7 +1370,7 @@ This object type doesn't do focus, so will never have a focus object."
 ;; Traditional displayor
 (defcustom semantic-completion-displayor-format-tag-function
   #'semantic-format-tag-name
-  "*A Tag format function to use when showing completions."
+  "A Tag format function to use when showing completions."
   :group 'semantic
   :type semantic-format-tag-custom-list)
 
@@ -1491,7 +1491,7 @@ Not meaningful return value."
   "Display completions in *Completions* buffer, with focus highlight.
 A traditional displayor which can focus on a tag by showing it.
 Same as `semantic-displayor-traditional', but with selection between
-multiple tags with the same name done by 'focusing' on the source
+multiple tags with the same name done by focusing on the source
 location of the different tags to differentiate them.")
 
 (cl-defmethod semantic-displayor-focus-request
@@ -1665,7 +1665,7 @@ Display mechanism using tooltip for a list of possible completions.")
 	(when (>= (oref obj typing-count) 5)
 	  (oset obj mode 'standard)
 	  (setq mode 'standard)
-	  (message "Resetting inline-mode to 'standard'."))
+	  (message "Resetting inline-mode to `standard'."))
 	(when (and (> numcompl max-tags)
 		   (< (oref obj typing-count) 2))
 	  ;; Discretely hint at completion availability.
@@ -1684,7 +1684,7 @@ Display mechanism using tooltip for a list of possible completions.")
 	      (setq msg-tail (concat "\n[<TAB> " (number-to-string (- numcompl max-tags)) " more]"))
 	    (setq msg-tail (concat "\n[<n/a> " (number-to-string (- numcompl max-tags)) " more]"))
 	    (when (>= (oref obj typing-count) 2)
-	      (message "Refine search to display results beyond the '%s' limit"
+	      (message "Refine search to display results beyond the `%s' limit"
 		       (symbol-name 'semantic-complete-inline-max-tags-extended)))))
 	 ((= numcompl 1)
 	  ;; two possible cases
@@ -1871,7 +1871,7 @@ Use this to enable custom editing.")
 
 (defcustom semantic-complete-inline-analyzer-displayor-class
   'semantic-displayor-traditional
-  "*Class for displayor to use with inline completion."
+  "Class for displayor to use with inline completion."
   :group 'semantic
   :type semantic-complete-inline-custom-type
   )
@@ -2075,7 +2075,7 @@ completion works."
 
 (defcustom semantic-complete-inline-analyzer-idle-displayor-class
   'semantic-displayor-ghost
-  "*Class for displayor to use with inline completion at idle time."
+  "Class for displayor to use with inline completion at idle time."
   :group 'semantic
   :type semantic-complete-inline-custom-type
   )

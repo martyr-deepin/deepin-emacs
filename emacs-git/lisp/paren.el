@@ -1,6 +1,6 @@
 ;;; paren.el --- highlight matching paren
 
-;; Copyright (C) 1993, 1996, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 1996, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: rms@gnu.org
 ;; Maintainer: emacs-devel@gnu.org
@@ -81,13 +81,11 @@ whitespace there."
   :type 'boolean
   :version "25.1")
 
-(define-obsolete-face-alias 'show-paren-match-face 'show-paren-match "22.1")
-
-(define-obsolete-face-alias 'show-paren-mismatch-face
-  'show-paren-mismatch "22.1")
-
 (defcustom show-paren-highlight-openparen t
-  "Non-nil turns on openparen highlighting when matching forward."
+  "Non-nil turns on openparen highlighting when matching forward.
+When nil, and point stands just before an open paren, the paren
+is not highlighted, the cursor being regarded as adequate to mark
+its position."
   :type 'boolean)
 
 (defvar show-paren--idle-timer nil)

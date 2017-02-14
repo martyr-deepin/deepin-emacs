@@ -1,14 +1,14 @@
 /* Declarations having to do with GNU Emacs syntax tables.
 
-Copyright (C) 1985, 1993-1994, 1997-1998, 2001-2015 Free Software
+Copyright (C) 1985, 1993-1994, 1997-1998, 2001-2017 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,9 +18,16 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
+#ifndef EMACS_SYNTAX_H
+#define EMACS_SYNTAX_H
+
+#include "buffer.h"
+#include "lisp.h"
+
 INLINE_HEADER_BEGIN
 
 extern void update_syntax_table (ptrdiff_t, EMACS_INT, bool, Lisp_Object);
+extern void update_syntax_table_forward (ptrdiff_t, bool, Lisp_Object);
 
 /* The standard syntax table is stored where it will automatically
    be used in all new buffers.  */
@@ -52,30 +59,32 @@ enum syntaxcode
 		       other side by any char with the same syntaxcode.  */
     Sstring_fence,  /* Starts/ends string which is delimited on the
 		       other side by any char with the same syntaxcode.  */
-    Smax	 /* Upper bound on codes that are meaningful */
+    Smax	 /* Upper bound on codes that are meaningful.  */
   };
 
 
 struct gl_state_s
 {
-  Lisp_Object object;			/* The object we are scanning. */
-  ptrdiff_t start;			/* Where to stop. */
-  ptrdiff_t stop;			/* Where to stop. */
+  Lisp_Object object;			/* The object we are scanning.  */
+  ptrdiff_t start;			/* Where to stop.  */
+  ptrdiff_t stop;			/* Where to stop.  */
   bool use_global;			/* Whether to use global_code
-					   or c_s_t. */
-  Lisp_Object global_code;		/* Syntax code of current char. */
-  Lisp_Object current_syntax_table;	/* Syntax table for current pos. */
-  Lisp_Object old_prop;			/* Syntax-table prop at prev pos. */
-  ptrdiff_t b_property;			/* First index where c_s_t is valid. */
+					   or c_s_t.  */
+  Lisp_Object global_code;		/* Syntax code of current char.  */
+  Lisp_Object current_syntax_table;	/* Syntax table for current pos.  */
+  Lisp_Object old_prop;			/* Syntax-table prop at prev pos.  */
+  ptrdiff_t b_property;			/* First index where c_s_t is valid.  */
   ptrdiff_t e_property;			/* First index where c_s_t is
-					   not valid. */
-  INTERVAL forward_i;			/* Where to start lookup on forward */
+					   not valid.  */
+  bool e_property_truncated;		/* true if e_property if was truncated
+					   by parse_sexp_propertize_done.  */
+  INTERVAL forward_i;			/* Where to start lookup on forward.  */
   INTERVAL backward_i;			/* or backward movement.  The
 					   data in c_s_t is valid
 					   between these intervals,
 					   and possibly at the
 					   intervals too, depending
-					   on: */
+					   on:  */
   /* Offset for positions specified to UPDATE_SYNTAX_TABLE.  */
   ptrdiff_t offset;
 };
@@ -171,6 +180,14 @@ SYNTAX_TABLE_BYTE_TO_CHAR (ptrdiff_t bytepos)
 
 INLINE void
 UPDATE_SYNTAX_TABLE_FORWARD (ptrdiff_t charpos)
+{ /* Performs just-in-time syntax-propertization.  */
+  if (parse_sexp_lookup_properties && charpos >= gl_state.e_property)
+    update_syntax_table_forward (charpos + gl_state.offset,
+				 false, gl_state.object);
+}
+
+INLINE void
+UPDATE_SYNTAX_TABLE_FORWARD_FAST (ptrdiff_t charpos)
 {
   if (parse_sexp_lookup_properties && charpos >= gl_state.e_property)
     update_syntax_table (charpos + gl_state.offset, 1, false, gl_state.object);
@@ -195,12 +212,20 @@ UPDATE_SYNTAX_TABLE (ptrdiff_t charpos)
   UPDATE_SYNTAX_TABLE_FORWARD (charpos);
 }
 
+INLINE void
+UPDATE_SYNTAX_TABLE_FAST (ptrdiff_t charpos)
+{
+  UPDATE_SYNTAX_TABLE_BACKWARD (charpos);
+  UPDATE_SYNTAX_TABLE_FORWARD_FAST (charpos);
+}
+
 /* Set up the buffer-global syntax table.  */
 
 INLINE void
 SETUP_BUFFER_SYNTAX_TABLE (void)
 {
   gl_state.use_global = false;
+  gl_state.e_property_truncated = false;
   gl_state.current_syntax_table = BVAR (current_buffer, syntax_table);
 }
 
@@ -208,3 +233,5 @@ extern ptrdiff_t scan_words (ptrdiff_t, EMACS_INT);
 extern void SETUP_SYNTAX_TABLE_FOR_OBJECT (Lisp_Object, ptrdiff_t, ptrdiff_t);
 
 INLINE_HEADER_END
+
+#endif /* EMACS_SYNTAX_H */

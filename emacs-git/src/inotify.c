@@ -1,13 +1,13 @@
 /* Inotify support for Emacs
 
-Copyright (C) 2012-2015 Free Software Foundation, Inc.
+Copyright (C) 2012-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,10 +25,9 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "coding.h"
 #include "process.h"
 #include "keyboard.h"
-#include "character.h"
-#include "frame.h" /* Required for termhooks.h.  */
 #include "termhooks.h"
 
+#include <errno.h>
 #include <sys/inotify.h>
 #include <sys/ioctl.h>
 
@@ -47,8 +46,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 static int inotifyfd = -1;
 
 /* Assoc list of files being watched.
-   Format:
-   (watch-descriptor . callback)
+   Format: (watch-descriptor name callback)
  */
 static Lisp_Object watch_list;
 
@@ -107,12 +105,14 @@ inotifyevent_to_event (Lisp_Object watch_object, struct inotify_event const *ev)
       name = make_unibyte_string (ev->name, min (len, ev->len));
       name = DECODE_FILE (name);
     }
+  else
+    name = XCAR (XCDR (watch_object));
 
   return list2 (list4 (make_watch_descriptor (ev->wd),
                        mask_to_aspects (ev->mask),
                        name,
                        make_number (ev->cookie)),
-                XCDR (watch_object));
+		Fnth (make_number (2), watch_object));
 }
 
 /* This callback is called when the FD is available for read.  The inotify
@@ -129,17 +129,14 @@ inotify_callback (int fd, void *_)
 
   to_read = 0;
   if (ioctl (fd, FIONREAD, &to_read) == -1)
-    xsignal1
-      (Qfile_notify_error,
-       build_string ("Error while trying to retrieve file system events"));
+    report_file_notify_error ("Error while retrieving file system events",
+			      Qnil);
   buffer = xmalloc (to_read);
   n = read (fd, buffer, to_read);
   if (n < 0)
     {
       xfree (buffer);
-      xsignal1
-      (Qfile_notify_error,
-       build_string ("Error while trying to read file system events"));
+      report_file_notify_error ("Error while reading file system events", Qnil);
     }
 
   EVENT_INIT (event);
@@ -215,7 +212,10 @@ symbol_to_inotifymask (Lisp_Object symb)
   else if (EQ (symb, Qt) || EQ (symb, Qall_events))
     return IN_ALL_EVENTS;
   else
-      xsignal2 (Qfile_notify_error, build_string ("Unknown aspect"), symb);
+    {
+      errno = EINVAL;
+      report_file_notify_error ("Unknown aspect", symb);
+    }
 }
 
 static uint32_t
@@ -272,7 +272,7 @@ onlydir
 Watching a directory is not recursive.  CALLBACK is passed a single argument
 EVENT which contains an event structure of the format
 
-(WATCH-DESCRIPTOR ASPECTS NAME COOKIE)
+\(WATCH-DESCRIPTOR ASPECTS NAME COOKIE)
 
 WATCH-DESCRIPTOR is the same object that was returned by this function.  It can
 be tested for equality using `equal'.  ASPECTS describes the event.  It is a
@@ -307,9 +307,7 @@ is managed internally and there is no corresponding inotify_init.  Use
     {
       inotifyfd = inotify_init1 (IN_NONBLOCK|IN_CLOEXEC);
       if (inotifyfd < 0)
-	xsignal1
-	  (Qfile_notify_error,
-	   build_string ("File watching feature (inotify) is not available"));
+	report_file_notify_error ("File watching is not available", Qnil);
       watch_list = Qnil;
       add_read_fd (inotifyfd, &inotify_callback, NULL);
     }
@@ -318,18 +316,17 @@ is managed internally and there is no corresponding inotify_init.  Use
   encoded_file_name = ENCODE_FILE (file_name);
   watchdesc = inotify_add_watch (inotifyfd, SSDATA (encoded_file_name), mask);
   if (watchdesc == -1)
-    xsignal2 (Qfile_notify_error,
-	      build_string ("Could not add watch for file"), file_name);
+    report_file_notify_error ("Could not add watch for file", file_name);
 
   watch_descriptor = make_watch_descriptor (watchdesc);
 
-  /* Delete existing watch object. */
+  /* Delete existing watch object.  */
   watch_object = Fassoc (watch_descriptor, watch_list);
   if (!NILP (watch_object))
       watch_list = Fdelete (watch_object, watch_list);
 
-  /* Store watch object in watch list. */
-  watch_object = Fcons (watch_descriptor, callback);
+  /* Store watch object in watch list.  */
+  watch_object = list3 (watch_descriptor, encoded_file_name, callback);
   watch_list = Fcons (watch_object, watch_list);
 
   return watch_descriptor;
@@ -348,15 +345,14 @@ See inotify_rm_watch(2) for more information.
   int wd = XINT (watch_descriptor);
 
   if (inotify_rm_watch (inotifyfd, wd) == -1)
-    xsignal2 (Qfile_notify_error,
-	      build_string ("Could not rm watch"), watch_descriptor);
+    report_file_notify_error ("Could not rm watch", watch_descriptor);
 
-  /* Remove watch descriptor from watch list. */
+  /* Remove watch descriptor from watch list.  */
   watch_object = Fassoc (watch_descriptor, watch_list);
   if (!NILP (watch_object))
     watch_list = Fdelete (watch_object, watch_list);
 
-  /* Cleanup if no more files are watched. */
+  /* Cleanup if no more files are watched.  */
   if (NILP (watch_list))
     {
       emacs_close (inotifyfd);
@@ -365,6 +361,21 @@ See inotify_rm_watch(2) for more information.
     }
 
   return Qt;
+}
+
+DEFUN ("inotify-valid-p", Finotify_valid_p, Sinotify_valid_p, 1, 1, 0,
+       doc: /* Check a watch specified by its WATCH-DESCRIPTOR.
+
+WATCH-DESCRIPTOR should be an object returned by `inotify-add-watch'.
+
+A watch can become invalid if the file or directory it watches is
+deleted, or if the watcher thread exits abnormally for any other
+reason.  Removing the watch by calling `inotify-rm-watch' also makes
+it invalid.  */)
+     (Lisp_Object watch_descriptor)
+{
+  Lisp_Object watch_object = Fassoc (watch_descriptor, watch_list);
+  return NILP (watch_object) ? Qnil : Qt;
 }
 
 void
@@ -401,6 +412,7 @@ syms_of_inotify (void)
 
   defsubr (&Sinotify_add_watch);
   defsubr (&Sinotify_rm_watch);
+  defsubr (&Sinotify_valid_p);
 
   staticpro (&watch_list);
 

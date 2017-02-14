@@ -5820,7 +5820,7 @@
 	* epa.el (epa-passphrase-callback-function): Say what we're
 	querying the password for.
 
-	* ibuffer.el (ibuffer-visit-buffer): To mimick list-buffers
+	* ibuffer.el (ibuffer-visit-buffer): To mimic list-buffers
 	behavior, don't bury the ibuffer buffer when visiting other buffers.
 
 2010-10-08  Chong Yidong  <cyd@stupidchicken.com>
@@ -22802,7 +22802,7 @@ See ChangeLog.14 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2009-2015 Free Software Foundation, Inc.
+  Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

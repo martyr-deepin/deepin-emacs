@@ -1,6 +1,6 @@
 ;;; newst-reader.el --- Generic RSS reader functions.
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
 ;; Author:      Ulf Jasper <ulf.jasper@web.de>
 ;; Filename:    newst-reader.el
@@ -69,6 +69,7 @@ This must be one of the functions `newsticker-plainview' or
 (defcustom newsticker-download-logos
   t
   "If non-nil newsticker downloads logo images of subscribed feeds."
+  :version "25.1"
   :type 'boolean
   :group 'newsticker-reader)
 
@@ -258,7 +259,7 @@ for formatting."
 (defun newsticker--image-read (feed-name-symbol disabled &optional max-height)
   "Read the cached image for FEED-NAME-SYMBOL from disk.
 If DISABLED is non-nil the image will be converted to a disabled look
-\(unless `newsticker-enable-logo-manipulations' is not t\).
+\(unless `newsticker-enable-logo-manipulations' is not t).
 Optional argument MAX-HEIGHT specifies the maximal image height.
 Return the image."
   (let ((image-name (concat (newsticker--images-dir)

@@ -1,6 +1,6 @@
 ;;; elisp-mode.el --- Emacs Lisp mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1999-2017 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: lisp, languages
@@ -28,7 +28,9 @@
 
 ;;; Code:
 
+(require 'cl-generic)
 (require 'lisp-mode)
+(eval-when-compile (require 'cl-lib))
 
 (define-abbrev-table 'emacs-lisp-mode-abbrev-table ()
   "Abbrev table for Emacs Lisp mode.
@@ -226,29 +228,25 @@ Blank lines separate paragraphs.  Semicolons start comments.
 
 \\{emacs-lisp-mode-map}"
   :group 'lisp
-  (defvar xref-find-function)
-  (defvar xref-identifier-completion-table-function)
+  (defvar project-vc-external-roots-function)
   (lisp-mode-variables nil nil 'elisp)
   (add-hook 'after-load-functions #'elisp--font-lock-flush-elisp-buffers)
   (setq-local electric-pair-text-pairs
-              (cons '(?\` . ?\') electric-pair-text-pairs))
+              (append '((?\` . ?\') (?‘ . ?’)) electric-pair-text-pairs))
+  (setq-local electric-quote-string t)
   (setq imenu-case-fold-search nil)
   (add-function :before-until (local 'eldoc-documentation-function)
                 #'elisp-eldoc-documentation-function)
-  (setq-local xref-find-function #'elisp-xref-find)
-  (setq-local xref-identifier-completion-table-function
-              #'elisp--xref-identifier-completion-table)
+  (add-hook 'xref-backend-functions #'elisp--xref-backend nil t)
+  (setq-local project-vc-external-roots-function #'elisp-load-path-roots)
   (add-hook 'completion-at-point-functions
             #'elisp-completion-at-point nil 'local))
 
 ;; Font-locking support.
 
 (defun elisp--font-lock-flush-elisp-buffers (&optional file)
-  ;; FIXME: Aren't we only ever called from after-load-functions?
-  ;; Don't flush during load unless called from after-load-functions.
-  ;; In that case, FILE is non-nil.  It's somehow strange that
-  ;; load-in-progress is t when an after-load-function is called since
-  ;; that should run *after* the load...
+  ;; We're only ever called from after-load-functions, load-in-progress can
+  ;; still be t in case of nested loads.
   (when (or (not load-in-progress) file)
     ;; FIXME: If the loaded file did not define any macros, there shouldn't
     ;; be any need to font-lock-flush all the Elisp buffers.
@@ -394,7 +392,7 @@ It can be quoted, or be inside a quoted form."
                ((or (eq (char-after) ?\[)
                     (progn
                       (skip-chars-backward " ")
-                      (memq (char-before) '(?' ?`))))
+                      (memq (char-before) '(?' ?` ?‘))))
                 (setq res t))
                ((eq (char-before) ?,)
                 (setq nesting nil))))
@@ -437,6 +435,7 @@ It can be quoted, or be inside a quoted form."
          (string-match ".*$" doc)
          (match-string 0 doc))))
 
+;; can't (require 'find-func) in a preloaded file
 (declare-function find-library-name "find-func" (library))
 (declare-function find-function-library "find-func" (function &optional l-o v))
 
@@ -453,13 +452,19 @@ It can be quoted, or be inside a quoted form."
      ((facep sym) (find-definition-noselect sym 'defface)))))
 
 (defun elisp-completion-at-point ()
-  "Function used for `completion-at-point-functions' in `emacs-lisp-mode'."
+  "Function used for `completion-at-point-functions' in `emacs-lisp-mode'.
+If the context at point allows only a certain category of
+symbols (e.g. functions, or variables) then the returned
+completions are restricted to that category.  In contexts where
+any symbol is possible (following a quote, for example),
+functions are annotated with \"<f>\" via the
+`:annotation-function' property."
   (with-syntax-table emacs-lisp-mode-syntax-table
     (let* ((pos (point))
 	   (beg (condition-case nil
 		    (save-excursion
 		      (backward-sexp 1)
-		      (skip-syntax-forward "'")
+		      (skip-chars-forward "`',‘#")
 		      (point))
 		  (scan-error pos)))
 	   (end
@@ -470,7 +475,7 @@ It can be quoted, or be inside a quoted form."
 		  (save-excursion
 		    (goto-char beg)
 		    (forward-sexp 1)
-                    (skip-chars-backward "'")
+                    (skip-chars-backward "'’")
 		    (when (>= (point) pos)
 		      (point)))
 		(scan-error pos))))
@@ -478,7 +483,7 @@ It can be quoted, or be inside a quoted form."
            (funpos (eq (char-before beg) ?\())
            (quoted (elisp--form-quoted-p beg)))
       (when (and end (or (not (nth 8 (syntax-ppss)))
-                         (eq (char-before beg) ?`)))
+                         (memq (char-before beg) '(?` ?‘))))
         (let ((table-etc
                (if (or (not funpos) quoted)
                    ;; FIXME: We could look at the first element of the list and
@@ -534,9 +539,9 @@ It can be quoted, or be inside a quoted form."
                                         (delete-dups
                                          ;; FIXME: We should include some
                                          ;; docstring with each entry.
-                                         (append
-                                          macro-declarations-alist
-                                          defun-declarations-alist)))))
+                                         (append macro-declarations-alist
+                                                 defun-declarations-alist
+                                                 nil))))) ; Copy both alists.
                        ((and (or `condition-case `condition-case-unless-debug)
                              (guard (save-excursion
                                       (ignore-errors
@@ -573,110 +578,232 @@ It can be quoted, or be inside a quoted form."
                                        " " (cadr table-etc)))
                     (cddr table-etc)))))))))
 
-(define-obsolete-function-alias
-  'lisp-completion-at-point 'elisp-completion-at-point "25.1")
+(defun lisp-completion-at-point (&optional _predicate)
+  (declare (obsolete elisp-completion-at-point "25.1"))
+  (elisp-completion-at-point))
 
 ;;; Xref backend
 
-(declare-function xref-make-elisp-location "xref" (symbol type file))
 (declare-function xref-make-bogus-location "xref" (message))
-(declare-function xref-make "xref" (description location))
-(declare-function xref-collect-matches "xref" (input dir &optional kind))
+(declare-function xref-make "xref" (summary location))
+(declare-function xref-collect-references "xref" (symbol dir))
 
-(defun elisp-xref-find (action id)
-  (require 'find-func)
-  (pcase action
-    (`definitions
-      (let ((sym (intern-soft id)))
-        (when sym
-          (elisp--xref-find-definitions sym))))
-    (`references
-     (elisp--xref-find-matches id 'symbol))
-    (`matches
-     (elisp--xref-find-matches id 'regexp))
-    (`apropos
-     (elisp--xref-find-apropos id))))
+(defun elisp--xref-backend () 'elisp)
 
-(defun elisp--xref-identifier-location (type sym)
-  (let ((file
-         (pcase type
-           (`defun (when (fboundp sym)
-                     (let ((fun-lib
-                            (find-function-library sym)))
-                       (setq sym (car fun-lib))
-                       (cdr fun-lib))))
-           (`defvar (and (boundp sym)
-                         (let ((el-file (symbol-file sym 'defvar)))
-                           (if el-file
-                               (and
-                                ;; Don't show minor modes twice.
-                                ;; TODO: If TYPE ever becomes dependent on the
-                                ;; context, move this check outside.
-                                (not (and (fboundp sym)
-                                          (memq sym minor-mode-list)))
-                                el-file)
-                             (help-C-file-name sym 'var)))))
-           (`feature (and (featurep sym)
-                          ;; Skip when a function with the same name
-                          ;; is defined, because it's probably in the
-                          ;; same file.
-                          (not (fboundp sym))
-                          (ignore-errors
-                            (find-library-name (symbol-name sym)))))
-           (`defface (when (facep sym)
-                       (symbol-file sym 'defface))))))
-    (when file
-      (when (string-match-p "\\.elc\\'" file)
-        (setq file (substring file 0 -1)))
-      (xref-make-elisp-location sym type file))))
-
+;; WORKAROUND: This is nominally a constant, but the text properties
+;; are not preserved thru dump if use defconst.  See bug#21237.
 (defvar elisp--xref-format
   (let ((str "(%s %s)"))
     (put-text-property 1 3 'face 'font-lock-keyword-face str)
     (put-text-property 4 6 'face 'font-lock-function-name-face str)
     str))
 
+;; WORKAROUND: This is nominally a constant, but the text properties
+;; are not preserved thru dump if use defconst.  See bug#21237.
+(defvar elisp--xref-format-extra
+  (let ((str "(%s %s %s)"))
+    (put-text-property 1 3 'face 'font-lock-keyword-face str)
+    (put-text-property 4 6 'face 'font-lock-function-name-face str)
+    str))
+
+(defvar find-feature-regexp);; in find-func.el
+
+(defun elisp--xref-make-xref (type symbol file &optional summary)
+  "Return an xref for TYPE SYMBOL in FILE.
+TYPE must be a type in `find-function-regexp-alist' (use nil for
+'defun).  If SUMMARY is non-nil, use it for the summary;
+otherwise build the summary from TYPE and SYMBOL."
+  (xref-make (or summary
+		 (format elisp--xref-format (or type 'defun) symbol))
+	     (xref-make-elisp-location symbol type file)))
+
+(defvar elisp-xref-find-def-functions nil
+  "List of functions to be run from `elisp--xref-find-definitions' to add additional xrefs.
+Called with one arg; the symbol whose definition is desired.
+Each function should return a list of xrefs, or nil; the first
+non-nil result supercedes the xrefs produced by
+`elisp--xref-find-definitions'.")
+
+(cl-defmethod xref-backend-definitions ((_backend (eql elisp)) identifier)
+  (require 'find-func)
+  ;; FIXME: use information in source near point to filter results:
+  ;; (dvc-log-edit ...) - exclude 'feature
+  ;; (require 'dvc-log-edit) - only 'feature
+  ;; Semantic may provide additional information
+  ;;
+  (let ((sym (intern-soft identifier)))
+    (when sym
+      (elisp--xref-find-definitions sym))))
+
 (defun elisp--xref-find-definitions (symbol)
-  (save-excursion
-    (let (lst)
-      (dolist (type '(feature defface defvar defun))
-        (let ((loc
-               (condition-case err
-                   (elisp--xref-identifier-location type symbol)
-                 (error
-                  (xref-make-bogus-location (error-message-string err))))))
-          (when loc
-            (push
-             (xref-make (format elisp--xref-format type symbol)
-                        loc)
-             lst))))
-      lst)))
+  ;; The file name is not known when `symbol' is defined via interactive eval.
+  (let (xrefs)
 
-(defvar package-user-dir)
+    (let ((temp elisp-xref-find-def-functions))
+      (while (and (null xrefs)
+                  temp)
+        (setq xrefs (append xrefs (funcall (pop temp) symbol)))))
 
-(defun elisp--xref-find-matches (symbol kind)
-  (let* ((dirs (sort
-                (mapcar
-                 (lambda (dir)
-                   (file-name-as-directory (expand-file-name dir)))
-                 ;; It's one level above a number of `load-path'
-                 ;; elements (one for each installed package).
-                 ;; Save us some process calls.
-                 (cons package-user-dir load-path))
-                #'string<))
-         (ref dirs))
-    ;; Delete subdirectories from the list.
-    (while (cdr ref)
-      (if (string-prefix-p (car ref) (cadr ref))
-          (setcdr ref (cddr ref))
-        (setq ref (cdr ref))))
-    (cl-mapcan
-     (lambda (dir)
-       (and (file-exists-p dir)
-            (xref-collect-matches symbol dir kind)))
-     dirs)))
+    (unless xrefs
+      ;; alphabetical by result type symbol
 
-(defun elisp--xref-find-apropos (regexp)
+      ;; FIXME: advised function; list of advice functions
+      ;; FIXME: aliased variable
+
+      ;; Coding system symbols do not appear in ‘load-history’,
+      ;; so we can’t get a location for them.
+
+      (when (and (symbolp symbol)
+                 (symbol-function symbol)
+                 (symbolp (symbol-function symbol)))
+        ;; aliased function
+        (let* ((alias-symbol symbol)
+               (alias-file (symbol-file alias-symbol))
+               (real-symbol  (symbol-function symbol))
+               (real-file (find-lisp-object-file-name real-symbol 'defun)))
+
+          (when real-file
+            (push (elisp--xref-make-xref nil real-symbol real-file) xrefs))
+
+          (when alias-file
+            (push (elisp--xref-make-xref 'defalias alias-symbol alias-file) xrefs))))
+
+      (when (facep symbol)
+        (let ((file (find-lisp-object-file-name symbol 'defface)))
+          (when file
+            (push (elisp--xref-make-xref 'defface symbol file) xrefs))))
+
+      (when (fboundp symbol)
+        (let ((file (find-lisp-object-file-name symbol (symbol-function symbol)))
+              generic doc)
+          (when file
+            (cond
+             ((eq file 'C-source)
+              ;; First call to find-lisp-object-file-name for an object
+              ;; defined in C; the doc strings from the C source have
+              ;; not been loaded yet.  Second call will return "src/*.c"
+              ;; in file; handled by 't' case below.
+              (push (elisp--xref-make-xref nil symbol (help-C-file-name (symbol-function symbol) 'subr)) xrefs))
+
+             ((and (setq doc (documentation symbol t))
+                   ;; This doc string is defined in cl-macs.el cl-defstruct
+                   (string-match "Constructor for objects of type `\\(.*\\)'" doc))
+              ;; `symbol' is a name for the default constructor created by
+              ;; cl-defstruct, so return the location of the cl-defstruct.
+              (let* ((type-name (match-string 1 doc))
+                     (type-symbol (intern type-name))
+                     (file (find-lisp-object-file-name type-symbol 'define-type))
+                     (summary (format elisp--xref-format-extra
+                                      'cl-defstruct
+                                      (concat "(" type-name)
+                                      (concat "(:constructor " (symbol-name symbol) "))"))))
+                (push (elisp--xref-make-xref 'define-type type-symbol file summary) xrefs)
+                ))
+
+             ((setq generic (cl--generic symbol))
+              ;; FIXME: move this to elisp-xref-find-def-functions, in cl-generic.el
+
+              ;; A generic function. If there is a default method, it
+              ;; will appear in the method table, with no
+              ;; specializers.
+              ;;
+              ;; If the default method is declared by the cl-defgeneric
+              ;; declaration, it will have the same location as the
+              ;; cl-defgeneric, so we want to exclude it from the
+              ;; result. In this case, it will have a null doc
+              ;; string. User declarations of default methods may also
+              ;; have null doc strings, but we hope that is
+              ;; rare. Perhaps this heuristic will discourage that.
+              (dolist (method (cl--generic-method-table generic))
+                (let* ((info (cl--generic-method-info method));; qual-string combined-args doconly
+                       (specializers (cl--generic-method-specializers method))
+                       (non-default nil)
+                       (met-name (cl--generic-load-hist-format
+                                  symbol
+                                  (cl--generic-method-qualifiers method)
+                                  specializers))
+                       (file (find-lisp-object-file-name met-name 'cl-defmethod)))
+                  (dolist (item specializers)
+                    ;; default method has all 't' in specializers
+                    (setq non-default (or non-default (not (equal t item)))))
+
+                  (when (and file
+                             (or non-default
+                                 (nth 2 info))) ;; assuming only co-located default has null doc string
+                    (if specializers
+                        (let ((summary (format elisp--xref-format-extra 'cl-defmethod symbol (nth 1 info))))
+                          (push (elisp--xref-make-xref 'cl-defmethod met-name file summary) xrefs))
+
+                      (let ((summary (format elisp--xref-format-extra 'cl-defmethod symbol "()")))
+                        (push (elisp--xref-make-xref 'cl-defmethod met-name file summary) xrefs))))
+                  ))
+
+              (if (and (setq doc (documentation symbol t))
+                       ;; This doc string is created somewhere in
+                       ;; cl--generic-make-function for an implicit
+                       ;; defgeneric.
+                       (string-match "\n\n(fn ARG &rest ARGS)" doc))
+                  ;; This symbol is an implicitly defined defgeneric, so
+                  ;; don't return it.
+                  nil
+                (push (elisp--xref-make-xref 'cl-defgeneric symbol file) xrefs))
+              )
+
+             (t
+              (push (elisp--xref-make-xref nil symbol file) xrefs))
+             ))))
+
+      (when (boundp symbol)
+        ;; A variable
+        (let ((file (find-lisp-object-file-name symbol 'defvar)))
+          (when file
+            (cond
+             ((eq file 'C-source)
+              ;; The doc strings from the C source have not been loaded
+              ;; yet; help-C-file-name does that.  Second call will
+              ;; return "src/*.c" in file; handled below.
+              (push (elisp--xref-make-xref 'defvar symbol (help-C-file-name symbol 'var)) xrefs))
+
+             ((string= "src/" (substring file 0 4))
+              ;; The variable is defined in a C source file; don't check
+              ;; for define-minor-mode.
+              (push (elisp--xref-make-xref 'defvar symbol file) xrefs))
+
+             ((memq symbol minor-mode-list)
+              ;; The symbol is a minor mode. These should be defined by
+              ;; "define-minor-mode", which means the variable and the
+              ;; function are declared in the same place. So we return only
+              ;; the function, arbitrarily.
+              ;;
+              ;; There is an exception, when the variable is defined in C
+              ;; code, as for abbrev-mode.
+              ;;
+              ;; IMPROVEME: If the user is searching for the identifier at
+              ;; point, we can determine whether it is a variable or
+              ;; function by looking at the source code near point.
+              ;;
+              ;; IMPROVEME: The user may actually be asking "do any
+              ;; variables by this name exist"; we need a way to specify
+              ;; that.
+              nil)
+
+             (t
+              (push (elisp--xref-make-xref 'defvar symbol file) xrefs))
+
+             ))))
+
+      (when (featurep symbol)
+        (let ((file (ignore-errors
+                      (find-library-name (symbol-name symbol)))))
+          (when file
+            (push (elisp--xref-make-xref 'feature symbol file) xrefs))))
+      );; 'unless xrefs'
+
+    xrefs))
+
+(declare-function project-external-roots "project")
+
+(cl-defmethod xref-backend-apropos ((_backend (eql elisp)) regexp)
   (apply #'nconc
          (let (lst)
            (dolist (sym (apropos-internal regexp))
@@ -693,8 +820,29 @@ It can be quoted, or be inside a quoted form."
                          (facep sym)))
                    'strict))
 
-(defun elisp--xref-identifier-completion-table ()
+(cl-defmethod xref-backend-identifier-completion-table ((_backend (eql elisp)))
   elisp--xref-identifier-completion-table)
+
+(cl-defstruct (xref-elisp-location
+               (:constructor xref-make-elisp-location (symbol type file)))
+  "Location of an Emacs Lisp symbol definition."
+  symbol type file)
+
+(cl-defmethod xref-location-marker ((l xref-elisp-location))
+  (pcase-let (((cl-struct xref-elisp-location symbol type file) l))
+    (let ((buffer-point (find-function-search-for-symbol symbol type file)))
+      (with-current-buffer (car buffer-point)
+        (save-excursion
+          (goto-char (or (cdr buffer-point) (point-min)))
+          (point-marker))))))
+
+(cl-defmethod xref-location-group ((l xref-elisp-location))
+  (xref-elisp-location-file l))
+
+(defun elisp-load-path-roots ()
+  (if (boundp 'package-user-dir)
+      (cons package-user-dir load-path)
+    load-path))
 
 ;;; Elisp Interaction mode
 
@@ -780,6 +928,7 @@ Semicolons start comments.
             (goto-char end)))))))
 
 (defun elisp-byte-code-syntax-propertize (start end)
+  (goto-char start)
   (elisp--byte-code-comment end (point))
   (funcall
    (syntax-propertize-rules
@@ -901,15 +1050,28 @@ If CHAR is not a character, return nil."
 (defun elisp--preceding-sexp ()
   "Return sexp before the point."
   (let ((opoint (point))
-	ignore-quotes
+	(left-quote ?‘)
 	expr)
     (save-excursion
       (with-syntax-table emacs-lisp-mode-syntax-table
-	;; If this sexp appears to be enclosed in `...'
+	;; If this sexp appears to be enclosed in `...' or ‘...’
 	;; then ignore the surrounding quotes.
-	(setq ignore-quotes
-	      (or (eq (following-char) ?\')
-		  (eq (preceding-char) ?\')))
+	(cond ((eq (preceding-char) ?’)
+	       (progn (forward-char -1) (setq opoint (point))))
+	      ((or (eq (following-char) ?\')
+		   (eq (preceding-char) ?\'))
+	       (setq left-quote ?\`)))
+
+        ;; When after a named character literal, skip over the entire
+        ;; literal, not only its last word.
+        (when (= (preceding-char) ?})
+          (let ((begin (save-excursion
+                         (backward-char)
+                         (skip-syntax-backward "w-")
+                         (backward-char 3)
+                         (when (looking-at-p "\\\\N{") (point)))))
+            (when begin (goto-char begin))))
+
 	(forward-sexp -1)
 	;; If we were after `?\e' (or similar case),
 	;; use the whole thing, not just the `e'.
@@ -933,7 +1095,7 @@ If CHAR is not a character, return nil."
 	      (forward-sexp -1))))
 
 	(save-restriction
-	  (if (and ignore-quotes (eq (following-char) ?`))
+	  (if (eq (following-char) left-quote)
               ;; vladimir@cs.ualberta.ca 30-Jul-1997: Skip ` in `variable' so
               ;; that the value is returned, not the name.
 	      (forward-char))
@@ -962,7 +1124,6 @@ character)."
     (elisp--eval-last-sexp-print-value
      (eval (eval-sexp-add-defvars (elisp--preceding-sexp)) lexical-binding)
      eval-last-sexp-arg-internal)))
-
 
 (defun elisp--eval-last-sexp-print-value (value &optional eval-last-sexp-arg-internal)
   (let ((unabbreviated (let ((print-length nil) (print-level nil))
@@ -1090,7 +1251,7 @@ If the current defun is actually a call to `defvar',
 then reset the variable using the initial value expression
 even if the variable already has some other value.
 \(Normally `defvar' does not change the variable's value
-if it already has a value.\)
+if it already has a value.)
 
 Return the result of evaluation."
   ;; FIXME: the print-length/level bindings should only be applied while
@@ -1172,7 +1333,7 @@ which see."
   0 - contains the last symbol read from the buffer.
   1 - contains the string last displayed in the echo area for variables,
       or argument string for functions.
-  2 - 'function if function args, 'variable if variable documentation.")
+  2 - `function' if function args, `variable' if variable documentation.")
 
 (defun elisp-eldoc-documentation-function ()
   "`eldoc-documentation-function' (which see) for Emacs Lisp."
@@ -1414,7 +1575,8 @@ In the absence of INDEX, just call `eldoc-docstring-format-sym-doc'."
 ARGLIST is either a string, or a list of strings or symbols."
   (let ((str (cond ((stringp arglist) arglist)
                    ((not (listp arglist)) nil)
-                   (t (format "%S" (help-make-usage 'toto arglist))))))
+                   (t (substitute-command-keys
+                       (help--make-usage-docstring 'toto arglist))))))
     (if (and str (string-match "\\`([^ )]+ ?" str))
         (replace-match "(" t t str)
       str)))

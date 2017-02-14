@@ -1,6 +1,6 @@
 ;;; url-file.el --- File retrieval code
 
-;; Copyright (C) 1996-1999, 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2017 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes
 
@@ -27,6 +27,7 @@
 (require 'url-vars)
 (require 'url-parse)
 (require 'url-dired)
+(declare-function mm-disable-multibyte "mm-util" ())
 
 (defconst url-file-default-port 21 "Default FTP port.")
 (defconst url-file-asynchronous-p t "FTP transfers are asynchronous.")

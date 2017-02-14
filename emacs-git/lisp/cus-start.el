@@ -1,6 +1,6 @@
 ;;; cus-start.el --- define customization properties of builtins  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Keywords: internal
@@ -54,7 +54,8 @@
 ;; :risky - risky-local-variable property
 ;; :safe - safe-local-variable property
 ;; :tag - custom-tag property
-(let (standard native-p prop propval
+(let (standard
+      native-p prop propval
       ;; This function turns a value
       ;; into an expression which produces that value.
       (quoter (lambda (sexp)
@@ -67,27 +68,27 @@
 			(stringp sexp)
 			(numberp sexp))
 		    sexp
-		  (list 'quote sexp)))))
+		  (list 'quote sexp))))
+      (cursor-type-types
+       '(choice
+         (const :tag "Frame default" t)
+         (const :tag "Filled box" box)
+         (const :tag "Hollow cursor" hollow)
+         (const :tag "Vertical bar" bar)
+         (cons  :tag "Vertical bar with specified width"
+                (const bar) integer)
+         (const :tag "Horizontal bar" hbar)
+         (cons  :tag "Horizontal bar with specified width"
+                (const hbar) integer)
+         (const :tag "None "nil))))
   (pcase-dolist
       (`(,symbol ,group ,type ,version . ,rest)
-           '(;; alloc.c
+           `(;; alloc.c
 	     (gc-cons-threshold alloc integer)
 	     (gc-cons-percentage alloc float)
 	     (garbage-collection-messages alloc boolean)
 	     ;; buffer.c
-	     (cursor-type
-	      display
-	      (choice
-	       (const :tag "Frame default" t)
-	       (const :tag "Filled box" box)
-	       (const :tag "Hollow cursor" hollow)
-	       (const :tag "Vertical bar" bar)
-	       (cons  :tag "Vertical bar with specified width"
-		      (const bar) integer)
-	       (const :tag "Horizontal bar" hbar)
-	       (cons  :tag "Horizontal bar with specified width"
-		      (const hbar) integer)
-	       (const :tag "None "nil)))
+	     (cursor-type display ,cursor-type-types)
 	     (mode-line-format mode-line sexp) ;Hard to do right.
 	     (major-mode internal function)
 	     (case-fold-search matching boolean)
@@ -147,7 +148,7 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     (line-spacing display (choice (const :tag "none" nil) number)
 			   "22.1")
 	     (cursor-in-non-selected-windows
-	      cursor boolean nil
+	      cursor ,cursor-type-types nil
 	      :tag "Cursor In Non-selected Windows"
 	      :set (lambda (symbol value)
 		     (set-default symbol value)
@@ -172,7 +173,9 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 					(directory :format "%v")))
                         nil
                         :standard
-                        (mapcar 'directory-file-name
+                        (mapcar (lambda (f)
+                                  (if f (directory-file-name f)
+                                    "."))
                                 (append (parse-colon-path (getenv "PATH"))
                                         (list exec-directory))))
 	     (exec-suffixes execute (repeat string))
@@ -181,6 +184,7 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 			       (repeat (directory :format "%v")))
 	     ;; coding.c
 	     (inhibit-eol-conversion mule boolean)
+	     (enable-character-translation mule boolean)
 	     (eol-mnemonic-undecided mule string)
 	     ;; startup.el fiddles with the values.  IMO, would be
 	     ;; simpler to just use #ifdefs in coding.c.
@@ -219,7 +223,7 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     (visible-bell display boolean)
 	     (no-redraw-on-reenter display boolean)
 
-	     ;; dosfns.c
+             ;; dosfns.c
 	     (dos-display-scancodes display boolean)
 	     (dos-hyper-key keyboard integer)
 	     (dos-super-key keyboard integer)
@@ -244,6 +248,7 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     (debug-ignored-errors debug (repeat (choice symbol regexp)))
 	     (debug-on-quit debug boolean)
 	     (debug-on-signal debug boolean)
+             (debugger-stack-frame-as-list debugger boolean "26.1")
 	     ;; fileio.c
 	     (delete-by-moving-to-trash auto-save boolean "23.1")
 	     (auto-save-visited-file-name auto-save boolean)
@@ -310,6 +315,7 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 					    (const :tag "Always" t)
 					    (repeat (symbol :tag "Parameter")))
 					   "25.1")
+	     (tooltip-reuse-hidden-frame tooltip boolean "26.1")
 	     ;; fringe.c
 	     (overflow-newline-into-fringe fringe boolean)
 	     ;; image.c
@@ -505,6 +511,7 @@ since it could result in memory overflow and make Emacs crash."
 	     (scroll-step windows integer)
 	     (scroll-conservatively windows integer)
 	     (scroll-margin windows integer)
+             (maximum-scroll-margin windows float "26.1")
 	     (hscroll-margin windows integer "22.1")
 	     (hscroll-step windows number "22.1")
 	     (truncate-partial-width-windows

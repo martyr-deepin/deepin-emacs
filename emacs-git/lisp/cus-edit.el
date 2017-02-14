@@ -1,6 +1,6 @@
 ;;; cus-edit.el --- tools for customizing Emacs and Lisp packages -*- lexical-binding:t -*-
 ;;
-;; Copyright (C) 1996-1997, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1997, 1999-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -175,9 +175,15 @@
   :group 'emacs)
 
 (defgroup wp nil
-  "Support for editing text files."
-  :tag "Text"
+  "Support for editing text files.
+Use group `text' for this instead.  This group is deprecated."
   :group 'emacs)
+
+(defgroup text nil
+  "Support for editing text files."
+  :group 'emacs
+  ;; Inherit from deprecated `wp' for compatibility, for now.
+  :group 'wp)
 
 (defgroup data nil
   "Support for editing binary data files."
@@ -196,14 +202,6 @@
   "Emulations of other editors."
   :link '(custom-manual "(emacs)Emulation")
   :group 'editing)
-
-(defgroup mouse nil
-  "Mouse support."
-  :group 'editing)
-
-(defgroup outlines nil
-  "Support for hierarchical outlining."
-  :group 'wp)
 
 (defgroup external nil
   "Interfacing to external utilities."
@@ -317,7 +315,7 @@
 (defgroup tex nil
   "Code related to the TeX formatter."
   :link '(custom-group-link :tag "Font Lock Faces group" font-lock-faces)
-  :group 'wp)
+  :group 'text)
 
 (defgroup faces nil
   "Support for multiple fonts."
@@ -406,10 +404,6 @@
   "Input from the keyboard."
   :group 'environment)
 
-(defgroup mouse nil
-  "Input from the mouse."
-  :group 'environment)
-
 (defgroup menu nil
   "Input from the menus."
   :group 'environment)
@@ -477,7 +471,7 @@
 (defun custom-split-regexp-maybe (regexp)
   "If REGEXP is a string, split it to a list at `\\|'.
 You can get the original back from the result with:
-  (mapconcat 'identity result \"\\|\")
+  (mapconcat \\='identity result \"\\|\")
 
 IF REGEXP is not a string, return it unchanged."
   (if (stringp regexp)
@@ -633,7 +627,7 @@ if that fails, the doc string with `custom-guess-doc-alist'."
 	(setq found (nth 1 current)
 	      names nil)))
     (unless found
-      (let ((doc (documentation-property symbol 'variable-documentation))
+      (let ((doc (documentation-property symbol 'variable-documentation t))
 	    (docs custom-guess-doc-alist))
 	(when doc
 	  (while docs
@@ -1072,9 +1066,10 @@ are shown; the contents of those subgroups are initially hidden."
 
 ;;;###autoload
 (defun customize-mode (mode)
-  "Customize options related to the current major mode.
-If a prefix \\[universal-argument] was given (or if the current major mode has no known group),
-then prompt for the MODE to customize."
+  "Customize options related to a major or minor mode.
+By default the current major mode is used.  With a prefix
+argument or if the current major mode has no known group, prompt
+for the MODE to customize."
   (interactive
    (list
     (let ((completion-regexp-list '("-mode\\'"))
@@ -1083,8 +1078,8 @@ then prompt for the MODE to customize."
 	  major-mode
 	(intern
 	 (completing-read (if group
-			      (format "Major mode (default %s): " major-mode)
-			    "Major mode: ")
+			      (format "Mode (default %s): " major-mode)
+			    "Mode: ")
 			  obarray
 			  'custom-group-of-mode
 			  t nil nil (if group (symbol-name major-mode))))))))
@@ -1164,7 +1159,7 @@ Show the buffer in another window, but don't select it."
     (unless (eq symbol basevar)
       (message "`%s' is an alias for `%s'" symbol basevar))))
 
-(defvar customize-changed-options-previous-release "24.1"
+(defvar customize-changed-options-previous-release "24.5"
   "Version for `customize-changed-options' to refer back to by default.")
 
 ;; Packages will update this variable, so make it available.
@@ -1189,8 +1184,8 @@ and `defface'.
 
 For example, the MH-E package updates this alist as follows:
 
-     (add-to-list 'customize-package-emacs-version-alist
-                  '(MH-E (\"6.0\" . \"22.1\") (\"6.1\" . \"22.1\")
+     (add-to-list \\='customize-package-emacs-version-alist
+                  \\='(MH-E (\"6.0\" . \"22.1\") (\"6.1\" . \"22.1\")
                          (\"7.0\" . \"22.1\") (\"7.1\" . \"22.1\")
                          (\"7.2\" . \"22.1\") (\"7.3\" . \"22.1\")
                          (\"7.4\" . \"22.1\") (\"8.0\" . \"22.1\")))
@@ -1499,11 +1494,12 @@ Return non-nil if user chooses to customize, for use in
 (defcustom custom-buffer-style 'links
   "Control the presentation style for customization buffers.
 The value should be a symbol, one of:
-
-brackets: groups nest within each other with big horizontal brackets.
-links: groups have links to subgroups."
+`brackets': groups nest within each other with big horizontal brackets.
+`links': groups have links to subgroups.
+`tree': display groups as trees."
   :type '(radio (const brackets)
-		(const links))
+		(const links)
+                (const tree))
   :group 'custom-buffer)
 
 (defcustom custom-buffer-done-kill nil
@@ -1543,27 +1539,29 @@ not for everybody."
 	buf))))
 
 ;;;###autoload
-(defun custom-buffer-create (options &optional name description)
+(defun custom-buffer-create (options &optional name _description)
   "Create a buffer containing OPTIONS.
 Optional NAME is the name of the buffer.
 OPTIONS should be an alist of the form ((SYMBOL WIDGET)...), where
 SYMBOL is a customization option, and WIDGET is a widget for editing
 that option.
 DESCRIPTION is unused."
-  (pop-to-buffer-same-window (custom-get-fresh-buffer (or name "*Customization*")))
-  (custom-buffer-create-internal options description))
+  (pop-to-buffer-same-window
+   (custom-get-fresh-buffer (or name "*Customization*")))
+  (custom-buffer-create-internal options))
 
 ;;;###autoload
-(defun custom-buffer-create-other-window (options &optional name description)
+(defun custom-buffer-create-other-window (options &optional name _description)
   "Create a buffer containing OPTIONS, and display it in another window.
 The result includes selecting that window.
 Optional NAME is the name of the buffer.
 OPTIONS should be an alist of the form ((SYMBOL WIDGET)...), where
 SYMBOL is a customization option, and WIDGET is a widget for editing
-that option."
+that option.
+DESCRIPTION is unused."
   (unless name (setq name "*Customization*"))
   (switch-to-buffer-other-window (custom-get-fresh-buffer name))
-  (custom-buffer-create-internal options description))
+  (custom-buffer-create-internal options))
 
 (defcustom custom-reset-button-menu t
   "If non-nil, only show a single reset button in customize buffers.
@@ -1599,7 +1597,7 @@ This button will have a menu with all three reset operations."
 
 (defcustom custom-raised-buttons (not (equal (face-valid-attribute-values :box)
 					     '(("unspecified" . unspecified))))
-  "If non-nil, indicate active buttons in a `raised-button' style.
+  "If non-nil, indicate active buttons in a raised-button style.
 Otherwise use brackets."
   :type 'boolean
   :version "21.1"
@@ -1621,7 +1619,9 @@ Otherwise use brackets."
     ;; Insert verbose help at the top of the custom buffer.
     (when custom-buffer-verbose-help
       (unless init-file
-	(widget-insert "Custom settings cannot be saved; maybe you started Emacs with `-q'.\n"))
+	(widget-insert
+         (format-message
+          "Custom settings cannot be saved; maybe you started Emacs with `-q'.\n")))
       (widget-insert "For help using this buffer, see ")
       (widget-create 'custom-manual
 		     :tag "Easy Customization"
@@ -1709,7 +1709,7 @@ Operate on all settings in this buffer:\n"))
 	    (mapcar (lambda (entry)
 		      (prog2
 			  (message "Creating customization items ...%2d%%"
-				   (/ (* 100.0 count) length))
+				   (floor (* 100.0 count) length))
 			  (widget-create (nth 1 entry)
 					 :tag (custom-unlispify-tag-name
 					       (nth 0 entry))
@@ -1748,7 +1748,7 @@ Operate on all settings in this buffer:\n"))
 on a button to invoke its action.
 Invoke [+] to expand a group, and [-] to collapse an expanded group.\n"
 			 (if custom-raised-buttons
-			     "`Raised' text indicates"
+			     "Raised text indicates"
 			   "Square brackets indicate")))
 
 
@@ -1965,7 +1965,7 @@ Each entry is of the form (STATE MAGIC FACE ITEM-DESC [ GROUP-DESC ]), where
 
 STATE is one of the following symbols:
 
-`nil'
+nil
    For internal use, should never occur.
 `unknown'
    For internal use, should never occur.
@@ -2457,7 +2457,7 @@ If INITIAL-STRING is non-nil, use that rather than \"Parent groups:\"."
   "Return documentation of VARIABLE for use in Custom buffer.
 Normally just return the docstring.  But if VARIABLE automatically
 becomes buffer local when set, append a message to that effect."
-  (format "%s%s" (documentation-property variable 'variable-documentation)
+  (format "%s%s" (documentation-property variable 'variable-documentation t)
 	  (if (and (local-variable-if-set-p variable)
 		   (or (not (local-variable-p variable))
 		       (with-temp-buffer
@@ -3990,12 +3990,12 @@ If GROUPS-ONLY is non-nil, return only those members that are groups."
 	 ;; (indent (widget-get widget :indent))
 	 (prefix (widget-get widget :custom-prefix))
 	 (buttons (widget-get widget :buttons))
-	 (tag (widget-get widget :tag))
+	 (tag (substitute-command-keys (widget-get widget :tag)))
 	 (symbol (widget-value widget))
 	 (members (custom-group-members symbol
 					(and (eq custom-buffer-style 'tree)
 					     custom-browse-only-groups)))
-	 (doc (widget-docstring widget)))
+	 (doc (substitute-command-keys (widget-docstring widget))))
     (cond ((and (eq custom-buffer-style 'tree)
 		(eq state 'hidden)
 		(or members (custom-unloaded-widget-p widget)))
@@ -4362,7 +4362,7 @@ option itself, into the file you specify, overwriting any
 `custom-set-variables' and `custom-set-faces' forms already
 present in that file.  It will not delete any customizations from
 the old custom file.  You should do that manually if that is what you
-want.  You also have to put something like `(load \"CUSTOM-FILE\")
+want.  You also have to put something like (load \"CUSTOM-FILE\")
 in your init file, where CUSTOM-FILE is the actual name of the
 file.  Otherwise, Emacs will not load the file when it starts up,
 and hence will not set `custom-file' to that file either."
@@ -4581,7 +4581,7 @@ This function does not save the buffer."
       (if (bolp)
 	  (princ " "))
       (princ ")")
-      (unless (looking-at-p "\n")
+      (when (/= (following-char) ?\n)
 	(princ "\n")))))
 
 (defun custom-save-faces ()
@@ -4636,7 +4636,7 @@ This function does not save the buffer."
       (if (bolp)
 	  (princ " "))
       (princ ")")
-      (unless (looking-at-p "\n")
+      (when (/= (following-char) ?\n)
 	(princ "\n")))))
 
 ;;; The Customize Menu.

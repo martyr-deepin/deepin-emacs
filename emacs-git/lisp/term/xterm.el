@@ -1,6 +1,6 @@
 ;;; xterm.el --- define function key sequences and standard colors for xterm  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: FSF
 ;; Keywords: terminals
@@ -34,6 +34,7 @@
   ;; `terminal-init-xterm' as well.
   '(set (const :tag "modifyOtherKeys support" modifyOtherKeys)
         (const :tag "report background" reportBackground)
+        (const :tag "get X selection" getSelection)
         (const :tag "set X selection" setSelection)))
 
 (defcustom xterm-extra-capabilities 'check
@@ -45,7 +46,8 @@ If a list, assume that the listed features are supported, without checking.
 The relevant features are:
   modifyOtherKeys  -- if supported, more key bindings work (e.g., \"\\C-,\")
   reportBackground -- if supported, Xterm reports its background color
-  setSelection     -- if supported, Xterm saves yanked text to the X selection"
+  getSelection     -- if supported, Xterm yanks text from the X selection
+  setSelection     -- if supported, Xterm saves killed text to the X selection"
   :version "24.1"
   :type `(choice (const :tag "Check" check)
                  ,xterm--extra-capabilities-type))
@@ -63,33 +65,35 @@ using the OSC 52 sequence.
 If you select a region larger than this size, it won't be copied to your system
 clipboard.  Since clipboard data is base 64 encoded, the actual number of
 string bytes that can be copied is 3/4 of this value."
+  :version "25.1"
   :type 'integer)
 
 (defconst xterm-paste-ending-sequence "\e[201~"
   "Characters send by the terminal to end a bracketed paste.")
 
+(defun xterm--pasted-text ()
+  "Handle the rest of a terminal paste operation.
+Return the pasted text as a string."
+  (let ((end-marker-length (length xterm-paste-ending-sequence)))
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (while (not (search-backward xterm-paste-ending-sequence
+                                   (- (point) end-marker-length) t))
+	(let ((event (read-event nil nil
+                                 ;; Use finite timeout to avoid glomming the
+                                 ;; event onto this-command-keys.
+                                 most-positive-fixnum)))
+	  (when (eql event ?\r)
+	    (setf event ?\n))
+	  (insert event)))
+      (let ((last-coding-system-used))
+	(decode-coding-region (point-min) (point) (keyboard-coding-system)
+                              t)))))
+
 (defun xterm-paste ()
   "Handle the start of a terminal paste operation."
   (interactive)
-  (let* ((end-marker-length (length xterm-paste-ending-sequence))
-         (pasted-text (with-temp-buffer
-                        (set-buffer-multibyte nil)
-                        (while (not (search-backward
-                                     xterm-paste-ending-sequence
-                                     (- (point) end-marker-length) t))
-                          (let ((event (read-event
-                                        nil nil
-                                        ;; Use finite timeout to avoid
-                                        ;; glomming the event onto
-                                        ;; this-command-keys.
-                                        most-positive-fixnum)))
-                            (when (eql event ?\r)
-                              (setf event ?\n))
-                            (insert event)))
-                        (let ((last-coding-system-used))
-                          (decode-coding-region
-                           (point-min) (point)
-                           (keyboard-coding-system) t))))
+  (let* ((pasted-text (xterm--pasted-text))
          (interprogram-paste-function (lambda () pasted-text)))
     (yank)))
 
@@ -587,6 +591,19 @@ string bytes that can be copied is 3/4 of this value."
     (define-key map [f59] [M-f11])
     (define-key map [f60] [M-f12])
 
+    (define-key map [f61] [M-S-f1])
+    (define-key map [f62] [M-S-f2])
+    (define-key map [f63] [M-S-f3])
+    (define-key map [f64] [M-S-f4])
+    (define-key map [f65] [M-S-f5])
+    (define-key map [f66] [M-S-f6])
+    (define-key map [f67] [M-S-f7])
+    (define-key map [f68] [M-S-f8])
+    (define-key map [f69] [M-S-f9])
+    (define-key map [f70] [M-S-f10])
+    (define-key map [f71] [M-S-f11])
+    (define-key map [f72] [M-S-f12])
+
     map)
   "Keymap of possible alternative meanings for some keys.")
 
@@ -674,15 +691,23 @@ string bytes that can be copied is 3/4 of this value."
         ;; introduced) or higher, initialize the
         ;; modifyOtherKeys support.
         (when (>= version 216)
-          (terminal-init-xterm-modify-other-keys))
+          (xterm--init-modify-other-keys))
         ;; In version 203 support for accessing the X selection was
         ;; added.  Hterm reports itself as version 256 and supports it
         ;; as well.  gnome-terminal doesn't and is excluded by this
         ;; test.
         (when (>= version 203)
-          (terminal-init-xterm-activate-set-selection))))))
+          ;; Most xterms seem to have it disabled by default, and if it's
+          ;; disabled, C-y will incur a timeout, so we only use it if the user
+          ;; explicitly requests it.
+          ;;(xterm--init-activate-get-selection)
+          (xterm--init-activate-set-selection))))))
 
-(defun xterm--query (query handlers)
+(defvar xterm-query-timeout 2
+  "Seconds to wait for an answer from the terminal.
+Can be nil to mean \"no timeout\".")
+
+(defun xterm--query (query handlers &optional no-async)
   "Send QUERY string to the terminal and watch for a response.
 HANDLERS is an alist with elements of the form (STRING . FUNCTION).
 We run the first FUNCTION whose STRING matches the input events."
@@ -690,35 +715,47 @@ We run the first FUNCTION whose STRING matches the input events."
   ;; rather annoying (bug#6758).  Maybe we could always use the asynchronous
   ;; approach, but it's less tested.
   ;; FIXME: Merge the two branches.
-  (if (input-pending-p)
-      (progn
-        (dolist (handler handlers)
-          (define-key input-decode-map (car handler)
-            (lambda (&optional _prompt)
-              ;; Unregister the handler, since we don't expect further answers.
-              (dolist (handler handlers)
-                (define-key input-decode-map (car handler) nil))
-              (funcall (cdr handler))
-              [])))
-        (send-string-to-terminal query))
-    ;; Pending input can be mistakenly returned by the calls to
-    ;; read-event below.  Discard it.
-    (send-string-to-terminal query)
-    (while handlers
-      (let ((handler (pop handlers))
-            (i 0))
-        (while (and (< i (length (car handler)))
-                    (let ((evt (read-event nil nil 2)))
-                      (or (eq evt (aref (car handler) i))
-                          (progn (if evt (push evt unread-command-events))
-                                 nil))))
-          (setq i (1+ i)))
-        (if (= i (length (car handler)))
-            (progn (setq handlers nil)
-                   (funcall (cdr handler)))
-          (while (> i 0)
-            (push (aref (car handler) (setq i (1- i)))
-                  unread-command-events)))))))
+  (let ((register
+         (lambda (handlers)
+           (dolist (handler handlers)
+             (define-key input-decode-map (car handler)
+               (lambda (&optional _prompt)
+                 ;; Unregister the handler, since we don't expect
+                 ;; further answers.
+                 (dolist (handler handlers)
+                   (define-key input-decode-map (car handler) nil))
+                 (funcall (cdr handler))
+                 []))))))
+    (if (and (or (null xterm-query-timeout) (input-pending-p))
+             (not no-async))
+        (progn
+          (funcall register handlers)
+          (send-string-to-terminal query))
+      ;; Pending input can be mistakenly returned by the calls to
+      ;; read-event below: discard it.
+      (discard-input)
+      (send-string-to-terminal query)
+      (while handlers
+        (let ((handler (pop handlers))
+              (i 0))
+          (while (and (< i (length (car handler)))
+                      (let ((evt (read-event nil nil xterm-query-timeout)))
+                        (if (and (null evt) (= i 0) (not no-async))
+                            ;; Timeout on the first event: fallback on async.
+                            (progn
+                              (funcall register (cons handler handlers))
+                              (setq handlers nil)
+                              nil)
+                          (or (eq evt (aref (car handler) i))
+                              (progn (if evt (push evt unread-command-events))
+                                     nil)))))
+            (setq i (1+ i)))
+          (if (= i (length (car handler)))
+              (progn (setq handlers nil)
+                     (funcall (cdr handler)))
+            (while (> i 0)
+              (push (aref (car handler) (setq i (1- i)))
+                    unread-command-events))))))))
 
 (defun xterm--push-map (map basemap)
   ;; Use inheritance to let the main keymaps override those defaults.
@@ -747,7 +784,7 @@ We run the first FUNCTION whose STRING matches the input events."
       ;; Try to find out the type of terminal by sending a "Secondary
       ;; Device Attributes (DA)" query.
       (xterm--query "\e[>0c"
-                    ;; Some terminals (like OS X's Terminal.app) respond to
+                    ;; Some terminals (like macOS's Terminal.app) respond to
                     ;; this query as if it were a "Primary Device Attributes"
                     ;; query instead, so we should handle that too.
                     '(("\e[?" . xterm--version-handler)
@@ -758,38 +795,73 @@ We run the first FUNCTION whose STRING matches the input events."
                     '(("\e]11;" .  xterm--report-background-handler))))
 
     (when (memq 'modifyOtherKeys xterm-extra-capabilities)
-      (terminal-init-xterm-modify-other-keys))
+      (xterm--init-modify-other-keys))
 
+    (when (memq 'getSelection xterm-extra-capabilities)
+      (xterm--init-activate-get-selection))
     (when (memq 'setSelection xterm-extra-capabilities)
-      (terminal-init-xterm-activate-set-selection)))
+      (xterm--init-activate-set-selection)))
 
   ;; Unconditionally enable bracketed paste mode: terminals that don't
   ;; support it just ignore the sequence.
-  (terminal-init-xterm-bracketed-paste-mode)
+  (xterm--init-bracketed-paste-mode)
 
   (run-hooks 'terminal-init-xterm-hook))
 
-(defun terminal-init-xterm-modify-other-keys ()
+(defun xterm--init-modify-other-keys ()
   "Terminal initialization for xterm's modifyOtherKeys support."
   (send-string-to-terminal "\e[>4;1m")
   (push "\e[>4m" (terminal-parameter nil 'tty-mode-reset-strings))
   (push "\e[>4;1m" (terminal-parameter nil 'tty-mode-set-strings)))
 
-(defun terminal-init-xterm-bracketed-paste-mode ()
+(defun xterm--init-bracketed-paste-mode ()
   "Terminal initialization for bracketed paste mode."
   (send-string-to-terminal "\e[?2004h")
   (push "\e[?2004l" (terminal-parameter nil 'tty-mode-reset-strings))
   (push "\e[?2004h" (terminal-parameter nil 'tty-mode-set-strings)))
 
-(defun terminal-init-xterm-activate-set-selection ()
+(defun xterm--init-activate-get-selection ()
+  "Terminal initialization for `gui-get-selection'."
+  (set-terminal-parameter nil 'xterm--get-selection t))
+
+(defun xterm--init-activate-set-selection ()
   "Terminal initialization for `gui-set-selection'."
   (set-terminal-parameter nil 'xterm--set-selection t))
 
-;; FIXME: This defines the gui method for all terminals, even tho it only
-;; supports a subset of them.
-(gui-method-define gui-set-selection nil #'xterm--set-selection)
+(defun xterm--selection-char (type)
+  (pcase type
+    ('PRIMARY "p")
+    ('CLIPBOARD "c")
+    (_ (error "Invalid selection type: %S" type))))
 
-(defun xterm--set-selection (type data)
+(cl-defmethod gui-backend-get-selection
+    (type data-type
+     &context (window-system nil)
+              ;; Only applies to terminals which have it enabled.
+              ((terminal-parameter nil 'xterm--get-selection) (eql t)))
+  (unless (eq data-type 'STRING)
+    (error "Unsupported data type %S" data-type))
+  (let* ((screen (eq (terminal-parameter nil 'terminal-initted)
+                     'terminal-init-screen))
+         (query (concat "\e]52;" (xterm--selection-char type) ";")))
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (xterm--query
+       (concat (when screen "\eP") query "?\a" (when screen "\e\\"))
+       (list (cons query (lambda ()
+                           (while (let ((char (read-char)))
+                                    (unless (eq char ?\a)
+                                      (insert char)
+                                      t))))))
+       'no-async)
+      (base64-decode-region (point-min) (point-max))
+      (decode-coding-region (point-min) (point-max) 'utf-8-unix t))))
+
+(cl-defmethod gui-backend-set-selection
+    (type data
+     &context (window-system nil)
+              ;; Only applies to terminals which have it enabled.
+              ((terminal-parameter nil 'xterm--set-selection) (eql t)))
   "Copy DATA to the X selection using the OSC 52 escape sequence.
 
 TYPE specifies which selection to set; it must be either
@@ -810,34 +882,24 @@ program.  When inside the screen program, this function also
 chops long DCS sequences into multiple smaller ones to avoid
 hitting screen's max DCS length."
   (let* ((screen (eq (terminal-parameter nil 'terminal-initted)
-                     'terminal-init-screen)))
-    ;; Only do something if the current terminal is actually an XTerm
-    ;; or screen.
-    (when (terminal-parameter nil 'xterm--set-selection)
-      (let* ((bytes (encode-coding-string data 'utf-8-unix))
-             (base-64 (if screen
-                          (replace-regexp-in-string
-                           "\n" "\e\\\eP"
-                           (base64-encode-string bytes)
-                           :fixedcase :literal)
-                        (base64-encode-string bytes :no-line-break)))
-             (length (length base-64)))
-        (if (> length xterm-max-cut-length)
-            (progn
-              (warn "Selection too long to send to terminal: %d bytes" length)
-              (sit-for 2))
-          (send-string-to-terminal
-           (concat
-            (when screen "\eP")
-            "\e]52;"
-            (pcase type
-              ('PRIMARY "p")
-              ('CLIPBOARD "c")
-              (_ (error "Invalid selection type: %S" type)))
-            ";"
-            base-64
-            "\a"
-            (when screen "\e\\"))))))))
+                     'terminal-init-screen))
+         (bytes (encode-coding-string data 'utf-8-unix))
+         (base-64 (if screen
+                      (replace-regexp-in-string
+                       "\n" "\e\\\eP"
+                       (base64-encode-string bytes)
+                       :fixedcase :literal)
+                    (base64-encode-string bytes :no-line-break)))
+         (length (length base-64)))
+    (if (> length xterm-max-cut-length)
+        (progn
+          (warn "Selection too long to send to terminal: %d bytes" length)
+          (sit-for 2))
+      (send-string-to-terminal
+       (concat
+        (when screen "\eP")
+        "\e]52;" (xterm--selection-char type) ";" base-64 "\a"
+        (when screen "\e\\"))))))
 
 (defun xterm-rgb-convert-to-16bit (prim)
   "Convert an 8-bit primary color value PRIM to a corresponding 16-bit value."

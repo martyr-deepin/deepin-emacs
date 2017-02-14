@@ -1,6 +1,6 @@
 ;;; register.el --- register commands for Emacs      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1985, 1993-1994, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1985, 1993-1994, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -220,7 +220,7 @@ Interactively, reads the register using `register-read-with-preview'."
 (set-advertised-calling-convention 'frame-configuration-to-register
 				   '(register) "24.4")
 
-(make-obsolete 'frame-configuration-to-register 'frameset-to-register' "24.4")
+(make-obsolete 'frame-configuration-to-register 'frameset-to-register "24.4")
 
 (defalias 'register-to-point 'jump-to-register)
 (defun jump-to-register (register &optional delete)

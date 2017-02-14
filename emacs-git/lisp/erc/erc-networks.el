@@ -1,6 +1,6 @@
 ;;; erc-networks.el --- IRC networks
 
-;; Copyright (C) 2002, 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002, 2004-2017 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@lexx.delysid.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -443,7 +443,15 @@ NET is a symbol indicating to which network from `erc-networks-alist' this
 HOST is the servers hostname and
 PORTS is either a number, a list of numbers, or a list of port ranges."
   :group 'erc-networks
-  :type 'sexp)
+  :type '(alist :key-type (string :tag "Name")
+		:value-type
+		(group symbol (string :tag "Hostname")
+		       (choice :tag "Ports"
+			       (integer :tag "Port number")
+			       (repeat :tag "List of ports or ranges"
+				       (choice (integer :tag "Port number")
+					       (list :tag "Port range"
+						     integer integer)))))))
 
 (defcustom erc-networks-alist
   '((4-irc "4-irc.com")
@@ -588,7 +596,7 @@ PORTS is either a number, a list of numbers, or a list of port ranges."
     (LagNet "lagnet.org.za")
     (Librenet "librenet.net")
     (LinkNet "link-net.org")
-    (LinuxChix "cats\.meow\.at\\|linuxchix\.org")
+    (LinuxChix "cats\\.meow\\.at\\|linuxchix\\.org")
     (Liquidized "liquidized.net")
     (M-IRC "m-sys.org")
     (MagicStar "magicstar.net")
@@ -782,9 +790,9 @@ PORTS should be a list of either:
   numbers between LOW and HIGH (inclusive) is returned.
 
 As an example:
-  (erc-ports-list '(1)) => (1)
-  (erc-ports-list '((1 5))) => (1 2 3 4 5)
-  (erc-ports-list '(1 (3 5))) => (1 3 4 5)"
+  (erc-ports-list \\='(1)) => (1)
+  (erc-ports-list \\='((1 5))) => (1 2 3 4 5)
+  (erc-ports-list \\='(1 (3 5))) => (1 3 4 5)"
   (let (result)
     (dolist (p ports)
       (cond ((numberp p)
@@ -866,4 +874,3 @@ VALUE is the options value.")
 ;; indent-tabs-mode: t
 ;; tab-width: 8
 ;; End:
-

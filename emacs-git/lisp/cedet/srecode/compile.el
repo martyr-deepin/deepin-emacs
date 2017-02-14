@@ -1,6 +1,6 @@
 ;;; srecode/compile --- Compilation of srecode template files.
 
-;; Copyright (C) 2005, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2005, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: codegeneration
@@ -75,7 +75,7 @@ any incoming dictionaries values.")
 	   :initform nil
 	   :documentation
 	   "During template insertion, this is the stack of active templates.
-The top-most template is the 'active' template.  Use the accessor methods
+The top-most template is the `active' template.  Use the accessor methods
 for push, pop, and peek for the active template.")
    (table :initarg :table
 	  :documentation
@@ -290,7 +290,7 @@ Arguments ESCAPE-START and ESCAPE-END are the current escape sequences in use."
        )
       ;; Continue
       (setq tags (cdr tags)))
-    
+
     ;; MSG - Before install since nreverse whacks our list.
     (when (called-interactively-p 'interactive)
       (message "%d templates compiled for %s"

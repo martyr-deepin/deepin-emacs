@@ -1,14 +1,14 @@
 /* Synchronous subprocess invocation for GNU Emacs.
 
-Copyright (C) 1985-1988, 1993-1995, 1999-2015 Free Software Foundation,
+Copyright (C) 1985-1988, 1993-1995, 1999-2017 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,6 +22,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <config.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -31,7 +32,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 
 #ifdef WINDOWSNT
-#define NOMINMAX
 #include <sys/socket.h>	/* for fcntl */
 #include <windows.h>
 #include "w32.h"
@@ -44,19 +44,14 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #endif /* MSDOS */
 
 #include "commands.h"
-#include "character.h"
 #include "buffer.h"
-#include "ccl.h"
 #include "coding.h"
-#include "composite.h"
 #include <epaths.h>
 #include "process.h"
 #include "syssignal.h"
-#include "systty.h"
 #include "syswait.h"
 #include "blockinput.h"
 #include "frame.h"
-#include "termhooks.h"
 
 #ifdef MSDOS
 #include "msdos.h"
@@ -113,10 +108,8 @@ Lisp_Object
 encode_current_directory (void)
 {
   Lisp_Object dir;
-  struct gcpro gcpro1;
 
   dir = BVAR (current_buffer, directory);
-  GCPRO1 (dir);
 
   dir = Funhandled_file_name_directory (dir);
 
@@ -138,7 +131,7 @@ encode_current_directory (void)
     report_file_error ("Setting current directory",
 		       BVAR (current_buffer, directory));
 
-  RETURN_UNGCPRO (dir);
+  return dir;
 }
 
 /* If P is reapable, record it as a deleted process and kill it.
@@ -205,11 +198,11 @@ call_process_cleanup (Lisp_Object buffer)
     {
       kill (-synch_process_pid, SIGINT);
       message1 ("Waiting for process to die...(type C-g again to kill it instantly)");
-      immediate_quit = 1;
-      QUIT;
+
+      /* This will quit on C-g.  */
       wait_for_termination (synch_process_pid, 0, 1);
+
       synch_process_pid = 0;
-      immediate_quit = 0;
       message1 ("Waiting for process to die...done");
     }
 #endif	/* !MSDOS */
@@ -228,7 +221,7 @@ The program's input comes from file INFILE (nil means `/dev/null').
 Insert output in DESTINATION before point; t means current buffer; nil for DESTINATION
  means discard it; 0 means discard and don't wait; and `(:file FILE)', where
  FILE is a file name string, means that it should be written to that file
- \(if the file already exists it is overwritten).
+ (if the file already exists it is overwritten).
 DESTINATION can also have the form (REAL-BUFFER STDERR-FILE); in that case,
 REAL-BUFFER says what to do with standard output, as above,
 while STDERR-FILE says what to do with standard error in the child.
@@ -252,7 +245,6 @@ usage: (call-process PROGRAM &optional INFILE DESTINATION DISPLAY &rest ARGS)  *
 {
   Lisp_Object infile, encoded_infile;
   int filefd;
-  struct gcpro gcpro1;
   ptrdiff_t count = SPECPDL_INDEX ();
 
   if (nargs >= 2 && ! NILP (args[1]))
@@ -263,14 +255,12 @@ usage: (call-process PROGRAM &optional INFILE DESTINATION DISPLAY &rest ARGS)  *
   else
     infile = build_string (NULL_DEVICE);
 
-  GCPRO1 (infile);
   encoded_infile = ENCODE_FILE (infile);
 
   filefd = emacs_open (SSDATA (encoded_infile), O_RDONLY, 0);
   if (filefd < 0)
     report_file_error ("Opening process input file", infile);
   record_unwind_protect_int (close_file_unwind, filefd);
-  UNGCPRO;
   return unbind_to (count, call_process (nargs, args, filefd, -1));
 }
 
@@ -302,7 +292,6 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
   Lisp_Object output_file = Qnil;
 #ifdef MSDOS	/* Demacs 1.1.1 91/10/16 HIRANO Satoshi */
   char *tempfile = NULL;
-  int pid;
 #else
   sigset_t oldset;
   pid_t pid;
@@ -422,26 +411,13 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
   /* Make sure that the child will be able to chdir to the current
      buffer's current directory, or its unhandled equivalent.  We
      can't just have the child check for an error when it does the
-     chdir, since it's in a vfork.
+     chdir, since it's in a vfork.  */
+  current_dir = encode_current_directory ();
 
-     We have to GCPRO around this because Fexpand_file_name,
-     Funhandled_file_name_directory, and Ffile_accessible_directory_p
-     might call a file name handling function.  The argument list is
-     protected by the caller, so all we really have to worry about is
-     buffer.  */
-  {
-    struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
-
-    current_dir = encode_current_directory ();
-
-    GCPRO4 (buffer, current_dir, error_file, output_file);
-
-    if (STRINGP (error_file))
-      error_file = ENCODE_FILE (error_file);
-    if (STRINGP (output_file))
-      output_file = ENCODE_FILE (output_file);
-    UNGCPRO;
-  }
+  if (STRINGP (error_file))
+    error_file = ENCODE_FILE (error_file);
+  if (STRINGP (output_file))
+    output_file = ENCODE_FILE (output_file);
 
   display_p = INTERACTIVE && nargs >= 4 && !NILP (args[3]);
 
@@ -454,13 +430,10 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 
   /* Search for program; barf if not found.  */
   {
-    struct gcpro gcpro1, gcpro2, gcpro3;
     int ok;
 
-    GCPRO3 (buffer, current_dir, error_file);
     ok = openp (Vexec_path, args[0], Vexec_suffixes, &path,
 		make_number (X_OK), false);
-    UNGCPRO;
     if (ok < 0)
       report_file_error ("Searching for program", args[0]);
   }
@@ -470,32 +443,26 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 
   SAFE_NALLOCA (new_argv, 1, nargs < 4 ? 2 : nargs - 2);
 
-  {
-    struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
+  if (nargs > 4)
+    {
+      ptrdiff_t i;
 
-    GCPRO4 (buffer, current_dir, path, error_file);
-    if (nargs > 4)
-      {
-	ptrdiff_t i;
-
-	argument_coding.dst_multibyte = 0;
-	for (i = 4; i < nargs; i++)
-	  {
-	    argument_coding.src_multibyte = STRING_MULTIBYTE (args[i]);
-	    if (CODING_REQUIRE_ENCODING (&argument_coding))
-	      /* We must encode this argument.  */
-	      args[i] = encode_coding_string (&argument_coding, args[i], 1);
-	  }
-	for (i = 4; i < nargs; i++)
-	  new_argv[i - 3] = SSDATA (args[i]);
-	new_argv[i - 3] = 0;
-      }
-    else
-      new_argv[1] = 0;
-    path = ENCODE_FILE (path);
-    new_argv[0] = SSDATA (path);
-    UNGCPRO;
-  }
+      argument_coding.dst_multibyte = 0;
+      for (i = 4; i < nargs; i++)
+	{
+	  argument_coding.src_multibyte = STRING_MULTIBYTE (args[i]);
+	  if (CODING_REQUIRE_ENCODING (&argument_coding))
+	    /* We must encode this argument.  */
+	    args[i] = encode_coding_string (&argument_coding, args[i], 1);
+	}
+      for (i = 4; i < nargs; i++)
+	new_argv[i - 3] = SSDATA (args[i]);
+      new_argv[i - 3] = 0;
+    }
+  else
+    new_argv[1] = 0;
+  path = ENCODE_FILE (path);
+  new_argv[0] = SSDATA (path);
 
   discard_output = INTEGERP (buffer) || (NILP (buffer) && NILP (output_file));
 
@@ -569,11 +536,9 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
     }
 
 #ifdef MSDOS /* MW, July 1993 */
-  /* Note that on MSDOS `child_setup' actually returns the child process
-     exit status, not its PID, so assign it to status below.  */
-  pid = child_setup (filefd, fd_output, fd_error, new_argv, 0, current_dir);
+  status = child_setup (filefd, fd_output, fd_error, new_argv, 0, current_dir);
 
-  if (pid < 0)
+  if (status < 0)
     {
       child_errno = errno;
       unbind_to (count, Qnil);
@@ -582,7 +547,6 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 	code_convert_string_norecord (build_string (strerror (child_errno)),
 				      Vlocale_coding_system, 0);
     }
-  status = pid;
 
   for (i = 0; i < CALLPROC_FDS; i++)
     if (0 <= callproc_fd[i])
@@ -597,8 +561,7 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
     {
       /* Since CRLF is converted to LF within `decode_coding', we
 	 can always open a file with binary mode.  */
-      callproc_fd[CALLPROC_PIPEREAD] = emacs_open (tempfile,
-						   O_RDONLY | O_BINARY, 0);
+      callproc_fd[CALLPROC_PIPEREAD] = emacs_open (tempfile, O_RDONLY, 0);
       if (callproc_fd[CALLPROC_PIPEREAD] < 0)
 	{
 	  int open_errno = errno;
@@ -763,9 +726,6 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
       process_coding.src_multibyte = 0;
     }
 
-  immediate_quit = 1;
-  QUIT;
-
   if (0 <= fd0)
     {
       enum { CALLPROC_BUFFER_SIZE_MIN = 16 * 1024 };
@@ -786,8 +746,8 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 	  nread = carryover;
 	  while (nread < bufsize - 1024)
 	    {
-	      int this_read = emacs_read (fd0, buf + nread,
-					  bufsize - nread);
+	      int this_read = emacs_read_quit (fd0, buf + nread,
+					       bufsize - nread);
 
 	      if (this_read < 0)
 		goto give_up;
@@ -806,7 +766,6 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 	    }
 
 	  /* Now NREAD is the total amount of data in the buffer.  */
-	  immediate_quit = 0;
 
 	  if (!nread)
 	    ;
@@ -879,8 +838,6 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 		 we should have already detected a coding system.  */
 	      display_on_the_fly = true;
 	    }
-	  immediate_quit = true;
-	  QUIT;
 	}
     give_up: ;
 
@@ -896,8 +853,6 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
   /* Wait for it to terminate, unless it already has.  */
   wait_for_termination (pid, &status, fd0 < 0);
 #endif
-
-  immediate_quit = 0;
 
   /* Don't kill any children that the subprocess may have left behind
      when exiting.  */
@@ -936,7 +891,6 @@ create_temp_file (ptrdiff_t nargs, Lisp_Object *args,
 		  Lisp_Object *filename_string_ptr)
 {
   int fd;
-  struct gcpro gcpro1;
   Lisp_Object filename_string;
   Lisp_Object val, start, end;
   Lisp_Object tmpdir;
@@ -980,7 +934,6 @@ create_temp_file (ptrdiff_t nargs, Lisp_Object *args,
 #endif
 
     filename_string = Fcopy_sequence (ENCODE_FILE (pattern));
-    GCPRO1 (filename_string);
     tempfile = SSDATA (filename_string);
 
     count = SPECPDL_INDEX ();
@@ -1033,13 +986,19 @@ create_temp_file (ptrdiff_t nargs, Lisp_Object *args,
      coding-system-for-read.  */
 
   *filename_string_ptr = filename_string;
-  UNGCPRO;
   return fd;
 }
 
 DEFUN ("call-process-region", Fcall_process_region, Scall_process_region,
        3, MANY, 0,
        doc: /* Send text from START to END to a synchronous process running PROGRAM.
+
+START and END are normally buffer positions specifying the part of the
+buffer to send to the process.
+If START is nil, that means to use the entire buffer contents; END is
+ignored.
+If START is a string, then send that string to the process
+instead of any buffer contents; END is ignored.
 The remaining arguments are optional.
 Delete the text if fourth arg DELETE is non-nil.
 
@@ -1064,7 +1023,6 @@ If you quit, the process is killed with SIGINT, or SIGKILL if you quit again.
 usage: (call-process-region START END PROGRAM &optional DELETE BUFFER DISPLAY &rest ARGS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
-  struct gcpro gcpro1;
   Lisp_Object infile, val;
   ptrdiff_t count = SPECPDL_INDEX ();
   Lisp_Object start = args[0];
@@ -1095,8 +1053,6 @@ usage: (call-process-region START END PROGRAM &optional DELETE BUFFER DISPLAY &r
       record_unwind_protect_int (close_file_unwind, fd);
     }
 
-  GCPRO1 (infile);
-
   if (nargs > 3 && !NILP (args[3]))
     Fdelete_region (start, end);
 
@@ -1113,13 +1069,9 @@ usage: (call-process-region START END PROGRAM &optional DELETE BUFFER DISPLAY &r
   args[1] = infile;
 
   val = call_process (nargs, args, fd, empty_input ? -1 : count);
-  RETURN_UNGCPRO (unbind_to (count, val));
+  return unbind_to (count, val);
 }
 
-#ifndef WINDOWSNT
-static int relocate_fd (int fd, int minfd);
-#endif
-
 static char **
 add_env (char **env, char **new_env, char *string)
 {
@@ -1137,7 +1089,7 @@ add_env (char **env, char **new_env, char *string)
       char *p = *ep, *q = string;
       while (ok)
 	{
-	  if (*q != *p)
+	  if (*p && *q != *p)
 	    break;
 	  if (*q == 0)
 	    /* The string is a lone variable name; keep it for now, we
@@ -1198,9 +1150,13 @@ exec_failed (char const *name, int err)
    CURRENT_DIR is an elisp string giving the path of the current
    directory the subprocess should have.  Since we can't really signal
    a decent error from within the child, this should be verified as an
-   executable directory by the parent.  */
+   executable directory by the parent.
 
-int
+   On GNUish hosts, either exec or return an error number.
+   On MS-Windows, either return a pid or signal an error.
+   On MS-DOS, either return an exit status or signal an error.  */
+
+CHILD_SETUP_TYPE
 child_setup (int in, int out, int err, char **new_argv, bool set_pgrp,
 	     Lisp_Object current_dir)
 {
@@ -1338,7 +1294,7 @@ child_setup (int in, int out, int err, char **new_argv, bool set_pgrp,
 
 #ifdef WINDOWSNT
   prepare_standard_handles (in, out, err, handles);
-  set_process_dir (SDATA (current_dir));
+  set_process_dir (SSDATA (current_dir));
   /* Spawn the child.  (See w32proc.c:sys_spawnve).  */
   cpid = spawnve (_P_NOWAIT, new_argv[0], new_argv, env);
   reset_standard_handles (in, out, err, handles);
@@ -1348,43 +1304,23 @@ child_setup (int in, int out, int err, char **new_argv, bool set_pgrp,
   return cpid;
 
 #else  /* not WINDOWSNT */
-  /* Make sure that in, out, and err are not actually already in
-     descriptors zero, one, or two; this could happen if Emacs is
-     started with its standard in, out, or error closed, as might
-     happen under X.  */
-  {
-    int oin = in, oout = out;
-
-    /* We have to avoid relocating the same descriptor twice!  */
-
-    in = relocate_fd (in, 3);
-
-    if (out == oin)
-      out = in;
-    else
-      out = relocate_fd (out, 3);
-
-    if (err == oin)
-      err = in;
-    else if (err == oout)
-      err = out;
-    else
-      err = relocate_fd (err, 3);
-  }
 
 #ifndef MSDOS
+
+  restore_nofile_limit ();
+
   /* Redirect file descriptors and clear the close-on-exec flag on the
      redirected ones.  IN, OUT, and ERR are close-on-exec so they
      need not be closed explicitly.  */
-  dup2 (in, 0);
-  dup2 (out, 1);
-  dup2 (err, 2);
+  dup2 (in, STDIN_FILENO);
+  dup2 (out, STDOUT_FILENO);
+  dup2 (err, STDERR_FILENO);
 
   setpgid (0, 0);
   tcsetpgrp (0, pid);
 
-  execve (new_argv[0], new_argv, env);
-  exec_failed (new_argv[0], errno);
+  int errnum = emacs_exec_file (new_argv[0], new_argv, env);
+  exec_failed (new_argv[0], errnum);
 
 #else /* MSDOS */
   pid = run_msdos_command (new_argv, pwd_var + 4, in, out, err, env);
@@ -1397,31 +1333,6 @@ child_setup (int in, int out, int err, char **new_argv, bool set_pgrp,
 #endif  /* not WINDOWSNT */
 }
 
-#ifndef WINDOWSNT
-/* Move the file descriptor FD so that its number is not less than MINFD.
-   If the file descriptor is moved at all, the original is closed on MSDOS,
-   but not elsewhere as the caller will close it anyway.  */
-static int
-relocate_fd (int fd, int minfd)
-{
-  if (fd >= minfd)
-    return fd;
-  else
-    {
-      int new = fcntl (fd, F_DUPFD_CLOEXEC, minfd);
-      if (new == -1)
-	{
-	  emacs_perror ("while setting up child");
-	  _exit (EXIT_CANCELED);
-	}
-#ifdef MSDOS
-      emacs_close (fd);
-#endif
-      return new;
-    }
-}
-#endif /* not WINDOWSNT */
-
 static bool
 getenv_internal_1 (const char *var, ptrdiff_t varlen, char **value,
 		   ptrdiff_t *valuelen, Lisp_Object env)
@@ -1433,7 +1344,7 @@ getenv_internal_1 (const char *var, ptrdiff_t varlen, char **value,
 	  && SBYTES (entry) >= varlen
 #ifdef WINDOWSNT
 	  /* NT environment variables are case insensitive.  */
-	  && ! strnicmp (SDATA (entry), var, varlen)
+	  && ! strnicmp (SSDATA (entry), var, varlen)
 #else  /* not WINDOWSNT */
 	  && ! memcmp (SDATA (entry), var, varlen)
 #endif /* not WINDOWSNT */
@@ -1465,6 +1376,20 @@ getenv_internal (const char *var, ptrdiff_t varlen, char **value,
   if (getenv_internal_1 (var, varlen, value, valuelen,
 			 Vprocess_environment))
     return *value ? 1 : 0;
+
+  /* On Windows we make some modifications to Emacs' environment
+     without recording them in Vprocess_environment.  */
+#ifdef WINDOWSNT
+  {
+    char* tmpval = getenv (var);
+    if (tmpval)
+      {
+        *value = tmpval;
+        *valuelen = strlen (tmpval);
+        return 1;
+      }
+  }
+#endif
 
   /* For DISPLAY try to get the values from the frame or the initial env.  */
   if (strcmp (var, "DISPLAY") == 0)
@@ -1698,7 +1623,7 @@ syms_of_callproc (void)
   DEFVAR_LISP ("shell-file-name", Vshell_file_name,
 	       doc: /* File name to load inferior shells from.
 Initialized from the SHELL environment variable, or to a system-dependent
-default if SHELL is not set.  */);
+default if SHELL is unset.  See Info node `(elisp)Security Considerations'.  */);
 
   DEFVAR_LISP ("exec-path", Vexec_path,
 	       doc: /* List of directories to search programs to run in subprocesses.
@@ -1706,7 +1631,7 @@ Each element is a string (directory name) or nil (try default directory).
 
 By default the last element of this list is `exec-directory'. The
 last element is not always used, for example in shell completion
-(`shell-dynamic-complete-command').  */);
+\(`shell-dynamic-complete-command').  */);
 
   DEFVAR_LISP ("exec-suffixes", Vexec_suffixes,
 	       doc: /* List of suffixes to try to find executable file names.

@@ -1,6 +1,6 @@
 ;;; winner.el --- Restore old window configurations
 
-;; Copyright (C) 1997-1998, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Ivar Rummelhoff <ivarru@math.uio.no>
 ;; Created: 27 Feb 1997
@@ -177,6 +177,12 @@ You may want to include buffer names such as *Help*, *Apropos*,
 ;; Called whenever the window configuration changes
 ;; (a `window-configuration-change-hook').
 (defun winner-change-fun ()
+
+  ;; Cull dead frames.
+  (setq winner-modified-list
+        (cl-loop for frame in winner-modified-list
+             if (frame-live-p frame) collect frame))
+
   (unless (or (memq (selected-frame) winner-modified-list)
               (/= 0 (minibuffer-depth)))
     (push (selected-frame) winner-modified-list)))
@@ -340,7 +346,19 @@ You may want to include buffer names such as *Help*, *Apropos*,
 
 
 ;;;###autoload
-(define-minor-mode winner-mode nil :global t ; let d-m-m make the doc
+(define-minor-mode winner-mode
+  "Toggle Winner mode on or off.
+With a prefix argument ARG, enable Winner mode if ARG is
+positive, and disable it otherwise.  If called from Lisp, enable
+the mode if ARG is omitted or nil, and toggle it if ARG is ‘toggle’.
+
+Winner mode is a global minor mode that records the changes in
+the window configuration (i.e. how the frames are partitioned
+into windows) so that the changes can be \"undone\" using the
+command `winner-undo'.  By default this one is bound to the key
+sequence `C-c <left>'.  If you change your mind (while undoing),
+you can press `C-c <right>' (calling `winner-redo')."
+  :global t
   (if winner-mode
       (progn
         (add-hook 'window-configuration-change-hook 'winner-change-fun)

@@ -1,6 +1,6 @@
-;;; rng-valid.el --- real-time validation of XML using RELAX NG
+;;; rng-valid.el --- real-time validation of XML using RELAX NG  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: James Clark
 ;; Keywords: wp, hypermedia, languages, XML, RelaxNG
@@ -101,7 +101,7 @@
 
 (defgroup relax-ng nil
   "Validation of XML using RELAX NG."
-  :group 'wp
+  :group 'text
   :group 'nxml
   :group 'languages)
 
@@ -345,17 +345,11 @@ The schema is set like `rng-auto-set-schema'."
 
 (defun rng-compute-mode-line-string ()
   (cond (rng-validate-timer
-	 (concat " Validated:"
-		 (number-to-string
-		  ;; Use floor rather than round because we want
-		  ;; to show 99% rather than 100% for changes near
-		  ;; the end.
-		  (floor (if (eq (buffer-size) 0)
-			     0.0
-			   (/ (* (- rng-validate-up-to-date-end (point-min))
-                                 100.0)
-			      (- (point-max) (point-min))))))
-		 "%%"))
+	 (format " Validated:%d%%"
+		 (if (= 0 (buffer-size))
+		     0
+		   (floor (- rng-validate-up-to-date-end (point-min))
+			  (- (point-max) (point-min))))))
 	((> rng-error-count 0)
 	 (concat " "
 		 (propertize "Invalid"
@@ -436,13 +430,13 @@ The schema is set like `rng-auto-set-schema'."
   (when (buffer-live-p buffer)		; bug#13999
     (with-current-buffer buffer
       (if rng-validate-mode
-	  (if (let ((rng-validate-display-point (point))
-		    (rng-validate-display-modified-p (buffer-modified-p)))
-		(rng-do-some-validation 'rng-validate-while-idle-continue-p))
-	      (force-mode-line-update)
-	    (rng-validate-done))
-	;; must have done kill-all-local-variables
-	(rng-kill-timers)))))
+          (if (let ((rng-validate-display-point (point))
+                    (rng-validate-display-modified-p (buffer-modified-p)))
+                (rng-do-some-validation 'rng-validate-while-idle-continue-p))
+              (force-mode-line-update)
+            (rng-validate-done))
+        ;; Must have done kill-all-local-variables.
+        (rng-kill-timers)))))
 
 (defun rng-validate-quick-while-idle (buffer)
   (when (buffer-live-p buffer)		; bug#13999
@@ -715,7 +709,7 @@ Return t if there is work to do, nil otherwise."
 
 ;; If we don't do this, then the front delimiter can move
 ;; past the end delimiter.
-(defun rng-error-modified (overlay after-p beg end &optional pre-change-len)
+(defun rng-error-modified (overlay after-p _beg _end &optional _pre-change-len)
   (when (and after-p
 	     (overlay-start overlay)	; check not deleted
 	     (>= (overlay-start overlay)
@@ -1144,9 +1138,8 @@ as empty-element."
 		(rng-match-start-tag-open required)
 		(rng-match-after)
 		(rng-match-start-tag-open name))
-	   (rng-mark-invalid (concat "Missing element "
-				     (rng-quote-string
-				      (rng-name-to-string required)))
+	   (rng-mark-invalid (format "Missing element \"%s\""
+                                     (rng-name-to-string required))
 			     xmltok-start
 			     (1+ xmltok-start)))
 	  ((and (rng-match-optionalize-elements)
@@ -1183,16 +1176,14 @@ as empty-element."
     (cond ((not required-attributes)
 	   "Required attributes missing")
 	  ((not (cdr required-attributes))
-	   (concat "Missing attribute "
-		   (rng-quote-string
-		    (rng-name-to-string (car required-attributes) t))))
+	   (format "Missing attribute \"%s\""
+                   (rng-name-to-string (car required-attributes) t)))
 	  (t
-	   (concat "Missing attributes "
+	   (format "Missing attributes \"%s\""
 		   (mapconcat (lambda (nm)
-				(rng-quote-string
-				 (rng-name-to-string nm t)))
+				 (rng-name-to-string nm t))
 			      required-attributes
-			      ", "))))))
+			      "\", \""))))))
 
 (defun rng-process-end-tag (&optional partial)
   (cond ((not rng-open-elements)
@@ -1235,8 +1226,7 @@ as empty-element."
 (defun rng-missing-element-message ()
   (let ((element (rng-match-required-element-name)))
     (if element
-	(concat "Missing element "
-		(rng-quote-string (rng-name-to-string element)))
+	(format "Missing element \"%s\"" (rng-name-to-string element))
       "Required child elements missing")))
 
 (defun rng-recover-mismatched-end-tag ()
@@ -1264,17 +1254,16 @@ as empty-element."
 
 (defun rng-mark-missing-end-tags (missing)
   (rng-mark-not-well-formed
-   (format "Missing end-tag%s %s"
+   (format "Missing end-tag%s \"%s\""
 	   (if (null (cdr missing)) "" "s")
 	   (mapconcat (lambda (name)
-			(rng-quote-string
-			 (if (car name)
-			     (concat (car name)
-				     ":"
-				     (cdr name))
-			   (cdr name))))
+                        (if (car name)
+                            (concat (car name)
+                                    ":"
+                                    (cdr name))
+                          (cdr name)))
 		      missing
-		      ", "))
+		      "\", \""))
    xmltok-start
    (+ xmltok-start 2)))
 

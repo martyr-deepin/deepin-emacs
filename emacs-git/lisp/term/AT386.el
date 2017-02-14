@@ -1,6 +1,6 @@
 ;;; AT386.el --- terminal support package for IBM AT keyboards
 
-;; Copyright (C) 1992, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
 ;; Keywords: terminals
@@ -53,5 +53,7 @@
     (define-key input-decode-map "\eN" [ALT])
     (define-key local-function-key-map [ALT] [27])
     ))
+
+(provide 'term/AT386)
 
 ;;; AT386.el ends here

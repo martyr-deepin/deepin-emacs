@@ -1,6 +1,6 @@
 ;;; tabulated-list.el --- generic major mode for tabulated lists -*- lexical-binding: t -*-
 
-;; Copyright (C) 2011-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
 ;; Author: Chong Yidong <cyd@stupidchicken.com>
 ;; Keywords: extensions, lisp
@@ -101,6 +101,8 @@ This is commonly used to recompute `tabulated-list-entries'.")
 It is called with two arguments, ID and COLS.  ID is a Lisp
 object identifying the entry, and COLS is a vector of column
 descriptors, as documented in `tabulated-list-entries'.")
+
+(defvar tabulated-list--near-rows)
 
 (defvar-local tabulated-list-sort-key nil
   "Sort key for the current Tabulated List mode buffer.
@@ -257,6 +259,12 @@ Do nothing if `tabulated-list--header-string' is nil."
                     (make-overlay (point-min) (point))))
       (overlay-put tabulated-list--header-overlay 'face 'underline))))
 
+(defsubst tabulated-list-header-overlay-p (&optional pos)
+  "Return non-nil if there is a fake header.
+Optional arg POS is a buffer position where to look for a fake header;
+defaults to `point-min'."
+  (overlays-at (or pos (point-min))))
+
 (defun tabulated-list-revert (&rest ignored)
   "The `revert-buffer-function' for `tabulated-list-mode'.
 It runs `tabulated-list-revert-hook', then calls `tabulated-list-print'."
@@ -277,58 +285,120 @@ It runs `tabulated-list-revert-hook', then calls `tabulated-list-print'."
     (or found
 	(error "No column named %s" name))))
 
-(defun tabulated-list-print (&optional remember-pos)
+(defun tabulated-list--get-sorter ()
+  "Return a sorting predicate for the current tabulated-list.
+Return nil if `tabulated-list-sort-key' specifies an unsortable
+column.  Negate the predicate that would be returned if
+`tabulated-list-sort-key' has a non-nil cdr."
+  (when (and tabulated-list-sort-key
+             (car tabulated-list-sort-key))
+    (let* ((sort-column (car tabulated-list-sort-key))
+           (n (tabulated-list--column-number sort-column))
+           (sorter (nth 2 (aref tabulated-list-format n))))
+      (when (eq sorter t); Default sorter checks column N:
+        (setq sorter (lambda (A B)
+                       (let ((a (aref (cadr A) n))
+                             (b (aref (cadr B) n)))
+                         (string< (if (stringp a) a (car a))
+                                  (if (stringp b) b (car b)))))))
+      ;; Reversed order.
+      (if (cdr tabulated-list-sort-key)
+          (lambda (a b) (not (funcall sorter a b)))
+        sorter))))
+
+(defsubst tabulated-list--col-local-max-widths (col)
+   "Return maximum entry widths at column COL around current row.
+Check the current row, the previous one and the next row."
+  (apply #'max (mapcar (lambda (x)
+                         (let ((nt (elt x col)))
+                           (string-width (if (stringp nt) nt (car nt)))))
+                       tabulated-list--near-rows)))
+
+(defun tabulated-list-print (&optional remember-pos update)
   "Populate the current Tabulated List mode buffer.
 This sorts the `tabulated-list-entries' list if sorting is
 specified by `tabulated-list-sort-key'.  It then erases the
 buffer and inserts the entries with `tabulated-list-printer'.
 
 Optional argument REMEMBER-POS, if non-nil, means to move point
-to the entry with the same ID element as the current line."
+to the entry with the same ID element as the current line and
+recenter window line accordingly.
+
+Non-nil UPDATE argument means to use an alternative printing
+method which is faster if most entries haven't changed since the
+last print.  The only difference in outcome is that tags will not
+be removed from entries that haven't changed (see
+`tabulated-list-put-tag').  Don't use this immediately after
+changing `tabulated-list-sort-key'."
   (let ((inhibit-read-only t)
 	(entries (if (functionp tabulated-list-entries)
 		     (funcall tabulated-list-entries)
 		   tabulated-list-entries))
-	entry-id saved-pt saved-col)
+        (sorter (tabulated-list--get-sorter))
+	entry-id saved-pt saved-col window-line)
     (and remember-pos
 	 (setq entry-id (tabulated-list-get-id))
-	 (setq saved-col (current-column)))
-    (erase-buffer)
-    (unless tabulated-list-use-header-line
-      (tabulated-list-print-fake-header))
+	 (setq saved-col (current-column))
+         (when (eq (window-buffer) (current-buffer))
+           (setq window-line
+                 (count-screen-lines (window-start) (point)))))
     ;; Sort the entries, if necessary.
-    (when (and tabulated-list-sort-key
-	       (car tabulated-list-sort-key))
-      (let* ((sort-column (car tabulated-list-sort-key))
-	     (n (tabulated-list--column-number sort-column))
-	     (sorter (nth 2 (aref tabulated-list-format n))))
-	;; Is the specified column sortable?
-	(when sorter
-	  (when (eq sorter t)
-	    (setq sorter ; Default sorter checks column N:
-		  (lambda (A B)
-		    (setq A (aref (cadr A) n))
-		    (setq B (aref (cadr B) n))
-		    (string< (if (stringp A) A (car A))
-			     (if (stringp B) B (car B))))))
-	  (setq entries (sort entries sorter))
-	  (if (cdr tabulated-list-sort-key)
-	      (setq entries (nreverse entries)))
-	  (unless (functionp tabulated-list-entries)
-	    (setq tabulated-list-entries entries)))))
-    ;; Print the resulting list.
-    (dolist (elt entries)
-      (and entry-id
-	   (equal entry-id (car elt))
-	   (setq saved-pt (point)))
-      (apply tabulated-list-printer elt))
+    (when sorter
+      (setq entries (sort entries sorter)))
+    (unless (functionp tabulated-list-entries)
+      (setq tabulated-list-entries entries))
+    ;; Without a sorter, we have no way to just update.
+    (when (and update (not sorter))
+      (setq update nil))
+    (if update (goto-char (point-min))
+      ;; Redo the buffer, unless we're just updating.
+      (erase-buffer)
+      (unless tabulated-list-use-header-line
+        (tabulated-list-print-fake-header)))
+    ;; Finally, print the resulting list.
+    (while entries
+      (let* ((elt (car entries))
+             (tabulated-list--near-rows
+              (list
+               (or (tabulated-list-get-entry (point-at-bol 0)) (cadr elt))
+               (cadr elt)
+               (or (cadr (cadr entries)) (cadr elt))))
+             (id (car elt)))
+        (and entry-id
+             (equal entry-id id)
+             (setq entry-id nil
+                   saved-pt (point)))
+        ;; If the buffer this empty, simply print each elt.
+        (if (or (not update) (eobp))
+            (apply tabulated-list-printer elt)
+          (while (let ((local-id (tabulated-list-get-id)))
+                   ;; If we find id, then nothing to update.
+                   (cond ((equal id local-id)
+                          (forward-line 1)
+                          nil)
+                         ;; If this entry sorts after id (or it's the
+                         ;; end), then just insert id and move on.
+                         ((or (not local-id)
+                              (funcall sorter elt
+                                       ;; FIXME: Might be faster if
+                                       ;; don't construct this list.
+                                       (list local-id (tabulated-list-get-entry))))
+                          (apply tabulated-list-printer elt)
+                          nil)
+                         ;; We find an entry that sorts before id,
+                         ;; it needs to be deleted.
+                         (t t)))
+            (let ((old (point)))
+              (forward-line 1)
+              (delete-region old (point))))))
+      (setq entries (cdr entries)))
     (set-buffer-modified-p nil)
     ;; If REMEMBER-POS was specified, move to the "old" location.
     (if saved-pt
 	(progn (goto-char saved-pt)
 	       (move-to-column saved-col)
-	       (when (eq (window-buffer) (current-buffer))
-		 (recenter)))
+	       (when window-line
+                 (recenter window-line)))
       (goto-char (point-min)))))
 
 (defun tabulated-list-print-entry (id cols)
@@ -342,8 +412,13 @@ of column descriptors."
 	(inhibit-read-only t))
     (if (> tabulated-list-padding 0)
 	(insert (make-string x ?\s)))
-    (dotimes (n ncols)
-      (setq x (tabulated-list-print-col n (aref cols n) x)))
+    (let ((tabulated-list--near-rows ; Bind it if not bound yet (Bug#25506).
+           (or (bound-and-true-p tabulated-list--near-rows)
+               (list (or (tabulated-list-get-entry (point-at-bol 0))
+                         cols)
+                     cols))))
+      (dotimes (n ncols)
+        (setq x (tabulated-list-print-col n (aref cols n) x))))
     (insert ?\n)
     ;; Ever so slightly faster than calling `put-text-property' twice.
     (add-text-properties
@@ -355,8 +430,6 @@ of column descriptors."
 N is the column number, COL-DESC is a column descriptor (see
 `tabulated-list-entries'), and X is the column number at point.
 Return the column number after insertion."
-  ;; TODO: don't truncate to `width' if the next column is align-right
-  ;; and has some space left.
   (let* ((format    (aref tabulated-list-format n))
 	 (name      (nth 0 format))
 	 (width     (nth 1 format))
@@ -367,12 +440,29 @@ Return the column number after insertion."
          (label-width (string-width label))
 	 (help-echo (concat (car format) ": " label))
 	 (opoint (point))
-	 (not-last-col (< (1+ n) (length tabulated-list-format))))
+	 (not-last-col (< (1+ n) (length tabulated-list-format)))
+	  available-space)
+    (when not-last-col
+      (let* ((next-col-format (aref tabulated-list-format (1+ n)))
+             (next-col-right-align (plist-get (nthcdr 3 next-col-format)
+                                              :right-align))
+             (next-col-width (nth 1 next-col-format)))
+        (setq available-space
+              (if (and (not right-align)
+                       next-col-right-align)
+                  (-
+                   (+ width next-col-width)
+                   (min next-col-width
+                        (tabulated-list--col-local-max-widths (1+ n))))
+                width))))
     ;; Truncate labels if necessary (except last column).
-    (and not-last-col
-	 (> label-width width)
-	 (setq label (truncate-string-to-width label width nil nil t)
-               label-width width))
+    ;; Don't truncate to `width' if the next column is align-right
+    ;; and has some space left, truncate to `available-space' instead.
+    (when (and not-last-col
+               (> label-width available-space)
+               (setq label (truncate-string-to-width
+                            label available-space nil nil t)
+                     label-width available-space)))
     (setq label (bidi-string-mark-left-to-right label))
     (when (and right-align (> width label-width))
       (let ((shift (- width label-width)))
@@ -390,7 +480,7 @@ Return the column number after insertion."
       (when not-last-col
         (when (> pad-right 0) (insert (make-string pad-right ?\s)))
         (insert (propertize
-                 (make-string (- next-x x label-width pad-right) ?\s)
+                 (make-string (- width (min width label-width)) ?\s)
                  'display `(space :align-to ,next-x))))
       (put-text-property opoint (point) 'tabulated-list-column-name name)
       next-x)))
@@ -447,7 +537,12 @@ this is the vector stored within it."
     (when (< pos eol)
       (delete-region pos (next-single-property-change pos prop nil eol))
       (goto-char pos)
-      (tabulated-list-print-col col desc (current-column))
+      (let ((tabulated-list--near-rows
+             (list
+              (tabulated-list-get-entry (point-at-bol 0))
+              entry
+              (or (tabulated-list-get-entry (point-at-bol 2)) entry))))
+        (tabulated-list-print-col col desc (current-column)))
       (if change-entry-data
 	  (aset entry col desc))
       (put-text-property pos (point) 'tabulated-list-id id)
@@ -473,7 +568,9 @@ With a numeric prefix argument N, sort the Nth column."
 		  (car (aref tabulated-list-format n))
 		(get-text-property (point)
 				   'tabulated-list-column-name))))
-    (tabulated-list--sort-by-column-name name)))
+    (if (nth 2 (assoc name (append tabulated-list-format nil)))
+        (tabulated-list--sort-by-column-name name)
+      (user-error "Cannot sort by %s" name))))
 
 (defun tabulated-list--sort-by-column-name (name)
   (when (and name (derived-mode-p 'tabulated-list-mode))
@@ -522,7 +619,6 @@ data in an ewoc may instead specify a printer function (e.g., one
 that calls `ewoc-enter-last'), with `tabulated-list-print-entry'
 as the ewoc pretty-printer."
   (setq-local truncate-lines t)
-  (setq-local buffer-read-only t)
   (setq-local buffer-undo-list t)
   (setq-local revert-buffer-function #'tabulated-list-revert)
   (setq-local glyphless-char-display tabulated-list-glyphless-char-display)
@@ -533,9 +629,5 @@ as the ewoc pretty-printer."
 (put 'tabulated-list-mode 'mode-class 'special)
 
 (provide 'tabulated-list)
-
-;; Local Variables:
-;; coding: utf-8
-;; End:
 
 ;;; tabulated-list.el ends here

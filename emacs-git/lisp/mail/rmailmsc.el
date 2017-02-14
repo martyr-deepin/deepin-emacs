@@ -1,6 +1,6 @@
 ;;; rmailmsc.el --- miscellaneous support functions for the RMAIL mail reader
 
-;; Copyright (C) 1985, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 2001-2017 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: mail
@@ -55,7 +55,7 @@ This applies only to the current session."
   (rmail-show-message-1 rmail-current-message))
 
 ;; Local Variables:
-;; generated-autoload-file: "rmail.el"
+;; generated-autoload-file: "rmail-loaddefs.el"
 ;; End:
 
 ;;; rmailmsc.el ends here

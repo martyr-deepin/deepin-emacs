@@ -1,6 +1,6 @@
-;;; footnote.el --- footnote support for message mode  -*- coding: utf-8;-*-
+;;; footnote.el --- footnote support for message mode
 
-;; Copyright (C) 1997, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Steven L Baur <steve@xemacs.org>
 ;; Keywords: mail, news
@@ -793,7 +793,7 @@ With a prefix argument ARG, enable Footnote mode if ARG is
 positive, and disable it otherwise.  If called from Lisp, enable
 the mode if ARG is omitted or nil.
 
-Footnode mode is a buffer-local minor mode.  If enabled, it
+Footnote mode is a buffer-local minor mode.  If enabled, it
 provides footnote support for `message-mode'.  To get started,
 play around with the following keys:
 \\{footnote-minor-mode-map}"

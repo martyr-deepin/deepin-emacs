@@ -5245,8 +5245,7 @@
 	(xg_set_toolkit_horizontal_scroll_bar_thumb)
 	(xg_get_default_scrollbar_height)
 	(xg_clear_under_internal_border): Extern.
-	* gtkutil.c (xg_frame_resized): Don't call
-	do_pending_window_change.
+	* gtkutil.c (xg_frame_resized): Call do_pending_window_change.
 	(xg_frame_set_char_size): Use adjust_frame_size.
 	(style_changed_cb): Call update_theme_scrollbar_height and
 	x_set_scroll_bar_default_height.
@@ -5367,7 +5366,7 @@
 	build without toolkit.  Always clear under internal border.
 	(x_set_window_size): Don't check frame size or recompute
 	fringes.  Reset fullscreen status before applying sizes.
-	Always resize as requested by pixelwise argument.  Don't call
+	Always resize as requested by pixelwise argument.  Call
 	do_pending_window_change.
 	(x_wm_set_size_hint): Add call for FRAME_SCROLL_BAR_AREA_HEIGHT.
 	(w32_initialize_display_info): Initialize dpyinfo's
@@ -5519,7 +5518,7 @@
 	Call x_net_wm_state.
 	(x_set_window_size_1, x_wm_set_size_hint): Don't call
 	check_frame_size.
-	(x_set_window_size): Don't call check_frame_size and
+	(x_set_window_size): Don't call check_frame_size.  Call
 	do_pending_window_change.
 	(x_term_init): Init horizontal_scroll_bar_cursor display info.
 	(x_create_terminal): Add set_horizontal_scroll_bar_hook.
@@ -8340,7 +8339,7 @@
 	* emacs.c (main): Initialize daemon_pipe[1] here ...
 	(syms_of_emacs): ... instead of here.
 
-2014-02-16  Anders Lindgern  <andlind@gmail.com>
+2014-02-16  Anders Lindgren  <andlind@gmail.com>
 
 	* nsterm.m (keyDown:): Check for normal key even if NSNumericPadKeyMask
 	is set (Bug#16505).
@@ -10152,7 +10151,7 @@
 	(FRAME_TEXT_COLS_TO_PIXEL_WIDTH, FRAME_PIXEL_WIDTH_TO_TEXT_COLS)
 	(FRAME_TEXT_COLS_TO_PIXEL_WIDTH): Rewrite macros.
 	(FRAME_TOTAL_COLS_ARG): Remove macro.
-	* fringe.c (draw_fringe_bitmap_1): Handle right divder.
+	* fringe.c (draw_fringe_bitmap_1): Handle right divider.
 	* gtkutil.c (xg_frame_resized, xg_frame_set_char_size)
 	(x_wm_set_size_hint): Handle frame pixel sizes.
 	* indent.c (compute_motion, Fcompute_motion):
@@ -16567,7 +16566,7 @@
 	(ns_draw_fringe_bitmap): Remove unused rowY.
 	Change #if to COCOA && >= 10_6.
 	(ns_draw_window_cursor): Remove unused overspill.
-	(ns_draw_underwave): width and x are EamcsCGFloat.
+	(ns_draw_underwave): width and x are EmacsCGFloat.
 	(ns_draw_box): thickness is CGFloat.
 	(ns_dumpglyphs_image): Change #if to COCOA && >= 10_6.
 	(ns_send_appdefined): When NS_IMPL_GNUSTEP, redirect to main thread
@@ -17074,7 +17073,7 @@
 2013-05-04  Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* minibuf.c (Fread_minibuffer, Feval_minibuffer): Move to Elisp.
-	(syms_of_minibuf): Adjust accodingly.
+	(syms_of_minibuf): Adjust accordingly.
 	* lread.c (Fread):
 	* callint.c (Fcall_interactively): Adjust calls accordingly.
 
@@ -17906,7 +17905,7 @@ See ChangeLog.12 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2015 Free Software Foundation, Inc.
+  Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

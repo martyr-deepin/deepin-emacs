@@ -1,6 +1,6 @@
 ;;; vc-dir.el --- Directory status display under VC  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; Author:   Dan Nicolaescu <dann@ics.uci.edu>
 ;; Keywords: vc tools
@@ -271,6 +271,7 @@ See `run-hooks'."
     (define-key map " " 'vc-dir-next-line)
     (define-key map "\t" 'vc-dir-next-directory)
     (define-key map "p" 'vc-dir-previous-line)
+    (define-key map [?\S-\ ] 'vc-dir-previous-line)
     (define-key map [backtab] 'vc-dir-previous-directory)
     ;;; Rebind paragraph-movement commands.
     (define-key map "\M-}" 'vc-dir-next-directory)
@@ -932,7 +933,7 @@ If it is a file, return the corresponding cons for the file itself."
 
 (defun vc-dir-resynch-file (&optional fname)
   "Update the entries for FNAME in any directory buffers that list it."
-  (let ((file (or fname (expand-file-name buffer-file-name)))
+  (let ((file (expand-file-name (or fname buffer-file-name)))
         (drop '()))
     (save-current-buffer
       ;; look for a vc-dir buffer that might show this file.

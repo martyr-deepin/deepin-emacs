@@ -1,13 +1,13 @@
 /* Interface definitions for termcap entries.
 
-Copyright (C) 2011-2015 Free Software Foundation, Inc.
+Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,6 +17,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
+#ifndef EMACS_TPARAM_H
+#define EMACS_TPARAM_H
 
 /* Don't try to include termcap.h.  On some systems, configure finds a
    non-standard termcap.h that the main build won't find.  */
@@ -33,3 +35,5 @@ char *tparam (const char *, char *, int, int, int, int, int);
 extern char PC;
 extern char *BC;
 extern char *UP;
+
+#endif /* EMACS_TPARAM_H */

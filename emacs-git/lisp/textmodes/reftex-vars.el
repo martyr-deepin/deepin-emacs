@@ -1,6 +1,6 @@
 ;;; reftex-vars.el --- configuration variables for RefTeX
 
-;; Copyright (C) 1997-1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1999, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <dominik@science.uva.nl>
 ;; Maintainer: auctex-devel@gnu.org
@@ -24,7 +24,7 @@
 
 ;;; Code:
 (defvar reftex-tables-dirty)
-(eval-when-compile (require 'cl))
+(eval-when-compile (require 'cl-lib))
 (eval-and-compile
   (defun reftex-set-dirty (symbol value)
     (setq reftex-tables-dirty t)
@@ -85,8 +85,9 @@
     (supertab    "Supertabular environment"
      (("supertabular" ?t nil nil "\\tablecaption{")))
 
-    (wrapfig     "The wrapfigure environment"
-     (("wrapfigure" ?f nil nil caption)))
+    (wrapfig     "The wrapfig package"
+     (("wrapfigure" ?f nil nil caption)
+      ("wraptable"  ?t nil nil caption)))
 
     (ctable	"The ctable package"
      (("\\ctable[]{}{}{}" ?t "tab:" "~\\ref{%s}" 1 ("table" "Tabelle"))))
@@ -149,6 +150,24 @@ distribution.  Mixed-case symbols are convenience aliases.")
       (?a    . "\\citeauthor{%l}")
       (?A    . "\\citeauthor*{%l}")
       (?y    . "\\citeyear{%l}")
+      (?n    . "\\nocite{%l}")))
+    (biblatex "The Biblatex package"
+     ((?\C-m . "\\cite[][]{%l}")
+      (?C    . "\\cite*[][]{%l}")
+      (?t    . "\\textcite[][]{%l}")
+      (?T    . "\\textcite*[][]{%l}")
+      (?p    . "\\parencite[][]{%l}")
+      (?P    . "\\parencite*[][]{%l}")
+      (?f    . "\\footcite[][]{%l}")
+      (?s    . "\\smartcite[][]{%l}")
+      (?u    . "\\autocite[][]{%l}")
+      (?U    . "\\autocite*[][]{%l}")
+      (?a    . "\\citeauthor{%l}")
+      (?A    . "\\citeauthor*{%l}")
+      (?i    . "\\citetitle{%l}")
+      (?I    . "\\citetitle*{%l}")
+      (?y    . "\\citeyear{%l}")
+      (?Y    . "\\citeyear*{%l}")
       (?n    . "\\nocite{%l}")))
     (amsrefs "The AMSRefs package"
      ((?\C-m . "\\cite{%l}")
@@ -334,7 +353,7 @@ more than `reftex-idle-time' seconds.
 Value t means, turn on immediately when RefTeX gets started.  Then,
 recentering will work for any TOC window created during the session.
 
-Value 'frame (the default) means, turn automatic recentering on only while the
+Value `frame' (the default) means, turn automatic recentering on only while the
 dedicated TOC frame does exist, and do the recentering only in that frame.  So
 when creating that frame (with `d' key in an ordinary TOC window), the
 automatic recentering is turned on.  When the frame gets destroyed, automatic
@@ -653,7 +672,7 @@ Possible keys are sectioning macro names like `chapter', section levels
                 (string :tag "Prefix"))))
 
 (defcustom reftex-default-context-regexps
-  '((caption       . "\\\\\\(rot\\)?caption\\*?[[{]")
+  '((caption       . "\\\\\\(rot\\|bi\\)?\\(sub\\)?caption\\(box\\)?\\*?[[{]")
     (item          . "\\\\item\\(\\[[^]]*\\]\\)?")
     (eqnarray-like . "\\\\begin{%s}\\|\\\\\\\\")
     (alignat-like  . "\\\\begin{%s}{[0-9]*}\\|\\\\\\\\"))
@@ -738,7 +757,7 @@ And here is the setup for RefTeX:
    \\end.  Here we use \"linguex\" as this name.
 
    (setq reftex-label-alist
-         '((\"linguex\" ?x \"ex:\" \"~\\\\ref{%s}\" nil (\"Example\" \"Ex.\"))))
+         \\='((\"linguex\" ?x \"ex:\" \"~\\\\ref{%s}\" nil (\"Example\" \"Ex.\"))))
 
 2. Write a function to detect the list macros and the determinators as well.
 
@@ -761,7 +780,7 @@ And here is the setup for RefTeX:
 
 3. Tell RefTeX to use this function
 
-   (setq reftex-special-environment-functions '(my-detect-linguex-list))"
+   (setq reftex-special-environment-functions \\='(my-detect-linguex-list))"
   :group 'reftex-defining-label-environments
   :type 'hook)
 
@@ -876,7 +895,7 @@ DOWNCASE    t:   Downcase words before using them."
       "\\\\label{\\(?1:[^}]*\\)}"
       ;; keyvals [..., label = {foo}, ...] forms used by ctable,
       ;; listings, minted, ...
-      "\\[[^]]*\\<label[[:space:]]*=[[:space:]]*{?\\(?1:[^],}]+\\)}?")
+      "\\[[^][]\\{0,2000\\}\\<label[[:space:]]*=[[:space:]]*{?\\(?1:[^],}]+\\)}?")
     "List of regexps matching \\label definitions.
 The default value matches usual \\label{...} definitions and
 keyval style [..., label = {...}, ...] label definitions.  It is
@@ -886,7 +905,7 @@ have to define it using \\(?1:...\\) when adding new regexps.
 When changed from Lisp, make sure to call
 `reftex-compile-variables' afterwards to make the change
 effective."
-    :version "24.4"
+    :version "25.1"
     :set (lambda (symbol value)
 	   (set symbol value)
 	   (when (fboundp 'reftex-compile-variables)
@@ -1075,9 +1094,9 @@ used in the variable `reftex-ref-style-alist'."
 
 ;; Compatibility with obsolete variables.
 (when reftex-vref-is-default
-  (add-to-list 'reftex-ref-style-default-list "Varioref"))
+  (cl-pushnew "Varioref" reftex-ref-style-default-list :test #'equal))
 (when reftex-fref-is-default
-  (add-to-list 'reftex-ref-style-default-list "Fancyref"))
+  (cl-pushnew "Fancyref" reftex-ref-style-default-list :test #'equal))
 
 (defcustom reftex-level-indent 2
   "Number of spaces to be used for indentation per section level."
@@ -1153,9 +1172,9 @@ path."
   "Sorting of the entries found in BibTeX databases by reftex-citation.
 Possible values:
 nil            Do not sort entries.
-'author        Sort entries by author name.
-'year          Sort entries by increasing year.
-'reverse-year  Sort entries by decreasing year."
+`author'       Sort entries by author name.
+`year'         Sort entries by increasing year.
+`reverse-year' Sort entries by decreasing year."
   :group 'reftex-citation-support
   :type '(choice (const :tag "not" nil)
                  (const :tag "by author" author)
@@ -1205,7 +1224,7 @@ strings.
 `reftex-cite-format' directly yourself or set it to the SYMBOL of one of
 the predefined styles.  The predefined symbols are those which have an
 association in the constant `reftex-cite-format-builtin'.
-E.g.: (setq reftex-cite-format 'natbib)"
+E.g.: (setq reftex-cite-format \\='natbib)"
   :group 'reftex-citation-support
   :type
   `(choice
@@ -1904,7 +1923,7 @@ instead or as well.  The variable may have one of these values:
    mouse    Highlighting is mouse driven.
    both     Both cursor and mouse trigger highlighting.
 
-Changing this variable requires to rebuild the selection and *toc* buffers
+Changing this variable requires rebuilding the selection and *toc* buffers
 to become effective (keys `g' or `r')."
   :group 'reftex-fontification-configurations
   :type '(choice
@@ -1991,7 +2010,8 @@ symbol indicating in what context the hook is called."
 
 (defcustom reftex-extra-bindings nil
   "Non-nil means, make additional key bindings on startup.
-These extra bindings are located in the users `C-c letter' map."
+These extra bindings are located in the users `C-c letter' map.
+Note that this variable needs to be set before reftex is loaded."
   :group 'reftex-miscellaneous-configurations
   :type 'boolean)
 

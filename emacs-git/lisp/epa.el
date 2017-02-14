@@ -1,6 +1,6 @@
 ;;; epa.el --- the EasyPG Assistant -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2017 Free Software Foundation, Inc.
 
 ;; Author: Daiki Ueno <ueno@unixuser.org>
 ;; Keywords: PGP, GnuPG
@@ -33,6 +33,17 @@
   :version "23.1"
   :link '(custom-manual "(epa) Top")
   :group 'epg)
+
+(defcustom epa-replace-original-text 'ask
+  "Whether the original text shall be replaced by the decrypted.
+
+If t, replace the original text without any confirmation.
+If nil, don't replace the original text and show the result in a new buffer.
+If neither t nor nil, ask user for confirmation."
+  :type '(choice (const :tag "Never" nil)
+		 (const :tag "Ask the user" ask)
+		 (const :tag "Always" t))
+  :group 'epa)
 
 (defcustom epa-popup-info-window t
   "If non-nil, display status information from epa commands in another window."
@@ -249,7 +260,7 @@ You should bind this variable with `let', but do not set it globally.")
     (define-key keymap "q" 'delete-window)
     keymap))
 
-(defvar epa-exit-buffer-function #'bury-buffer)
+(defvar epa-exit-buffer-function #'quit-window)
 
 (define-widget 'epa-key 'push-button
   "Button for representing a epg-key object."
@@ -462,14 +473,12 @@ If ARG is non-nil, mark the key."
       (widget-create 'link
 		     :notify (lambda (&rest _ignore) (abort-recursive-edit))
 		     :help-echo
-		     (substitute-command-keys
-		      "Click here or \\[abort-recursive-edit] to cancel")
+		     "Click here or \\[abort-recursive-edit] to cancel"
 		     "Cancel")
       (widget-create 'link
 		     :notify (lambda (&rest _ignore) (exit-recursive-edit))
 		     :help-echo
-		     (substitute-command-keys
-		      "Click here or \\[exit-recursive-edit] to finish")
+		     "Click here or \\[exit-recursive-edit] to finish"
 		     "OK")
       (insert "\n\n")
       (epa--insert-keys keys)
@@ -658,7 +667,7 @@ If SECRET is non-nil, list secret keys instead of public keys."
 	(if (= current total)
 	    (message "%s...done" prompt)
 	  (message "%s...%d%%" prompt
-		   (floor (* (/ current (float total)) 100))))
+		   (floor (* 100.0 current) total)))
       (message "%s..." prompt))))
 
 (defun epa-read-file-name (input)
@@ -843,10 +852,10 @@ should consider using the string based counterpart
 
 For example:
 
-\(let ((context (epg-make-context 'OpenPGP)))
+\(let ((context (epg-make-context \\='OpenPGP)))
   (decode-coding-string
     (epg-decrypt-string context (buffer-substring start end))
-    'utf-8))"
+    \\='utf-8))"
   (interactive "r")
   (save-excursion
     (let ((context (epg-make-context epa-protocol))
@@ -874,7 +883,9 @@ For example:
 	  (with-current-buffer (funcall make-buffer-function)
 	    (let ((inhibit-read-only t))
 	      (insert plain)))
-	(if (y-or-n-p "Replace the original text? ")
+	(if (or (eq epa-replace-original-text t)
+                (and epa-replace-original-text
+                     (y-or-n-p "Replace the original text? ")))
 	    (let ((inhibit-read-only t))
 	      (delete-region start end)
 	      (goto-char start)
@@ -941,10 +952,10 @@ should consider using the string based counterpart
 
 For example:
 
-\(let ((context (epg-make-context 'OpenPGP)))
+\(let ((context (epg-make-context \\='OpenPGP)))
   (decode-coding-string
     (epg-verify-string context (buffer-substring start end))
-    'utf-8))"
+    \\='utf-8))"
   (declare (interactive-only t))
   (interactive "r")
   (let ((context (epg-make-context epa-protocol))
@@ -970,7 +981,9 @@ For example:
 		 (or coding-system-for-read
 		     (get-text-property start 'epa-coding-system-used)
 		     'undecided)))
-    (if (y-or-n-p "Replace the original text? ")
+    (if (or (eq epa-replace-original-text t)
+            (and epa-replace-original-text
+                 (y-or-n-p "Replace the original text? ")))
 	(let ((inhibit-read-only t)
 	      buffer-read-only)
 	  (delete-region start end)
@@ -1030,10 +1043,10 @@ based counterpart `epg-sign-file' instead.
 
 For example:
 
-\(let ((context (epg-make-context 'OpenPGP)))
+\(let ((context (epg-make-context \\='OpenPGP)))
   (epg-sign-string
     context
-    (encode-coding-string (buffer-substring start end) 'utf-8)))"
+    (encode-coding-string (buffer-substring start end) \\='utf-8)))"
   (declare (interactive-only t))
   (interactive
    (let ((verbose current-prefix-arg))
@@ -1116,10 +1129,10 @@ file based counterpart `epg-encrypt-file' instead.
 
 For example:
 
-\(let ((context (epg-make-context 'OpenPGP)))
+\(let ((context (epg-make-context \\='OpenPGP)))
   (epg-encrypt-string
     context
-    (encode-coding-string (buffer-substring start end) 'utf-8)
+    (encode-coding-string (buffer-substring start end) \\='utf-8)
     nil))"
   (declare (interactive-only t))
   (interactive

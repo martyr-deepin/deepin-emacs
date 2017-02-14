@@ -1,6 +1,6 @@
 ;;; w32-win.el --- parse switches controlling interface with W32 window system -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1994, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Kevin Gallo
 ;; Keywords: terminals
@@ -177,12 +177,15 @@ the last file dropped is selected."
 
  ;;; make f10 activate the real menubar rather than the mini-buffer menu
  ;;; navigation feature.
- (defun w32-menu-bar-open (&optional frame)
+(defun w32-menu-bar-open (&optional frame)
    "Start key navigation of the menu bar in FRAME.
 
 This initially activates the first menu-bar item, and you can then navigate
 with the arrow keys, select a menu entry with the Return key or cancel with
-the Escape key.  If FRAME has no menu bar, this function does nothing.
+one or two Escape keypresses.  (Two Escape keypresses are needed when a
+menu was already dropped down by pressing Return.)
+
+If FRAME has no menu bar, this function does nothing.
 
 If FRAME is nil or not given, use the selected frame.
 If FRAME does not have the menu bar enabled, display a text menu using
@@ -290,7 +293,8 @@ See the documentation of `create-fontset-from-fontset-spec' for the format.")
 (declare-function x-parse-geometry "frame.c" (string))
 (defvar x-command-line-resources)
 
-(defun w32-initialize-window-system (&optional _display)
+(cl-defmethod window-system-initialization (&context (window-system w32)
+                                            &optional _display)
   "Initialize Emacs for W32 GUI frames."
   (cl-assert (not w32-initialized))
 
@@ -376,11 +380,11 @@ See the documentation of `create-fontset-from-fontset-spec' for the format.")
   (setq w32-initialized t))
 
 (add-to-list 'display-format-alist '("\\`w32\\'" . w32))
-(gui-method-define handle-args-function w32 #'x-handle-args)
-(gui-method-define frame-creation-function w32
-                   #'x-create-frame-with-faces)
-(gui-method-define window-system-initialization w32
-                   #'w32-initialize-window-system)
+(cl-defmethod handle-args-function (args &context (window-system w32))
+  (x-handle-args args))
+
+(cl-defmethod frame-creation-function (params &context (window-system w32))
+  (x-create-frame-with-faces params))
 
 ;;;; Selections
 
@@ -396,28 +400,55 @@ See the documentation of `create-fontset-from-fontset-spec' for the format.")
     (put 'x-selections (or type 'PRIMARY) value)))
 
 (defun w32--get-selection  (&optional type data-type)
-  (if (and (eq type 'CLIPBOARD)
-           (eq data-type 'STRING))
-      (with-demoted-errors "w32-get-clipboard-data:%S"
-        (w32-get-clipboard-data))
-    (get 'x-selections (or type 'PRIMARY))))
+  (cond ((and (eq type 'CLIPBOARD)
+              (eq data-type 'STRING))
+         (with-demoted-errors "w32-get-clipboard-data:%S"
+           (w32-get-clipboard-data)))
+        ((eq data-type 'TARGETS)
+         (if (eq type 'CLIPBOARD)
+             (w32-selection-targets type)
+           (if (get 'x-selections (or type 'PRIMARY)) '[STRING])))
+        (t (get 'x-selections (or type 'PRIMARY)))))
 
 (defun w32--selection-owner-p (selection)
   (and (memq selection '(nil PRIMARY SECONDARY))
        (get 'x-selections (or selection 'PRIMARY))))
 
-(gui-method-define gui-set-selection w32 #'w32--set-selection)
-(gui-method-define gui-get-selection w32 #'w32--get-selection)
+(cl-defmethod gui-backend-set-selection (type value
+                                         &context (window-system w32))
+  (w32--set-selection type value))
 
-(gui-method-define gui-selection-owner-p w32 #'w32--selection-owner-p)
-(gui-method-define gui-selection-exists-p w32 #'w32-selection-exists-p)
+(cl-defmethod gui-backend-get-selection (type data-type
+                                         &context (window-system w32))
+  (w32--get-selection type data-type))
+
+(cl-defmethod gui-backend-selection-owner-p (selection
+                                             &context (window-system w32))
+  (w32--selection-owner-p selection))
+
+(cl-defmethod gui-backend-selection-exists-p (selection
+                                              &context (window-system w32))
+  (w32-selection-exists-p selection))
 
 (when (eq system-type 'windows-nt)
   ;; Make copy&pasting in w32's console interact with the system's clipboard!
-  (gui-method-define gui-set-selection nil #'w32--set-selection)
-  (gui-method-define gui-get-selection nil #'w32--get-selection)
-  (gui-method-define gui-selection-owner-p nil #'w32--selection-owner-p)
-  (gui-method-define gui-selection-exists-p nil #'w32-selection-exists-p))
+  ;; We could move those cl-defmethods outside of the `when' and use
+  ;; "&context (system-type (eql windows-nt))" instead!
+  (cl-defmethod gui-backend-set-selection (type value
+                                           &context (window-system nil))
+    (w32--set-selection type value))
+
+  (cl-defmethod gui-backend-get-selection (type data-type
+                                           &context (window-system nil))
+    (w32--get-selection type data-type))
+
+  (cl-defmethod gui-backend-selection-owner-p (selection
+                                               &context (window-system nil))
+    (w32--selection-owner-p selection))
+
+  (cl-defmethod gui-selection-exists-p (selection
+                                        &context (window-system nil))
+    (w32-selection-exists-p selection)))
 
 ;; The "Windows" keys on newer keyboards bring up the Start menu
 ;; whether you want it or not - make Emacs ignore these keystrokes
@@ -439,5 +470,6 @@ That includes all Windows systems except for 9X/Me."
   (getenv "SystemRoot"))
 
 (provide 'w32-win)
+(provide 'term/w32-win)
 
 ;;; w32-win.el ends here

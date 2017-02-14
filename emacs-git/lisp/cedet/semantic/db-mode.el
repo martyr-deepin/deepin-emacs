@@ -1,6 +1,6 @@
 ;;; semantic/db-mode.el --- Semanticdb Minor Mode
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -39,7 +39,6 @@
     (semanticdb-kill-hook kill-buffer-hook)
     (semanticdb-kill-hook change-major-mode-hook) ;; Not really a kill, but we need the same effect.
     (semanticdb-kill-emacs-hook kill-emacs-hook)
-    (semanticdb-save-all-db-idle auto-save-hook)
     )
   "List of hooks and values to add/remove when configuring semanticdb.")
 

@@ -1,6 +1,6 @@
 ;;; flymake.el --- a universal on-the-fly syntax checker  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
 ;; Author:  Pavel Kobyakov <pk_at_work@yahoo.com>
 ;; Maintainer: Leo Liu <sdl.web@gmail.com>
@@ -102,6 +102,8 @@ See `flymake-error-bitmap' and `flymake-warning-bitmap'."
   "Enables/disables GUI warnings."
   :group 'flymake
   :type 'boolean)
+(make-obsolete-variable 'flymake-gui-warnings-enabled
+			"it no longer has any effect." "26.1")
 
 (defcustom flymake-start-syntax-check-on-find-file t
   "Start syntax check on find file."
@@ -200,7 +202,7 @@ ignored.  Otherwise, it is printed using `message'.
 TEXT is a format control string, and the remaining arguments ARGS
 are the string substitutions (see the function `format')."
   (if (<= level flymake-log-level)
-      (let* ((msg (apply 'format text args)))
+      (let* ((msg (apply #'format-message text args)))
 	(message "%s" msg))))
 
 (defun flymake-ins-after (list pos val)
@@ -287,7 +289,7 @@ Return its file name if found, or nil if not found."
             nil)))))
 
 (defun flymake-fix-file-name (name)
-  "Replace all occurrences of '\' with '/'."
+  "Replace all occurrences of `\\' with `/'."
   (when name
     (setq name (expand-file-name name))
     (setq name (abbreviate-file-name name))
@@ -785,7 +787,7 @@ Perhaps use text from LINE-ERR-INFO-LIST to enhance highlighting."
 	(when (flymake-same-files real-file-name source-file-name)
 	  (setq line-err-info (flymake-ler-set-file line-err-info nil))
 	  (setq err-info-list (flymake-add-err-info err-info-list line-err-info))))
-      (flymake-log 3 "parsed '%s', %s line-err-info" (nth idx lines) (if line-err-info "got" "no"))
+      (flymake-log 3 "parsed `%s', %s line-err-info" (nth idx lines) (if line-err-info "got" "no"))
       (setq idx (1+ idx)))
     err-info-list))
 
@@ -826,16 +828,16 @@ Convert it to flymake internal format."
   (append
    '(
      ;; MS Visual C++ 6.0
-     ("\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\)(\\([0-9]+\\)) \: \\(\\(error\\|warning\\|fatal error\\) \\(C[0-9]+\\):[ \t\n]*\\(.+\\)\\)"
+     ("\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\)(\\([0-9]+\\)) : \\(\\(error\\|warning\\|fatal error\\) \\(C[0-9]+\\):[ \t\n]*\\(.+\\)\\)"
       1 3 nil 4)
      ;; jikes
-     ("\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\)\:\\([0-9]+\\)\:[0-9]+\:[0-9]+\:[0-9]+\: \\(\\(Error\\|Warning\\|Caution\\|Semantic Error\\):[ \t\n]*\\(.+\\)\\)"
+     ("\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\):\\([0-9]+\\):[0-9]+:[0-9]+:[0-9]+: \\(\\(Error\\|Warning\\|Caution\\|Semantic Error\\):[ \t\n]*\\(.+\\)\\)"
       1 3 nil 4)
      ;; MS midl
      ("midl[ ]*:[ ]*\\(command line error .*\\)"
       nil nil nil 1)
      ;; MS C#
-     ("\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\)(\\([0-9]+\\),[0-9]+)\: \\(\\(error\\|warning\\|fatal error\\) \\(CS[0-9]+\\):[ \t\n]*\\(.+\\)\\)"
+     ("\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\)(\\([0-9]+\\),[0-9]+): \\(\\(error\\|warning\\|fatal error\\) \\(CS[0-9]+\\):[ \t\n]*\\(.+\\)\\)"
       1 3 nil 4)
      ;; perl
      ("\\(.*\\) at \\([^ \n]+\\) line \\([0-9]+\\)[,.\n]" 2 3 nil 1)
@@ -843,7 +845,7 @@ Convert it to flymake internal format."
      ("\\(?:Parse\\|Fatal\\) error: \\(.*\\) in \\(.*\\) on line \\([0-9]+\\)" 2 3 nil 1)
      ;; LaTeX warnings (fileless) ("\\(LaTeX \\(Warning\\|Error\\): .*\\) on input line \\([0-9]+\\)" 20 3 nil 1)
      ;; ant/javac.  Note this also matches gcc warnings!
-     (" *\\(\\[javac\\] *\\)?\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\)\:\\([0-9]+\\)\\(?:\:[0-9]+\\)?\:[ \t\n]*\\(.+\\)"
+     (" *\\(\\[javac\\] *\\)?\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\):\\([0-9]+\\)\\(?::[0-9]+\\)?:[ \t\n]*\\(.+\\)"
       2 4 nil 5))
    ;; compilation-error-regexp-alist)
    (flymake-reformat-err-line-patterns-from-compile-el compilation-error-regexp-alist-alist))
@@ -989,7 +991,7 @@ For the format of LINE-ERR-INFO, see `flymake-ler-make-ler'."
   (funcall flymake-get-project-include-dirs-function basedir))
 
 (defun flymake-get-system-include-dirs ()
-  "System include dirs - from the 'INCLUDE' env setting."
+  "System include dirs - from the `INCLUDE' env setting."
   (let* ((includes (getenv "INCLUDE")))
     (if includes (split-string includes path-separator t) nil)))
 
@@ -1072,6 +1074,7 @@ For the format of LINE-ERR-INFO, see `flymake-ler-make-ler'."
                        "flymake-proc" (current-buffer) cmd args))))
         (set-process-sentinel process 'flymake-process-sentinel)
         (set-process-filter process 'flymake-process-filter)
+        (set-process-query-on-exit-flag process nil)
         (push process flymake-processes)
 
         (setq flymake-is-running t)
@@ -1084,8 +1087,10 @@ For the format of LINE-ERR-INFO, see `flymake-ler-make-ler'."
                      default-directory)
         process)
     (error
-     (let* ((err-str (format "Failed to launch syntax check process '%s' with args %s: %s"
-                             cmd args (error-message-string err)))
+     (let* ((err-str
+             (format-message
+              "Failed to launch syntax check process `%s' with args %s: %s"
+              cmd args (error-message-string err)))
             (source-file-name buffer-file-name)
             (cleanup-f        (flymake-get-cleanup-function source-file-name)))
        (flymake-log 0 err-str)
@@ -1187,15 +1192,17 @@ For the format of LINE-ERR-INFO, see `flymake-ler-make-ler'."
     (setq flymake-mode-line mode-line)
     (force-mode-line-update)))
 
-(defun flymake-display-warning (warning)
-  "Display a warning to user."
-  (message-box warning))
+;; Nothing in flymake uses this at all any more, so this is just for
+;; third-party compatibility.
+(define-obsolete-function-alias 'flymake-display-warning 'message-box "26.1")
 
 (defun flymake-report-fatal-status (status warning)
   "Display a warning and switch flymake mode off."
-  (when flymake-gui-warnings-enabled
-    (flymake-display-warning (format "Flymake: %s. Flymake will be switched OFF" warning))
-    )
+  ;; This first message was always shown by default, and flymake-log
+  ;; does nothing by default, hence the use of message.
+  ;; Another option is display-warning.
+  (if (< flymake-log-level 0)
+      (message "Flymake: %s. Flymake will be switched OFF" warning))
   (flymake-mode 0)
   (flymake-log 0 "switched OFF Flymake mode for buffer %s due to fatal status %s, warning %s"
                (buffer-name) status warning))

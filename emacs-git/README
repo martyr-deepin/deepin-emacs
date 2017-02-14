@@ -1,8 +1,8 @@
-Copyright (C) 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 2001-2017 Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 
-This directory tree holds version 25.0.50 of GNU Emacs, the extensible,
+This directory tree holds version 26.0.50 of GNU Emacs, the extensible,
 customizable, self-documenting real-time display editor.
 
 The file INSTALL in this directory says how to build and install GNU
@@ -14,6 +14,9 @@ user-visible changes in recent versions of Emacs.
 
 The file etc/PROBLEMS contains information on many common problems that
 occur in building, installing and running Emacs.
+
+The file CONTRIBUTE contains information on contributing to Emacs as a
+developer.
 
 You may encounter bugs in this release.  If you do, please report
 them; your bug reports are valuable contributions to the FSF, since
@@ -83,9 +86,8 @@ There are several subdirectories:
                 in Emacs Lisp manual.
 'msdos'     holds configuration files for compiling Emacs under MS-DOS.
 'nextstep'  holds instructions and some other files for compiling the
-            Nextstep port of Emacs, for GNUstep and Mac OS X Cocoa.
-'nt'        holds various command files and documentation files that pertain
-            to building and running Emacs on Windows 9X/ME/NT/2000/XP.
+            Nextstep port of Emacs, for GNUstep and macOS Cocoa.
+'nt'        holds code and documentation for building Emacs on MS-Windows.
 'test'      holds tests for various aspects of Emacs's functionality.
 
    Building Emacs on non-Posix platforms requires tools that aren't part

@@ -1,6 +1,6 @@
 ;;; cl-generic.el --- CLOS-style generic functions for Elisp  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2017 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Version: 1.0
@@ -80,13 +80,16 @@
 
 ;; TODO:
 ;;
-;; - A generic "filter" generalizer (e.g. could be used to cleanly adds methods
+;; - A generic "filter" generalizer (e.g. could be used to cleanly add methods
 ;;   to cl-generic-combine-methods with a specializer that says it applies only
 ;;   when some particular qualifier is used).
-;; - A way to dispatch on the context (e.g. the major-mode, some global
-;;   variable, you name it).
 
 ;;; Code:
+
+;; The autoloads.el mechanism which adds package--builtin-versions
+;; maintenance to loaddefs.el doesn't work for preloaded packages (such
+;; as this one), so we have to do it by hand!
+(push (purecopy '(cl-generic 1 0)) package--builtin-versions)
 
 ;; Note: For generic functions that dispatch on several arguments (i.e. those
 ;; which use the multiple-dispatch feature), we always use the same "tagcodes"
@@ -95,19 +98,39 @@
 ;; usually be simplified, or even completely skipped.
 
 (eval-when-compile (require 'cl-lib))
+(eval-when-compile (require 'cl-macs))  ;For cl--find-class.
 (eval-when-compile (require 'pcase))
 
 (cl-defstruct (cl--generic-generalizer
                (:constructor nil)
                (:constructor cl-generic-make-generalizer
-                (priority tagcode-function specializers-function)))
+                (name priority tagcode-function specializers-function)))
+  (name nil :type string)
   (priority nil :type integer)
   tagcode-function
   specializers-function)
 
-(defconst cl--generic-t-generalizer
-  (cl-generic-make-generalizer
-   0 (lambda (_name) nil) (lambda (_tag) '(t))))
+
+(defmacro cl-generic-define-generalizer
+    (name priority tagcode-function specializers-function)
+  "Define a new kind of generalizer.
+NAME is the name of the variable that will hold it.
+PRIORITY defines which generalizer takes precedence.
+  The catch-all generalizer has priority 0.
+  Then `eql' generalizer has priority 100.
+TAGCODE-FUNCTION takes as first argument a varname and should return
+  a chunk of code that computes the tag of the value held in that variable.
+  Further arguments are reserved for future use.
+SPECIALIZERS-FUNCTION takes as first argument a tag value TAG
+  and should return a list of specializers that match TAG.
+  Further arguments are reserved for future use."
+  (declare (indent 1) (debug (symbolp body)))
+  `(defconst ,name
+     (cl-generic-make-generalizer
+      ',name ,priority ,tagcode-function ,specializers-function)))
+
+(cl-generic-define-generalizer cl--generic-t-generalizer
+   0 (lambda (_name &rest _) nil) (lambda (_tag &rest _) '(t)))
 
 (cl-defstruct (cl--generic-method
                (:constructor nil)
@@ -143,16 +166,18 @@
 (defmacro cl--generic (name)
   `(get ,name 'cl--generic))
 
-(defun cl-generic-ensure-function (name)
+(defun cl-generic-ensure-function (name &optional noerror)
   (let (generic
         (origname name))
     (while (and (null (setq generic (cl--generic name)))
                 (fboundp name)
+                (null noerror)
                 (symbolp (symbol-function name)))
       (setq name (symbol-function name)))
     (unless (or (not (fboundp name))
                 (autoloadp (symbol-function name))
-                (and (functionp name) generic))
+                (and (functionp name) generic)
+                noerror)
       (error "%s is already defined as something else than a generic function"
              origname))
     (if generic
@@ -160,18 +185,6 @@
       (setf (cl--generic name) (setq generic (cl--generic-make name)))
       (defalias name (cl--generic-make-function generic)))
     generic))
-
-(defun cl--generic-setf-rewrite (name)
-  (let* ((setter (intern (format "cl-generic-setter--%s" name)))
-         (exp `(unless (eq ',setter (get ',name 'cl-generic-setter))
-                 ;; (when (get ',name 'gv-expander)
-                 ;;   (error "gv-expander conflicts with (setf %S)" ',name))
-                 (setf (get ',name 'cl-generic-setter) ',setter)
-                 (gv-define-setter ,name (val &rest args)
-                   (cons ',setter (cons val args))))))
-    ;; Make sure `setf' can be used right away, e.g. in the body of the method.
-    (eval exp t)
-    (cons setter exp)))
 
 ;;;###autoload
 (defmacro cl-defgeneric (name args &rest options-and-methods)
@@ -185,9 +198,9 @@ OPTIONS-AND-METHODS currently understands:
 - (declare DECLARATIONS)
 - (:argument-precedence-order &rest ARGS)
 - (:method [QUALIFIERS...] ARGS &rest BODY)
-BODY, if present, is used as the body of a default method.
+DEFAULT-BODY, if present, is used as the body of a default method.
 
-\(fn NAME ARGS [DOC-STRING] [OPTIONS-AND-METHODS...] &rest BODY)"
+\(fn NAME ARGS [DOC-STRING] [OPTIONS-AND-METHODS...] &rest DEFAULT-BODY)"
   (declare (indent 2) (doc-string 3))
   (let* ((doc (if (stringp (car-safe options-and-methods))
                   (pop options-and-methods)))
@@ -210,12 +223,16 @@ BODY, if present, is used as the body of a default method.
     (when options-and-methods
       ;; Anything remaining is assumed to be a default method body.
       (push `(,args ,@options-and-methods) methods))
-    `(progn
-       ,(when (eq 'setf (car-safe name))
-          (pcase-let ((`(,setter . ,code) (cl--generic-setf-rewrite
-                                           (cadr name))))
-            (setq name setter)
-            code))
+    (when (eq 'setf (car-safe name))
+      (require 'gv)
+      (setq name (gv-setter (cadr name))))
+    `(prog1
+         (progn
+           (defalias ',name
+             (cl-generic-define ',name ',args ',(nreverse options))
+             ,(help-add-fundoc-usage doc args))
+           ,@(mapcar (lambda (method) `(cl-defmethod ,name ,@method))
+                     (nreverse methods)))
        ,@(mapcar (lambda (declaration)
                    (let ((f (cdr (assq (car declaration)
                                        defun-declarations-alist))))
@@ -224,27 +241,27 @@ BODY, if present, is used as the body of a default method.
                       (t (message "Warning: Unknown defun property `%S' in %S"
                                   (car declaration) name)
                          nil))))
-                 (cdr declarations))
-       (defalias ',name
-         (cl-generic-define ',name ',args ',(nreverse options))
-         ,(help-add-fundoc-usage doc args))
-       ,@(mapcar (lambda (method) `(cl-defmethod ,name ,@method))
-                 (nreverse methods)))))
+                 (cdr declarations)))))
 
 ;;;###autoload
 (defun cl-generic-define (name args options)
-  (pcase-let* ((generic (cl-generic-ensure-function name))
+  (pcase-let* ((generic (cl-generic-ensure-function name 'noerror))
                (`(,spec-args . ,_) (cl--generic-split-args args))
                (mandatory (mapcar #'car spec-args))
                (apo (assq :argument-precedence-order options)))
-    (setf (cl--generic-dispatches generic) nil)
+    (unless (fboundp name)
+      ;; If the generic function was fmakunbound, throw away previous methods.
+      (setf (cl--generic-dispatches generic) nil)
+      (setf (cl--generic-method-table generic) nil))
     (when apo
       (dolist (arg (cdr apo))
         (let ((pos (memq arg mandatory)))
           (unless pos (error "%S is not a mandatory argument" arg))
-          (push (list (- (length mandatory) (length pos)))
-                (cl--generic-dispatches generic)))))
-    (setf (cl--generic-method-table generic) nil)
+          (let* ((argno (- (length mandatory) (length pos)))
+                 (dispatches (cl--generic-dispatches generic))
+                 (dispatch (or (assq argno dispatches) (list argno))))
+            (setf (cl--generic-dispatches generic)
+                  (cons dispatch (delq dispatch dispatches)))))))
     (setf (cl--generic-options generic) options)
     (cl--generic-make-function generic)))
 
@@ -252,6 +269,15 @@ BODY, if present, is used as the body of a default method.
   "List of (VAR . TYPE) where TYPE is var's specializer.
 This macro can only be used within the lexical scope of a cl-generic method."
   (error "cl-generic-current-method-specializers used outside of a method"))
+
+(defmacro cl-generic-define-context-rewriter (name args &rest body)
+  "Define a special kind of context named NAME.
+Whenever a context specializer of the form (NAME . ARGS) appears,
+the specializer used will be the one returned by BODY."
+  (declare (debug (&define name lambda-list def-body)) (indent defun))
+  `(eval-and-compile
+     (put ',name 'cl-generic--context-rewriter
+          (lambda ,args ,@body))))
 
 (eval-and-compile         ;Needed while compiling the cl-defmethod calls below!
   (defun cl--generic-fgrep (vars sexp)    ;Copied from pcase.el.
@@ -279,6 +305,11 @@ This macro can only be used within the lexical scope of a cl-generic method."
                 ((let 'context mandatory)
                  (unless (consp arg)
                    (error "Invalid &context arg: %S" arg))
+                 (let* ((name (car arg))
+                        (rewriter
+                         (and (symbolp name)
+                              (get name 'cl-generic--context-rewriter))))
+                   (if rewriter (setq arg (apply rewriter (cdr arg)))))
                  (push `((&context . ,(car arg)) . ,(cadr arg)) specializers)
                  nil)
                 (`(,name . ,type)
@@ -328,15 +359,35 @@ This macro can only be used within the lexical scope of a cl-generic method."
                             ,nbody))))))
         (f (error "Unexpected macroexpansion result: %S" f))))))
 
+(put 'cl-defmethod 'function-documentation
+     '(cl--generic-make-defmethod-docstring))
+
+(defun cl--generic-make-defmethod-docstring ()
+  ;; FIXME: Copy&paste from pcase--make-docstring.
+  (let* ((main (documentation (symbol-function 'cl-defmethod) 'raw))
+         (ud (help-split-fundoc main 'cl-defmethod)))
+    ;; So that eg emacs -Q -l cl-lib --eval "(documentation 'pcase)" works,
+    ;; where cl-lib is anything using pcase-defmacro.
+    (require 'help-fns)
+    (with-temp-buffer
+      (insert (or (cdr ud) main))
+      (insert "\n\n\tCurrently supported forms for TYPE:\n\n")
+      (dolist (method (reverse (cl--generic-method-table
+                                (cl--generic 'cl-generic-generalizers))))
+        (let* ((info (cl--generic-method-info method)))
+          (when (nth 2 info)
+          (insert (nth 2 info) "\n\n"))))
+      (let ((combined-doc (buffer-string)))
+        (if ud (help-add-fundoc-usage combined-doc (car ud)) combined-doc)))))
 
 ;;;###autoload
 (defmacro cl-defmethod (name args &rest body)
   "Define a new method for generic function NAME.
 I.e. it defines the implementation of NAME to use for invocations where the
-value of the dispatch argument matches the specified TYPE.
-The dispatch argument has to be one of the mandatory arguments, and
-all methods of NAME have to use the same argument for dispatch.
-The dispatch argument and TYPE are specified in ARGS where the corresponding
+values of the dispatch arguments match the specified TYPEs.
+The dispatch arguments have to be among the mandatory arguments, and
+all methods of NAME have to use the same set of arguments for dispatch.
+Each dispatch argument and TYPE are specified in ARGS where the corresponding
 formal argument appears as (VAR TYPE) rather than just VAR.
 
 The optional second argument QUALIFIER is a specifier that
@@ -345,9 +396,17 @@ modifies how the method is combined with other methods, including:
    :after   - Method will be called after the primary
    :around  - Method will be called around everything else
 The absence of QUALIFIER means this is a \"primary\" method.
+The set of acceptable qualifiers and their meaning is defined
+\(and can be extended) by the methods of `cl-generic-combine-methods'.
 
-Other than a type, TYPE can also be of the form `(eql VAL)' in
-which case this method will be invoked when the argument is `eql' to VAL.
+ARGS can also include so-called context specializers, introduced by
+`&context' (which should appear right after the mandatory arguments,
+before any &optional or &rest).  They have the form (EXPR TYPE) where
+EXPR is an Elisp expression whose value should match TYPE for the
+method to be applicable.
+
+The set of acceptable TYPEs (also called \"specializers\") is defined
+\(and can be extended) by the various methods of `cl-generic-generalizers'.
 
 \(fn NAME [QUALIFIER] ARGS &rest [DOCSTRING] BODY)"
   (declare (doc-string 3) (indent 2)
@@ -359,18 +418,15 @@ which case this method will be invoked when the argument is `eql' to VAL.
              list                       ; arguments
              [ &optional stringp ]      ; documentation string
              def-body)))                ; part to be debugged
-  (let ((qualifiers nil)
-        (setfizer (if (eq 'setf (car-safe name))
-                      ;; Call it before we call cl--generic-lambda.
-                      (cl--generic-setf-rewrite (cadr name)))))
+  (let ((qualifiers nil))
     (while (not (listp args))
       (push args qualifiers)
       (setq args (pop body)))
+    (when (eq 'setf (car-safe name))
+      (require 'gv)
+      (setq name (gv-setter (cadr name))))
     (pcase-let* ((`(,uses-cnm . ,fun) (cl--generic-lambda args body)))
       `(progn
-         ,(when setfizer
-            (setq name (car setfizer))
-            (cdr setfizer))
          ,(and (get name 'byte-obsolete-info)
                (or (not (fboundp 'byte-compile-warning-enabled-p))
                    (byte-compile-warning-enabled-p 'obsolete))
@@ -382,7 +438,8 @@ which case this method will be invoked when the argument is `eql' to VAL.
          ;; function, so warnings like "not known to be defined" are fair game.
          ;; But in practice, it's common to use `cl-defmethod'
          ;; without a previous `cl-defgeneric'.
-         (declare-function ,name "")
+         ;; The ",'" is a no-op that pacifies check-declare.
+         (,'declare-function ,name "")
          (cl-generic-define-method ',name ',(nreverse qualifiers) ',args
                                    ,uses-cnm ,fun)))))
 
@@ -394,6 +451,12 @@ which case this method will be invoked when the argument is `eql' to VAL.
                        (equal (cl--generic-method-qualifiers m) qualifiers)))))
     (setq methods (cdr methods)))
   methods)
+
+(defun cl--generic-load-hist-format (name qualifiers specializers)
+  ;; FIXME: This function is used in elisp-mode.el and
+  ;; elisp-mode-tests.el, but I still decided to use an internal name
+  ;; because these uses should be removed or moved into cl-generic.el.
+  `(,name ,qualifiers . ,specializers))
 
 ;;;###autoload
 (defun cl-generic-define-method (name qualifiers args uses-cnm function)
@@ -427,9 +490,17 @@ which case this method will be invoked when the argument is `eql' to VAL.
                           (> (cl--generic-generalizer-priority x)
                              (cl--generic-generalizer-priority y)))))))
         (setq i (1+ i))))
-    (if me (setcar me method)
-      (setf (cl--generic-method-table generic) (cons method mt)))
-    (cl-pushnew `(cl-defmethod . (,(cl--generic-name generic) . ,specializers))
+    ;; We used to (setcar me method), but that can cause false positives in
+    ;; the hash-consing table of the method-builder (bug#20644).
+    ;; See also the related FIXME in cl--generic-build-combined-method.
+    (setf (cl--generic-method-table generic)
+          (if (null me)
+              (cons method mt)
+            ;; Keep the ordering; important for methods with :extra qualifiers.
+            (mapcar (lambda (x) (if (eq x (car me)) method x)) mt)))
+    (cl-pushnew `(cl-defmethod . ,(cl--generic-load-hist-format
+                                   (cl--generic-name generic)
+                                   qualifiers specializers))
                 current-load-list :test #'equal)
     ;; FIXME: Try to avoid re-constructing a new function if the old one
     ;; is still valid (e.g. still empty method cache)?
@@ -438,16 +509,14 @@ which case this method will be invoked when the argument is `eql' to VAL.
           ;; the generic function.
           current-load-list)
       ;; For aliases, cl--generic-name gives us the actual name.
-      (funcall
-       (if purify-flag
-           ;; BEWARE!  Don't purify this function definition, since that leads
-           ;; to memory corruption if the hash-tables it holds are modified
-           ;; (the GC doesn't trace those pointers).
-           #'fset
-         ;; But do use `defalias' in the normal case, so that it interacts
-         ;; properly with nadvice, e.g. for tracing/debug-on-entry.
-         #'defalias)
-       (cl--generic-name generic) gfun))))
+      (let ((purify-flag
+             ;; BEWARE!  Don't purify this function definition, since that leads
+             ;; to memory corruption if the hash-tables it holds are modified
+             ;; (the GC doesn't trace those pointers).
+             nil))
+        ;; But do use `defalias', so that it interacts properly with nadvice,
+        ;; e.g. for tracing/debug-on-entry.
+        (defalias (cl--generic-name generic) gfun)))))
 
 (defmacro cl--generic-with-memoization (place &rest code)
   (declare (indent 1) (debug t))
@@ -525,7 +594,7 @@ which case this method will be invoked when the argument is `eql' to VAL.
           (progn
             (while (and dispatches
                         (let ((x (nth 1 (car dispatches))))
-                          ;; No need to dispatch for `t' specializers.
+                          ;; No need to dispatch for t specializers.
                           (or (null x) (equal x cl--generic-t-generalizer))))
               (setq dispatches (cdr dispatches)))
             (pop dispatches))))
@@ -634,16 +703,28 @@ FUN is the function that should be called when METHOD calls
           (setq fun (cl-generic-call-method generic method fun)))
         fun)))))
 
+(defun cl-generic-apply (generic args)
+  "Like `apply' but takes a cl-generic object rather than a function."
+  ;; Handy in cl-no-applicable-method, for example.
+  ;; In Common Lisp, generic-function objects are funcallable.  Ideally
+  ;; we'd want the same in Elisp, but it would either require using a very
+  ;; different (and less efficient) representation of cl--generic objects,
+  ;; or non-trivial changes in the general infrastructure (compiler and such).
+  (apply (cl--generic-name generic) args))
+
+(defun cl--generic-arg-specializer (method dispatch-arg)
+  (or (if (integerp dispatch-arg)
+          (nth dispatch-arg
+               (cl--generic-method-specializers method))
+        (cdr (assoc dispatch-arg
+                    (cl--generic-method-specializers method))))
+      t))
+
 (defun cl--generic-cache-miss (generic
                                dispatch-arg dispatches-left methods-left types)
   (let ((methods '()))
     (dolist (method methods-left)
-      (let* ((specializer (or (if (integerp dispatch-arg)
-                                  (nth dispatch-arg
-                                       (cl--generic-method-specializers method))
-                                (cdr (assoc dispatch-arg
-                                            (cl--generic-method-specializers method))))
-                              t))
+      (let* ((specializer (cl--generic-arg-specializer method dispatch-arg))
              (m (member specializer types)))
         (when m
           (push (cons (length m) method) methods))))
@@ -683,7 +764,6 @@ The tags should be chosen according to the following rules:
   This is because the method-cache is only indexed with the first non-nil
   tag (by order of decreasing priority).")
 
-
 (cl-defgeneric cl-generic-combine-methods (generic methods)
   "Build the effective method made of METHODS.
 It should return a function that expects the same arguments as the methods, and
@@ -694,17 +774,23 @@ The METHODS list is sorted from most specific first to most generic last.
 The function can use `cl-generic-call-method' to create functions that call those
 methods.")
 
-;; Temporary definition to let the next defmethod succeed.
-(fset 'cl-generic-generalizers
-      (lambda (_specializer) (list cl--generic-t-generalizer)))
-(fset 'cl-generic-combine-methods
-      #'cl--generic-standard-method-combination)
+(unless (ignore-errors (cl-generic-generalizers t))
+  ;; Temporary definition to let the next defmethod succeed.
+  (fset 'cl-generic-generalizers
+        (lambda (specializer)
+          (if (eq t specializer) (list cl--generic-t-generalizer))))
+  (fset 'cl-generic-combine-methods #'cl--generic-standard-method-combination))
 
 (cl-defmethod cl-generic-generalizers (specializer)
-  "Support for the catch-all `t' specializer."
+  "Support for the catch-all t specializer which always matches."
   (if (eq specializer t) (list cl--generic-t-generalizer)
     (error "Unknown specializer %S" specializer)))
 
+(eval-when-compile
+  ;; This macro is brittle and only really important in order to be
+  ;; able to preload cl-generic without also preloading the byte-compiler,
+  ;; So we use `eval-when-compile' so as not keep it available longer than
+  ;; strictly needed.
 (defmacro cl--generic-prefill-dispatchers (arg-or-context specializer)
   (unless (integerp arg-or-context)
     (setq arg-or-context `(&context . ,arg-or-context)))
@@ -722,7 +808,7 @@ methods.")
                        ,@(cl-generic-generalizers ',specializer)
                        ,cl--generic-t-generalizer)))
        ;; (message "Prefilling for %S with \n%S" dispatch ',fun)
-       (puthash dispatch ',fun cl--generic-dispatchers))))
+       (puthash dispatch ',fun cl--generic-dispatchers)))))
 
 (cl-defmethod cl-generic-combine-methods (generic methods)
   "Standard support for :after, :before, :around, and `:extra NAME' qualifiers."
@@ -761,10 +847,10 @@ methods.")
 
 ;;; Define some pre-defined generic functions, used internally.
 
-(define-error 'cl-no-method "No method for %S")
-(define-error 'cl-no-next-method "No next method for %S" 'cl-no-method)
-(define-error 'cl-no-primary-method "No primary method for %S" 'cl-no-method)
-(define-error 'cl-no-applicable-method "No applicable method for %S"
+(define-error 'cl-no-method "No method")
+(define-error 'cl-no-next-method "No next method" 'cl-no-method)
+(define-error 'cl-no-primary-method "No primary method" 'cl-no-method)
+(define-error 'cl-no-applicable-method "No applicable method"
   'cl-no-method)
 
 (cl-defgeneric cl-no-next-method (generic method &rest args)
@@ -796,31 +882,39 @@ Can only be used from within the lexical body of a primary or around method."
         specializers qualifiers
         (cl--generic-method-table (cl--generic generic)))))
 
-(defalias 'cl-method-qualifiers 'cl--generic-method-qualifiers)
-
 ;;; Add support for describe-function
 
 (defun cl--generic-search-method (met-name)
+  "For `find-function-regexp-alist'. Searches for a cl-defmethod.
+MET-NAME is as returned by `cl--generic-load-hist-format'."
   (let ((base-re (concat "(\\(?:cl-\\)?defmethod[ \t]+"
                          (regexp-quote (format "%s" (car met-name)))
 			 "\\_>")))
     (or
      (re-search-forward
       (concat base-re "[^&\"\n]*"
+              (mapconcat (lambda (qualifier)
+                           (regexp-quote (format "%S" qualifier)))
+                         (cadr met-name)
+                         "[ \t\n]*")
               (mapconcat (lambda (specializer)
                            (regexp-quote
                             (format "%S" (if (consp specializer)
                                              (nth 1 specializer) specializer))))
-                         (remq t (cdr met-name))
+                         (remq t (cddr met-name))
                          "[ \t\n]*)[^&\"\n]*"))
       nil t)
      (re-search-forward base-re nil t))))
 
+;; WORKAROUND: This can't be a defconst due to bug#21237.
+(defvar cl--generic-find-defgeneric-regexp "(\\(?:cl-\\)?defgeneric[ \t]+%s\\>")
 
 (with-eval-after-load 'find-func
   (defvar find-function-regexp-alist)
   (add-to-list 'find-function-regexp-alist
-               `(cl-defmethod . ,#'cl--generic-search-method)))
+               `(cl-defmethod . ,#'cl--generic-search-method))
+  (add-to-list 'find-function-regexp-alist
+               `(cl-defgeneric . cl--generic-find-defgeneric-regexp)))
 
 (defun cl--generic-method-info (method)
   (let* ((specializers (cl--generic-method-specializers method))
@@ -850,6 +944,9 @@ Can only be used from within the lexical body of a primary or around method."
 
 (add-hook 'help-fns-describe-function-functions #'cl--generic-describe)
 (defun cl--generic-describe (function)
+  ;; Supposedly this is called from help-fns, so help-fns should be loaded at
+  ;; this point.
+  (declare-function help-fns-short-filename "help-fns" (filename))
   (let ((generic (if (symbolp function) (cl--generic function))))
     (when generic
       (require 'help-mode)              ;Needed for `help-function-def' button!
@@ -861,16 +958,67 @@ Can only be used from within the lexical body of a primary or around method."
           (let* ((info (cl--generic-method-info method)))
             ;; FIXME: Add hyperlinks for the types as well.
             (insert (format "%s%S" (nth 0 info) (nth 1 info)))
-            (let* ((met-name (cons function
-                                   (cl--generic-method-specializers method)))
+            (let* ((met-name (cl--generic-load-hist-format
+                              function
+                              (cl--generic-method-qualifiers method)
+                              (cl--generic-method-specializers method)))
                    (file (find-lisp-object-file-name met-name 'cl-defmethod)))
               (when file
-                (insert " in `")
+                (insert (substitute-command-keys " in `"))
                 (help-insert-xref-button (help-fns-short-filename file)
                                          'help-function-def met-name file
                                          'cl-defmethod)
-                (insert "'.\n")))
+                (insert (substitute-command-keys "'.\n"))))
             (insert "\n" (or (nth 2 info) "Undocumented") "\n\n")))))))
+
+(defun cl--generic-specializers-apply-to-type-p (specializers type)
+  "Return non-nil if a method with SPECIALIZERS applies to TYPE."
+  (let ((applies nil))
+    (dolist (specializer specializers)
+      (if (memq (car-safe specializer) '(subclass eieio--static))
+          (setq specializer (nth 1 specializer)))
+      ;; Don't include the methods that are "too generic", such as those
+      ;; applying to `eieio-default-superclass'.
+      (and (not (memq specializer '(t eieio-default-superclass)))
+           (or (equal type specializer)
+               (when (symbolp specializer)
+                 (let ((sclass (cl--find-class specializer))
+                       (tclass (cl--find-class type)))
+                   (when (and sclass tclass)
+                     (member specializer (cl--generic-class-parents tclass))))))
+           (setq applies t)))
+    applies))
+
+(defun cl-generic-all-functions (&optional type)
+  "Return a list of all generic functions.
+Optional TYPE argument returns only those functions that contain
+methods for TYPE."
+  (let ((l nil))
+    (mapatoms
+     (lambda (symbol)
+       (let ((generic (and (fboundp symbol) (cl--generic symbol))))
+         (and generic
+	      (catch 'found
+		(if (null type) (throw 'found t))
+		(dolist (method (cl--generic-method-table generic))
+		  (if (cl--generic-specializers-apply-to-type-p
+		       (cl--generic-method-specializers method) type)
+		      (throw 'found t))))
+	      (push symbol l)))))
+    l))
+
+(defun cl--generic-method-documentation (function type)
+  "Return info for all methods of FUNCTION (a symbol) applicable to TYPE.
+The value returned is a list of elements of the form
+\(QUALIFIERS ARGS DOC)."
+  (let ((generic (cl--generic function))
+        (docs ()))
+    (when generic
+      (dolist (method (cl--generic-method-table generic))
+        (when (cl--generic-specializers-apply-to-type-p
+               (cl--generic-method-specializers method) type)
+          (push (cl--generic-method-info method) docs))))
+    docs))
 
 ;;; Support for (head <val>) specializers.
 
@@ -892,13 +1040,13 @@ Can only be used from within the lexical body of a primary or around method."
 
 (defvar cl--generic-head-used (make-hash-table :test #'eql))
 
-(defconst cl--generic-head-generalizer
-  (cl-generic-make-generalizer
-   80 (lambda (name) `(gethash (car-safe ,name) cl--generic-head-used))
-   (lambda (tag) (if (eq (car-safe tag) 'head) (list tag)))))
+(cl-generic-define-generalizer cl--generic-head-generalizer
+  80 (lambda (name &rest _) `(gethash (car-safe ,name) cl--generic-head-used))
+  (lambda (tag &rest _) (if (eq (car-safe tag) 'head) (list tag))))
 
 (cl-defmethod cl-generic-generalizers :extra "head" (specializer)
-  "Support for the `(head VAL)' specializers."
+  "Support for (head VAL) specializers.
+These match if the argument is a cons cell whose car is `eql' to VAL."
   ;; We have to implement `head' here using the :extra qualifier,
   ;; since we can't use the `head' specializer to implement itself.
   (if (not (eq (car-safe specializer) 'head))
@@ -913,22 +1061,26 @@ Can only be used from within the lexical body of a primary or around method."
 
 (defvar cl--generic-eql-used (make-hash-table :test #'eql))
 
-(defconst cl--generic-eql-generalizer
-  (cl-generic-make-generalizer
-   100 (lambda (name) `(gethash ,name cl--generic-eql-used))
-   (lambda (tag) (if (eq (car-safe tag) 'eql) (list tag)))))
+(cl-generic-define-generalizer cl--generic-eql-generalizer
+  100 (lambda (name &rest _) `(gethash ,name cl--generic-eql-used))
+  (lambda (tag &rest _) (if (eq (car-safe tag) 'eql) (list tag))))
 
 (cl-defmethod cl-generic-generalizers ((specializer (head eql)))
-  "Support for the `(eql VAL)' specializers."
+  "Support for (eql VAL) specializers.
+These match if the argument is `eql' to VAL."
   (puthash (cadr specializer) specializer cl--generic-eql-used)
   (list cl--generic-eql-generalizer))
 
 (cl--generic-prefill-dispatchers 0 (eql nil))
 (cl--generic-prefill-dispatchers window-system (eql nil))
+(cl--generic-prefill-dispatchers (terminal-parameter nil 'xterm--get-selection)
+                                 (eql nil))
+(cl--generic-prefill-dispatchers (terminal-parameter nil 'xterm--set-selection)
+                                 (eql nil))
 
 ;;; Support for cl-defstructs specializers.
 
-(defun cl--generic-struct-tag (name)
+(defun cl--generic-struct-tag (name &rest _)
   ;; It's tempting to use (and (vectorp ,name) (aref ,name 0))
   ;; but that would suffer from some problems:
   ;; - the vector may have size 0.
@@ -944,30 +1096,33 @@ Can only be used from within the lexical body of a primary or around method."
   `(and (vectorp ,name)
         (> (length ,name) 0)
         (let ((tag (aref ,name 0)))
-          (if (eq (symbol-function tag) :quick-object-witness-check)
-              tag))))
+          (and (symbolp tag)
+               (eq (symbol-function tag) :quick-object-witness-check)
+               tag))))
 
-(defun cl--generic-struct-specializers (tag)
+(defun cl--generic-class-parents (class)
+  (let ((parents ())
+        (classes (list class)))
+    ;; BFS precedence.  FIXME: Use a topological sort.
+    (while (let ((class (pop classes)))
+             (cl-pushnew (cl--class-name class) parents)
+             (setq classes
+                   (append classes
+                           (cl--class-parents class)))))
+    (nreverse parents)))
+
+(defun cl--generic-struct-specializers (tag &rest _)
   (and (symbolp tag) (boundp tag)
        (let ((class (symbol-value tag)))
          (when (cl-typep class 'cl-structure-class)
-           (let ((types ())
-                 (classes (list class)))
-             ;; BFS precedence.
-             (while (let ((class (pop classes)))
-                      (push (cl--class-name class) types)
-                      (setq classes
-                            (append classes
-                                    (cl--class-parents class)))))
-             (nreverse types))))))
+           (cl--generic-class-parents class)))))
 
-(defconst cl--generic-struct-generalizer
-  (cl-generic-make-generalizer
-   50 #'cl--generic-struct-tag
-   #'cl--generic-struct-specializers))
+(cl-generic-define-generalizer cl--generic-struct-generalizer
+  50 #'cl--generic-struct-tag
+  #'cl--generic-struct-specializers)
 
 (cl-defmethod cl-generic-generalizers :extra "cl-struct" (type)
-  "Support for dispatch on cl-struct types."
+  "Support for dispatch on types defined by `cl-defstruct'."
   (or
    (when (symbolp type)
      ;; Use the "cl--struct-class*" (inlinable) functions/macros rather than
@@ -1004,25 +1159,61 @@ Can only be used from within the lexical body of a primary or around method."
     (sequence)
     (number)))
 
-(defconst cl--generic-typeof-generalizer
-  (cl-generic-make-generalizer
-   ;; FIXME: We could also change `type-of' to return `null' for nil.
-   10 (lambda (name) `(if ,name (type-of ,name) 'null))
-   (lambda (tag) (and (symbolp tag) (assq tag cl--generic-typeof-types)))))
+(cl-generic-define-generalizer cl--generic-typeof-generalizer
+  ;; FIXME: We could also change `type-of' to return `null' for nil.
+  10 (lambda (name &rest _) `(if ,name (type-of ,name) 'null))
+  (lambda (tag &rest _)
+    (and (symbolp tag) (assq tag cl--generic-typeof-types))))
 
 (cl-defmethod cl-generic-generalizers :extra "typeof" (type)
-  "Support for dispatch on builtin types."
+  "Support for dispatch on builtin types.
+See the full list and their hierarchy in `cl--generic-typeof-types'."
   ;; FIXME: Add support for other types accepted by `cl-typep' such
   ;; as `character', `atom', `face', `function', ...
   (or
    (and (assq type cl--generic-typeof-types)
         (progn
-          (if (memq type '(vector array sequence))
-              (message "`%S' also matches CL structs and EIEIO classes" type))
+          ;; FIXME: While this wrinkle in the semantics can be occasionally
+          ;; problematic, this warning is more often annoying than helpful.
+          ;;(if (memq type '(vector array sequence))
+          ;;    (message "`%S' also matches CL structs and EIEIO classes"
+          ;;             type))
           (list cl--generic-typeof-generalizer)))
    (cl-call-next-method)))
 
 (cl--generic-prefill-dispatchers 0 integer)
+
+;;; Dispatch on major mode.
+
+;; Two parts:
+;; - first define a specializer (derived-mode <mode>) to match symbols
+;;   representing major modes, while obeying the major mode hierarchy.
+;; - then define a context-rewriter so you can write
+;;   "&context (major-mode c-mode)" rather than
+;;   "&context (major-mode (derived-mode c-mode))".
+
+(defun cl--generic-derived-specializers (mode &rest _)
+  ;; FIXME: Handle (derived-mode <mode1> ... <modeN>)
+  (let ((specializers ()))
+    (while mode
+      (push `(derived-mode ,mode) specializers)
+      (setq mode (get mode 'derived-mode-parent)))
+    (nreverse specializers)))
+
+(cl-generic-define-generalizer cl--generic-derived-generalizer
+  90 (lambda (name) `(and (symbolp ,name) (functionp ,name) ,name))
+  #'cl--generic-derived-specializers)
+
+(cl-defmethod cl-generic-generalizers ((_specializer (head derived-mode)))
+  "Support for (derived-mode MODE) specializers.
+Used internally for the (major-mode MODE) context specializers."
+  (list cl--generic-derived-generalizer))
+
+(cl-generic-define-context-rewriter major-mode (mode &rest modes)
+  `(major-mode ,(if (consp mode)
+                    ;;E.g. could be (eql ...)
+                    (progn (cl-assert (null modes)) mode)
+                  `(derived-mode ,mode . ,modes))))
 
 ;; Local variables:
 ;; generated-autoload-file: "cl-loaddefs.el"

@@ -1,6 +1,6 @@
 ;;; esh-util.el --- general utilities  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -33,7 +33,7 @@
 ;;; User Variables:
 
 (defcustom eshell-stringify-t t
-  "If non-nil, the string representation of t is 't'.
+  "If non-nil, the string representation of t is \"t\".
 If nil, t will be represented only in the exit code of the function,
 and not printed as a string.  This causes Lisp functions to behave
 similarly to external commands, as far as successful result output."
@@ -88,7 +88,7 @@ specification of filenames (for example, in calling `find-file', or
 some other Lisp function that deals with files, not numbers), add the
 following in your init file:
 
-  (put 'find-file 'eshell-no-numeric-conversions t)
+  (put \\='find-file \\='eshell-no-numeric-conversions t)
 
 Any function with the property `eshell-no-numeric-conversions' set to
 a non-nil value, will be passed strings, not numbers, even when an
@@ -228,7 +228,7 @@ If N or M is nil, it means the end of the list."
 
 (defvar eshell-path-env (getenv "PATH")
   "Content of $PATH.
-It might be different from \(getenv \"PATH\"\), when
+It might be different from \(getenv \"PATH\"), when
 `default-directory' points to a remote host.")
 (make-variable-buffer-local 'eshell-path-env)
 
@@ -678,8 +678,8 @@ If NOSORT is non-nil, the list is not sorted--its order is unpredictable.
 (defun eshell-file-attributes (file &optional id-format)
   "Return the attributes of FILE, playing tricks if it's over ange-ftp.
 The optional argument ID-FORMAT specifies the preferred uid and
-gid format.  Valid values are 'string and 'integer, defaulting to
-'integer.  See `file-attributes'."
+gid format.  Valid values are `string' and `integer', defaulting to
+`integer'.  See `file-attributes'."
   (let* ((file (expand-file-name file))
 	 entry)
     (if (string-equal (file-remote-p file 'method) "ftp")

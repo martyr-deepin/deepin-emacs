@@ -1,6 +1,6 @@
 ;;; tooltip.el --- show tooltip windows
 
-;; Copyright (C) 1997, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Gerd Moellmann <gerd@acm.org>
 ;; Keywords: help c mouse tools
@@ -127,7 +127,9 @@ position to pop up the tooltip.
 
 Note that font and color parameters are ignored, and the attributes
 of the `tooltip' face are used instead."
-  :type 'sexp
+  :type '(repeat (cons :format "%v"
+		       (symbol :tag "Parameter")
+		       (sexp :tag "Value")))
   :group 'tooltip)
 
 (defface tooltip

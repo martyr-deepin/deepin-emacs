@@ -1,5 +1,5 @@
 /* Deal with the X Resource Manager.
-   Copyright (C) 1990, 1993-1994, 2000-2015 Free Software Foundation,
+   Copyright (C) 1990, 1993-1994, 2000-2017 Free Software Foundation,
    Inc.
 
 Author: Joseph Arceneaux
@@ -9,8 +9,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -41,11 +41,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <X11/Xresource.h>
 #ifdef HAVE_PWD_H
 #include <pwd.h>
-#endif
-
-#ifdef USE_MOTIF
-/* For Vdouble_click_time.  */
-#include "keyboard.h"
 #endif
 
 /* X file search path processing.  */
@@ -119,8 +114,8 @@ magic_db (const char *string, ptrdiff_t string_len, const char *class,
   while (p < string + string_len)
     {
       /* The chunk we're about to stick on the end of result.  */
-      const char *next = NULL;
-      ptrdiff_t next_len;
+      const char *next = p;
+      ptrdiff_t next_len = 1;
 
       if (*p == '%')
 	{
@@ -137,10 +132,13 @@ magic_db (const char *string, ptrdiff_t string_len, const char *class,
 		break;
 
 	      case 'C':
-		next = (x_customization_string
-			? x_customization_string
-			: "");
-		next_len = strlen (next);
+		if (x_customization_string)
+		  {
+		    next = x_customization_string;
+		    next_len = strlen (next);
+		  }
+		else
+		  next_len = 0;
 		break;
 
 	      case 'N':
@@ -176,17 +174,11 @@ magic_db (const char *string, ptrdiff_t string_len, const char *class,
 		return NULL;
 	      }
 	}
-      else
-	next = p, next_len = 1;
 
       /* Do we have room for this component followed by a '\0'?  */
       if (path_size - path_len <= next_len)
-	{
-	  if (min (PTRDIFF_MAX, SIZE_MAX) / 2 - 1 - path_len < next_len)
-	    memory_full (SIZE_MAX);
-	  path_size = (path_len + next_len + 1) * 2;
-	  path = xrealloc (path, path_size);
-	}
+	path = xpalloc (path, &path_size, path_len - path_size + next_len + 1,
+			-1, sizeof *path);
 
       memcpy (path + path_len, next, next_len);
       path_len += next_len;

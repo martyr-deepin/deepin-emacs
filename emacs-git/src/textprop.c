@@ -1,13 +1,13 @@
 /* Interface code for dealing with text properties.
-   Copyright (C) 1993-1995, 1997, 1999-2015 Free Software Foundation,
+   Copyright (C) 1993-1995, 1997, 1999-2017 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,7 +21,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "lisp.h"
 #include "intervals.h"
-#include "character.h"
 #include "buffer.h"
 #include "window.h"
 
@@ -212,7 +211,7 @@ validate_plist (Lisp_Object list)
 	  if (! CONSP (tail))
 	    error ("Odd length text property list");
 	  tail = XCDR (tail);
-	  QUIT;
+	  maybe_quit ();
 	}
       while (CONSP (tail));
 
@@ -375,15 +374,10 @@ add_properties (Lisp_Object plist, INTERVAL i, Lisp_Object object,
 {
   Lisp_Object tail1, tail2, sym1, val1;
   bool changed = false;
-  struct gcpro gcpro1, gcpro2, gcpro3;
 
   tail1 = plist;
   sym1 = Qnil;
   val1 = Qnil;
-  /* No need to protect OBJECT, because we can GC only in the case
-     where it is a buffer, and live buffers are always protected.
-     I and its plist are also protected, via OBJECT.  */
-  GCPRO3 (tail1, sym1, val1);
 
   /* Go through each element of PLIST.  */
   for (tail1 = plist; CONSP (tail1); tail1 = Fcdr (XCDR (tail1)))
@@ -396,9 +390,7 @@ add_properties (Lisp_Object plist, INTERVAL i, Lisp_Object object,
       for (tail2 = i->plist; CONSP (tail2); tail2 = Fcdr (XCDR (tail2)))
 	if (EQ (sym1, XCAR (tail2)))
 	  {
-	    /* No need to gcpro, because tail2 protects this
-	       and it must be a cons cell (we get an error otherwise).  */
-	    register Lisp_Object this_cdr;
+	    Lisp_Object this_cdr;
 
 	    this_cdr = XCDR (tail2);
 	    /* Found the property.  Now check its value.  */
@@ -455,8 +447,6 @@ add_properties (Lisp_Object plist, INTERVAL i, Lisp_Object object,
 	  changed = true;
 	}
     }
-
-  UNGCPRO;
 
   return changed;
 }
@@ -1160,7 +1150,6 @@ add_text_properties_1 (Lisp_Object start, Lisp_Object end,
   INTERVAL i, unchanged;
   ptrdiff_t s, len;
   bool modified = false;
-  struct gcpro gcpro1;
   bool first_time = true;
 
   properties = validate_plist (properties);
@@ -1178,10 +1167,6 @@ add_text_properties_1 (Lisp_Object start, Lisp_Object end,
   s = XINT (start);
   len = XINT (end) - s;
 
-  /* No need to protect OBJECT, because we GC only if it's a buffer,
-     and live buffers are always protected.  */
-  GCPRO1 (properties);
-
   /* If this interval already has the properties, we can skip it.  */
   if (interval_has_all_properties (properties, i))
     {
@@ -1190,7 +1175,7 @@ add_text_properties_1 (Lisp_Object start, Lisp_Object end,
       do
 	{
 	  if (got >= len)
-	    RETURN_UNGCPRO (Qnil);
+	    return Qnil;
 	  len -= got;
 	  i = next_interval (i);
 	  got = LENGTH (i);
@@ -1233,11 +1218,6 @@ add_text_properties_1 (Lisp_Object start, Lisp_Object end,
 
       if (LENGTH (i) >= len)
 	{
-	  /* We can UNGCPRO safely here, because there will be just
-	     one more chance to gc, in the next call to add_properties,
-	     and after that we will not need PROPERTIES or OBJECT again.  */
-	  UNGCPRO;
-
 	  if (interval_has_all_properties (properties, i))
 	    {
 	      if (BUFFERP (object))
@@ -1906,7 +1886,6 @@ copy_text_properties (Lisp_Object start, Lisp_Object end, Lisp_Object src,
   Lisp_Object plist;
   ptrdiff_t s, e, e2, p, len;
   bool modified = false;
-  struct gcpro gcpro1, gcpro2;
 
   i = validate_interval_range (src, &start, &end, soft);
   if (!i)
@@ -1964,8 +1943,6 @@ copy_text_properties (Lisp_Object start, Lisp_Object end, Lisp_Object src,
       s = i->position;
     }
 
-  GCPRO2 (stuff, dest);
-
   while (! NILP (stuff))
     {
       res = Fcar (stuff);
@@ -1975,8 +1952,6 @@ copy_text_properties (Lisp_Object start, Lisp_Object end, Lisp_Object src,
 	modified = true;
       stuff = Fcdr (stuff);
     }
-
-  UNGCPRO;
 
   return modified ? Qt : Qnil;
 }
@@ -2047,10 +2022,6 @@ text_property_list (Lisp_Object object, Lisp_Object start, Lisp_Object end, Lisp
 void
 add_text_properties_from_list (Lisp_Object object, Lisp_Object list, Lisp_Object delta)
 {
-  struct gcpro gcpro1, gcpro2;
-
-  GCPRO2 (list, object);
-
   for (; CONSP (list); list = XCDR (list))
     {
       Lisp_Object item, start, end, plist;
@@ -2062,8 +2033,6 @@ add_text_properties_from_list (Lisp_Object object, Lisp_Object list, Lisp_Object
 
       Fadd_text_properties (start, end, plist, object);
     }
-
-  UNGCPRO;
 }
 
 
@@ -2074,18 +2043,19 @@ add_text_properties_from_list (Lisp_Object object, Lisp_Object list, Lisp_Object
    end-points to NEW_END.  */
 
 Lisp_Object
-extend_property_ranges (Lisp_Object list, Lisp_Object new_end)
+extend_property_ranges (Lisp_Object list, Lisp_Object old_end, Lisp_Object new_end)
 {
   Lisp_Object prev = Qnil, head = list;
   ptrdiff_t max = XINT (new_end);
 
   for (; CONSP (list); prev = list, list = XCDR (list))
     {
-      Lisp_Object item, beg, end;
+      Lisp_Object item, beg;
+      ptrdiff_t end;
 
       item = XCAR (list);
       beg = XCAR (item);
-      end = XCAR (XCDR (item));
+      end = XINT (XCAR (XCDR (item)));
 
       if (XINT (beg) >= max)
 	{
@@ -2096,9 +2066,16 @@ extend_property_ranges (Lisp_Object list, Lisp_Object new_end)
 	  else
 	    XSETCDR (prev, XCDR (list));
 	}
-      else if (XINT (end) > max)
-	/* The end-point is past the end of the new string.  */
-	XSETCAR (XCDR (item), new_end);
+      else if ((end == XINT (old_end) && end != max)
+	       || end > max)
+	{
+	  /* Either the end-point is past the end of the new string,
+	     and we need to discard the properties past the new end,
+	     or the caller is extending the property range, and we
+	     should update all end-points that are on the old end of
+	     the range to reflect that.  */
+	  XSETCAR (XCDR (item), new_end);
+	}
     }
 
   return head;
@@ -2111,14 +2088,11 @@ extend_property_ranges (Lisp_Object list, Lisp_Object new_end)
 static void
 call_mod_hooks (Lisp_Object list, Lisp_Object start, Lisp_Object end)
 {
-  struct gcpro gcpro1;
-  GCPRO1 (list);
   while (!NILP (list))
     {
       call2 (Fcar (list), start, end);
       list = Fcdr (list);
     }
-  UNGCPRO;
 }
 
 /* Check for read-only intervals between character positions START ... END,
@@ -2138,7 +2112,6 @@ verify_interval_modification (struct buffer *buf,
   Lisp_Object hooks;
   Lisp_Object prev_mod_hooks;
   Lisp_Object mod_hooks;
-  struct gcpro gcpro1;
 
   hooks = Qnil;
   prev_mod_hooks = Qnil;
@@ -2295,7 +2268,6 @@ verify_interval_modification (struct buffer *buf,
 
       if (!inhibit_modification_hooks)
 	{
-	  GCPRO1 (hooks);
 	  hooks = Fnreverse (hooks);
 	  while (! EQ (hooks, Qnil))
 	    {
@@ -2303,7 +2275,6 @@ verify_interval_modification (struct buffer *buf,
 			      make_number (end));
 	      hooks = Fcdr (hooks);
 	    }
-	  UNGCPRO;
 	}
     }
 }
@@ -2344,8 +2315,16 @@ returned. */);
 
   DEFVAR_LISP ("inhibit-point-motion-hooks", Vinhibit_point_motion_hooks,
 	       doc: /* If non-nil, don't run `point-left' and `point-entered' text properties.
-This also inhibits the use of the `intangible' text property.  */);
-  Vinhibit_point_motion_hooks = Qnil;
+This also inhibits the use of the `intangible' text property.
+
+This variable is obsolete since Emacs-25.1.  Use `cursor-intangible-mode'
+or `cursor-sensor-mode' instead.  */);
+  /* FIXME: We should make-obsolete-variable, but that signals too many
+     warnings in code which does (let ((inhibit-point-motion-hooks t)) ...)
+     Ideally, make-obsolete-variable should let us specify that only the nil
+     value is obsolete, but that requires too many changes in bytecomp.el,
+     so for now we'll keep it "obsolete via the docstring".  */
+  Vinhibit_point_motion_hooks = Qt;
 
   DEFVAR_LISP ("text-property-default-nonsticky",
 	       Vtext_property_default_nonsticky,
@@ -2369,12 +2348,8 @@ inherits it if NONSTICKINESS is nil.  The `front-sticky' and
 
   /* Common attributes one might give text.  */
 
-  DEFSYM (Qforeground, "foreground");
-  DEFSYM (Qbackground, "background");
   DEFSYM (Qfont, "font");
   DEFSYM (Qface, "face");
-  DEFSYM (Qstipple, "stipple");
-  DEFSYM (Qunderline, "underline");
   DEFSYM (Qread_only, "read-only");
   DEFSYM (Qinvisible, "invisible");
   DEFSYM (Qintangible, "intangible");
@@ -2387,8 +2362,6 @@ inherits it if NONSTICKINESS is nil.  The `front-sticky' and
 
   /* Properties that text might use to specify certain actions.  */
 
-  DEFSYM (Qmouse_left, "mouse-left");
-  DEFSYM (Qmouse_entered, "mouse-entered");
   DEFSYM (Qpoint_left, "point-left");
   DEFSYM (Qpoint_entered, "point-entered");
 

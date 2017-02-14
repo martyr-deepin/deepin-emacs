@@ -1,6 +1,6 @@
 ;;; em-tramp.el --- Eshell features that require TRAMP  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Aidan Gauland <aidalgol@no8wireless.co.nz>
 
@@ -72,8 +72,7 @@ Become another USER during a login session.")
 	    (let ((user "root")
 		  (host (or (file-remote-p default-directory 'host)
 			    "localhost"))
-		  (dir (or (file-remote-p default-directory 'localname)
-			   (expand-file-name default-directory)))
+		  (dir (file-local-name (expand-file-name default-directory)))
 		  (prefix (file-remote-p default-directory)))
 	      (dolist (arg args)
 		(if (string-equal arg "-") (setq login t) (setq user arg)))
@@ -111,8 +110,7 @@ Execute a COMMAND as the superuser or another USER.")
 	    (let ((user (or user "root"))
 		  (host (or (file-remote-p default-directory 'host)
 			    "localhost"))
-		  (dir (or (file-remote-p default-directory 'localname)
-			   (expand-file-name default-directory)))
+		  (dir (file-local-name (expand-file-name default-directory)))
 		  (prefix (file-remote-p default-directory)))
 	      ;; `eshell-eval-using-options' reads options of COMMAND.
 	      (while (and (stringp (car orig-args))

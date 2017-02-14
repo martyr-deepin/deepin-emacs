@@ -1,6 +1,6 @@
 ;;; semantic/db-find.el --- Searching through semantic databases.
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: tags
@@ -297,7 +297,7 @@ refreshed when things change.  See `semanticdb-ref-test'.
 Note for overloading:  If you opt to overload this function for your
 major mode, and your routine takes a long time, be sure to call
 
- (semantic-throw-on-input 'your-symbol-here)
+ (semantic-throw-on-input \\='your-symbol-here)
 
 so that it can be called from the idle work handler."
   )
@@ -316,7 +316,7 @@ Default action as described in `semanticdb-find-translate-path'."
 ;;;###autoload
 (define-overloadable-function semanticdb-find-table-for-include (includetag &optional table)
   "For a single INCLUDETAG found in TABLE, find a `semanticdb-table' object
-INCLUDETAG is a semantic TAG of class 'include.
+INCLUDETAG is a semantic TAG of class `include'.
 TABLE is a semanticdb table that identifies where INCLUDETAG came from.
 TABLE is optional if INCLUDETAG has an overlay of :filename attribute."
   )
@@ -854,7 +854,7 @@ This makes it appear more like the results of a `semantic-find-' call.
 Optional FIND-FILE-MATCH loads all files associated with RESULTS
 into buffers.  This has the side effect of enabling `semantic-tag-buffer' to
 return a value.
-If FIND-FILE-MATCH is 'name, then only the filename is stored
+If FIND-FILE-MATCH is `name', then only the filename is stored
 in each tag instead of loading each file into a buffer.
 If the input RESULTS are not going to be used again, and if
 FIND-FILE-MATCH is nil, you can use `semanticdb-fast-strip-find-results'
@@ -902,7 +902,7 @@ instead."
 This makes it appear more like the results of a `semantic-find-' call.
 This is like `semanticdb-strip-find-results', except the input list RESULTS
 will be changed."
-  (apply #'nconc (mapcar #'cdr results)))
+  (mapcan #'cdr results))
 
 (defun semanticdb-find-results-p (resultp)
   "Non-nil if RESULTP is in the form of a semanticdb search result.

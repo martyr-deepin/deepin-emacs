@@ -1,9 +1,10 @@
 ;;; eieio-compat.el --- Compatibility with Older EIEIO versions  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1995-1996, 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1996, 1998-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: OO, lisp
+;; Package: eieio
 
 ;; This file is part of GNU Emacs.
 
@@ -124,7 +125,7 @@ Summary:
        (defgeneric ,method ,args)
        (eieio--defmethod ',method ',key ',class #',code))))
 
-(defun eieio--generic-static-symbol-specializers (tag)
+(defun eieio--generic-static-symbol-specializers (tag &rest _)
   (cl-assert (or (null tag) (eieio--class-p tag)))
   (when (eieio--class-p tag)
     (let ((superclasses (eieio--generic-subclass-specializers tag))
@@ -134,27 +135,25 @@ Summary:
 	(push `(eieio--static ,(cadr superclass)) specializers))
       (nreverse specializers))))
 
-(defconst eieio--generic-static-symbol-generalizer
-  (cl-generic-make-generalizer
-   ;; Give it a slightly higher priority than `subclass' so that the
-   ;; interleaved list comes before subclass's non-interleaved list.
-   61 (lambda (name) `(and (symbolp ,name) (eieio--class-v ,name)))
-   #'eieio--generic-static-symbol-specializers))
-(defconst eieio--generic-static-object-generalizer
-  (cl-generic-make-generalizer
-   ;; Give it a slightly higher priority than `class' so that the
-   ;; interleaved list comes before the class's non-interleaved list.
-   51 #'cl--generic-struct-tag
-   (lambda (tag)
-     (and (symbolp tag) (boundp tag) (setq tag (symbol-value tag))
-          (eieio--class-p tag)
-          (let ((superclasses (eieio--class-precedence-list tag))
-                (specializers ()))
-            (dolist (superclass superclasses)
-              (setq superclass (eieio--class-name superclass))
-              (push superclass specializers)
-              (push `(eieio--static ,superclass) specializers))
-            (nreverse specializers))))))
+(cl-generic-define-generalizer eieio--generic-static-symbol-generalizer
+  ;; Give it a slightly higher priority than `subclass' so that the
+  ;; interleaved list comes before subclass's non-interleaved list.
+  61 (lambda (name &rest _) `(and (symbolp ,name) (cl--find-class ,name)))
+  #'eieio--generic-static-symbol-specializers)
+(cl-generic-define-generalizer eieio--generic-static-object-generalizer
+  ;; Give it a slightly higher priority than `class' so that the
+  ;; interleaved list comes before the class's non-interleaved list.
+  51 #'cl--generic-struct-tag
+  (lambda (tag &rest _)
+    (and (symbolp tag) (boundp tag) (setq tag (symbol-value tag))
+         (eieio--class-p tag)
+         (let ((superclasses (eieio--class-precedence-list tag))
+               (specializers ()))
+           (dolist (superclass superclasses)
+             (setq superclass (eieio--class-name superclass))
+             (push superclass specializers)
+             (push `(eieio--static ,superclass) specializers))
+           (nreverse specializers)))))
 
 (cl-defmethod cl-generic-generalizers ((_specializer (head eieio--static)))
   (list eieio--generic-static-symbol-generalizer
@@ -189,7 +188,8 @@ Summary:
             (`no-applicable-method
              (setq method 'cl-no-applicable-method)
              (setq specializers `(generic ,@specializers))
-             (lambda (generic arg &rest args) (apply code arg generic args)))
+             (lambda (generic arg &rest args)
+               (apply code arg (cl--generic-name generic) (cons arg args))))
             (_ code))))
     (cl-generic-define-method
      method (unless (memq kind '(nil :primary)) (list kind))
@@ -266,7 +266,7 @@ Summary:
 
 
 ;; Local Variables:
-;; generated-autoload-file: "eieio-core.el"
+;; generated-autoload-file: "eieio-loaddefs.el"
 ;; End:
 
 (provide 'eieio-compat)

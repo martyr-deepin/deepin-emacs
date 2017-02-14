@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1999, 2001-2015 Free Software Foundation,
+@c Copyright (C) 1990-1995, 1999, 2001-2017 Free Software Foundation,
 @c Inc.
 @c See the file elisp.texi for copying conditions.
 @node Backups and Auto-Saving
@@ -40,6 +40,11 @@ by the original owner or becomes owned by the user editing it.
 You can alternatively request numbered backups; then each new backup
 file gets a new name.  You can delete old numbered backups when you
 don't want them any more, or Emacs can delete them automatically.
+
+  For performance, the operating system may not write the backup
+file's contents to secondary storage immediately, or may alias the
+backup data with the original until one or the other is later
+modified.  @xref{Files and Storage}.
 
 @menu
 * Making Backups::     How Emacs makes backup files, and when.
@@ -398,7 +403,7 @@ those versions by excluding them from the @sc{cdr} of the value.
 @xref{Numbered Backups}.
 
 In this example, the value says that @file{~rms/foo.~5~} is the name
-to use for the new backup file, and @file{~rms/foo.~3~} is an ``excess''
+to use for the new backup file, and @file{~rms/foo.~3~} is an excess
 version that the caller should consider deleting now.
 
 @smallexample

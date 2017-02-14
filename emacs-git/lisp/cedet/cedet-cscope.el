@@ -1,6 +1,6 @@
 ;;; cedet-cscope.el --- CScope support for CEDET
 
-;;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Package: cedet
@@ -52,7 +52,7 @@ SCOPE is the scope of the search, such as 'project or 'subdirs."
   ;; -0 = Find C symbol
   ;; -1 = Find global definition
   ;; -3 = Find references
-  ;; -6 = Find egrep pattern
+  ;; -6 = Find grep -E pattern
   ;; -7 = Find file
   (let ((idx (cond ((eq type 'file)
 		    "-7")

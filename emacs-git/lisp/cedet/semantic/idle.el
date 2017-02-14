@@ -1,6 +1,6 @@
 ;;; idle.el --- Schedule parsing tasks in idle time
 
-;; Copyright (C) 2003-2006, 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2006, 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: syntax
@@ -141,7 +141,7 @@ Use the command `semantic-idle-scheduler-mode' to change this variable.")
 (make-variable-buffer-local 'semantic-idle-scheduler-mode)
 
 (defcustom semantic-idle-scheduler-max-buffer-size 0
-  "*Maximum size in bytes of buffers where idle-scheduler is enabled.
+  "Maximum size in bytes of buffers where idle-scheduler is enabled.
 If this value is less than or equal to 0, idle-scheduler is enabled in
 all buffers regardless of their size."
   :group 'semantic
@@ -303,13 +303,13 @@ call additional functions registered with the timer calls."
 ;; Unlike the shorter timer, the WORK timer will kick of tasks that
 ;; may take a long time to complete.
 (defcustom semantic-idle-work-parse-neighboring-files-flag nil
-  "*Non-nil means to parse files in the same dir as the current buffer.
+  "Non-nil means to parse files in the same dir as the current buffer.
 Disable to prevent lots of excessive parsing in idle time."
   :group 'semantic
   :type 'boolean)
 
 (defcustom semantic-idle-work-update-headers-flag nil
-  "*Non-nil means to parse through header files in idle time.
+  "Non-nil means to parse through header files in idle time.
 Disable to prevent idle time parsing of many files.  If completion
 is called that work will be done then instead."
   :group 'semantic
@@ -716,8 +716,8 @@ It might be useful to override this variable to add comment faces
 specific to a major mode.  For example, in jde mode:
 
 \(defvar-mode-local jde-mode semantic-idle-summary-out-of-context-faces
-   (append (default-value 'semantic-idle-summary-out-of-context-faces)
-	   '(jde-java-font-lock-doc-tag-face
+   (append (default-value \\='semantic-idle-summary-out-of-context-faces)
+	   \\='(jde-java-font-lock-doc-tag-face
 	     jde-java-font-lock-link-face
 	     jde-java-font-lock-bold-face
 	     jde-java-font-lock-underline-face

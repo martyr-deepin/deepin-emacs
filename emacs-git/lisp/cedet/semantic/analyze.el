@@ -1,6 +1,6 @@
 ;;; semantic/analyze.el --- Analyze semantic tags against local context
 
-;; Copyright (C) 2000-2005, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2005, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -251,7 +251,7 @@ are found in SEQUENCE.
 Optional argument THROWSYM specifies a symbol the throw on non-recoverable error.
 Remaining arguments FLAGS are additional flags to apply when searching.
 This function knows of flags:
-  'mustbeclassvariable"
+  `mustbeclassvariable'"
   (let ((s sequence)			; copy of the sequence
 	(tmp nil)			; tmp find variable
 	(tag nil)			; tag return list
@@ -263,7 +263,7 @@ This function knows of flags:
 	)
     ;; First order check.  Is this wholly contained in the typecache?
     (setq tmp (semanticdb-typecache-find sequence))
-  
+
     (when tmp
       (if (or (not tagclass) (semantic-tag-of-class-p tmp tagclass))
 	  ;; We are effectively done...
@@ -709,7 +709,7 @@ Returns nil if no alias was found."
   (when (eq (semantic-tag-get-attribute (car taglist) :kind) 'alias)
     (let ((tagname
 	   (semantic-analyze-split-name
-	    (semantic-tag-name 
+	    (semantic-tag-name
 	     (car (semantic-tag-get-attribute (car taglist) :members))))))
       (append (if (listp tagname)
 		  tagname

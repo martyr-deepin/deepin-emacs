@@ -1,6 +1,6 @@
 ;;; ede/proj-archive.el --- EDE Generic Project archive support
 
-;;  Copyright (C) 1998-2001, 2009-2015 Free Software Foundation, Inc.
+;;  Copyright (C) 1998-2001, 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: project, make
@@ -55,7 +55,7 @@ Makefile.am generator, so use it to add this important bin program."
 (cl-defmethod ede-proj-makefile-garbage-patterns
   ((this ede-proj-target-makefile-archive))
   "Add archive name to the garbage patterns.
-This makes sure that the archive is removed with 'make clean'."
+This makes sure that the archive is removed with `make clean'."
   (let ((garb (cl-call-next-method)))
     (append garb (list (concat "lib" (ede-name this) ".a")))))
 

@@ -1,14 +1,14 @@
-/* Functions for the NeXT/Open/GNUstep and MacOSX window system.
+/* Functions for the NeXT/Open/GNUstep and macOS window system.
 
-Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2015 Free Software
+Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2017 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,7 +22,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 Originally by Carl Edman
 Updated by Christian Limpach (chris@nice.ch)
 OpenStep/Rhapsody port by Scott Bender (sbender@harmony-ds.com)
-MacOSX/Aqua port by Christophe de Dinechin (descubes@earthlink.net)
+macOS/Aqua port by Christophe de Dinechin (descubes@earthlink.net)
 GNUstep port and post-20 update by Adrian Robert (arobert@cogsci.ucsd.edu)
 */
 
@@ -49,31 +49,19 @@ GNUstep port and post-20 update by Adrian Robert (arobert@cogsci.ucsd.edu)
 #include "macfont.h"
 #endif
 
-#if 0
-int fns_trace_num = 1;
-#define NSTRACE(x)        fprintf (stderr, "%s:%d: [%d] " #x "\n",        \
-                                  __FILE__, __LINE__, ++fns_trace_num)
-#else
-#define NSTRACE(x)
-#endif
 
 #ifdef HAVE_NS
 
-extern NSArray *ns_send_types, *ns_return_types, *ns_drag_types;
-
-EmacsTooltip *ns_tooltip = nil;
-
-/* Need forward declaration here to preserve organizational integrity of file */
-Lisp_Object Fx_open_connection (Lisp_Object, Lisp_Object, Lisp_Object);
+static EmacsTooltip *ns_tooltip = nil;
 
 /* Static variables to handle applescript execution.  */
 static Lisp_Object as_script, *as_result;
 static int as_status;
 
-#ifdef GLYPH_DEBUG
 static ptrdiff_t image_cache_refcount;
-#endif
 
+static struct ns_display_info *ns_display_info_for_name (Lisp_Object);
+static void ns_set_name_as_filename (struct frame *);
 
 /* ==========================================================================
 
@@ -141,7 +129,7 @@ ns_get_window (Lisp_Object maybeFrame)
 
 /* Return the X display structure for the display named NAME.
    Open a new connection if necessary.  */
-struct ns_display_info *
+static struct ns_display_info *
 ns_display_info_for_name (Lisp_Object name)
 {
   struct ns_display_info *dpyinfo;
@@ -366,7 +354,7 @@ static void
 x_set_icon_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
   NSView *view = FRAME_NS_VIEW (f);
-  NSTRACE (x_set_icon_name);
+  NSTRACE ("x_set_icon_name");
 
   /* see if it's changed */
   if (STRINGP (arg))
@@ -410,16 +398,15 @@ x_set_icon_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 static void
 ns_set_name_internal (struct frame *f, Lisp_Object name)
 {
-  struct gcpro gcpro1;
   Lisp_Object encoded_name, encoded_icon_name;
   NSString *str;
   NSView *view = FRAME_NS_VIEW (f);
 
-  GCPRO1 (name);
+
   encoded_name = ENCODE_UTF_8 (name);
-  UNGCPRO;
 
   str = [NSString stringWithUTF8String: SSDATA (encoded_name)];
+
 
   /* Don't change the name if it's already NAME.  */
   if (! [[[view window] title] isEqualToString: str])
@@ -441,7 +428,7 @@ ns_set_name_internal (struct frame *f, Lisp_Object name)
 static void
 ns_set_name (struct frame *f, Lisp_Object name, int explicit)
 {
-  NSTRACE (ns_set_name);
+  NSTRACE ("ns_set_name");
 
   /* Make sure that requests from lisp code override requests from
      Emacs redisplay code.  */
@@ -482,7 +469,7 @@ ns_set_name (struct frame *f, Lisp_Object name, int explicit)
 static void
 x_explicitly_set_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
-  NSTRACE (x_explicitly_set_name);
+  NSTRACE ("x_explicitly_set_name");
   ns_set_name (f, arg, 1);
 }
 
@@ -493,11 +480,16 @@ x_explicitly_set_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 void
 x_implicitly_set_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
-  NSTRACE (x_implicitly_set_name);
+  NSTRACE ("x_implicitly_set_name");
+
+  Lisp_Object frame_title = buffer_local_value
+    (Qframe_title_format, XWINDOW (f->selected_window)->contents);
+  Lisp_Object icon_title = buffer_local_value
+    (Qicon_title_format, XWINDOW (f->selected_window)->contents);
 
   /* Deal with NS specific format t.  */
-  if (FRAME_NS_P (f) && ((FRAME_ICONIFIED_P (f) && EQ (Vicon_title_format, Qt))
-                         || EQ (Vframe_title_format, Qt)))
+  if (FRAME_NS_P (f) && ((FRAME_ICONIFIED_P (f) && EQ (icon_title, Qt))
+                         || EQ (frame_title, Qt)))
     ns_set_name_as_filename (f);
   else
     ns_set_name (f, arg, 0);
@@ -510,7 +502,7 @@ x_implicitly_set_name (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 static void
 x_set_title (struct frame *f, Lisp_Object name, Lisp_Object old_name)
 {
-  NSTRACE (x_set_title);
+  NSTRACE ("x_set_title");
   /* Don't change the title if it's already NAME.  */
   if (EQ (name, f->title))
     return;
@@ -528,7 +520,7 @@ x_set_title (struct frame *f, Lisp_Object name, Lisp_Object old_name)
 }
 
 
-void
+static void
 ns_set_name_as_filename (struct frame *f)
 {
   NSView *view;
@@ -536,10 +528,9 @@ ns_set_name_as_filename (struct frame *f)
   Lisp_Object buf = XWINDOW (f->selected_window)->contents;
   const char *title;
   NSAutoreleasePool *pool;
-  struct gcpro gcpro1;
   Lisp_Object encoded_name, encoded_filename;
   NSString *str;
-  NSTRACE (ns_set_name_as_filename);
+  NSTRACE ("ns_set_name_as_filename");
 
   if (f->explicit_name || ! NILP (f->title))
     return;
@@ -557,9 +548,7 @@ ns_set_name_as_filename (struct frame *f)
         name = build_string ([ns_app_name UTF8String]);
     }
 
-  GCPRO1 (name);
   encoded_name = ENCODE_UTF_8 (name);
-  UNGCPRO;
 
   view = FRAME_NS_VIEW (f);
 
@@ -584,9 +573,7 @@ ns_set_name_as_filename (struct frame *f)
 
       if (! NILP (filename))
         {
-          GCPRO1 (filename);
           encoded_filename = ENCODE_UTF_8 (filename);
-          UNGCPRO;
 
           fstr = [NSString stringWithUTF8String: SSDATA (encoded_filename)];
           if (fstr == nil) fstr = @"";
@@ -632,7 +619,7 @@ ns_set_doc_edited (void)
 }
 
 
-void
+static void
 x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 {
   int nlines;
@@ -662,10 +649,17 @@ x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 
 
 /* toolbar support */
-void
+static void
 x_set_tool_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 {
+  /* Currently, when the tool bar change state, the frame is resized.
+
+     TODO: It would be better if this didn't occur when 1) the frame
+     is full height or maximized or 2) when specified by
+     `frame-inhibit-implied-resize'. */
   int nlines;
+
+  NSTRACE ("x_set_tool_bar_lines");
 
   if (FRAME_MINIBUF_ONLY_P (f))
     return;
@@ -686,22 +680,52 @@ x_set_tool_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
         {
           free_frame_tool_bar (f);
           FRAME_EXTERNAL_TOOL_BAR (f) = 0;
-        }
+
+          {
+            EmacsView *view = FRAME_NS_VIEW (f);
+            int fs_state = [view fullscreenState];
+
+            if (fs_state == FULLSCREEN_MAXIMIZED)
+              {
+                [view setFSValue:FULLSCREEN_WIDTH];
+              }
+            else if (fs_state == FULLSCREEN_HEIGHT)
+              {
+                [view setFSValue:FULLSCREEN_NONE];
+              }
+          }
+       }
     }
 
-  x_set_window_size (f, 0, f->text_cols, f->text_lines, 0);
+  {
+    int inhibit
+      = ((f->after_make_frame
+	  && !f->tool_bar_resized
+	  && (EQ (frame_inhibit_implied_resize, Qt)
+	      || (CONSP (frame_inhibit_implied_resize)
+		  && !NILP (Fmemq (Qtool_bar_lines,
+				   frame_inhibit_implied_resize))))
+	  && NILP (get_frame_param (f, Qfullscreen)))
+	 ? 0
+	 : 2);
+
+    NSTRACE_MSG ("inhibit:%d", inhibit);
+
+    frame_size_history_add (f, Qupdate_frame_tool_bar, 0, 0, Qnil);
+    adjust_frame_size (f, -1, -1, inhibit, 0, Qtool_bar_lines);
+  }
 }
 
 
-void
+static void
 x_set_internal_border_width (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
   int old_width = FRAME_INTERNAL_BORDER_WIDTH (f);
 
   CHECK_TYPE_RANGED_INTEGER (int, arg);
-  FRAME_INTERNAL_BORDER_WIDTH (f) = XINT (arg);
+  f->internal_border_width = XINT (arg);
   if (FRAME_INTERNAL_BORDER_WIDTH (f) < 0)
-    FRAME_INTERNAL_BORDER_WIDTH (f) = 0;
+    f->internal_border_width = 0;
 
   if (FRAME_INTERNAL_BORDER_WIDTH (f) == old_width)
     return;
@@ -723,7 +747,7 @@ ns_implicitly_set_icon_type (struct frame *f)
   NSAutoreleasePool *pool;
   BOOL setMini = YES;
 
-  NSTRACE (ns_implicitly_set_icon_type);
+  NSTRACE ("ns_implicitly_set_icon_type");
 
   block_input ();
   pool = [[NSAutoreleasePool alloc] init];
@@ -749,7 +773,7 @@ ns_implicitly_set_icon_type (struct frame *f)
        chain = XCDR (chain))
     {
       elt = XCAR (chain);
-      /* special case: 't' means go by file type */
+      /* special case: t means go by file type */
       if (SYMBOLP (elt) && EQ (elt, Qt) && SSDATA (f->name)[0] == '/')
         {
           NSString *str
@@ -791,7 +815,7 @@ x_set_icon_type (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
   id image = nil;
   BOOL setMini = YES;
 
-  NSTRACE (x_set_icon_type);
+  NSTRACE ("x_set_icon_type");
 
   if (!NILP (arg) && SYMBOLP (arg))
     {
@@ -821,40 +845,6 @@ x_set_icon_type (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 
   f->output_data.ns->miniimage = image;
   [view setMiniwindowImage: setMini];
-}
-
-
-/* TODO: move to nsterm? */
-int
-ns_lisp_to_cursor_type (Lisp_Object arg)
-{
-  char *str;
-  if (XTYPE (arg) == Lisp_String)
-    str = SSDATA (arg);
-  else if (XTYPE (arg) == Lisp_Symbol)
-    str = SSDATA (SYMBOL_NAME (arg));
-  else return -1;
-  if (!strcmp (str, "box"))	return FILLED_BOX_CURSOR;
-  if (!strcmp (str, "hollow"))	return HOLLOW_BOX_CURSOR;
-  if (!strcmp (str, "hbar"))	return HBAR_CURSOR;
-  if (!strcmp (str, "bar"))	return BAR_CURSOR;
-  if (!strcmp (str, "no"))	return NO_CURSOR;
-  return -1;
-}
-
-
-Lisp_Object
-ns_cursor_type_to_lisp (int arg)
-{
-  switch (arg)
-    {
-    case FILLED_BOX_CURSOR: return Qbox;
-    case HOLLOW_BOX_CURSOR: return Qhollow;
-    case HBAR_CURSOR:	    return Qhbar;
-    case BAR_CURSOR:	    return Qbar;
-    case NO_CURSOR:
-    default:		    return intern ("no");
-    }
 }
 
 /* This is the same as the xfns.c definition.  */
@@ -915,7 +905,7 @@ static void
 x_icon (struct frame *f, Lisp_Object parms)
 /* --------------------------------------------------------------------------
    Strangely-named function to set icon position parameters in frame.
-   This is irrelevant under OS X, but might be needed under GNUstep,
+   This is irrelevant under macOS, but might be needed under GNUstep,
    depending on the window manager used.  Note, this is not a standard
    frame parameter-setter; it is called directly from x-create-frame.
    -------------------------------------------------------------------------- */
@@ -956,8 +946,8 @@ frame_parm_handler ns_frame_parm_handlers[] =
   x_set_icon_name,
   x_set_icon_type,
   x_set_internal_border_width, /* generic OK */
-  0, /* x_set_right_divider_width */
-  0, /* x_set_bottom_divider_width */
+  x_set_right_divider_width,
+  x_set_bottom_divider_width,
   x_set_menu_bar_lines,
   x_set_mouse_color,
   x_explicitly_set_name,
@@ -981,6 +971,7 @@ frame_parm_handler ns_frame_parm_handlers[] =
   x_set_alpha,
   0, /* x_set_sticky */
   0, /* x_set_tool_bar_position */
+  0, /* x_set_inhibit_double_buffering */
 };
 
 
@@ -1005,10 +996,21 @@ unwind_create_frame (Lisp_Object frame)
       struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
 #endif
 
+      /* If the frame's image cache refcount is still the same as our
+	 private shadow variable, it means we are unwinding a frame
+	 for which we didn't yet call init_frame_faces, where the
+	 refcount is incremented.  Therefore, we increment it here, so
+	 that free_frame_faces, called in x_free_frame_resources
+	 below, will not mistakenly decrement the counter that was not
+	 incremented yet to account for this new frame.  */
+      if (FRAME_IMAGE_CACHE (f) != NULL
+	  && FRAME_IMAGE_CACHE (f)->refcount == image_cache_refcount)
+	FRAME_IMAGE_CACHE (f)->refcount++;
+
       x_free_frame_resources (f);
       free_glyphs (f);
 
-#ifdef GLYPH_DEBUG
+#if defined GLYPH_DEBUG && defined ENABLE_CHECKING
       /* Check that reference counts are indeed correct.  */
       eassert (dpyinfo->terminal->image_cache->refcount == image_cache_refcount);
 #endif
@@ -1076,12 +1078,12 @@ This function is an internal primitive--use `make-frame' instead.  */)
   int minibuffer_only = 0;
   long window_prompting = 0;
   ptrdiff_t count = specpdl_ptr - specpdl;
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
   Lisp_Object display;
   struct ns_display_info *dpyinfo = NULL;
   Lisp_Object parent;
   struct kboard *kb;
   static int desc_ctr = 1;
+  int x_width = 0, x_height = 0;
 
   /* x_get_arg modifies parms.  */
   parms = Fcopy_alist (parms);
@@ -1118,7 +1120,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
   /* No need to protect DISPLAY because that's not used after passing
      it to make_frame_without_minibuffer.  */
   frame = Qnil;
-  GCPRO4 (parms, parent, name, frame);
   tem = x_get_arg (dpyinfo, parms, Qminibuffer, "minibuffer", "Minibuffer",
                   RES_TYPE_SYMBOL);
   if (EQ (tem, Qnone) || NILP (tem))
@@ -1187,6 +1188,9 @@ This function is an internal primitive--use `make-frame' instead.  */)
     register_font_driver (&nsfont_driver, f);
 #endif
 
+  image_cache_refcount =
+    FRAME_IMAGE_CACHE (f) ? FRAME_IMAGE_CACHE (f)->refcount : 0;
+
   x_default_parameter (f, parms, Qfont_backend, Qnil,
 			"fontBackend", "FontBackend", RES_TYPE_STRING);
 
@@ -1241,11 +1245,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
   x_default_parameter (f, parms, Qright_fringe, Qnil,
 		       "rightFringe", "RightFringe", RES_TYPE_NUMBER);
 
-#ifdef GLYPH_DEBUG
-  image_cache_refcount =
-    FRAME_IMAGE_CACHE (f) ? FRAME_IMAGE_CACHE (f)->refcount : 0;
-#endif
-
   init_frame_faces (f);
 
   /* Read comment about this code in corresponding place in xfns.c.  */
@@ -1271,7 +1270,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
                        RES_TYPE_STRING);
 
   parms = get_geometry_from_preferences (dpyinfo, parms);
-  window_prompting = x_figure_window_size (f, parms, 1);
+  window_prompting = x_figure_window_size (f, parms, true, &x_width, &x_height);
 
   tem = x_get_arg (dpyinfo, parms, Qunsplittable, 0, 0, RES_TYPE_BOOLEAN);
   f->no_split = minibuffer_only || (!EQ (tem, Qunbound) && !EQ (tem, Qnil));
@@ -1290,6 +1289,8 @@ This function is an internal primitive--use `make-frame' instead.  */)
   FRAME_DISPLAY_INFO (f)->horizontal_scroll_bar_cursor
      = [NSCursor arrowCursor];
   f->output_data.ns->current_pointer = f->output_data.ns->text_cursor;
+
+  f->output_data.ns->in_animation = NO;
 
   [[EmacsView alloc] initFrameFromEmacs: f];
 
@@ -1324,6 +1325,11 @@ This function is an internal primitive--use `make-frame' instead.  */)
 
   /* Allow x_set_window_size, now.  */
   f->can_x_set_window_size = true;
+
+  if (x_width > 0)
+    SET_FRAME_WIDTH (f, x_width);
+  if (x_height > 0)
+    SET_FRAME_HEIGHT (f, x_height);
 
   adjust_frame_size (f, FRAME_TEXT_WIDTH (f), FRAME_TEXT_HEIGHT (f), 0, 1,
 		     Qx_create_frame_2);
@@ -1360,8 +1366,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
   for (tem = parms; CONSP (tem); tem = XCDR (tem))
     if (CONSP (XCAR (tem)) && !NILP (XCAR (XCAR (tem))))
       fset_param_alist (f, Fcons (XCAR (tem), f->param_alist));
-
-  UNGCPRO;
 
   if (window_prompting & USPosition)
     x_set_offset (f, f->left_pos, f->top_pos, 1);
@@ -1542,7 +1546,7 @@ Optional arg DIR_ONLY_P, if non-nil, means choose only directories.  */)
      The file dialog may pop up a confirm dialog after Ok has been pressed,
      so we can not simply pop down on the Ok/Cancel press.
    */
-  nxev = [NSEvent otherEventWithType: NSApplicationDefined
+  nxev = [NSEvent otherEventWithType: NSEventTypeApplicationDefined
                             location: NSMakePoint (0, 0)
                        modifierFlags: 0
                            timestamp: 0
@@ -1690,7 +1694,7 @@ If omitted or nil, that stands for the selected frame's display.
 
 Note: "screen" here is not in Nextstep terminology but in X11's.  For
 the number of physical monitors, use `(length
-(display-monitor-attributes-list TERMINAL))' instead.  */)
+\(display-monitor-attributes-list TERMINAL))' instead.  */)
   (Lisp_Object terminal)
 {
   check_ns_display_info (terminal);
@@ -2020,7 +2024,7 @@ DEFUN ("ns-list-services", Fns_list_services, Sns_list_services, 0, 0, 0,
 
   [svcs setAutoenablesItems: NO];
 #ifdef NS_IMPL_COCOA
-  [svcs update]; /* on OS X, converts from '/' structure */
+  [svcs update]; /* on macOS, converts from '/' structure */
 #endif
 
   ret = interpret_services_menu (svcs, Qnil, ret);
@@ -2056,39 +2060,6 @@ there was no result.  */)
   if ([[pb types] count] == 0)
     return build_string ("");
   return ns_string_from_pasteboard (pb);
-}
-
-
-DEFUN ("ns-convert-utf8-nfd-to-nfc", Fns_convert_utf8_nfd_to_nfc,
-       Sns_convert_utf8_nfd_to_nfc, 1, 1, 0,
-       doc: /* Return an NFC string that matches the UTF-8 NFD string STR.  */)
-     (Lisp_Object str)
-{
-/* TODO: If GNUstep ever implements precomposedStringWithCanonicalMapping,
-         remove this. */
-  NSString *utfStr;
-  Lisp_Object ret = Qnil;
-  NSAutoreleasePool *pool;
-
-  CHECK_STRING (str);
-  pool = [[NSAutoreleasePool alloc] init];
-  utfStr = [NSString stringWithUTF8String: SSDATA (str)];
-#ifdef NS_IMPL_COCOA
-  if (utfStr)
-    utfStr = [utfStr precomposedStringWithCanonicalMapping];
-#endif
-  if (utfStr)
-    {
-      const char *cstr = [utfStr UTF8String];
-      if (cstr)
-        ret = build_string (cstr);
-    }
-
-  [pool release];
-  if (NILP (ret))
-    error ("Invalid UTF-8");
-
-  return ret;
 }
 
 
@@ -2186,7 +2157,7 @@ In case the execution fails, an error is signaled. */)
      errors aren't returned and executeAndReturnError hangs forever.
      Post an event that runs applescript and then start the event loop.
      The event loop is exited when the script is done.  */
-  nxev = [NSEvent otherEventWithType: NSApplicationDefined
+  nxev = [NSEvent otherEventWithType: NSEventTypeApplicationDefined
                             location: NSMakePoint (0, 0)
                        modifierFlags: 0
                            timestamp: 0
@@ -2266,9 +2237,10 @@ x_get_string_resource (XrmDatabase rdb, const char *name, const char *class)
     return NULL;
 
   res = ns_get_defaults_value (toCheck);
-  return (!res ? NULL :
-	  (!c_strncasecmp (res, "YES", 3) ? "true" :
-	   (!c_strncasecmp (res, "NO", 2) ? "false" : (char *) res)));
+  return (char *) (!res ? NULL
+		   : !c_strncasecmp (res, "YES", 3) ? "true"
+		   : !c_strncasecmp (res, "NO", 2) ? "false"
+		   : res);
 }
 
 
@@ -2666,7 +2638,7 @@ compute_tip_xy (struct frame *f,
                 int *root_x,
                 int *root_y)
 {
-  Lisp_Object left, top;
+  Lisp_Object left, top, right, bottom;
   EmacsView *view = FRAME_NS_VIEW (f);
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
   NSPoint pt;
@@ -2674,8 +2646,11 @@ compute_tip_xy (struct frame *f,
   /* Start with user-specified or mouse position.  */
   left = Fcdr (Fassq (Qleft, parms));
   top = Fcdr (Fassq (Qtop, parms));
+  right = Fcdr (Fassq (Qright, parms));
+  bottom = Fcdr (Fassq (Qbottom, parms));
 
-  if (!INTEGERP (left) || !INTEGERP (top))
+  if ((!INTEGERP (left) && !INTEGERP (right))
+      || (!INTEGERP (top) && !INTEGERP (bottom)))
     {
       pt.x = dpyinfo->last_mouse_motion_x;
       pt.y = dpyinfo->last_mouse_motion_y;
@@ -2695,13 +2670,14 @@ compute_tip_xy (struct frame *f,
   else
     {
       /* Absolute coordinates.  */
-      pt.x = XINT (left);
-      pt.y = x_display_pixel_height (FRAME_DISPLAY_INFO (f)) - XINT (top)
-        - height;
+      pt.x = INTEGERP (left) ? XINT (left) : XINT (right);
+      pt.y = (x_display_pixel_height (FRAME_DISPLAY_INFO (f))
+	      - (INTEGERP (top) ? XINT (top) : XINT (bottom))
+	      - height);
     }
 
   /* Ensure in bounds.  (Note, screen origin = lower left.) */
-  if (INTEGERP (left))
+  if (INTEGERP (left) || INTEGERP (right))
     *root_x = pt.x;
   else if (pt.x + XINT (dx) <= 0)
     *root_x = 0; /* Can happen for negative dx */
@@ -2716,7 +2692,7 @@ compute_tip_xy (struct frame *f,
     /* Put it left justified on the screen -- it ought to fit that way.  */
     *root_x = 0;
 
-  if (INTEGERP (top))
+  if (INTEGERP (top) || INTEGERP (bottom))
     *root_y = pt.y;
   else if (pt.y - XINT (dy) - height >= 0)
     /* It fits below the pointer.  */
@@ -2746,27 +2722,30 @@ Automatically hide the tooltip after TIMEOUT seconds.  TIMEOUT nil
 means use the default timeout of 5 seconds.
 
 If the list of frame parameters PARMS contains a `left' parameter,
-the tooltip is displayed at that x-position.  Otherwise it is
-displayed at the mouse position, with offset DX added (default is 5 if
-DX isn't specified).  Likewise for the y-position; if a `top' frame
-parameter is specified, it determines the y-position of the tooltip
-window, otherwise it is displayed at the mouse position, with offset
-DY added (default is -10).
+display the tooltip at that x-position.  If the list of frame parameters
+PARMS contains no `left' but a `right' parameter, display the tooltip
+right-adjusted at that x-position. Otherwise display it at the
+x-position of the mouse, with offset DX added (default is 5 if DX isn't
+specified).
+
+Likewise for the y-position: If a `top' frame parameter is specified, it
+determines the position of the upper edge of the tooltip window.  If a
+`bottom' parameter but no `top' frame parameter is specified, it
+determines the position of the lower edge of the tooltip window.
+Otherwise display the tooltip window at the y-position of the mouse,
+with offset DY added (default is -10).
 
 A tooltip's maximum size is specified by `x-max-tooltip-size'.
 Text larger than the specified size is clipped.  */)
      (Lisp_Object string, Lisp_Object frame, Lisp_Object parms, Lisp_Object timeout, Lisp_Object dx, Lisp_Object dy)
 {
   int root_x, root_y;
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4;
   ptrdiff_t count = SPECPDL_INDEX ();
   struct frame *f;
   char *str;
   NSSize size;
 
   specbind (Qinhibit_redisplay, Qt);
-
-  GCPRO4 (string, parms, frame, timeout);
 
   CHECK_STRING (string);
   str = SSDATA (string);
@@ -2803,7 +2782,6 @@ Text larger than the specified size is clipped.  */)
   [ns_tooltip showAtX: root_x Y: root_y for: XINT (timeout)];
   unblock_input ();
 
-  UNGCPRO;
   return unbind_to (count, Qnil);
 }
 
@@ -2819,87 +2797,143 @@ Value is t if tooltip was open, nil otherwise.  */)
   return Qt;
 }
 
-DEFUN ("x-frame-geometry", Fx_frame_geometry, Sx_frame_geometry, 0, 1, 0,
-       doc: /* Return geometric attributes of frame FRAME.
-
-FRAME must be a live frame and defaults to the selected one.
-
-The return value is an association list containing the following
-elements (all size values are in pixels).
-
-- `frame-outer-size' is a cons of the outer width and height of FRAME.
-  The outer size include the title bar and the external borders as well
-  as any menu and/or tool bar of frame.
-
-- `border' is a cons of the horizontal and vertical width of FRAME's
-  external borders.
-
-- `title-bar-height' is the height of the title bar of FRAME.
-
-- `menu-bar-external' if `t' means the menu bar is external (not
-  included in the inner edges of FRAME).
-
-- `menu-bar-size' is a cons of the width and height of the menu bar of
-  FRAME.
-
-- `tool-bar-external' if `t' means the tool bar is external (not
-  included in the inner edges of FRAME).
-
-- `tool-bar-side' tells tells on which side the tool bar on FRAME is and
-  can be one of `left', `top', `right' or `bottom'.
-
-- `tool-bar-size' is a cons of the width and height of the tool bar of
-  FRAME.
-
-- `frame-inner-size' is a cons of the inner width and height of FRAME.
-  This excludes FRAME's title bar and external border as well as any
-  external menu and/or tool bar.  */)
-  (Lisp_Object frame)
+/* Return geometric attributes of FRAME.  According to the value of
+   ATTRIBUTES return the outer edges of FRAME (Qouter_edges), the inner
+   edges of FRAME, the root window edges of frame (Qroot_edges).  Any
+   other value means to return the geometry as returned by
+   Fx_frame_geometry.  */
+static Lisp_Object
+frame_geometry (Lisp_Object frame, Lisp_Object attribute)
 {
   struct frame *f = decode_live_frame (frame);
-  int inner_width = FRAME_PIXEL_WIDTH (f);
-  int inner_height = FRAME_PIXEL_HEIGHT (f);
-  Lisp_Object fullscreen = Fframe_parameter (frame, Qfullscreen);
-  int border = f->border_width;
-  int title = FRAME_NS_TITLEBAR_HEIGHT (f);
-  int outer_width = FRAME_PIXEL_WIDTH (f) + 2 * border;
-  int outer_height = FRAME_PIXEL_HEIGHT (f) + 2 * border;
+  Lisp_Object fullscreen_symbol = Fframe_parameter (frame, Qfullscreen);
+  bool fullscreen = (EQ (fullscreen_symbol, Qfullboth)
+		     || EQ (fullscreen_symbol, Qfullscreen));
+  int border = fullscreen ? 0 : f->border_width;
+  int title_height = fullscreen ? 0 : FRAME_NS_TITLEBAR_HEIGHT (f);
+  int native_width = FRAME_PIXEL_WIDTH (f);
+  int native_height = FRAME_PIXEL_HEIGHT (f);
+  int outer_width = native_width + 2 * border;
+  int outer_height = native_height + 2 * border + title_height;
+  int native_left = f->left_pos + border;
+  int native_top = f->top_pos + border + title_height;
+  int native_right = f->left_pos + outer_width - border;
+  int native_bottom = f->top_pos + outer_height - border;
+  int internal_border_width = FRAME_INTERNAL_BORDER_WIDTH (f);
   int tool_bar_height = FRAME_TOOLBAR_HEIGHT (f);
-  int tool_bar_width = tool_bar_height > 0
-    ? outer_width - 2 * FRAME_INTERNAL_BORDER_WIDTH (f)
-    : 0;
-  // Always 0 on NS.
-  int menu_bar_height = 0;
-  int menu_bar_width = 0;
+  int tool_bar_width = (tool_bar_height
+			? outer_width - 2 * internal_border_width
+			: 0);
 
-  return
-    listn (CONSTYPE_HEAP, 10,
-	   Fcons (Qframe_position,
-		  Fcons (make_number (f->left_pos), make_number (f->top_pos))),
-	   Fcons (Qframe_outer_size,
-		  Fcons (make_number (outer_width), make_number (outer_height))),
-	   Fcons (Qexternal_border_size,
-		  ((EQ (fullscreen, Qfullboth) || EQ (fullscreen, Qfullscreen))
-		   ? Fcons (make_number (0), make_number (0))
-		   : Fcons (make_number (border), make_number (border)))),
-           Fcons (Qtitle_height,
-		  ((EQ (fullscreen, Qfullboth) || EQ (fullscreen, Qfullscreen))
-		   ? make_number (0)
-		   : make_number (title))),
-	   Fcons (Qmenu_bar_external, FRAME_EXTERNAL_MENU_BAR (f) ? Qt : Qnil),
-	   Fcons (Qmenu_bar_size,
-		  Fcons (make_number (menu_bar_width),
-			 make_number (menu_bar_height))),
-	   Fcons (Qtool_bar_external, FRAME_EXTERNAL_TOOL_BAR (f) ? Qt : Qnil),
-	   Fcons (Qtool_bar_position, FRAME_TOOL_BAR_POSITION (f)),
-	   Fcons (Qtool_bar_size,
-		  Fcons (make_number (tool_bar_width),
-			 make_number (tool_bar_height))),
-	   Fcons (Qframe_inner_size,
-		  Fcons (make_number (inner_width),
-			 make_number (inner_height))));
+  /* Construct list.  */
+  if (EQ (attribute, Qouter_edges))
+    return list4 (make_number (f->left_pos), make_number (f->top_pos),
+		  make_number (f->left_pos + outer_width),
+		  make_number (f->top_pos + outer_height));
+  else if (EQ (attribute, Qnative_edges))
+    return list4 (make_number (native_left), make_number (native_top),
+		  make_number (native_right), make_number (native_bottom));
+  else if (EQ (attribute, Qinner_edges))
+    return list4 (make_number (native_left + internal_border_width),
+		  make_number (native_top
+			       + tool_bar_height
+			       + internal_border_width),
+		  make_number (native_right - internal_border_width),
+		  make_number (native_bottom - internal_border_width));
+  else
+    return
+      listn (CONSTYPE_HEAP, 10,
+	     Fcons (Qouter_position,
+		    Fcons (make_number (f->left_pos),
+			   make_number (f->top_pos))),
+	     Fcons (Qouter_size,
+		    Fcons (make_number (outer_width),
+			   make_number (outer_height))),
+	     Fcons (Qexternal_border_size,
+		    (fullscreen
+		     ? Fcons (make_number (0), make_number (0))
+		     : Fcons (make_number (border), make_number (border)))),
+	     Fcons (Qtitle_bar_size,
+		    Fcons (make_number (0), make_number (title_height))),
+	     Fcons (Qmenu_bar_external, Qnil),
+	     Fcons (Qmenu_bar_size, Fcons (make_number (0), make_number (0))),
+	     Fcons (Qtool_bar_external,
+		    FRAME_EXTERNAL_TOOL_BAR (f) ? Qt : Qnil),
+	     Fcons (Qtool_bar_position, FRAME_TOOL_BAR_POSITION (f)),
+	     Fcons (Qtool_bar_size,
+		    Fcons (make_number (tool_bar_width),
+			   make_number (tool_bar_height))),
+	     Fcons (Qinternal_border_width,
+		    make_number (internal_border_width)));
 }
 
+DEFUN ("ns-frame-geometry", Fns_frame_geometry, Sns_frame_geometry, 0, 1, 0,
+       doc: /* Return geometric attributes of FRAME.
+FRAME must be a live frame and defaults to the selected one.  The return
+value is an association list of the attributes listed below.  All height
+and width values are in pixels.
+
+`outer-position' is a cons of the outer left and top edges of FRAME
+  relative to the origin - the position (0, 0) - of FRAME's display.
+
+`outer-size' is a cons of the outer width and height of FRAME.  The
+  outer size includes the title bar and the external borders as well as
+  any menu and/or tool bar of frame.
+
+`external-border-size' is a cons of the horizontal and vertical width of
+  FRAME's external borders as supplied by the window manager.
+
+`title-bar-size' is a cons of the width and height of the title bar of
+  FRAME as supplied by the window manager.  If both of them are zero,
+  FRAME has no title bar.  If only the width is zero, Emacs was not
+  able to retrieve the width information.
+
+`menu-bar-external', if non-nil, means the menu bar is external (never
+  included in the inner edges of FRAME).
+
+`menu-bar-size' is a cons of the width and height of the menu bar of
+  FRAME.
+
+`tool-bar-external', if non-nil, means the tool bar is external (never
+  included in the inner edges of FRAME).
+
+`tool-bar-position' tells on which side the tool bar on FRAME is and can
+  be one of `left', `top', `right' or `bottom'.  If this is nil, FRAME
+  has no tool bar.
+
+`tool-bar-size' is a cons of the width and height of the tool bar of
+  FRAME.
+
+`internal-border-width' is the width of the internal border of
+  FRAME.  */)
+  (Lisp_Object frame)
+{
+  return frame_geometry (frame, Qnil);
+}
+
+DEFUN ("ns-frame-edges", Fns_frame_edges, Sns_frame_edges, 0, 2, 0,
+       doc: /* Return edge coordinates of FRAME.
+FRAME must be a live frame and defaults to the selected one.  The return
+value is a list of the form (LEFT, TOP, RIGHT, BOTTOM).  All values are
+in pixels relative to the origin - the position (0, 0) - of FRAME's
+display.
+
+If optional argument TYPE is the symbol `outer-edges', return the outer
+edges of FRAME.  The outer edges comprise the decorations of the window
+manager (like the title bar or external borders) as well as any external
+menu or tool bar of FRAME.  If optional argument TYPE is the symbol
+`native-edges' or nil, return the native edges of FRAME.  The native
+edges exclude the decorations of the window manager and any external
+menu or tool bar of FRAME.  If TYPE is the symbol `inner-edges', return
+the inner edges of FRAME.  These edges exclude title bar, any borders,
+menu bar or tool bar of FRAME.  */)
+  (Lisp_Object frame, Lisp_Object type)
+{
+  return frame_geometry (frame, ((EQ (type, Qouter_edges)
+				  || EQ (type, Qinner_edges))
+				 ? type
+				 : Qnative_edges));
+}
 
 /* ==========================================================================
 
@@ -2918,7 +2952,7 @@ handlePanelKeys (NSSavePanel *panel, NSEvent *theEvent)
   int i;
   BOOL ret = NO;
 
-  if ([theEvent type] != NSKeyDown) return NO;
+  if ([theEvent type] != NSEventTypeKeyDown) return NO;
   s = [theEvent characters];
 
   for (i = 0; i < [s length]; ++i)
@@ -2937,7 +2971,7 @@ handlePanelKeys (NSSavePanel *panel, NSEvent *theEvent)
           /* Don't send command modified keys, as those are handled in the
              performKeyEquivalent method of the super class.
           */
-          if (! ([theEvent modifierFlags] & NSCommandKeyMask))
+          if (! ([theEvent modifierFlags] & NSEventModifierFlagCommand))
             {
               [panel sendEvent: theEvent];
               ret = YES;
@@ -2954,7 +2988,7 @@ handlePanelKeys (NSSavePanel *panel, NSEvent *theEvent)
         case 'c': // Copy
         case 'v': // Paste
         case 'a': // Select all
-          if ([theEvent modifierFlags] & NSCommandKeyMask)
+          if ([theEvent modifierFlags] & NSEventModifierFlagCommand)
             {
               [NSApp sendAction:
                        (ch == 'x'
@@ -2970,7 +3004,7 @@ handlePanelKeys (NSSavePanel *panel, NSEvent *theEvent)
         default:
           // Send all control keys, as the text field supports C-a, C-f, C-e
           // C-b and more.
-          if ([theEvent modifierFlags] & NSControlKeyMask)
+          if ([theEvent modifierFlags] & NSEventModifierFlagControl)
             {
               [panel sendEvent: theEvent];
               ret = YES;
@@ -3039,6 +3073,8 @@ void
 syms_of_nsfns (void)
 {
   DEFSYM (Qfontsize, "fontsize");
+  DEFSYM (Qframe_title_format, "frame-title-format");
+  DEFSYM (Qicon_title_format, "icon-title-format");
 
   DEFVAR_LISP ("ns-icon-type-alist", Vns_icon_type_alist,
                doc: /* Alist of elements (REGEXP . IMAGE) for images of icons associated to frames.
@@ -3054,7 +3090,7 @@ Example: Install an icon Gnus.tiff and execute the following code
 
   (setq ns-icon-type-alist
         (append ns-icon-type-alist
-                '((\"^\\\\*\\\\(Group\\\\*$\\\\|Summary \\\\|Article\\\\*$\\\\)\"
+                \\='((\"^\\\\*\\\\(Group\\\\*$\\\\|Summary \\\\|Article\\\\*$\\\\)\"
                    . \"Gnus\"))))
 
 When you miniaturize a Group, Summary or Article frame, Gnus.tiff will
@@ -3083,7 +3119,8 @@ be used as the image of the icon representing the frame.  */);
   defsubr (&Sx_display_pixel_width);
   defsubr (&Sx_display_pixel_height);
   defsubr (&Sns_display_monitor_attributes_list);
-  defsubr (&Sx_frame_geometry);
+  defsubr (&Sns_frame_geometry);
+  defsubr (&Sns_frame_edges);
   defsubr (&Sx_display_mm_width);
   defsubr (&Sx_display_mm_height);
   defsubr (&Sx_display_screens);
@@ -3102,7 +3139,6 @@ be used as the image of the icon representing the frame.  */);
   defsubr (&Sns_emacs_info_panel);
   defsubr (&Sns_list_services);
   defsubr (&Sns_perform_service);
-  defsubr (&Sns_convert_utf8_nfd_to_nfc);
   defsubr (&Sns_popup_font_panel);
   defsubr (&Sns_popup_color_panel);
 

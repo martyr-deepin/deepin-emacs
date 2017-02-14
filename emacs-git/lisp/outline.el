@@ -1,6 +1,6 @@
 ;;; outline.el --- outline mode commands for Emacs
 
-;; Copyright (C) 1986, 1993-1995, 1997, 2000-2015 Free Software
+;; Copyright (C) 1986, 1993-1995, 1997, 2000-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -38,7 +38,7 @@
 (defgroup outlines nil
   "Support for hierarchical outlining."
   :prefix "outline-"
-  :group 'wp)
+  :group 'text)
 
 (defvar outline-regexp "[*\^L]+"
   "Regular expression to match the beginning of a heading.
@@ -338,7 +338,7 @@ numbered and unnumbered sections), list them set by set and sorted by level
 within each set.  For example in texinfo mode:
 
      (setq outline-heading-alist
-      '((\"@chapter\" . 2) (\"@section\" . 3) (\"@subsection\" . 4)
+      \\='((\"@chapter\" . 2) (\"@section\" . 3) (\"@subsection\" . 4)
            (\"@subsubsection\" . 5)
         (\"@unnumbered\" . 2) (\"@unnumberedsec\" . 3)
            (\"@unnumberedsubsec\" . 4)  (\"@unnumberedsubsubsec\" . 5)
@@ -388,9 +388,9 @@ at the end of the buffer."
 		      nil 'move))
 
 (defsubst outline-invisible-p (&optional pos)
-  "Non-nil if the character after POS is invisible.
+  "Non-nil if the character after POS has outline invisible property.
 If POS is nil, use `point' instead."
-  (get-char-property (or pos (point)) 'invisible))
+  (eq (get-char-property (or pos (point)) 'invisible) 'outline))
 
 (defun outline-back-to-heading (&optional invisible-ok)
   "Move to previous heading line, or beg of this line if it's a heading.
@@ -449,8 +449,8 @@ Otherwise, it will be one level below."
           ;; Why bother checking that it is indeed higher/lower level ?
           new-head
         ;; Didn't work, so ask what to do.
-        (read-string (format "%s heading for `%s': "
-                             (if up "Parent" "Demoted") head)
+        (read-string (format-message "%s heading for `%s': "
+				     (if up "Parent" "Demoted") head)
                      head nil nil t)))))
 
 (defun outline-promote (&optional which)
@@ -788,7 +788,8 @@ Show the heading too, if it is currently invisible."
     'show-entry 'outline-show-entry "25.1")
 
 (defun outline-hide-body ()
-  "Hide all body lines in buffer, leaving all headings visible."
+  "Hide all body lines in buffer, leaving all headings visible.
+Note that this does not hide the lines preceding the first heading line."
   (interactive)
   (outline-hide-region-body (point-min) (point-max)))
 
@@ -868,7 +869,12 @@ Show the heading too, if it is currently invisible."
 		       nil))
 
 (defun outline-hide-sublevels (levels)
-  "Hide everything but the top LEVELS levels of headers, in whole buffer."
+  "Hide everything but the top LEVELS levels of headers, in whole buffer.
+This also unhides the top heading-less body, if any.
+
+Interactively, the prefix argument supplies the value of LEVELS.
+When invoked without a prefix argument, LEVELS defaults to the level
+of the current heading, or to 1 if the current line is not a heading."
   (interactive (list
 		(cond
 		 (current-prefix-arg (prefix-numeric-value current-prefix-arg))
@@ -909,7 +915,8 @@ Show the heading too, if it is currently invisible."
     'hide-sublevels 'outline-hide-sublevels "25.1")
 
 (defun outline-hide-other ()
-  "Hide everything except current body and parent and top-level headings."
+  "Hide everything except current body and parent and top-level headings.
+This also unhides the top heading-less body, if any."
   (interactive)
   (outline-hide-sublevels 1)
   (let (outline-view-change-hook)

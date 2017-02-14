@@ -1,8 +1,8 @@
 # emacs-buffer.gdb --- gdb macros for recovering buffers from emacs coredumps
 
-# Copyright (C) 2005-2015 Free Software Foundation, Inc.
+# Copyright (C) 2005-2017 Free Software Foundation, Inc.
 
-# Maintainer: Noah Friedman <friedman@splode.com>
+# Author: Noah Friedman <friedman@splode.com>
 # Created: 2005-04-28
 
 # This file is part of GNU Emacs.
@@ -29,11 +29,11 @@
 # The Emacs executable must have debugging symbols for this to work.
 # But you never strip Emacs, right?
 #
-# The main commands of interest are `ybuffer-list', `yfile-buffers',
-# `ysave-buffer', and `ybuffer-contents'.  The `y' prefix avoids any
+# The main commands of interest are 'ybuffer-list', 'yfile-buffers',
+# 'ysave-buffer', and 'ybuffer-contents'.  The 'y' prefix avoids any
 # namespace collisions with emacs/src/.gdbinit.
 
-# Since the internal data structures in Emacs occasionally from time to
+# Since the internal data structures in Emacs change from time to
 # time, you should use the version of this file that came with your
 # particular Emacs version; older versions might not work anymore.
 
@@ -70,8 +70,10 @@
 
 # Code:
 
-# Force loading of symbols, enough to give us VALMASK etc.
-set main
+# Force loading of symbols, enough to give us VALBITS etc.
+set $dummy = main + 8
+# With some compilers, we need this to give us struct Lisp_Symbol etc.:
+set $dummy = Fmake_symbol + 8
 
 # When nonzero, display some extra diagnostics in various commands
 set $yverbose = 1
@@ -81,6 +83,11 @@ define ygetptr
   set $ptr = $arg0
   set $ptr = (CHECK_LISP_OBJECT_TYPE ? $ptr.i : $ptr) & VALMASK
 end
+
+# Get the value of Qnil for comparison.  Needed when
+# CHECK_LISP_OBJECT_TYPE is non-zero.
+ygetptr Qnil
+set $qnil = $ptr
 
 define ybuffer-list
   set $files_only         = $yfile_buffers_only
@@ -93,10 +100,13 @@ define ybuffer-list
 
   set $i = 0
   set $alist = Vbuffer_alist
-  while $alist != Qnil
-    ygetptr $alist
+  ygetptr $alist
+  set $alist = $ptr
+  while $alist != $qnil
     set $this  = ((struct Lisp_Cons *) $ptr)->car
     set $alist = ((struct Lisp_Cons *) $ptr)->u.cdr
+    ygetptr $alist
+    set $alist = $ptr
 
     # Vbuffer_alist elts are pairs of the form (name . buffer)
     ygetptr $this
@@ -104,7 +114,9 @@ define ybuffer-list
     ygetptr $buf
     set $buf = (struct buffer *) $ptr
 
-    if ! ($files_only && $buf->filename_ == Qnil)
+    ygetptr $buf->filename_
+    set $fname = $ptr
+    if ! ($files_only && $fname == $qnil)
       ygetptr $buf->name_
       set $name = ((struct Lisp_String *) $ptr)->data
       set $modp = ($buf->text->modiff > $buf->text->save_modiff) ? '*' : ' '
@@ -112,11 +124,11 @@ define ybuffer-list
       ygetptr $buf->mode_name_
       set $mode = ((struct Lisp_String *) $ptr)->data
 
-      if $buf->filename_ != Qnil
+      if $fname != $qnil
         ygetptr $buf->filename_
         printf "%2d %c  %9d %-20s %-10s %s\n", \
                $i, $modp, ($buf->text->z_byte - 1), $name, $mode, \
-               ((struct Lisp_String *) $ptr)->data
+               ((struct Lisp_String *) $fname)->data
       else
         printf "%2d %c  %9d %-20s %-10s\n", \
                $i, $modp, ($buf->text->z_byte - 1), $name, $mode
@@ -129,7 +141,7 @@ end
 document ybuffer-list
   Display a list of buffer names, sizes, and other attributes.
   The buffer number in the first column is used as an argument
-  to some other emacs-buffer recovery commands, e.g. `ysave-buffer'.
+  to some other emacs-buffer recovery commands, e.g. 'ysave-buffer'.
 end
 
 define yfile-buffers
@@ -138,7 +150,7 @@ define yfile-buffers
 end
 document yfile-buffers
   Display a list of buffers which are associated with files.
-  This is like `ybuffer-list', but only buffers that were visiting files
+  This is like 'ybuffer-list', but only buffers that were visiting files
   are displayed.
 end
 
@@ -146,15 +158,17 @@ define yset-buffer
   set $i = $arg0
 
   set $alist = Vbuffer_alist
-  while ($alist != Qnil && $i > 0)
-    ygetptr $alist
+  ygetptr $alist
+  set $alist = $ptr
+  while ($alist != $qnil && $i > 0)
     set $alist = ((struct Lisp_Cons *) $ptr)->u.cdr
+    ygetptr $alist
+    set $alist = $ptr
     set $i--
   end
 
   # Get car of alist; this is a pair (name . buffer)
-  ygetptr $alist
-  set $this = ((struct Lisp_Cons *) $ptr)->car
+  set $this = ((struct Lisp_Cons *) $alist)->car
 
   # Get the buffer object
   ygetptr $this
@@ -165,7 +179,7 @@ define yset-buffer
 end
 document yset-buffer
   Set current buffer (for other emacs-buffer recovery commands) to the ARG'th
-  buffer as displayed by `ybuffer-list'.
+  buffer as displayed by 'ybuffer-list'.
 end
 
 define yget-buffer-pointers
@@ -184,9 +198,9 @@ define yget-buffer-pointers
 end
 document yget-buffer-pointers
   Update convenience variables with address pointers for the ARG'th buffer
-  as displayed by `ybuffer-list'.
+  as displayed by 'ybuffer-list'.
 
-  This also sets the current buffer using `yset-buffer' (which see).
+  This also sets the current buffer using 'yset-buffer' (which see).
 end
 
 define yget-current-buffer-name
@@ -213,18 +227,22 @@ define ydump-buffer
       set $endptr = $beg + $buf->gpt_byte - 1
       dump binary memory $arg1 $beg $endptr
     else
-      dump   binary memory $arg1 $beg $gap-1
-      append binary memory $arg1 $gap_end $end
+      if $gap - $beg > 1
+        dump   binary memory $arg1 $beg $gap-1
+        append binary memory $arg1 $gap_end $end
+      else
+        dump   binary memory $arg1 $gap_end $end
+      end
       set $endptr = $end
     end
   end
 end
 document ydump-buffer
-  Write contents of buffer N (as numbered according to `ybuffer-list') to
+  Write contents of buffer N (as numbered according to 'ybuffer-list') to
   file FILE.
 
-  This is mainly used as an internal subroutine for `ysave-buffer' and
-  `ybuffer-contents', which see.
+  This is mainly used as an internal subroutine for 'ysave-buffer' and
+  'ybuffer-contents', which see.
 end
 
 define ysave-buffer
@@ -242,7 +260,7 @@ define ysave-buffer
   end
 end
 document ysave-buffer
-  Save contents of buffer N (as numbered according to `ybuffer-list') to
+  Save contents of buffer N (as numbered according to 'ybuffer-list') to
   file FILE.
 end
 
@@ -258,7 +276,7 @@ define ybuffer-contents
   end
 end
 document ybuffer-contents
-  Write contents of buffer N (numbered according to `ybuffer-list') to stdout.
+  Write contents of buffer N (numbered according to 'ybuffer-list') to stdout.
 end
 
 # local variables:

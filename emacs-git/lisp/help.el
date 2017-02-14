@@ -1,6 +1,6 @@
 ;;; help.el --- help commands for Emacs
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2015 Free Software
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -95,7 +95,7 @@
     (define-key map "k" 'describe-key)
     (define-key map "l" 'view-lossage)
     (define-key map "m" 'describe-mode)
-    (define-key map "o" 'describe-function-or-variable)
+    (define-key map "o" 'describe-symbol)
     (define-key map "n" 'view-emacs-news)
     (define-key map "p" 'finder-by-keyword)
     (define-key map "P" 'describe-package)
@@ -355,12 +355,12 @@ With argument, display info only for the selected version."
 		   (while (re-search-forward
 			   (if (member file '("NEWS.18" "NEWS.1-17"))
 			       "Changes in \\(?:Emacs\\|version\\)?[ \t]*\\([0-9]+\\(?:\\.[0-9]+\\)?\\)"
-			     "^\* [^0-9\n]*\\([0-9]+\\.[0-9]+\\)") nil t)
+			     "^\\* [^0-9\n]*\\([0-9]+\\.[0-9]+\\)") nil t)
 		     (setq res (cons (match-string-no-properties 1) res)))))
 	       (cons "NEWS"
 		     (directory-files data-directory nil
 				      "^NEWS\\.[0-9][-0-9]*$" nil)))
-	      (sort (delete-dups res) (lambda (a b) (string< b a)))))
+	      (sort (delete-dups res) #'string>)))
 	   (current (car all-versions)))
       (setq version (completing-read
 		     (format "Read NEWS for the version (default %s): " current)
@@ -392,7 +392,7 @@ With argument, display info only for the selected version."
       (when (re-search-forward
 	     (concat (if (< vn 19)
 			 "Changes in Emacs[ \t]*"
-		       "^\* [^0-9\n]*") version "$")
+		       "^\\* [^0-9\n]*") version "$")
 	     nil t)
 	(beginning-of-line)
 	(narrow-to-region
@@ -402,7 +402,7 @@ With argument, display info only for the selected version."
 			     (re-search-forward
 			      (if (< vn 19)
 				  "Changes in \\(?:Emacs\\|version\\)?[ \t]*\\([0-9]+\\(?:\\.[0-9]+\\)?\\)"
-				"^\* [^0-9\n]*\\([0-9]+\\.[0-9]+\\)") nil t))
+				"^\\* [^0-9\n]*\\([0-9]+\\.[0-9]+\\)") nil t))
 		       (equal (match-string-no-properties 1) version)))
 	   (or res (goto-char (point-max)))
 	   (beginning-of-line)
@@ -613,7 +613,15 @@ temporarily enables it to allow getting help on disabled items and buttons."
 	   (when (null (cdr yank-menu))
 	     (setq saved-yank-menu (copy-sequence yank-menu))
 	     (menu-bar-update-yank-menu "(any string)" nil))
-	   (setq key (read-key-sequence "Describe key (or click or menu item): "))
+           (while
+               (progn
+                 (setq key (read-key-sequence "Describe the following key, mouse click, or menu item: "))
+                 (and (vectorp key)
+                      (consp (aref key 0))
+                      (symbolp (car (aref key 0)))
+                      (string-match "\\(mouse\\|down\\|click\\|drag\\)"
+                                    (symbol-name (car (aref key 0))))
+                      (not (sit-for (/ double-click-time 1000.0) t)))))
 	   ;; Clear the echo area message (Bug#7014).
 	   (message nil)
 	   ;; If KEY is a down-event, read and discard the
@@ -750,7 +758,15 @@ temporarily enables it to allow getting help on disabled items and buttons."
 	   (when (null (cdr yank-menu))
 	     (setq saved-yank-menu (copy-sequence yank-menu))
 	     (menu-bar-update-yank-menu "(any string)" nil))
-	   (setq key (read-key-sequence "Describe key (or click or menu item): "))
+           (while
+               (progn
+                 (setq key (read-key-sequence "Describe the following key, mouse click, or menu item: "))
+                 (and (vectorp key)
+                      (consp (aref key 0))
+                      (symbolp (car (aref key 0)))
+                      (string-match "\\(mouse\\|down\\|click\\|drag\\)"
+                                    (symbol-name (car (aref key 0))))
+                      (not (sit-for (/ double-click-time 1000.0) t)))))
 	   (list
 	    key
 	    (prefix-numeric-value current-prefix-arg)
@@ -930,14 +946,15 @@ documentation for the major and minor modes of that buffer."
 	      (let ((mode-function (nth 0 mode))
 		    (pretty-minor-mode (nth 1 mode))
 		    (indicator (nth 2 mode)))
-		(add-text-properties 0 (length pretty-minor-mode)
-				     '(face bold) pretty-minor-mode)
 		(save-excursion
 		  (goto-char (point-max))
 		  (princ "\n\f\n")
 		  (push (point-marker) help-button-cache)
 		  ;; Document the minor modes fully.
-		  (insert pretty-minor-mode)
+                  (insert-text-button
+                   pretty-minor-mode 'type 'help-function
+                   'help-args (list mode-function)
+                   'button '(t))
 		  (princ (format " minor mode (%s):\n"
 				 (if (zerop (length indicator))
 				     "no indicator"
@@ -964,11 +981,13 @@ documentation for the major and minor modes of that buffer."
 	(let* ((mode major-mode)
 	       (file-name (find-lisp-object-file-name mode nil)))
 	  (when file-name
-	    (princ (concat " defined in `" (file-name-nondirectory file-name) "'"))
+	    (princ (format-message " defined in `%s'"
+                                   (file-name-nondirectory file-name)))
 	    ;; Make a hyperlink to the library.
 	    (with-current-buffer standard-output
 	      (save-excursion
-		(re-search-backward "`\\([^`']+\\)'" nil t)
+		(re-search-backward (substitute-command-keys "`\\([^`']+\\)'")
+                                    nil t)
 		(help-xref-button 1 'help-function-def mode file-name)))))
 	(princ ":\n")
 	(princ (documentation major-mode)))))
@@ -1067,7 +1086,7 @@ is currently activated with completion."
 ;;; Automatic resizing of temporary buffers.
 (defcustom temp-buffer-max-height
   (lambda (buffer)
-    (if (eq (selected-window) (frame-root-window))
+    (if (and (display-graphic-p) (eq (selected-window) (frame-root-window)))
 	(/ (x-display-pixel-height) (frame-char-height) 2)
       (/ (- (frame-height) 2) 2)))
   "Maximum height of a window displaying a temporary buffer.
@@ -1084,7 +1103,7 @@ function is called, the window to be resized is selected."
 
 (defcustom temp-buffer-max-width
   (lambda (buffer)
-    (if (eq (selected-window) (frame-root-window))
+    (if (and (display-graphic-p) (eq (selected-window) (frame-root-window)))
 	(/ (x-display-pixel-width) (frame-char-width) 2)
       (/ (- (frame-width) 2) 2)))
   "Maximum width of a window displaying a temporary buffer.
@@ -1160,8 +1179,8 @@ size of WINDOW."
 		       (and (window-combined-p window t)
 			    fit-window-to-buffer-horizontally)))
 	      (and (eq quit-cadr 'frame)
-		     fit-frame-to-buffer
-		     (eq window (frame-root-window window))))
+                   fit-frame-to-buffer
+                   (eq window (frame-root-window window))))
 	(fit-window-to-buffer window height nil width nil t))))
 
 ;;; Help windows.
@@ -1348,6 +1367,11 @@ the help window if the current value of the user option
 	  (princ msg)))))
 
 
+(defun help--docstring-quote (string)
+  "Return a doc string that represents STRING.
+The result, when formatted by `substitute-command-keys', should equal STRING."
+  (replace-regexp-in-string "['\\`‘’]" "\\\\=\\&" string))
+
 ;; The following functions used to be in help-fns.el, which is not preloaded.
 ;; But for various reasons, they are more widely needed, so they were
 ;; moved to this file, which is preloaded.  http://debbugs.gnu.org/17001
@@ -1363,12 +1387,16 @@ DEF is the function whose usage we're looking for in DOCSTRING."
   ;; function's name in the doc string so we use `fn' as the anonymous
   ;; function name instead.
   (when (and docstring (string-match "\n\n(fn\\(\\( .*\\)?)\\)\\'" docstring))
-    (cons (format "(%s%s"
-		  ;; Replace `fn' with the actual function name.
-		  (if (symbolp def) def "anonymous")
-		  (match-string 1 docstring))
-	  (unless (zerop (match-beginning 0))
-            (substring docstring 0 (match-beginning 0))))))
+    (let ((doc (unless (zerop (match-beginning 0))
+		 (substring docstring 0 (match-beginning 0))))
+	  (usage-tail (match-string 1 docstring)))
+      (cons (format "(%s%s"
+		    ;; Replace `fn' with the actual function name.
+		    (if (symbolp def)
+			(help--docstring-quote (format "%S" def))
+		      'anonymous)
+		    usage-tail)
+	    doc))))
 
 (defun help-add-fundoc-usage (docstring arglist)
   "Add the usage info to DOCSTRING.
@@ -1383,10 +1411,11 @@ ARGLIST can also be t or a string of the form \"(FUN ARG1 ARG2 ...)\"."
 	    (if (string-match "\n?\n\\'" docstring)
 		(if (< (- (match-end 0) (match-beginning 0)) 2) "\n" "")
 	      "\n\n")
-	    (if (and (stringp arglist)
-		     (string-match "\\`([^ ]+\\(.*\\))\\'" arglist))
-		(concat "(fn" (match-string 1 arglist) ")")
-	      (format "%S" (help-make-usage 'fn arglist))))))
+	    (if (stringp arglist)
+                (if (string-match "\\`[^ ]+\\(.*\\))\\'" arglist)
+                    (concat "(fn" (match-string 1 arglist) ")")
+                  (error "Unrecognized usage format"))
+	      (help--make-usage-docstring 'fn arglist)))))
 
 (defun help-function-arglist (def &optional preserve-names)
   "Return a formal argument list for the function DEF.
@@ -1441,7 +1470,7 @@ the same names as used in the original source code, when possible."
     "[Arg list not available until function definition is loaded.]")
    (t t)))
 
-(defun help-make-usage (function arglist)
+(defun help--make-usage (function arglist)
   (cons (if (symbolp function) function 'anonymous)
 	(mapcar (lambda (arg)
 		  (if (not (symbolp arg)) arg
@@ -1452,6 +1481,12 @@ the same names as used in the original source code, when possible."
                         (intern (upcase (substring name 1))))
                        (t (intern (upcase name)))))))
 		arglist)))
+
+(define-obsolete-function-alias 'help-make-usage 'help--make-usage "25.1")
+
+(defun help--make-usage-docstring (fn arglist)
+  (let ((print-escape-newlines t))
+    (help--docstring-quote (format "%S" (help--make-usage fn arglist)))))
 
 
 (provide 'help)

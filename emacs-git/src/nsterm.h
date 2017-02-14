@@ -1,13 +1,13 @@
 /* Definitions and headers for communication with NeXT/Open/GNUstep API.
-   Copyright (C) 1989, 1993, 2005, 2008-2015 Free Software Foundation,
+   Copyright (C) 1989, 1993, 2005, 2008-2017 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -39,6 +39,9 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifndef MAC_OS_X_VERSION_10_9
 #define MAC_OS_X_VERSION_10_9 1090
 #endif
+#ifndef MAC_OS_X_VERSION_10_12
+#define MAC_OS_X_VERSION_10_12 101200
+#endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
 #define HAVE_NATIVE_FS
@@ -58,6 +61,300 @@ typedef CGFloat EmacsCGFloat;
 #else
 typedef float EmacsCGFloat;
 #endif
+
+/* ==========================================================================
+
+   Trace support
+
+   ========================================================================== */
+
+/* Uncomment the following line to enable trace.
+
+   Uncomment suitable NSTRACE_GROUP_xxx lines to trace more.
+
+   Hint: keep the trailing whitespace -- the version control system
+   will reject accidental commits. */
+
+/* #define NSTRACE_ENABLED 1          */
+
+
+/* When non-zero, trace output is enabled for all parts, except those
+   explicitly disabled. */
+/* #define NSTRACE_ALL_GROUPS     1     */
+
+/* When non-zero, trace output is enabled in the corresponding part. */
+/* #define NSTRACE_GROUP_EVENTS  1     */
+/* #define NSTRACE_GROUP_UPDATES 1     */
+/* #define NSTRACE_GROUP_FRINGE  1     */
+/* #define NSTRACE_GROUP_COLOR   1     */
+/* #define NSTRACE_GROUP_GLYPHS  1     */
+/* #define NSTRACE_GROUP_FOCUS   1     */
+
+
+/* Print a call tree containing all annotated functions.
+
+   The call structure of the functions is represented using
+   indentation and vertical lines.  Extra information is printed using
+   horizontal lines that connect to the vertical line.
+
+   The return value is represented using the arrow "->>".  For simple
+   functions, the arrow can be printed on the same line as the
+   function name.  If more output is printed, it is connected to the
+   vertical line of the function.
+
+   The first column contains the file name, the second the line
+   number, and the third a number increasing for each trace line.
+
+   Note, when trace output from several threads are mixed, the output
+   can become misaligned, as all threads (currently) share one state.
+   This is post prominent when the EVENTS part is enabled.
+
+   Note that the trace system, when enabled, use the GCC/Clang
+   "cleanup" extension. */
+
+/*   For example, the following is the output of `M-x
+     toggle-frame-maximized RET'.
+
+     (Long lines manually split to reduced width):
+
+nsterm.m  : 1608: [  354]  ns_fullscreen_hook
+nsterm.m  : 7180: [  355]  | [EmacsView handleFS]
+nsterm.m  : 7209: [  356]  | +--- FULLSCREEN_MAXIMIZED
+nsterm.m  : 7706: [  357]  | | [EmacsWindow performZoom:]
+nsterm.m  : 7715: [  358]  | | | [EmacsWindow zoom:]
+nsterm.m  :  882: [  359]  | | | | ns_update_auto_hide_menu_bar
+nsterm.m  : 6752: [  360]  | | | |
+  [EmacsView windowWillUseStandardFrame:defaultFrame:(X:0 Y:0)/(W:1600 H:1177)]
+nsterm.m  : 6753: [  361]  | | | | +--- fs_state: FULLSCREEN_NONE
+nsterm.m  : 6754: [  362]  | | | | +--- fs_before_fs: -1
+nsterm.m  : 6755: [  363]  | | | | +--- next_maximized: FULLSCREEN_MAXIMIZED
+nsterm.m  : 6756: [  364]  | | | | +--- ns_userRect: (X:0 Y:0)/(W:0 H:0)
+nsterm.m  : 6757: [  365]  | | | | +---
+                                      [sender frame]: (X:0 Y:626)/(W:595 H:551)
+nsterm.m  : 6781: [  366]  | | | | +---
+                                     ns_userRect (2): (X:0 Y:626)/(W:595 H:551)
+nsterm.m  : 6821: [  367]  | | | | +--- FULLSCREEN_MAXIMIZED
+nsterm.m  : 7232: [  368]  | | | | |
+                                    [EmacsView setFSValue:FULLSCREEN_MAXIMIZED]
+nsterm.m  : 6848: [  369]  | | | | +---
+                                   Final ns_userRect: (X:0 Y:626)/(W:595 H:551)
+nsterm.m  : 6849: [  370]  | | | | +--- Final maximized_width: 1600
+nsterm.m  : 6850: [  371]  | | | | +--- Final maximized_height: 1177
+nsterm.m  : 6851: [  372]  | | | | +--- Final next_maximized: -1
+nsterm.m  : 6322: [  373]  | | | | |
+                           [EmacsView windowWillResize:toSize: (W:1600 H:1177)]
+nsterm.m  : 6323: [  374]  | | | | | +---
+                                      [sender frame]: (X:0 Y:626)/(W:595 H:551)
+nsterm.m  : 6324: [  375]  | | | | | +--- fs_state: FULLSCREEN_MAXIMIZED
+nsterm.m  : 7027: [  376]  | | | | | | [EmacsView isFullscreen]
+nsterm.m  : 6387: [  377]  | | | | | +--- cols: 223  rows: 79
+nsterm.m  : 6412: [  378]  | | | | | +->> (W:1596 H:1167)
+nsterm.m  : 6855: [  379]  | | | | +->> (X:0 Y:0)/(W:1600 H:1177)
+*/
+
+#ifndef NSTRACE_ENABLED
+#define NSTRACE_ENABLED 0
+#endif
+
+#if NSTRACE_ENABLED
+
+#ifndef NSTRACE_ALL_GROUPS
+#define NSTRACE_ALL_GROUPS 0
+#endif
+
+#ifndef NSTRACE_GROUP_EVENTS
+#define NSTRACE_GROUP_EVENTS NSTRACE_ALL_GROUPS
+#endif
+
+#ifndef NSTRACE_GROUP_UPDATES
+#define NSTRACE_GROUP_UPDATES NSTRACE_ALL_GROUPS
+#endif
+
+#ifndef NSTRACE_GROUP_FRINGE
+#define NSTRACE_GROUP_FRINGE NSTRACE_ALL_GROUPS
+#endif
+
+#ifndef NSTRACE_GROUP_COLOR
+#define NSTRACE_GROUP_COLOR NSTRACE_ALL_GROUPS
+#endif
+
+#ifndef NSTRACE_GROUP_GLYPHS
+#define NSTRACE_GROUP_GLYPHS NSTRACE_ALL_GROUPS
+#endif
+
+#ifndef NSTRACE_GROUP_FOCUS
+#define NSTRACE_GROUP_FOCUS NSTRACE_ALL_GROUPS
+#endif
+
+extern volatile int nstrace_num;
+extern volatile int nstrace_depth;
+extern volatile int nstrace_enabled_global;
+
+void nstrace_leave(int *);
+void nstrace_restore_global_trace_state(int *);
+char const * nstrace_fullscreen_type_name (int);
+
+/* printf-style trace output.  Output is aligned with contained heading. */
+#define NSTRACE_MSG_NO_DASHES(...)                                          \
+  do                                                                        \
+    {                                                                       \
+      if (nstrace_enabled)                                                  \
+        {                                                                   \
+          fprintf (stderr, "%-10s:%5d: [%5d]%.*s",                          \
+                   __FILE__, __LINE__, nstrace_num++,                       \
+                   2*nstrace_depth, "  | | | | | | | | | | | | | | | ..");  \
+          fprintf (stderr, __VA_ARGS__);                                    \
+          fprintf (stderr, "\n");                                           \
+        }                                                                   \
+    }                                                                       \
+  while(0)
+
+#define NSTRACE_MSG(...) NSTRACE_MSG_NO_DASHES("+--- " __VA_ARGS__)
+
+
+
+/* Macros for printing complex types.
+
+   NSTRACE_FMT_what     -- Printf format string for "what".
+   NSTRACE_ARG_what(x)  -- Printf argument for "what". */
+
+#define NSTRACE_FMT_SIZE        "(W:%.0f H:%.0f)"
+#define NSTRACE_ARG_SIZE(elt)   (elt).width, (elt).height
+
+#define NSTRACE_FMT_POINT       "(X:%.0f Y:%.0f)"
+#define NSTRACE_ARG_POINT(elt)  (elt).x, (elt).y
+
+#define NSTRACE_FMT_RECT        NSTRACE_FMT_POINT "/" NSTRACE_FMT_SIZE
+#define NSTRACE_ARG_RECT(elt)   \
+  NSTRACE_ARG_POINT((elt).origin), NSTRACE_ARG_SIZE((elt).size)
+
+#define NSTRACE_FMT_FSTYPE      "%s"
+#define NSTRACE_ARG_FSTYPE(elt) nstrace_fullscreen_type_name(elt)
+
+
+/* Macros for printing complex types as extra information. */
+
+#define NSTRACE_SIZE(str,size)                                          \
+  NSTRACE_MSG (str ": " NSTRACE_FMT_SIZE,                               \
+               NSTRACE_ARG_SIZE (size));
+
+#define NSTRACE_POINT(str,point)                                        \
+  NSTRACE_MSG (str ": " NSTRACE_FMT_POINT,                              \
+               NSTRACE_ARG_POINT (point));
+
+#define NSTRACE_RECT(str,rect)                                          \
+  NSTRACE_MSG (str ": " NSTRACE_FMT_RECT,                               \
+               NSTRACE_ARG_RECT (rect));
+
+#define NSTRACE_FSTYPE(str,fs_type)                                     \
+  NSTRACE_MSG (str ": " NSTRACE_FMT_FSTYPE,                             \
+               NSTRACE_ARG_FSTYPE (fs_type));
+
+
+/* Return value macros.
+
+   NSTRACE_RETURN(fmt, ...) - Print a return value, support printf-style
+                              format string and arguments.
+
+   NSTRACE_RETURN_what(obj) - Print a return value of kind WHAT.
+
+   NSTRACE_FMT_RETURN - A string literal representing a returned
+                        value.  Useful when creating a format string
+                        to printf-like constructs like NSTRACE(). */
+
+#define NSTRACE_FMT_RETURN "->>"
+
+#define NSTRACE_RETURN(...) \
+  NSTRACE_MSG_NO_DASHES ("+" NSTRACE_FMT_RETURN " " __VA_ARGS__)
+
+#define NSTRACE_RETURN_SIZE(size) \
+  NSTRACE_RETURN(NSTRACE_FMT_SIZE, NSTRACE_ARG_SIZE(size))
+
+#define NSTRACE_RETURN_POINT(point) \
+  NSTRACE_RETURN(NSTRACE_FMT_POINT, NSTRACE_ARG_POINT(point))
+
+#define NSTRACE_RETURN_RECT(rect) \
+  NSTRACE_RETURN(NSTRACE_FMT_RECT, NSTRACE_ARG_RECT(rect))
+
+
+/* Function enter macros.
+
+   NSTRACE (fmt, ...) -- Enable trace output in current block
+                         (typically a function).  Accepts printf-style
+                         arguments.
+
+   NSTRACE_WHEN (cond, fmt, ...) -- Enable trace output when COND is true.
+
+   NSTRACE_UNLESS (cond, fmt, ...) -- Enable trace output unless COND is
+                                      true. */
+
+
+
+#define NSTRACE_WHEN(cond, ...)                                         \
+  __attribute__((cleanup(nstrace_restore_global_trace_state)))          \
+  int nstrace_saved_enabled_global = nstrace_enabled_global;            \
+  __attribute__((cleanup(nstrace_leave)))                               \
+  int nstrace_enabled = nstrace_enabled_global && (cond);               \
+  if (nstrace_enabled) { ++nstrace_depth; }                             \
+  else { nstrace_enabled_global = 0; }                                  \
+  NSTRACE_MSG_NO_DASHES(__VA_ARGS__);
+
+/* Unsilence called functions.
+
+   Concretely, this us used to allow "event" functions to be silenced
+   while trace output can be printed for functions they call. */
+#define NSTRACE_UNSILENCE() do { nstrace_enabled_global = 1; } while(0)
+
+#endif /* NSTRACE_ENABLED */
+
+#define NSTRACE(...)              NSTRACE_WHEN(1, __VA_ARGS__)
+#define NSTRACE_UNLESS(cond, ...) NSTRACE_WHEN(!(cond), __VA_ARGS__)
+
+/* Non-trace replacement versions. */
+#ifndef NSTRACE_WHEN
+#define NSTRACE_WHEN(...)
+#endif
+
+#ifndef NSTRACE_MSG
+#define NSTRACE_MSG(...)
+#endif
+
+#ifndef NSTRACE_SIZE
+#define NSTRACE_SIZE(str,size)
+#endif
+
+#ifndef NSTRACE_POINT
+#define NSTRACE_POINT(str,point)
+#endif
+
+#ifndef NSTRACE_RECT
+#define NSTRACE_RECT(str,rect)
+#endif
+
+#ifndef NSTRACE_FSTYPE
+#define NSTRACE_FSTYPE(str,fs_type)
+#endif
+
+#ifndef NSTRACE_RETURN_SIZE
+#define NSTRACE_RETURN_SIZE(size)
+#endif
+
+#ifndef NSTRACE_RETURN_POINT
+#define NSTRACE_RETURN_POINT(point)
+#endif
+
+#ifndef NSTRACE_RETURN_RECT
+#define NSTRACE_RETURN_RECT(rect)
+#endif
+
+#ifndef NSTRACE_RETURN_FSTYPE
+#define NSTRACE_RETURN_FSTYPE(fs_type)
+#endif
+
+#ifndef NSTRACE_UNSILENCE
+#define NSTRACE_UNSILENCE()
+#endif
+
 
 /* ==========================================================================
 
@@ -86,9 +383,9 @@ typedef float EmacsCGFloat;
 #endif
 #ifdef NS_IMPL_GNUSTEP
   BOOL applicationDidFinishLaunchingCalled;
+#endif
 @public
   int nextappdefined;
-#endif
 }
 - (void)logNotification: (NSNotification *)notification;
 - (void)antialiasThresholdDidChange:(NSNotification *)notification;
@@ -174,6 +471,14 @@ typedef float EmacsCGFloat;
 #ifdef NS_IMPL_GNUSTEP
 - (void)windowDidMove: (id)sender;
 #endif
+- (int)fullscreenState;
+
+/* Non-notification versions of NSView methods. Used for direct calls. */
+- (void)windowWillEnterFullScreen;
+- (void)windowDidEnterFullScreen;
+- (void)windowWillExitFullScreen;
+- (void)windowDidExitFullScreen;
+- (void)windowDidBecomeKey;
 @end
 
 
@@ -374,10 +679,12 @@ typedef float EmacsCGFloat;
    /* offset to the bottom of knob of last mouse down */
    CGFloat last_mouse_offset;
    float min_portion;
-   int pixel_height;
+   int pixel_length;
    enum scroll_bar_part last_hit_part;
 
    BOOL condemned;
+
+   BOOL horizontal;
 
    /* optimize against excessive positioning calls generated by emacs */
    int em_position;
@@ -424,7 +731,7 @@ typedef float EmacsCGFloat;
 
 extern NSArray *ns_send_types, *ns_return_types;
 extern NSString *ns_app_name;
-extern EmacsMenu *mainMenu, *svcsMenu, *dockMenu;
+extern EmacsMenu *svcsMenu;
 
 /* Apple removed the declaration, but kept the implementation */
 #if defined (NS_IMPL_COCOA)
@@ -617,8 +924,6 @@ struct ns_display_info
 /* This is a chain of structures for all the NS displays currently in use.  */
 extern struct ns_display_info *x_display_list;
 
-extern struct ns_display_info *ns_display_info_for_name (Lisp_Object name);
-
 struct ns_output
 {
 #ifdef __OBJC__
@@ -678,6 +983,9 @@ struct ns_output
 
   /* Non-zero if we are zooming (maximizing) the frame.  */
   int zooming;
+
+  /* Non-zero if we are doing an animation, e.g. toggling the tool bar. */
+  int in_animation;
 };
 
 /* this dummy decl needed to support TTYs */
@@ -707,7 +1015,7 @@ struct x_output
 #define FRAME_NS_TITLEBAR_HEIGHT(f) ((f)->output_data.ns->titlebar_height)
 #define FRAME_TOOLBAR_HEIGHT(f) ((f)->output_data.ns->toolbar_height)
 
-#define FRAME_DEFAULT_FACE(f) FACE_FROM_ID (f, DEFAULT_FACE_ID)
+#define FRAME_DEFAULT_FACE(f) FACE_FROM_ID_OR_NULL (f, DEFAULT_FACE_ID)
 
 #define FRAME_NS_VIEW(f) ((f)->output_data.ns->view)
 #define FRAME_CURSOR_COLOR(f) ((f)->output_data.ns->cursor_color)
@@ -739,10 +1047,10 @@ struct x_output
 
 /* Difference btwn char-column-calculated and actual SB widths.
    This is only a concern for rendering when SB on left. */
-#define NS_SCROLL_BAR_ADJUST(w, f)		\
-(WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_LEFT (w) ?	\
-    (FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f)	\
-        - NS_SCROLL_BAR_WIDTH (f)) : 0)
+#define NS_SCROLL_BAR_ADJUST(w, f)				\
+  (WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_LEFT (w) ?			\
+   (FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f)		\
+    - NS_SCROLL_BAR_WIDTH (f)) : 0)
 
 /* Difference btwn char-line-calculated and actual SB heights.
    This is only a concern for rendering when SB on top. */
@@ -789,7 +1097,7 @@ extern void nsfont_make_fontset_for_font (Lisp_Object name,
 
 /* In nsfont, for debugging */
 struct glyph_string;
-void ns_dump_glyphstring (struct glyph_string *s);
+void ns_dump_glyphstring (struct glyph_string *s) EXTERNALLY_VISIBLE;
 
 /* Implemented in nsterm, published in or needed from nsfns. */
 extern Lisp_Object ns_list_fonts (struct frame *f, Lisp_Object pattern,
@@ -806,9 +1114,6 @@ extern void ns_string_to_pasteboard (id pb, Lisp_Object str);
 extern Lisp_Object ns_get_local_selection (Lisp_Object selection_name,
                                            Lisp_Object target_type);
 extern void nxatoms_of_nsselect (void);
-extern int ns_lisp_to_cursor_type (Lisp_Object arg);
-extern Lisp_Object ns_cursor_type_to_lisp (int arg);
-extern void ns_set_name_as_filename (struct frame *f);
 extern void ns_set_doc_edited (void);
 
 extern bool
@@ -820,11 +1125,9 @@ extern void
 ns_query_color (void *col, XColor *color_def, int setPixel);
 
 #ifdef __OBJC__
-extern Lisp_Object ns_color_to_lisp (NSColor *col);
 extern int ns_lisp_to_color (Lisp_Object color, NSColor **col);
 extern NSColor *ns_lookup_indexed_color (unsigned long idx, struct frame *f);
 extern unsigned long ns_index_color (NSColor *color, struct frame *f);
-extern void ns_free_indexed_color (unsigned long idx, struct frame *f);
 extern const char *ns_get_pending_menu_title (void);
 extern void ns_check_menu_open (NSMenu *menu);
 extern void ns_check_pending_open_menu (void);
@@ -836,12 +1139,12 @@ extern void  ns_retain_object (void *obj);
 extern void *ns_alloc_autorelease_pool (void);
 extern void ns_release_autorelease_pool (void *);
 extern const char *ns_get_defaults_value (const char *key);
+extern void ns_init_locale (void);
+
 
 /* in nsmenu */
 extern void update_frame_tool_bar (struct frame *f);
 extern void free_frame_tool_bar (struct frame *f);
-extern void find_and_call_menu_selection (struct frame *f,
-    int menu_bar_items_used, Lisp_Object vector, void *client_data);
 extern Lisp_Object find_and_return_menu_selection (struct frame *f,
                                                    bool keymaps,
                                                    void *client_data);
@@ -864,7 +1167,7 @@ extern void syms_of_nsselect (void);
 
 /* From nsimage.m, needed in image.c */
 struct image;
-extern void *ns_image_from_XBM (unsigned char *bits, int width, int height,
+extern void *ns_image_from_XBM (char *bits, int width, int height,
                                 unsigned long fg, unsigned long bg);
 extern void *ns_image_for_XPM (int width, int height, int depth);
 extern void *ns_image_from_file (Lisp_Object file);
@@ -880,6 +1183,7 @@ extern int x_display_pixel_height (struct ns_display_info *);
 extern int x_display_pixel_width (struct ns_display_info *);
 
 /* This in nsterm.m */
+extern float ns_antialias_threshold;
 extern void x_destroy_window (struct frame *f);
 extern int ns_select (int nfds, fd_set *readfds, fd_set *writefds,
 		      fd_set *exceptfds, struct timespec const *timeout,
@@ -887,14 +1191,11 @@ extern int ns_select (int nfds, fd_set *readfds, fd_set *writefds,
 extern unsigned long ns_get_rgb_color (struct frame *f,
                                        float r, float g, float b, float a);
 
-extern void ns_init_events ();
-extern void ns_finish_events ();
+struct input_event;
+extern void ns_init_events (struct input_event *);
+extern void ns_finish_events (void);
 
 #ifdef __OBJC__
-/* From nsterm.m, needed in nsfont.m. */
-extern void
-ns_draw_text_decoration (struct glyph_string *s, struct face *face,
-                         NSColor *defaultCol, CGFloat width, CGFloat x);
 /* Needed in nsfns.m.  */
 extern void
 ns_set_represented_filename (NSString* fstr, struct frame *f);
@@ -923,5 +1224,43 @@ extern char gnustep_base_version[];  /* version tracking */
 #define IN_BOUND(min, x, max) (((x) < (min)) \
                                 ? (min) : (((x)>(max)) ? (max) : (x)))
 #define SCREENMAXBOUND(x) (IN_BOUND (-SCREENMAX, x, SCREENMAX))
+
+/* macOS 10.12 deprecates a bunch of constants. */
+#if !defined (NS_IMPL_COCOA) || \
+  MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_12
+#define NSEventModifierFlagCommand         NSCommandKeyMask
+#define NSEventModifierFlagControl         NSControlKeyMask
+#define NSEventModifierFlagHelp            NSHelpKeyMask
+#define NSEventModifierFlagNumericPad      NSNumericPadKeyMask
+#define NSEventModifierFlagOption          NSAlternateKeyMask
+#define NSEventModifierFlagShift           NSShiftKeyMask
+#define NSCompositingOperationSourceOver   NSCompositeSourceOver
+#define NSEventMaskApplicationDefined      NSApplicationDefinedMask
+#define NSEventTypeApplicationDefined      NSApplicationDefined
+#define NSEventTypeCursorUpdate            NSCursorUpdate
+#define NSEventTypeMouseMoved              NSMouseMoved
+#define NSEventTypeLeftMouseDown           NSLeftMouseDown
+#define NSEventTypeRightMouseDown          NSRightMouseDown
+#define NSEventTypeOtherMouseDown          NSOtherMouseDown
+#define NSEventTypeLeftMouseUp             NSLeftMouseUp
+#define NSEventTypeRightMouseUp            NSRightMouseUp
+#define NSEventTypeOtherMouseUp            NSOtherMouseUp
+#define NSEventTypeLeftMouseDragged        NSLeftMouseDragged
+#define NSEventTypeRightMouseDragged       NSRightMouseDragged
+#define NSEventTypeOtherMouseDragged       NSOtherMouseDragged
+#define NSEventTypeScrollWheel             NSScrollWheel
+#define NSEventTypeKeyDown                 NSKeyDown
+#define NSEventTypeKeyUp                   NSKeyUp
+#define NSEventTypeFlagsChanged            NSFlagsChanged
+#define NSEventMaskAny                     NSAnyEventMask
+#define NSWindowStyleMaskBorderless        NSBorderlessWindowMask
+#define NSWindowStyleMaskClosable          NSClosableWindowMask
+#define NSWindowStyleMaskFullScreen        NSFullScreenWindowMask
+#define NSWindowStyleMaskMiniaturizable    NSMiniaturizableWindowMask
+#define NSWindowStyleMaskResizable         NSResizableWindowMask
+#define NSWindowStyleMaskTitled            NSTitledWindowMask
+#define NSAlertStyleCritical               NSCriticalAlertStyle
+#define NSControlSizeRegular               NSRegularControlSize
+#endif
 
 #endif	/* HAVE_NS */

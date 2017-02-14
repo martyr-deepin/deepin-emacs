@@ -1,6 +1,6 @@
 ;;; makeinfo.el --- run makeinfo conveniently
 
-;; Copyright (C) 1991, 1993, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1991, 1993, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Robert J. Chassell
 ;; Maintainer: emacs-devel@gnu.org
@@ -66,7 +66,7 @@ The name of the file is appended to this string, separated by a space."
   "String containing options for running `makeinfo'.
 Do not include `--footnote-style' or `--paragraph-indent';
 the proper way to specify those is with the Texinfo commands
-`@footnotestyle` and `@paragraphindent'."
+`@footnotestyle' and `@paragraphindent'."
   :type 'string
   :group 'makeinfo)
 
@@ -228,7 +228,7 @@ nonsensical results."
   "Make Info file from current buffer.
 
 Use the \\[next-error] command to move to the next error
-\(if there are errors\)."
+\(if there are errors)."
 
   (interactive)
   (cond ((null buffer-file-name)

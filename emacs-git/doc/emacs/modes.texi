@@ -1,5 +1,6 @@
+@c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2017 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Modes
@@ -112,10 +113,13 @@ hook}, a customizable list of Lisp functions to run each time the mode
 is enabled in a buffer.  @xref{Hooks}, for more information about
 hooks.  Each mode hook is named after its major mode, e.g., Fortran
 mode has @code{fortran-mode-hook}.  Furthermore, all text-based major
-modes run @code{text-mode-hook}, and all programming language modes
-run @code{prog-mode-hook}, prior to running their own mode hooks.
-Hook functions can look at the value of the variable @code{major-mode}
-to see which mode is actually being entered.
+modes run @code{text-mode-hook}, and many programming language modes
+@footnote{More specifically, the modes which are ''derived'' from
+@code{prog-mode} (@pxref{Derived Modes,,, elisp, The Emacs Lisp
+Reference Manual}).} (including all those distributed with Emacs) run
+@code{prog-mode-hook}, prior to running their own mode hooks.  Hook
+functions can look at the value of the variable @code{major-mode} to
+see which mode is actually being entered.
 
   Mode hooks are commonly used to enable minor modes (@pxref{Minor
 Modes}).  For example, you can put the following lines in your init
@@ -200,6 +204,12 @@ Auto Save mode saves the buffer contents periodically to reduce the
 amount of work you can lose in case of a crash.  @xref{Auto Save}.
 
 @item
+Electric Quote mode automatically converts quotation marks.  For
+example, it requotes text typed @t{`like this'} to text @t{‘like
+this’}.  You can control what kind of text it operates in, and you can
+disable it entirely in individual buffers.  @xref{Quotation Marks}.
+
+@item
 Enriched mode enables editing and saving of formatted text.
 @xref{Enriched Text}.
 
@@ -245,7 +255,7 @@ In Binary Overwrite mode, digits after @kbd{C-q} specify an octal
 character code, as usual.
 
 @item
-Visual Line mode performs ``word wrapping'', causing long lines to be
+Visual Line mode performs word wrapping, causing long lines to be
 wrapped at word boundaries.  @xref{Visual Line Mode}.
 @end itemize
 
@@ -429,7 +439,8 @@ compares the text at the start of the buffer to the variable
 @code{magic-mode-alist}, described above, except that is consulted
 only after @code{auto-mode-alist}.  By default,
 @code{magic-fallback-mode-alist} contains forms that check for image
-files, HTML/XML/SGML files, and PostScript files.
+files, HTML/XML/SGML files, PostScript files, and Unix style Conf
+files.
 
 @findex normal-mode
   If you have changed the major mode of a buffer, you can return to
@@ -444,6 +455,6 @@ the file's @samp{-*-} line or local variables list (if any).
 a new major mode if the new file name implies a mode (@pxref{Saving}).
 (@kbd{C-x C-s} does this too, if the buffer wasn't visiting a file.)
 However, this does not happen if the buffer contents specify a major
-mode, and certain ``special'' major modes do not allow the mode to
+mode, and certain special major modes do not allow the mode to
 change.  You can turn off this mode-changing feature by setting
 @code{change-major-mode-with-file-name} to @code{nil}.

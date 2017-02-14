@@ -1,7 +1,7 @@
 ### @configure_input@
 
 # Copyright (C) 1992, 1993 Lucid, Inc.
-# Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+# Copyright (C) 1994, 2001-2017 Free Software Foundation, Inc.
 #
 # This file is part of the Lucid Widget Library.
 #
@@ -26,13 +26,14 @@ srcdir=@srcdir@
 # MinGW CPPFLAGS may use this.
 abs_top_srcdir=@abs_top_srcdir@
 VPATH=@srcdir@
-@SET_MAKE@
 C_SWITCH_X_SITE=@C_SWITCH_X_SITE@
 C_SWITCH_SYSTEM=@C_SWITCH_SYSTEM@
 C_SWITCH_MACHINE=@C_SWITCH_MACHINE@
 PROFILING_CFLAGS = @PROFILING_CFLAGS@
-WARN_CFLAGS = `echo @WARN_CFLAGS@ | sed 's/ -Wwrite-strings//'`
+WARN_CFLAGS = @WARN_CFLAGS@
+WARN_CFLAGS := $(filter-out -Wwrite-strings,${WARN_CFLAGS})
 WERROR_CFLAGS = @WERROR_CFLAGS@
+CAIRO_CFLAGS= @CAIRO_CFLAGS@
 
 CC=@CC@
 CFLAGS=@CFLAGS@
@@ -42,6 +43,7 @@ RANLIB=@RANLIB@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 MKDIR_P = @MKDIR_P@
+EXEEXT = @EXEEXT@
 
 LUCID_OBJS = lwlib-Xlw.o xlwmenu.o lwlib-Xaw.o
 MOTIF_OBJS = lwlib-Xm.o
@@ -88,6 +90,7 @@ endif
 ALL_CFLAGS= $(C_SWITCH_SYSTEM) $(C_SWITCH_X_SITE) \
   $(C_SWITCH_MACHINE) $(DEPFLAGS) \
   $(WARN_CFLAGS) $(WERROR_CFLAGS) $(PROFILING_CFLAGS) $(CFLAGS) \
+  $(CAIRO_CFLAGS) \
   -Demacs -I../src \
   -I$(srcdir) -I$(srcdir)/../src -I../lib -I$(srcdir)/../lib
 
@@ -125,15 +128,17 @@ distclean: clean
 bootstrap-clean maintainer-clean: distclean
 	rm -f TAGS
 
+ETAGS = ../lib-src/etags${EXEEXT}
 
-ETAGS = ../lib-src/etags
+${ETAGS}: FORCE
+	${MAKE} -C ../lib-src $(notdir $@)
 
-ctagsfiles= $(srcdir)/*.[ch]
+ctagsfiles= $(wildcard ${srcdir}/*.[ch])
 
-TAGS: $(ctagsfiles)
-	"$(ETAGS)" $(ctagsfiles)
+FORCE:
+.PHONY: tags FORCE
 tags: TAGS
-.PHONY: tags
-
+TAGS: ${ETAGS} $(ctagsfiles)
+	${ETAGS} $(ctagsfiles)
 
 ### Makefile.in ends here

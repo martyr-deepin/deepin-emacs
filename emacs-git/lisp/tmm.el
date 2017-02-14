@@ -1,6 +1,6 @@
 ;;; tmm.el --- text mode access to menu-bar  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1994-1996, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1996, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Ilya Zakharevich <ilya@math.mps.ohio-state.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -54,7 +54,7 @@ we make that menu bar item (the one at that position) the default choice.
 
 Note that \\[menu-bar-open] by default drops down TTY menus; if you want it
 to invoke `tmm-menubar' instead, customize the variable
-\`tty-menu-open-use-tmm' to a non-nil value."
+`tty-menu-open-use-tmm' to a non-nil value."
   (interactive)
   (run-hooks 'menu-bar-update-hook)
   ;; Obey menu-bar-final-items; put those items last.
@@ -72,13 +72,15 @@ to invoke `tmm-menubar' instead, customize the variable
      (tmm-get-keybind [menu-bar]))
     (setq menu-bar `(keymap ,@(nreverse menu-bar) ,@(nreverse menu-end)))
     (if x-position
-	(let ((column 0))
+	(let ((column 0)
+              prev-key)
           (catch 'done
             (map-keymap
              (lambda (key binding)
                (when (> column x-position)
-                 (setq menu-bar-item key)
+                 (setq menu-bar-item prev-key)
                  (throw 'done nil))
+               (setq prev-key key)
                (pcase binding
                  ((or `(,(and (pred stringp) name) . ,_) ;Simple menu item.
                       `(menu-item ,name ,_cmd            ;Extended menu item.
@@ -187,7 +189,6 @@ Its value should be an event that has a binding in MENU."
          ((vectorp elt)
           (dotimes (i (length elt))
             (tmm-get-keymap (cons i (aref elt i)) not-menu))))))
-    (setq tmm-km-list (nreverse tmm-km-list))
     ;; Choose an element of tmm-km-list; put it in choice.
     (if (and not-menu (= 1 (length tmm-km-list)))
 	;; If this is the top-level of an x-popup-menu menu,
@@ -239,10 +240,17 @@ Its value should be an event that has a binding in MENU."
                    (if default-item
                        (car (nth index-of-default tmm-km-list))
                      (minibuffer-with-setup-hook #'tmm-add-prompt
+                       ;; tmm-km-list is reversed, because history
+                       ;; needs it in LIFO order.  But completion
+                       ;; needs it in non-reverse order, so that the
+                       ;; menu items are displayed as completion
+                       ;; candidates in the order they are shown on
+                       ;; the menu bar.  So pass completing-read the
+                       ;; reversed copy of the list.
                        (completing-read
                         (concat gl-str
                                 " (up/down to change, PgUp to menu): ")
-                        (tmm--completion-table tmm-km-list) nil t nil
+                        (tmm--completion-table (reverse tmm-km-list)) nil t nil
                         (cons 'tmm--history
                               (- (* 2 history-len) index-of-default))))))))
       (setq choice (cdr (assoc out tmm-km-list)))

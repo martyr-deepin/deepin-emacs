@@ -1,6 +1,6 @@
 ;;; newst-backend.el --- Retrieval backend for newsticker.
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
 ;; Author:      Ulf Jasper <ulf.jasper@web.de>
 ;; Filename:    newst-backend.el
@@ -235,7 +235,7 @@ which apply for this feed only, overriding the value of
   'intern
   "Method for retrieving news from the web, either `intern' or `extern'.
 Default value `intern' uses Emacs' built-in asynchronous download
-capabilities ('url-retrieve').  If set to `extern' the external
+capabilities (`url-retrieve').  If set to `extern' the external
 program wget is used, see `newsticker-wget-name'."
   :type '(choice :tag "Method"
                  (const :tag "Intern" intern)
@@ -332,9 +332,9 @@ deleted at the next retrieval."
 This is an alist of the form (FEED-NAME PATTERN-LIST).  I.e. each
 element consists of a FEED-NAME a PATTERN-LIST.  Each element of
 the pattern-list has the form (AGE TITLE-OR-DESCRIPTION REGEXP).
-AGE must be one of the symbols 'old or 'immortal.
-TITLE-OR-DESCRIPTION must be on of the symbols 'title,
-'description, or 'all.  REGEXP is a regular expression, i.e. a
+AGE must be one of the symbols `old' or `immortal'.
+TITLE-OR-DESCRIPTION must be one of the symbols `title',
+`description', or `all'.  REGEXP is a regular expression, i.e., a
 string.
 
 This filter is checked after a new headline has been retrieved.
@@ -343,8 +343,8 @@ pattern-list is checked: The new headline will be marked as AGE
 if REGEXP matches the headline's TITLE-OR-DESCRIPTION.
 
 If, for example, `newsticker-auto-mark-filter-list' looks like
- \((slashdot ('old 'title \"^Forget me!$\") ('immortal 'title \"Read me\")
-  \('immortal 'all \"important\"))))
+ ((slashdot (\\='old \\='title \"^Forget me!$\") (\\='immortal \\='title \"Read me\")
+  (\\='immortal \\='all \"important\"))))
 
 then all articles from slashdot are marked as old if they have
 the title \"Forget me!\".  All articles with a title containing
@@ -442,13 +442,6 @@ buffers *newsticker-wget-<feed>* will not be closed."
 
 ;; FIXME It is bad practice to define compat functions with such generic names.
 
-;; This is not needed in Emacs >= 22.1.
-(unless (fboundp 'time-add)
-  (require 'time-date);;FIXME
-  (defun time-add (t1 t2)
-    (with-no-warnings ; don't warn about obsolete time-to-seconds in 23.2
-      (seconds-to-time (+ (time-to-seconds t1) (time-to-seconds t2))))))
-
 (unless (fboundp 'match-string-no-properties)
   (defalias 'match-string-no-properties 'match-string))
 
@@ -502,8 +495,8 @@ This is a list of the form
 
 where LABEL is a symbol.  TITLE, DESCRIPTION, and LINK are
 strings.  TIME is a time value as returned by `current-time'.
-AGE is a symbol: 'new, 'old, 'immortal, and 'obsolete denote
-ordinary news items, whereas 'feed denotes an item which is not a
+AGE is a symbol: `new', `old', `immortal', and `obsolete' denote
+ordinary news items, whereas `feed' denotes an item which is not a
 headline but describes the feed itself.  INDEX denotes the
 original position of the item -- used for restoring the original
 order.  PREFORMATTED-CONTENTS and PREFORMATTED-TITLE hold the
@@ -562,7 +555,7 @@ If non-nil only the current headline is visible.")
   "Return guid of ITEM."
   (newsticker--guid-to-string (assoc 'guid (newsticker--extra item))))
 (defsubst newsticker--enclosure (item)
-  "Return enclosure element of ITEM in the form \(...FIXME...\) or nil."
+  "Return enclosure element of ITEM in the form (...FIXME...) or nil."
   (let ((enclosure (assoc 'enclosure (newsticker--extra item))))
     (if enclosure
         (xml-node-attributes enclosure))))
@@ -846,7 +839,7 @@ Argument BUFFER is the buffer of the retrieval process."
                newsticker--cache
                name-symbol
                newsticker--error-headline
-               (format
+               (format-message
                 (concat "%s: Newsticker could not retrieve news from %s.\n"
                         "Return status: `%s'\n"
                         "Command was `%s'")
@@ -1987,7 +1980,7 @@ Renders the HTML code in the region POS1 to POS2 using htmlr."
 
 (defun newsticker--cache-replace-age (data feed old-age new-age)
   "Mark all items in DATA in FEED which carry age OLD-AGE with NEW-AGE.
-If FEED is 'any it applies to all feeds.  If OLD-AGE is 'any,
+If FEED is `any' it applies to all feeds.  If OLD-AGE is `any',
 all marks are replaced by NEW-AGE.  Removes all pre-formatted contents."
   (mapc (lambda (a-feed)
           (when (or (eq feed 'any)
@@ -2038,7 +2031,7 @@ The properties which are checked are TITLE, DESC, LINK, AGE, and
 GUID.  In general all properties must match in order to return a
 certain item, except for the following cases.
 
-If AGE equals 'feed the TITLE, DESCription and LINK do not
+If AGE equals `feed' the TITLE, DESCription and LINK do not
 matter.  If DESC is nil it is ignored as well.  If
 `newsticker-desc-comp-max' is non-nil, only the first
 `newsticker-desc-comp-max' characters of DESC are taken into
@@ -2131,19 +2124,16 @@ which the item got."
       (setq item (list title desc link time age position preformatted-contents
                        preformatted-title extra-elements))
       ;;(newsticker--debug-msg "Adding item %s" item)
-      (catch 'found
-        (mapc (lambda (this-feed)
-                (when (eq (car this-feed) feed-name-symbol)
-                  (setcdr this-feed (nconc (cdr this-feed) (list item)))
-                  (throw 'found this-feed)))
-              data)
-        ;; the feed is not contained
-        (add-to-list 'data (list feed-name-symbol item) t))))
-  data)
+      (let ((this-feed (assq feed-name-symbol data)))
+        (if this-feed
+            (setcdr this-feed (nconc (cdr this-feed) (list item)))
+          ;; The feed is not contained.
+          (setq data (append data (list (list feed-name-symbol item)))))))
+    data))
 
 (defun newsticker--cache-remove (data feed-symbol age)
   "Remove all entries from DATA in the feed FEED-SYMBOL with AGE.
-FEED-SYMBOL may be 'any.  Entries from old feeds, which are no longer in
+FEED-SYMBOL may be `any'.  Entries from old feeds, which are no longer in
 `newsticker-url-list' or `newsticker-url-list-defaults', are removed as
 well."
   (let* ((pos data)

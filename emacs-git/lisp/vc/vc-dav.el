@@ -1,6 +1,6 @@
 ;;; vc-dav.el --- vc.el support for WebDAV
 
-;; Copyright (C) 2001, 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2001, 2004-2017 Free Software Foundation, Inc.
 
 ;; Author: Bill Perry <wmperry@gnu.org>
 ;; Maintainer: Bill Perry <wmperry@gnu.org>
@@ -82,7 +82,7 @@ See `vc-checkout-model' for a list of possible values."
   ;; Do we need to do anything here?  FIXME?
   )
 
-(defun vc-dav-checkin (url comment)
+(defun vc-dav-checkin (url comment &optional _rev)
   "Commit changes in URL to WebDAV. COMMENT is used as a check-in comment."
   ;; This should PUT the resource and release any locks that we hold.
   )

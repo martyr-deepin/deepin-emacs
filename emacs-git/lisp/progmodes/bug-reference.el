@@ -1,6 +1,6 @@
 ;; bug-reference.el --- buttonize bug references
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Tom Tromey <tromey@redhat.com>
 ;; Created: 21 Mar 2007
@@ -58,7 +58,7 @@ It can use `match-string' to get parts matched against
 There is no default setting for this, it must be set per file.
 If you set it to a symbol in the file Local Variables section,
 you need to add a `bug-reference-url-format' property to it:
-\(put 'my-bug-reference-url-format 'bug-reference-url-format t)
+\(put \\='my-bug-reference-url-format \\='bug-reference-url-format t)
 so that it is considered safe, see `enable-local-variables'.")
 
 ;;;###autoload
@@ -69,7 +69,7 @@ so that it is considered safe, see `enable-local-variables'.")
                 (get s 'bug-reference-url-format)))))
 
 (defcustom bug-reference-bug-regexp
-  "\\([Bb]ug ?#\\|[Pp]atch ?#\\|RFE ?#\\|PR [a-z-+]+/\\)\\([0-9]+\\(?:#[0-9]+\\)?\\)"
+  "\\([Bb]ug ?#?\\|[Pp]atch ?#\\|RFE ?#\\|PR [a-z-+]+/\\)\\([0-9]+\\(?:#[0-9]+\\)?\\)"
   "Regular expression matching bug references.
 The second subexpression should match the bug reference (usually a number)."
   :type 'string

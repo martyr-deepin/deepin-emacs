@@ -1,13 +1,13 @@
 /* Simple built-in editing commands.
 
-Copyright (C) 1985, 1993-1998, 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 1985, 1993-1998, 2001-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,10 +25,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "character.h"
 #include "buffer.h"
 #include "syntax.h"
-#include "window.h"
 #include "keyboard.h"
 #include "keymap.h"
-#include "dispextern.h"
 #include "frame.h"
 
 static int internal_self_insert (int, EMACS_INT);
@@ -110,10 +108,17 @@ DEFUN ("forward-line", Fforward_line, Sforward_line, 0, 1, "^p",
 Precisely, if point is on line I, move to the start of line I + N
 \("start of line" in the logical order).
 If there isn't room, go as far as possible (no error).
+
 Returns the count of lines left to move.  If moving forward,
-that is N - number of lines moved; if backward, N + number moved.
-With positive N, a non-empty line at the end counts as one line
-successfully moved (for the return value).  */)
+that is N minus number of lines moved; if backward, N plus number
+moved.
+
+Exception: With positive N, a non-empty line at the end of the
+buffer, or of its accessible portion, counts as one line
+successfully moved (for the return value).  This means that the
+function will move point to the end of such a line and will count
+it as a line moved across, even though there is no next line to
+go to its beginning.  */)
   (Lisp_Object n)
 {
   ptrdiff_t opoint = PT, pos, pos_byte, shortage, count;
@@ -213,36 +218,6 @@ to t.  */)
   return Qnil;
 }
 
-static int nonundocount;
-
-static void
-remove_excessive_undo_boundaries (void)
-{
-  bool remove_boundary = true;
-
-  if (!EQ (Vthis_command, KVAR (current_kboard, Vlast_command)))
-    nonundocount = 0;
-
-  if (NILP (Vexecuting_kbd_macro))
-    {
-      if (nonundocount <= 0 || nonundocount >= 20)
-	{
-	  remove_boundary = false;
-	  nonundocount = 0;
-	}
-      nonundocount++;
-    }
-
-  if (remove_boundary
-      && CONSP (BVAR (current_buffer, undo_list))
-      && NILP (XCAR (BVAR (current_buffer, undo_list)))
-      /* Only remove auto-added boundaries, not boundaries
-	 added by explicit calls to undo-boundary.  */
-      && EQ (BVAR (current_buffer, undo_list), last_undo_boundary))
-    /* Remove the undo_boundary that was just pushed.  */
-    bset_undo_list (current_buffer, XCDR (BVAR (current_buffer, undo_list)));
-}
-
 DEFUN ("delete-char", Fdelete_char, Sdelete_char, 1, 2, "p\nP",
        doc: /* Delete the following N characters (previous if N is negative).
 Optional second arg KILLFLAG non-nil means kill instead (save in kill ring).
@@ -257,8 +232,8 @@ because it respects values of `delete-active-region' and `overwrite-mode'.  */)
 
   CHECK_NUMBER (n);
 
-  if (abs (XINT (n)) < 2)
-    remove_excessive_undo_boundaries ();
+  if (eabs (XINT (n)) < 2)
+    call0 (Qundo_auto_amalgamate);
 
   pos = PT + XINT (n);
   if (NILP (killflag))
@@ -300,11 +275,11 @@ At the end, it runs `post-self-insert-hook'.  */)
 {
   CHECK_NUMBER (n);
 
-  if (XFASTINT (n) < 0)
-    error ("Negative repetition argument %"pI"d", XFASTINT (n));
+  if (XINT (n) < 0)
+    error ("Negative repetition argument %"pI"d", XINT (n));
 
   if (XFASTINT (n) < 2)
-    remove_excessive_undo_boundaries ();
+    call0 (Qundo_auto_amalgamate);
 
   /* Barf if the key that invoked this was not a character.  */
   if (!CHARACTERP (last_command_event))
@@ -314,7 +289,7 @@ At the end, it runs `post-self-insert-hook'.  */)
 				    XINT (last_command_event));
     int val = internal_self_insert (character, XFASTINT (n));
     if (val == 2)
-      nonundocount = 0;
+      Fset (Qundo_auto__this_command_amalgamating, Qnil);
     frame_make_pointer_invisible (SELECTED_FRAME ());
   }
 
@@ -472,7 +447,7 @@ internal_self_insert (int c, EMACS_INT n)
 	  string = concat2 (string, tem);
 	}
 
-      replace_range (PT, PT + chars_to_delete, string, 1, 1, 1);
+      replace_range (PT, PT + chars_to_delete, string, 1, 1, 1, 0);
       Fforward_char (make_number (n));
     }
   else if (n > 1)
@@ -519,7 +494,10 @@ internal_self_insert (int c, EMACS_INT n)
 void
 syms_of_cmds (void)
 {
-  DEFSYM (Qkill_backward_chars, "kill-backward-chars");
+  DEFSYM (Qundo_auto_amalgamate, "undo-auto-amalgamate");
+  DEFSYM (Qundo_auto__this_command_amalgamating,
+          "undo-auto--this-command-amalgamating");
+
   DEFSYM (Qkill_forward_chars, "kill-forward-chars");
 
   /* A possible value for a buffer's overwrite-mode variable.  */
@@ -549,7 +527,6 @@ keys_of_cmds (void)
 {
   int n;
 
-  nonundocount = 0;
   initial_define_key (global_map, Ctl ('I'), "self-insert-command");
   for (n = 040; n < 0177; n++)
     initial_define_key (global_map, n, "self-insert-command");

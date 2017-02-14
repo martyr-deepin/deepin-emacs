@@ -1,6 +1,6 @@
 ;;; semantic/mru-bookmark.el --- Automatic bookmark tracking
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -207,7 +207,7 @@ The resulting bookmark is then sorted within the ring."
       )))
 
 (defun semantic-mrub-cache-flush-fcn ()
-  "Function called in the `semantic-before-toplevel-cache-flush-hook`.
+  "Function called in the `semantic-before-toplevel-cache-flush-hook'.
 Cause tags in the ring to become unlinked."
   (let* ((ring (oref semantic-mru-bookmark-ring ring))
 	 (len (ring-length ring))
@@ -263,7 +263,7 @@ If ARG is positive or nil, enable, if it is negative, disable."
    'semantic-mru-bookmark-mode (if global-semantic-mru-bookmark-mode 1 -1)))
 
 (defcustom semantic-mru-bookmark-mode-hook nil
-  "*Hook run at the end of function `semantic-mru-bookmark-mode'."
+  "Hook run at the end of function `semantic-mru-bookmark-mode'."
   :group 'semantic
   :type 'hook)
 

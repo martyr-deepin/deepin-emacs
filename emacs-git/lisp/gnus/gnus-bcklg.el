@@ -1,6 +1,6 @@
 ;;; gnus-bcklg.el --- backlog functions for Gnus
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -83,7 +83,7 @@
 	    (insert-buffer-substring buffer)
 	    ;; Tag the beginning of the article with the ident.
 	    (if (> (point-max) b)
-	      (gnus-put-text-property b (1+ b) 'gnus-backlog ident)
+	      (put-text-property b (1+ b) 'gnus-backlog ident)
 	      (gnus-error 3 "Article %d is blank" number))))))))
 
 (defun gnus-backlog-remove-oldest-article ()

@@ -1,11 +1,12 @@
 ;;; trampver.el --- Transparent Remote Access, Multiple Protocol
 ;;; lisp/trampver.el.  Generated from trampver.el.in by configure.
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
 
 ;; Author: Kai Großjohann <kai.grossjohann@gmx.net>
 ;; Keywords: comm, processes
 ;; Package: tramp
+;; Version: 2.3.1
 
 ;; This file is part of GNU Emacs.
 
@@ -26,27 +27,36 @@
 
 ;; In the Tramp GIT repository, the version number and the bug report
 ;; address are auto-frobbed from configure.ac, so you should edit that
-;; file and run "autoconf && ./configure" to change them.  (X)Emacs
+;; file and run "autoconf && ./configure" to change them.  Emacs
 ;; version check is defined in macro AC_EMACS_INFO of aclocal.m4;
 ;; should be changed only there.
 
 ;;;###tramp-autoload
-(defconst tramp-version "2.2.12-pre"
+(defconst tramp-version "2.3.1"
   "This version of Tramp.")
 
 ;;;###tramp-autoload
 (defconst tramp-bug-report-address "tramp-devel@gnu.org"
   "Email address to send bug reports to.")
 
-;; Check for (X)Emacs version.
-(let ((x (if (or (>= emacs-major-version 22)
-		 (and (featurep 'xemacs)
-		      (= emacs-major-version 21)
-		      (>= emacs-minor-version 4)))
-	     "ok"
-	   (format "Tramp 2.2.12-pre is not fit for %s"
-		   (when (string-match "^.*$" (emacs-version))
-		     (match-string 0 (emacs-version)))))))
+(defun tramp-repository-get-version ()
+  "Try to return as a string the repository revision of the Tramp sources."
+  (let ((dir (locate-dominating-file (locate-library "tramp") ".git")))
+    (when dir
+      (with-temp-buffer
+	(let ((default-directory (file-name-as-directory dir)))
+	  (and (zerop
+		(ignore-errors
+		  (call-process "git" nil '(t nil) nil "rev-parse" "HEAD")))
+	       (not (zerop (buffer-size)))
+	       (replace-regexp-in-string "\n" "" (buffer-string))))))))
+
+;; Check for Emacs version.
+(let ((x (if (>= emacs-major-version 23)
+    "ok"
+  (format "Tramp 2.3.1 is not fit for %s"
+	  (when (string-match "^.*$" (emacs-version))
+	    (match-string 0 (emacs-version)))))))
   (unless (string-match "\\`ok\\'" x) (error "%s" x)))
 
 (add-hook 'tramp-unload-hook

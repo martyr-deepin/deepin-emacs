@@ -1,13 +1,13 @@
 /* Implementation of GUI terminal on the Microsoft Windows API.
 
-Copyright (C) 1989, 1993-2015 Free Software Foundation, Inc.
+Copyright (C) 1989, 1993-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,38 +23,29 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "blockinput.h"
 #include "w32term.h"
-
-#include "systty.h"
-#include "systime.h"
+#include "w32common.h"	/* for OS version info */
 
 #include <ctype.h>
 #include <errno.h>
 #include <sys/stat.h>
+#ifdef CYGWIN
+#include <fcntl.h>	/* for O_RDWR */
+#endif
 #include <imm.h>
 
-#include "charset.h"
-#include "character.h"
 #include "coding.h"
-#include "ccl.h"
 #include "frame.h"
-#include "dispextern.h"
 #include "fontset.h"
 #include "termhooks.h"
 #include "termopts.h"
 #include "termchar.h"
-#include "disptab.h"
 #include "buffer.h"
 #include "window.h"
 #include "keyboard.h"
-#include "intervals.h"
-#include "process.h"
-#include "atimer.h"
-#include "keymap.h"
-#include "menu.h"
+#include "menu.h"	/* for w32_menu_show */
 
 #ifdef WINDOWSNT
 #include "w32.h"	/* for filename_from_utf16, filename_from_ansi */
-#include "w32heap.h"
 #endif
 
 #ifndef WINDOWSNT
@@ -65,6 +56,10 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "font.h"
 #include "w32font.h"
+
+#if 0	/* TODO: stipple */
+#include "bitmaps/gray.xbm"
+#endif
 
 /* Fringe bitmaps.  */
 
@@ -87,8 +82,6 @@ static int last_mousemove_y = 0;
 static int any_help_event_p;
 
 extern unsigned int msh_mousewheel;
-
-extern void free_frame_menubar (struct frame *);
 
 extern int w32_codepage_for_font (char *fontname);
 extern Cursor w32_load_cursor (LPCTSTR name);
@@ -183,9 +176,7 @@ static void w32_define_cursor (Window, Cursor);
 
 void x_lower_frame (struct frame *);
 void x_scroll_bar_clear (struct frame *);
-void x_wm_set_size_hint (struct frame *, long, bool);
 void x_raise_frame (struct frame *);
-void x_set_window_size (struct frame *, bool, int, int, bool);
 void x_wm_set_window_state (struct frame *, int);
 void x_wm_set_icon_pixmap (struct frame *, int);
 static void w32_initialize (void);
@@ -253,7 +244,7 @@ record_event (char *locus, int type)
 #endif /* 0 */
 
 
-void
+static void
 XChangeGC (void *ignore, XGCValues *gc, unsigned long mask,
 	   XGCValues *xgcv)
 {
@@ -266,7 +257,7 @@ XChangeGC (void *ignore, XGCValues *gc, unsigned long mask,
 }
 
 XGCValues *
-XCreateGC (void *ignore, Window window, unsigned long mask, XGCValues *xgcv)
+XCreateGC (void *ignore, HWND wignore, unsigned long mask, XGCValues *xgcv)
 {
   XGCValues *gc = xzalloc (sizeof (XGCValues));
 
@@ -275,12 +266,14 @@ XCreateGC (void *ignore, Window window, unsigned long mask, XGCValues *xgcv)
   return gc;
 }
 
-void
+#if 0	/* unused for now, see x_draw_image_glyph_string below */
+static void
 XGetGCValues (void *ignore, XGCValues *gc,
 	      unsigned long mask, XGCValues *xgcv)
 {
   XChangeGC (ignore, xgcv, mask, gc);
 }
+#endif
 
 static void
 w32_set_clip_rectangle (HDC hdc, RECT *rect)
@@ -326,7 +319,7 @@ w32_restore_glyph_string_clip (struct glyph_string *s)
 
 */
 
-void
+static void
 w32_draw_underwave (struct glyph_string *s, COLORREF color)
 {
   int wave_height = 3, wave_length = 2;
@@ -389,7 +382,7 @@ w32_draw_underwave (struct glyph_string *s, COLORREF color)
 }
 
 /* Draw a hollow rectangle at the specified position.  */
-void
+static void
 w32_draw_rectangle (HDC hdc, XGCValues *gc, int x, int y,
                     int width, int height)
 {
@@ -401,7 +394,13 @@ w32_draw_rectangle (HDC hdc, XGCValues *gc, int x, int y,
   oldhb = SelectObject (hdc, hb);
   oldhp = SelectObject (hdc, hp);
 
-  Rectangle (hdc, x, y, x + width, y + height);
+  /* We enlarge WIDTH and HEIGHT by 1 to be bug-compatible to the
+     brain-dead design of XDrawRectangle, which draws a rectangle that
+     is 1 pixel wider and higher than its arguments WIDTH and HEIGHT.
+     This allows us to keep the code that calls this function similar
+     to the corresponding code in xterm.c.  For the details, see
+     http://lists.gnu.org/archives/html/emacs-devel/2014-10/msg00546.html.  */
+  Rectangle (hdc, x, y, x + width + 1, y + height + 1);
 
   SelectObject (hdc, oldhb);
   SelectObject (hdc, oldhp);
@@ -612,7 +611,7 @@ w32_draw_vertical_window_border (struct window *w, int x, int y0, int y1)
   r.bottom = y1;
 
   hdc = get_frame_dc (f);
-  face = FACE_FROM_ID (f, VERTICAL_BORDER_FACE_ID);
+  face = FACE_FROM_ID_OR_NULL (f, VERTICAL_BORDER_FACE_ID);
   if (face)
     w32_fill_rect (f, hdc, face->foreground, &r);
   else
@@ -629,9 +628,11 @@ w32_draw_window_divider (struct window *w, int x0, int x1, int y0, int y1)
 {
   struct frame *f = XFRAME (WINDOW_FRAME (w));
   HDC hdc = get_frame_dc (f);
-  struct face *face = FACE_FROM_ID (f, WINDOW_DIVIDER_FACE_ID);
-  struct face *face_first = FACE_FROM_ID (f, WINDOW_DIVIDER_FIRST_PIXEL_FACE_ID);
-  struct face *face_last = FACE_FROM_ID (f, WINDOW_DIVIDER_LAST_PIXEL_FACE_ID);
+  struct face *face = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_FACE_ID);
+  struct face *face_first
+    = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_FIRST_PIXEL_FACE_ID);
+  struct face *face_last
+    = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_LAST_PIXEL_FACE_ID);
   unsigned long color = face ? face->foreground : FRAME_FOREGROUND_PIXEL (f);
   unsigned long color_first = (face_first
 			       ? face_first->foreground
@@ -973,7 +974,7 @@ x_set_cursor_gc (struct glyph_string *s)
 		   mask, &xgcv);
       else
 	FRAME_DISPLAY_INFO (s->f)->scratch_cursor_gc
-	  = XCreateGC (NULL, s->window, mask, &xgcv);
+	  = XCreateGC (NULL, FRAME_W32_WINDOW (s->f), mask, &xgcv);
 
       s->gc = FRAME_DISPLAY_INFO (s->f)->scratch_cursor_gc;
     }
@@ -990,7 +991,7 @@ x_set_mouse_face_gc (struct glyph_string *s)
 
   /* What face has to be used last for the mouse face?  */
   face_id = MOUSE_HL_INFO (s->f)->mouse_face_face_id;
-  face = FACE_FROM_ID (s->f, face_id);
+  face = FACE_FROM_ID_OR_NULL (s->f, face_id);
   if (face == NULL)
     face = FACE_FROM_ID (s->f, MOUSE_FACE_ID);
 
@@ -1022,7 +1023,7 @@ x_set_mouse_face_gc (struct glyph_string *s)
 		   mask, &xgcv);
       else
 	FRAME_DISPLAY_INFO (s->f)->scratch_cursor_gc
-	  = XCreateGC (NULL, s->window, mask, &xgcv);
+	  = XCreateGC (NULL, FRAME_W32_WINDOW (s->f), mask, &xgcv);
 
       s->gc = FRAME_DISPLAY_INFO (s->f)->scratch_cursor_gc;
     }
@@ -1203,7 +1204,7 @@ x_draw_glyph_string_background (struct glyph_string *s, bool force_p)
 	{
 	  /* Fill background with a stipple pattern.  */
 	  XSetFillStyle (s->display, s->gc, FillOpaqueStippled);
-	  XFillRectangle (s->display, s->window, s->gc, s->x,
+	  XFillRectangle (s->display, FRAME_W32_WINDOW (s->f), s->gc, s->x,
 			  s->y + box_line_width,
 			  s->background_width,
 			  s->height - 2 * box_line_width);
@@ -1212,7 +1213,12 @@ x_draw_glyph_string_background (struct glyph_string *s, bool force_p)
 	}
       else
 #endif
-        if (FONT_HEIGHT (s->font) < s->height - 2 * box_line_width
+           if (FONT_HEIGHT (s->font) < s->height - 2 * box_line_width
+	       /* When xdisp.c ignores FONT_HEIGHT, we cannot trust
+		  font dimensions, since the actual glyphs might be
+		  much smaller.  So in that case we always clear the
+		  rectangle with background color.  */
+	       || FONT_TOO_HIGH (s->font)
 	       || s->font_not_found_p
 	       || s->extends_to_end_of_line_p
 	       || force_p)
@@ -1410,7 +1416,7 @@ x_draw_glyphless_glyph_string_foreground (struct glyph_string *s)
 
       if (glyph->u.glyphless.method == GLYPHLESS_DISPLAY_ACRONYM)
 	{
-	  if (len > 1
+	  if (len > 0
 	      && CHAR_TABLE_P (Vglyphless_char_display)
 	      && (CHAR_TABLE_EXTRA_SLOTS (XCHAR_TABLE (Vglyphless_char_display))
 		  >= 1))
@@ -1428,7 +1434,7 @@ x_draw_glyphless_glyph_string_foreground (struct glyph_string *s)
 	{
 	  sprintf ((char *) buf, "%0*X",
 		   glyph->u.glyphless.ch < 0x10000 ? 4 : 6,
-		   glyph->u.glyphless.ch);
+		   (unsigned int) glyph->u.glyphless.ch);
 	  str = buf;
 	}
 
@@ -1585,7 +1591,9 @@ w32_setup_relief_color (struct frame *f, struct relief *relief, double factor,
   unsigned long mask = GCForeground;
   COLORREF pixel;
   COLORREF background = di->relief_background;
+#if 0
   struct w32_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
+#endif
 
   /* TODO: Free colors (if using palette)? */
 
@@ -2053,7 +2061,7 @@ x_draw_glyph_string_bg_rect (struct glyph_string *s, int x, int y, int w, int h)
     {
       /* Fill background with a stipple pattern.  */
       XSetFillStyle (s->display, s->gc, FillOpaqueStippled);
-      XFillRectangle (s->display, s->window, s->gc, x, y, w, h);
+      XFillRectangle (s->display, FRAME_W32_WINDOW (s->f), s->gc, x, y, w, h);
       XSetFillStyle (s->display, s->gc, FillSolid);
     }
   else
@@ -2125,7 +2133,7 @@ x_draw_image_glyph_string (struct glyph_string *s)
 	  int depth = DefaultDepthOfScreen (screen);
 
 	  /* Create a pixmap as large as the glyph string.  */
- 	  pixmap = XCreatePixmap (s->display, s->window,
+	  pixmap = XCreatePixmap (s->display, FRAME_W32_WINDOW (s->f),
 				  s->background_width,
 				  s->height, depth);
 
@@ -2267,7 +2275,7 @@ x_draw_stretch_glyph_string (struct glyph_string *s)
 	    {
 	      /* Fill background with a stipple pattern.  */
 	      XSetFillStyle (s->display, gc, FillOpaqueStippled);
-	      XFillRectangle (s->display, s->window, gc, x, y, w, h);
+	      XFillRectangle (s->display, FRAME_W32_WINDOW (s->f), gc, x, y, w, h);
 	      XSetFillStyle (s->display, gc, FillSolid);
 	    }
 	  else
@@ -2569,7 +2577,7 @@ x_draw_glyph_string (struct glyph_string *s)
 
 /* Shift display to make room for inserted glyphs.   */
 
-void
+static void
 w32_shift_glyphs_for_insert (struct frame *f, int x, int y,
 			     int width, int height, int shift_by)
 {
@@ -2866,13 +2874,15 @@ w32_detect_focus_change (struct w32_display_info *dpyinfo, W32Msg *event,
 }
 
 
+#if 0	/* unused */
 /* Handle an event saying the mouse has moved out of an Emacs frame.  */
 
-void
+static void
 x_mouse_leave (struct w32_display_info *dpyinfo)
 {
   x_new_focus_frame (dpyinfo, dpyinfo->w32_focus_event_frame);
 }
+#endif
 
 /* The focus has changed, or we have redirected a frame's focus to
    another frame (this happens when a frame uses a surrogate
@@ -3203,71 +3213,85 @@ static void
 queue_notifications (struct input_event *event, W32Msg *msg, struct frame *f,
 		     int *evcount)
 {
-  BYTE *p = file_notifications;
-  FILE_NOTIFY_INFORMATION *fni = (PFILE_NOTIFY_INFORMATION)p;
-  const DWORD min_size
-    = offsetof (FILE_NOTIFY_INFORMATION, FileName) + sizeof(wchar_t);
+  struct notifications_set *ns = NULL;
   Lisp_Object frame;
+  int done = 0;
 
   /* We cannot process notification before Emacs is fully initialized,
      since we need the UTF-16LE coding-system to be set up.  */
   if (!initialized)
-    {
-      notification_buffer_in_use = 0;
-      return;
-    }
+    return;
 
   XSETFRAME (frame, f);
 
-  enter_crit ();
-  if (notification_buffer_in_use)
+  while (!done)
     {
-      DWORD info_size = notifications_size;
-      Lisp_Object cs = Qutf_16le;
-      Lisp_Object obj = w32_get_watch_object (notifications_desc);
+      ns = NULL;
 
-      /* notifications_size could be zero when the buffer of
-	 notifications overflowed on the OS level, or when the
-	 directory being watched was itself deleted.  Do nothing in
-	 that case.  */
-      if (info_size
-	  && !NILP (obj) && CONSP (obj))
+      /* Find out if there is a record available in the linked list of
+	 notifications sets.  If so, unlink the set from the linked
+	 list.  Use critical section.  */
+      enter_crit ();
+      if (notifications_set_head->next != notifications_set_head)
 	{
-	  Lisp_Object callback = XCDR (obj);
-
-	  while (info_size >= min_size)
-	    {
-	      Lisp_Object utf_16_fn
-		= make_unibyte_string ((char *)fni->FileName,
-				       fni->FileNameLength);
-	      /* Note: mule-conf is preloaded, so utf-16le must
-		 already be defined at this point.  */
-	      Lisp_Object fname
-		= code_convert_string_norecord (utf_16_fn, cs, 0);
-	      Lisp_Object action = lispy_file_action (fni->Action);
-
-	      event->kind = FILE_NOTIFY_EVENT;
-	      event->timestamp = msg->msg.time;
-	      event->modifiers = 0;
-	      event->frame_or_window = callback;
-	      event->arg = list3 (make_pointer_integer (notifications_desc),
-				  action, fname);
-	      kbd_buffer_store_event (event);
-	      (*evcount)++;
-
-	      if (!fni->NextEntryOffset)
-		break;
-	      p += fni->NextEntryOffset;
-	      fni = (PFILE_NOTIFY_INFORMATION)p;
-	      info_size -= fni->NextEntryOffset;
-	    }
+	  ns = notifications_set_head->next;
+	  ns->prev->next = ns->next;
+	  ns->next->prev = ns->prev;
 	}
-      notification_buffer_in_use = 0;
-    }
-  else
-    DebPrint (("We were promised notifications, but in-use flag is zero!\n"));
-  leave_crit ();
+      else
+	done = 1;
+      leave_crit();
 
+      if (ns)
+	{
+	  BYTE *p = ns->notifications;
+	  FILE_NOTIFY_INFORMATION *fni = (PFILE_NOTIFY_INFORMATION)p;
+	  const DWORD min_size
+	    = offsetof (FILE_NOTIFY_INFORMATION, FileName) + sizeof(wchar_t);
+	  DWORD info_size = ns->size;
+	  Lisp_Object cs = Qutf_16le;
+	  Lisp_Object obj = w32_get_watch_object (ns->desc);
+
+	  /* notifications size could be zero when the buffer of
+	     notifications overflowed on the OS level, or when the
+	     directory being watched was itself deleted.  Do nothing in
+	     that case.  */
+	  if (info_size
+	      && !NILP (obj) && CONSP (obj))
+	    {
+	      Lisp_Object callback = XCDR (obj);
+
+	      while (info_size >= min_size)
+		{
+		  Lisp_Object utf_16_fn
+		    = make_unibyte_string ((char *)fni->FileName,
+					   fni->FileNameLength);
+		  /* Note: mule-conf is preloaded, so utf-16le must
+		     already be defined at this point.  */
+		  Lisp_Object fname
+		    = code_convert_string_norecord (utf_16_fn, cs, 0);
+		  Lisp_Object action = lispy_file_action (fni->Action);
+
+		  event->kind = FILE_NOTIFY_EVENT;
+		  event->timestamp = msg->msg.time;
+		  event->modifiers = 0;
+		  event->frame_or_window = callback;
+		  event->arg = list3 (make_pointer_integer (ns->desc),
+				      action, fname);
+		  kbd_buffer_store_event (event);
+		  (*evcount)++;
+		  if (!fni->NextEntryOffset)
+		    break;
+		  p += fni->NextEntryOffset;
+		  fni = (PFILE_NOTIFY_INFORMATION)p;
+		  info_size -= fni->NextEntryOffset;
+		}
+	    }
+	  /* Free this notifications set. */
+	  xfree (ns->notifications);
+	  xfree (ns);
+	}
+    }
   /* We've stuffed all the events ourselves, so w32_read_socket shouldn't.  */
   event->kind = NO_EVENT;
 }
@@ -3608,8 +3632,8 @@ w32_set_horizontal_scroll_bar_thumb (struct scroll_bar *bar,
   si.fMask = SIF_PAGE | SIF_POS | SIF_RANGE;
   si.nMin = 0;
   si.nMax = whole;
-  /* Allow nPage to be one larger than nPos so we don't allow to scroll
-     an already fully visible buffer.  */
+  /* Allow nPage to be one larger than nPos so we don't allow the scrolling
+     of an already fully visible buffer.  */
   si.nPage = min (portion, si.nMax) + 1;
   si.nPos = min (position, si.nMax);
   SetScrollInfo (w, SB_CTL, &si, TRUE);
@@ -4174,6 +4198,7 @@ w32_scroll_bar_handle_click (struct scroll_bar *bar, W32Msg *msg,
       y = si.nPos;
 
     bar->dragging = 0;
+    struct frame *f;		/* Value is not used.  */
     FRAME_DISPLAY_INFO (f)->last_mouse_scroll_bar_pos = msg->msg.wParam;
 
     switch (sb_event)
@@ -4289,6 +4314,7 @@ w32_horizontal_scroll_bar_handle_click (struct scroll_bar *bar, W32Msg *msg,
     y = si.nMax - si.nPage;
 
     bar->dragging = 0;
+    struct frame *f;		/* Value is not used.  */
     FRAME_DISPLAY_INFO (f)->last_mouse_scroll_bar_pos = msg->msg.wParam;
 
     switch (sb_event)
@@ -4339,8 +4365,6 @@ w32_horizontal_scroll_bar_handle_click (struct scroll_bar *bar, W32Msg *msg,
 	if (dragging)
 	  {
 	    SCROLLINFO si;
-	    int start = bar->start;
-	    int end = bar->end;
 
 	    si.cbSize = sizeof (si);
 	    si.fMask = SIF_POS;
@@ -4498,18 +4522,6 @@ x_scroll_bar_clear (struct frame *f)
       }
 }
 
-static void
-set_frame_param (struct frame *f, Lisp_Object prop, Lisp_Object val)
-{
-  register Lisp_Object old_alist_elt;
-
-  old_alist_elt = Fassq (prop, f->param_alist);
-  if (EQ (old_alist_elt, Qnil))
-    fset_param_alist (f, Fcons (Fcons (prop, val), f->param_alist));
-  else
-    Fsetcdr (old_alist_elt, val);
-}
-
 /* The main W32 event-reading loop - w32_read_socket.  */
 
 /* Record the last 100 characters stored
@@ -4539,6 +4551,8 @@ static char dbcs_lead = 0;
    which message we are processing since the windows proc gets called
    recursively with different messages by the system.
 */
+
+extern void menubar_selection_callback (struct frame *, void *);
 
 static int
 w32_read_socket (struct terminal *terminal,
@@ -4614,11 +4628,18 @@ w32_read_socket (struct terminal *terminal,
 		}
 	      else
 		{
-		  HDC hdc = get_frame_dc (f);
+		  /* Erase background again for safety.  But don't do
+		     that if the frame's 'garbaged' flag is set, since
+		     in that case expose_frame will do nothing, and if
+		     the various redisplay flags happen to be unset,
+		     we are left with a blank frame.  */
+		  if (!FRAME_GARBAGED_P (f))
+		    {
+		      HDC hdc = get_frame_dc (f);
 
-		  /* Erase background again for safety.  */
-		  w32_clear_rect (f, hdc, &msg.rect);
-		  release_frame_dc (f, hdc);
+		      w32_clear_rect (f, hdc, &msg.rect);
+		      release_frame_dc (f, hdc);
+		    }
 		  expose_frame (f,
 				msg.rect.left,
 				msg.rect.top,
@@ -5148,7 +5169,7 @@ w32_read_socket (struct terminal *terminal,
 	  if (f && !FRAME_ICONIFIED_P (f) && msg.msg.wParam != SIZE_MINIMIZED)
 	    {
 	      RECT rect;
-	      int rows, columns, width, height, text_width, text_height;
+	      int /* rows, columns, */ width, height, text_width, text_height;
 
 	      if (GetClientRect (msg.msg.hwnd, &rect)
 		  /* GetClientRect evidently returns (0, 0, 0, 0) if
@@ -5252,6 +5273,10 @@ w32_read_socket (struct terminal *terminal,
 	    }
 	  break;
 
+	case WM_ENDSESSION:
+	  inev.kind = END_SESSION_EVENT;
+	  break;
+
 	case WM_INITMENU:
 	  f = x_window_to_frame (dpyinfo, msg.msg.hwnd);
 
@@ -5267,8 +5292,6 @@ w32_read_socket (struct terminal *terminal,
 
 	  if (f)
 	    {
-	      extern void menubar_selection_callback
-		(struct frame *f, void * client_data);
 	      menubar_selection_callback (f, (void *)msg.msg.wParam);
 	    }
 
@@ -5821,7 +5844,7 @@ Lisp_Object
 x_new_font (struct frame *f, Lisp_Object font_object, int fontset)
 {
   struct font *font = XFONT_OBJECT (font_object);
-  int unit;
+  int unit, font_ascent, font_descent;
 
   if (fontset < 0)
     fontset = fontset_from_font (font_object);
@@ -5834,7 +5857,8 @@ x_new_font (struct frame *f, Lisp_Object font_object, int fontset)
   FRAME_FONT (f) = font;
   FRAME_BASELINE_OFFSET (f) = font->baseline_offset;
   FRAME_COLUMN_WIDTH (f) = unit = font->average_width;
-  FRAME_LINE_HEIGHT (f) = font->height;
+  get_font_ascent_descent (font, &font_ascent, &font_descent);
+  FRAME_LINE_HEIGHT (f) = font_ascent + font_descent;
 
   /* Compute number of scrollbar columns.  */
   unit = FRAME_COLUMN_WIDTH (f);
@@ -5884,7 +5908,7 @@ xim_close_dpy (dpyinfo)
 /* Calculate the absolute position in frame F
    from its current recorded position values and gravity.  */
 
-void
+static void
 x_calc_absolute_position (struct frame *f)
 {
   int flags = f->size_hint_flags;
@@ -5919,16 +5943,49 @@ x_calc_absolute_position (struct frame *f)
       top_bottom_borders_height = 32;
     }
 
+  /* With multiple monitors, we can legitimately get negative
+     coordinates (for monitors above or to the left of the primary
+     monitor).  Find the display origin to ensure negative positions
+     are computed correctly (Bug#21173).  */
+  int display_left = 0;
+  int display_top = 0;
+  if (flags & (XNegative | YNegative))
+    {
+      Lisp_Object list;
+
+      list = Fw32_display_monitor_attributes_list (Qnil);
+      while (CONSP (list))
+        {
+          Lisp_Object attributes = CAR(list);
+          Lisp_Object geometry;
+          Lisp_Object monitor_left, monitor_top;
+
+          list = CDR(list);
+
+          geometry = Fassoc (Qgeometry, attributes);
+          if (!NILP (geometry))
+            {
+              monitor_left = Fnth (make_number (1), geometry);
+              monitor_top  = Fnth (make_number (2), geometry);
+
+              display_left = min (display_left, XINT (monitor_left));
+              display_top  = min (display_top,  XINT (monitor_top));
+            }
+        }
+    }
+
   /* Treat negative positions as relative to the rightmost bottommost
      position that fits on the screen.  */
   if (flags & XNegative)
     f->left_pos = (x_display_pixel_width (FRAME_DISPLAY_INFO (f))
+                   + display_left
 		   - FRAME_PIXEL_WIDTH (f)
 		   + f->left_pos
 		   - (left_right_borders_width - 1));
 
   if (flags & YNegative)
     f->top_pos = (x_display_pixel_height (FRAME_DISPLAY_INFO (f))
+                  + display_top
 		  - FRAME_PIXEL_HEIGHT (f)
 		  + f->top_pos
 		  - (top_bottom_borders_height - 1));
@@ -6088,8 +6145,21 @@ x_set_window_size (struct frame *f, bool change_gravity,
   int pixelwidth, pixelheight;
   Lisp_Object fullscreen = get_frame_param (f, Qfullscreen);
   RECT rect;
+  MENUBARINFO info;
+  int menu_bar_height;
 
   block_input ();
+
+  /* Get the height of the menu bar here.  It's used below to detect
+     whether the menu bar is wrapped.  It's also used to specify the
+     third argument for AdjustWindowRect.  FRAME_EXTERNAL_MENU_BAR which
+     has been used before for that reason is unreliable because it only
+     specifies whether we _want_ a menu bar for this frame and not
+     whether this frame _has_ a menu bar.  See bug#22105.  */
+  info.cbSize = sizeof (info);
+  info.rcBar.top = info.rcBar.bottom = 0;
+  GetMenuBarInfo (FRAME_W32_WINDOW (f), 0xFFFFFFFD, 0, &info);
+  menu_bar_height = info.rcBar.bottom - info.rcBar.top;
 
   if (pixelwise)
     {
@@ -6108,17 +6178,11 @@ x_set_window_size (struct frame *f, bool change_gravity,
 	 height of the frame then the wrapped menu bar lines are not
 	 accounted for (Bug#15174 and Bug#18720).  Here we add these
 	 extra lines to the frame height.  */
-      MENUBARINFO info;
       int default_menu_bar_height;
-      int menu_bar_height;
 
       /* Why is (apparently) SM_CYMENUSIZE needed here instead of
 	 SM_CYMENU ??  */
       default_menu_bar_height = GetSystemMetrics (SM_CYMENUSIZE);
-      info.cbSize = sizeof (info);
-      info.rcBar.top = info.rcBar.bottom = 0;
-      GetMenuBarInfo (FRAME_W32_WINDOW (f), 0xFFFFFFFD, 0, &info);
-      menu_bar_height = info.rcBar.bottom - info.rcBar.top;
 
       if ((default_menu_bar_height > 0)
 	  && (menu_bar_height > default_menu_bar_height)
@@ -6133,8 +6197,7 @@ x_set_window_size (struct frame *f, bool change_gravity,
   rect.right = pixelwidth;
   rect.bottom = pixelheight;
 
-  AdjustWindowRect (&rect, f->output_data.w32->dwStyle,
-		    FRAME_EXTERNAL_MENU_BAR (f));
+  AdjustWindowRect (&rect, f->output_data.w32->dwStyle, menu_bar_height > 0);
 
   if (!(f->after_make_frame)
       && !(f->want_fullscreen & FULLSCREEN_WAIT)
@@ -6164,6 +6227,13 @@ x_set_window_size (struct frame *f, bool change_gravity,
 
   if (pixelwidth > 0 || pixelheight > 0)
     {
+      frame_size_history_add
+	(f, Qx_set_window_size_1, width, height,
+	 list2 (Fcons (make_number (pixelwidth),
+		       make_number (pixelheight)),
+		Fcons (make_number (rect.right - rect.left),
+		       make_number (rect.bottom - rect.top))));
+
       my_set_window_pos (FRAME_W32_WINDOW (f), NULL,
 			 0, 0,
 			 rect.right - rect.left,
@@ -6191,7 +6261,7 @@ x_set_window_size (struct frame *f, bool change_gravity,
 
   unblock_input ();
 
-  do_pending_window_change (0);
+  do_pending_window_change (false);
 }
 
 /* Mouse warping.  */
@@ -6199,6 +6269,8 @@ x_set_window_size (struct frame *f, bool change_gravity,
 void
 frame_set_mouse_pixel_position (struct frame *f, int pix_x, int pix_y)
 {
+  UINT trail_num = 0;
+  BOOL ret = false;
   RECT rect;
   POINT pt;
 
@@ -6209,7 +6281,15 @@ frame_set_mouse_pixel_position (struct frame *f, int pix_x, int pix_y)
   pt.y = rect.top + pix_y;
   ClientToScreen (FRAME_W32_WINDOW (f), &pt);
 
+  /* When "mouse trails" are in effect, moving the mouse cursor
+     sometimes leaves behind an annoying "ghost" of the pointer.
+     Avoid that by momentarily switching off mouse trails.  */
+  if (os_subtype == OS_NT
+      && w32_major_version + w32_minor_version >= 6)
+    ret = SystemParametersInfo (SPI_GETMOUSETRAILS, 0, &trail_num, 0);
   SetCursorPos (pt.x, pt.y);
+  if (ret)
+    SystemParametersInfo (SPI_SETMOUSETRAILS, trail_num, NULL, 0);
 
   unblock_input ();
 }
@@ -6504,7 +6584,7 @@ x_free_frame_resources (struct frame *f)
 
 
 /* Destroy the window of frame F.  */
-void
+static void
 x_destroy_window (struct frame *f)
 {
   struct w32_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
@@ -6578,7 +6658,10 @@ w32_hide_hourglass (struct frame *f)
   struct w32_output *w32 = FRAME_X_OUTPUT (f);
 
   w32->hourglass_p = 0;
-  SetCursor (w32->current_cursor);
+  if (f->pointer_invisible)
+    SetCursor (NULL);
+  else
+    SetCursor (w32->current_cursor);
 }
 
 /* FIXME: old code did that, but I don't know why.  Anyway,
@@ -6588,6 +6671,21 @@ void
 w32_arrow_cursor (void)
 {
   SetCursor (w32_load_cursor (IDC_ARROW));
+}
+
+static void
+w32_toggle_invisible_pointer (struct frame *f, bool invisible)
+{
+  block_input ();
+
+  if (f->pointer_invisible != invisible)
+    {
+      f->pointer_invisible = invisible;
+      w32_define_cursor (FRAME_W32_WINDOW (f),
+			 f->output_data.w32->current_cursor);
+    }
+
+  unblock_input ();
 }
 
 /***********************************************************************
@@ -6729,6 +6827,7 @@ w32_create_terminal (struct w32_display_info *dpyinfo)
   terminal->ins_del_lines_hook = x_ins_del_lines;
   terminal->delete_glyphs_hook = x_delete_glyphs;
   terminal->ring_bell_hook = w32_ring_bell;
+  terminal->toggle_invisible_pointer_hook = w32_toggle_invisible_pointer;
   terminal->update_begin_hook = x_update_begin;
   terminal->update_end_hook = x_update_end;
   terminal->read_socket_hook = w32_read_socket;
@@ -6874,6 +6973,17 @@ x_delete_display (struct w32_display_info *dpyinfo)
 
 /* Set up use of W32.  */
 
+void
+w32_init_main_thread (void)
+{
+  dwMainThreadId = GetCurrentThreadId ();
+  DuplicateHandle (GetCurrentProcess (), GetCurrentThread (),
+		   GetCurrentProcess (), &hMainThread, 0, TRUE,
+		   DUPLICATE_SAME_ACCESS);
+
+
+}
+
 DWORD WINAPI w32_msg_worker (void * arg);
 
 static void
@@ -6933,10 +7043,6 @@ w32_initialize (void)
   /* Create the window thread - it will terminate itself when the app
      terminates */
   init_crit ();
-
-  dwMainThreadId = GetCurrentThreadId ();
-  DuplicateHandle (GetCurrentProcess (), GetCurrentThread (),
-		   GetCurrentProcess (), &hMainThread, 0, TRUE, DUPLICATE_SAME_ACCESS);
 
   /* Wait for thread to start */
   {
@@ -7082,7 +7188,10 @@ specified by `file-name-coding-system'.
 This variable is set to non-nil by default when Emacs runs on Windows
 systems of the NT family, including W2K, XP, Vista, Windows 7 and
 Windows 8.  It is set to nil on Windows 9X.  */);
-  w32_unicode_filenames = 0;
+  if (os_subtype == OS_9X)
+    w32_unicode_filenames = 0;
+  else
+    w32_unicode_filenames = 1;
 
 
   /* FIXME: The following variable will be (hopefully) removed

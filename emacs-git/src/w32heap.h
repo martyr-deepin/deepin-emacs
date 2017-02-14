@@ -1,12 +1,12 @@
 /* Heap management routines (including unexec) for GNU Emacs on Windows NT.
-   Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 1994, 2001-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -61,10 +61,10 @@ int open_output_file (file_data *p_file, char *name, unsigned long size);
 void close_file_data (file_data *p_file);
 
 /* Return pointer to section header for named section.  */
-IMAGE_SECTION_HEADER * find_section (char * name, IMAGE_NT_HEADERS * nt_header);
+IMAGE_SECTION_HEADER * find_section (const char *, IMAGE_NT_HEADERS *);
 
 /* Return pointer to section header for section containing the given
    relative virtual address.  */
-IMAGE_SECTION_HEADER * rva_to_section (DWORD_PTR rva, IMAGE_NT_HEADERS * nt_header);
+IMAGE_SECTION_HEADER * rva_to_section (DWORD_PTR, IMAGE_NT_HEADERS *);
 
 #endif /* NTHEAP_H_ */

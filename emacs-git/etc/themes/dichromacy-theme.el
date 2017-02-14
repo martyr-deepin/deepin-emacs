@@ -1,6 +1,6 @@
 ;;; dichromacy-theme.el --- color theme suitable for color-blind users
 
-;; Copyright (C) 2011-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
 ;; Author: Chong Yidong <cyd@stupidchicken>
 
@@ -60,6 +60,7 @@ Ansi-Color faces are included.")
    ;; Escape and prompt faces
    `(minibuffer-prompt ((,class (:weight bold :foreground ,blue))))
    `(escape-glyph ((,class (:foreground ,vermillion))))
+   `(homoglyph ((,class (:foreground ,vermillion))))
    `(error ((,class (:weight bold :slant italic
 			     :foreground ,vermillion))))
    `(warning ((,class (:foreground ,orange))))

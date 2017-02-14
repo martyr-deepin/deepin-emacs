@@ -1,6 +1,6 @@
 ;;; gnus-int.el --- backend interface functions for Gnus
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -164,8 +164,8 @@ If CONFIRM is non-nil, the user will be asked for an NNTP server."
        (gnus-open-server gnus-select-method)
        gnus-batch-mode
        (gnus-y-or-n-p
-	(format
-	 "%s (%s) open error: '%s'.  Continue? "
+	(format-message
+	 "%s (%s) open error: `%s'.  Continue? "
 	 (car gnus-select-method) (cadr gnus-select-method)
 	 (gnus-status-message gnus-select-method)))
        (gnus-error 1 "Couldn't open server on %s"
@@ -555,7 +555,7 @@ the group's summary.
   (let ((saved-display
          (gnus-group-get-parameter group 'display :allow-list)))
 
-    ;; Tell gnus we really don't want any articles 
+    ;; Tell gnus we really don't want any articles
     (gnus-group-set-parameter group 'display 0)
 
     (unwind-protect
@@ -573,7 +573,7 @@ the group's summary.
   ;; Create it now and insert the message
   (let ((group-is-new (gnus-summary-setup-buffer group)))
     (condition-case err
-        (let ((article-number 
+        (let ((article-number
                (gnus-summary-insert-subject message-id)))
           (unless article-number
             (signal 'error "message-id not in group"))
@@ -777,8 +777,7 @@ If GROUP is nil, all groups on GNUS-COMMAND-METHOD are scanned."
       (message-options-set-recipient)
       (save-restriction
 	(message-narrow-to-head)
-	(let ((mail-parse-charset message-default-charset))
-	  (mail-encode-encoded-word-buffer)))
+	(mail-encode-encoded-word-buffer))
       (message-encode-message-body)))
   (let ((gnus-command-method (or gnus-command-method
 				 (gnus-find-method-for-group group)))
@@ -800,8 +799,7 @@ If GROUP is nil, all groups on GNUS-COMMAND-METHOD are scanned."
       (message-options-set-recipient)
       (save-restriction
 	(message-narrow-to-head)
-	(let ((mail-parse-charset message-default-charset))
-	  (mail-encode-encoded-word-buffer)))
+	(mail-encode-encoded-word-buffer))
       (message-encode-message-body)))
   (let* ((func (car (gnus-group-name-to-method group)))
          (result (funcall (intern (format "%s-request-replace-article" func))

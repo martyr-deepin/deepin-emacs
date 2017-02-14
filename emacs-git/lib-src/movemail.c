@@ -1,15 +1,15 @@
 /* movemail foo bar -- move file foo to file bar,
    locking file foo the way /bin/mail respects.
 
-Copyright (C) 1986, 1992-1994, 1996, 1999, 2001-2015 Free Software
+Copyright (C) 1986, 1992-1994, 1996, 1999, 2001-2017 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -59,8 +59,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/file.h>
-#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <time.h>
 
@@ -174,8 +174,6 @@ main (int argc, char **argv)
   int desc;
 #endif /* not MAIL_USE_SYSTEM_LOCK */
 
-  char *spool_name = 0;
-
 #ifdef MAIL_USE_POP
   bool pop_reverse_order = false;
 # define ARGSTR "pr"
@@ -246,13 +244,14 @@ main (int argc, char **argv)
 #ifndef DISABLE_DIRECT_ACCESS
 
   char *lockname = 0;
+  char *spool_name = 0;
 
-#ifndef MAIL_USE_SYSTEM_LOCK
 #ifdef MAIL_USE_MAILLOCK
   spool_name = mail_spool_name (inname);
 #endif
   if (! spool_name)
     {
+#ifndef MAIL_USE_SYSTEM_LOCK
       /* Use a lock file named after our first argument with .lock appended:
 	 If it exists, the mail file is locked.  */
       /* Note: this locking mechanism is *required* by the mailer
@@ -323,8 +322,8 @@ main (int argc, char **argv)
 	}
 
       delete_lockname = lockname;
-    }
 #endif /* not MAIL_USE_SYSTEM_LOCK */
+    }
 
 #ifdef SIGCHLD
   signal (SIGCHLD, SIG_DFL);
@@ -339,7 +338,7 @@ main (int argc, char **argv)
       int lockcount = 0;
       int status = 0;
 #if defined (MAIL_USE_MAILLOCK) && defined (HAVE_TOUCHLOCK)
-      time_t touched_lock IF_LINT (= 0);
+      time_t touched_lock;
 #endif
 
       if (setuid (getuid ()) < 0 || setregid (-1, real_gid) < 0)
@@ -799,6 +798,51 @@ mbx_write (char *line, int len, FILE *mbf)
     }
   return fwrite (line, 1, len, mbf) == len && 0 <= fputc ('\n', mbf);
 }
+
+#ifdef WINDOWSNT
+/* Work around MS-Windows lack of support for %e or %T with a
+   special-purpose strftime that assumes the exact format that
+   movemail uses.  */
+static size_t
+movemail_strftime (char *s, size_t size, char const *format,
+		   struct tm const *tm)
+{
+  char fmt[size + 6], *q;
+  const char *p;
+
+  for (p = format, q = &fmt[0]; *p; )
+    {
+      if (*p == '%' && p[1] == 'e')
+	{
+	  memcpy (q, "%d", 2);
+	  q += 2;
+	  p += 2;
+	}
+      else if (*p == '%' && p[1] == 'T')
+	{
+	  memcpy (q, "%H:%M:%S", 8);
+	  q += 8;
+	  p += 2;
+	}
+      else if (*p == '%' && p[1] == '%')
+	{
+	  memcpy (q, p, 2);
+	  q += 2;
+	  p += 2;
+	}
+      else
+	*q++ = *p++;
+    }
+
+  size_t n = strftime (s, size, fmt, tm);
+  char *mday = s + sizeof "From movemail Sun Jan " - 1;
+  if (*mday == '0')
+    *mday = ' ';
+  return n;
+}
+# undef strftime
+# define strftime movemail_strftime
+#endif
 
 static bool
 mbx_delimit_begin (FILE *mbf)

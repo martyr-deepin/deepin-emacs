@@ -1,6 +1,6 @@
 ;;; rmailsort.el --- Rmail: sort messages
 
-;; Copyright (C) 1990, 1993-1994, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1990, 1993-1994, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Masanobu UMEDA <umerin@mse.kyutech.ac.jp>
@@ -251,7 +251,7 @@ Numeric keys are sorted numerically, all others as strings."
 (provide 'rmailsort)
 
 ;; Local Variables:
-;; generated-autoload-file: "rmail.el"
+;; generated-autoload-file: "rmail-loaddefs.el"
 ;; End:
 
 ;;; rmailsort.el ends here

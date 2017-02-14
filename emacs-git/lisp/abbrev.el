@@ -1,6 +1,6 @@
 ;;; abbrev.el --- abbrev mode commands for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1987, 1992, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1985-1987, 1992, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -33,6 +33,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl-lib))
+(require 'obarray)
 
 (defgroup abbrev-mode nil
   "Word abbreviations mode."
@@ -87,7 +88,7 @@ be replaced by its expansion."
   "Make a new abbrev-table with the same abbrevs as TABLE.
 Does not copy property lists."
   (let ((new-table (make-abbrev-table)))
-    (mapatoms
+    (obarray-map
      (lambda (symbol)
        (define-abbrev new-table
 	 (symbol-name symbol)
@@ -399,19 +400,19 @@ A prefix argument means don't query; expand all abbrevs."
 		   (buffer-substring-no-properties
 		    (save-excursion (forward-word -1) (point))
 		    pnt)))
-	    (if (or noquery (y-or-n-p (format "Expand `%s'? " string)))
+	    (if (or noquery (y-or-n-p (format-message "Expand `%s'? " string)))
 		(expand-abbrev)))))))
 
 ;;; Abbrev properties.
 
 (defun abbrev-table-get (table prop)
   "Get the PROP property of abbrev table TABLE."
-  (let ((sym (intern-soft "" table)))
+  (let ((sym (obarray-get table "")))
     (if sym (get sym prop))))
 
 (defun abbrev-table-put (table prop val)
   "Set the PROP property of abbrev table TABLE to VAL."
-  (let ((sym (intern "" table)))
+  (let ((sym (obarray-put table "")))
     (set sym nil)	     ; Make sure it won't be confused for an abbrev.
     (put sym prop val)))
 
@@ -435,8 +436,7 @@ See `define-abbrev' for the effect of some special properties.
 (defun make-abbrev-table (&optional props)
   "Create a new, empty abbrev table object.
 PROPS is a list of properties."
-  ;; The value 59 is an arbitrary prime number.
-  (let ((table (make-vector 59 0)))
+  (let ((table (obarray-make)))
     ;; Each abbrev-table has a `modiff' counter which can be used to detect
     ;; when an abbreviation was added.  An example of use would be to
     ;; construct :regexp dynamically as the union of all abbrev names, so
@@ -451,7 +451,7 @@ PROPS is a list of properties."
 
 (defun abbrev-table-p (object)
   "Return non-nil if OBJECT is an abbrev table."
-  (and (vectorp object)
+  (and (obarrayp object)
        (numberp (abbrev-table-get object :abbrev-table-modiff))))
 
 (defun abbrev-table-empty-p (object &optional ignore-system)
@@ -460,12 +460,12 @@ If IGNORE-SYSTEM is non-nil, system definitions are ignored."
   (unless (abbrev-table-p object)
     (error "Non abbrev table object"))
   (not (catch 'some
-	 (mapatoms (lambda (abbrev)
-		     (unless (or (zerop (length (symbol-name abbrev)))
-				 (and ignore-system
-				      (abbrev-get abbrev :system)))
-		       (throw 'some t)))
-		   object))))
+	 (obarray-map (lambda (abbrev)
+                        (unless (or (zerop (length (symbol-name abbrev)))
+                                    (and ignore-system
+                                         (abbrev-get abbrev :system)))
+                          (throw 'some t)))
+                      object))))
 
 (defvar global-abbrev-table (make-abbrev-table)
   "The abbrev table whose abbrevs affect all buffers.
@@ -529,12 +529,12 @@ the current abbrev table before abbrev lookup happens."
 (defun clear-abbrev-table (table)
   "Undefine all abbrevs in abbrev table TABLE, leaving it empty."
   (setq abbrevs-changed t)
-  (let* ((sym (intern-soft "" table)))
+  (let* ((sym (obarray-get table "")))
     (dotimes (i (length table))
       (aset table i 0))
     ;; Preserve the table's properties.
     (cl-assert sym)
-    (let ((newsym (intern "" table)))
+    (let ((newsym (obarray-put table "")))
       (set newsym nil)	     ; Make sure it won't be confused for an abbrev.
       (setplist newsym (symbol-plist sym)))
     (abbrev-table-put table :abbrev-table-modiff
@@ -580,8 +580,10 @@ An obsolete but still supported calling form is:
                   ,@(if (cadr props) (list :system (cadr props))))))
   (unless (plist-get props :count)
     (setq props (plist-put props :count 0)))
+  (setq props (plist-put props :abbrev-table-modiff
+                         (abbrev-table-get table :abbrev-table-modiff)))
   (let ((system-flag (plist-get props :system))
-        (sym (intern name table)))
+        (sym (obarray-put table name)))
     ;; Don't override a prior user-defined abbrev with a system abbrev,
     ;; unless system-flag is `force'.
     (unless (and (not (memq system-flag '(nil force)))
@@ -671,10 +673,10 @@ The value is nil if that abbrev is not defined."
          ;; abbrevs do, we have to be careful.
          (sym
           ;; First try without case-folding.
-          (or (intern-soft abbrev table)
+          (or (obarray-get table abbrev)
               (when case-fold
                 ;; We didn't find any abbrev, try case-folding.
-                (let ((sym (intern-soft (downcase abbrev) table)))
+                (let ((sym (obarray-get table (downcase abbrev))))
                   ;; Only use it if it doesn't require :case-fixed.
                   (and sym (not (abbrev-get sym :case-fixed))
                        sym))))))
@@ -835,18 +837,19 @@ Takes no argument and should return the abbrev symbol if expansion took place.")
   "Expand the abbrev before point, if there is an abbrev there.
 Effective when explicitly called even when `abbrev-mode' is nil.
 Before doing anything else, runs `pre-abbrev-expand-hook'.
-Calls `abbrev-expand-function' with no argument to do the work,
-and returns whatever it does.  (This should be the abbrev symbol
-if expansion occurred, else nil.)"
+Calls the value of `abbrev-expand-function' with no argument to do
+the work, and returns whatever it does.  (That return value should
+be the abbrev symbol if expansion occurred, else nil.)"
   (interactive)
   (run-hooks 'pre-abbrev-expand-hook)
   (funcall abbrev-expand-function))
 
 (defun abbrev--default-expand ()
   "Default function to use for `abbrev-expand-function'.
-This respects the wrapper hook `abbrev-expand-functions'.
+This also respects the obsolete wrapper hook `abbrev-expand-functions'.
+\(See `with-wrapper-hook' for details about wrapper hooks.)
 Calls `abbrev-insert' to insert any expansion, and returns what it does."
-  (with-wrapper-hook abbrev-expand-functions ()
+  (subr--with-wrapper-hook-no-warnings abbrev-expand-functions ()
     (pcase-let ((`(,sym ,name ,wordstart ,wordend) (abbrev--before-point)))
       (when sym
         (let ((startpos (copy-marker (point) t))
@@ -976,10 +979,10 @@ Properties with special meaning:
   ;; We used to manually add the docstring, but we also want to record this
   ;; location as the definition of the variable (in load-history), so we may
   ;; as well just use `defvar'.
-  (if (and docstring props (symbolp docstring))
-      ;; There is really no docstring, instead the docstring arg
-      ;; is a property name.
-      (push docstring props) (setq docstring nil))
+  (when (and docstring props (symbolp docstring))
+    ;; There is really no docstring, instead the docstring arg
+    ;; is a property name.
+    (push docstring props) (setq docstring nil))
   (eval `(defvar ,tablename nil ,@(if docstring (list docstring))))
   (let ((table (if (boundp tablename) (symbol-value tablename))))
     (unless table
@@ -1003,17 +1006,17 @@ PROMPT is the prompt to use for the keymap.
 SORTFUN is passed to `sort' to change the default ordering."
   (unless sortfun (setq sortfun 'string-lessp))
   (let ((entries ()))
-    (mapatoms (lambda (abbrev)
-                (when (symbol-value abbrev)
-                  (let ((name (symbol-name abbrev)))
-                    (push `(,(intern name) menu-item ,name
-                            (lambda () (interactive)
-                              (abbrev-insert ',abbrev)))
-                          entries))))
-              table)
+    (obarray-map (lambda (abbrev)
+                   (when (symbol-value abbrev)
+                     (let ((name (symbol-name abbrev)))
+                       (push `(,(intern name) menu-item ,name
+                               (lambda () (interactive)
+                                 (abbrev-insert ',abbrev)))
+                             entries))))
+                 table)
     (nconc (make-sparse-keymap prompt)
            (sort entries (lambda (x y)
-                (funcall sortfun (nth 2 x) (nth 2 y)))))))
+                           (funcall sortfun (nth 2 x) (nth 2 y)))))))
 
 ;; Keep it after define-abbrev-table, since define-derived-mode uses
 ;; define-abbrev-table.

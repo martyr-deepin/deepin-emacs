@@ -1,13 +1,13 @@
 /* Functions for handling font and other changes dynamically.
 
-Copyright (C) 2009-2015 Free Software Foundation, Inc.
+Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -537,10 +537,10 @@ parse_settings (unsigned char *prop,
               else
                 settings->seen &= ~SEEN_RGBA;
             }
-          else if (strcmp (name, "Xft/DPI") == 0)
+          else if (strcmp (name, "Xft/DPI") == 0 && ival != (CARD32) -1)
             {
               settings->seen |= SEEN_DPI;
-              settings->dpi = (double)ival/1024.0;
+              settings->dpi = ival / 1024.0;
             }
           else if (strcmp (name, "Xft/lcdfilter") == 0)
             {
@@ -667,8 +667,23 @@ apply_xft_settings (struct x_display_info *dpyinfo,
     }
 #endif
 
-  if ((settings->seen & SEEN_DPI) != 0 && oldsettings.dpi != settings->dpi
-      && settings->dpi > 0)
+  if ((settings->seen & SEEN_DPI) != 0
+      && settings->dpi > 0
+      /* The following conjunct avoids setting `changed' to true when
+	 old and new dpi settings do not differ "substantially".
+	 Otherwise, the dynamic-setting Elisp code may process all sorts
+	 of unrelated settings that override users' font customizations,
+	 among others.  Compare:
+
+	 http://lists.gnu.org/archive/html/emacs-devel/2016-05/msg00557.html
+	 http://lists.gnu.org/archive/html/bug-gnu-emacs/2016-12/msg00820.html
+
+	 As soon as the dynamic-settings code has been tested and
+	 verified, this Emacs 25.2 workaround should be removed.  */
+      && ((oldsettings.dpi >= settings->dpi
+	   && (oldsettings.dpi - settings->dpi) > 2)
+	  || ((settings->dpi > oldsettings.dpi)
+	      && (settings->dpi - oldsettings.dpi) > 2)))
     {
       FcPatternDel (pat, FC_DPI);
       FcPatternAddDouble (pat, FC_DPI, settings->dpi);

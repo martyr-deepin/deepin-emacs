@@ -1,13 +1,13 @@
 /* Interface definitions for display code.
 
-Copyright (C) 1985, 1993-1994, 1997-2015 Free Software Foundation, Inc.
+Copyright (C) 1985, 1993-1994, 1997-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -82,6 +82,7 @@ typedef XImagePtr XImagePtr_or_DC;
 
 #ifdef HAVE_WINDOW_SYSTEM
 # include <time.h>
+# include "fontset.h"
 #endif
 
 #ifndef HAVE_WINDOW_SYSTEM
@@ -347,7 +348,10 @@ enum glyph_type
   IMAGE_GLYPH,
 
   /* Glyph is a space of fractional width and/or height.  */
-  STRETCH_GLYPH
+  STRETCH_GLYPH,
+
+  /* Glyph is an external widget drawn by the GUI toolkit.  */
+  XWIDGET_GLYPH
 };
 
 
@@ -498,6 +502,11 @@ struct glyph
 
     /* Image ID for image glyphs (type == IMAGE_GLYPH).  */
     int img_id;
+
+#ifdef HAVE_XWIDGETS
+    /* Xwidget reference (type == XWIDGET_GLYPH).  */
+    struct xwidget *xwidget;
+#endif
 
     /* Sub-structure for type == STRETCH_GLYPH.  */
     struct
@@ -1267,7 +1276,6 @@ struct glyph_string
 
   /* X display and window for convenience.  */
   Display *display;
-  Window window;
 
   /* The glyph row for which this string was built.  It determines the
      y-origin and height of the string.  */
@@ -1349,6 +1357,9 @@ struct glyph_string
 
   /* Image, if any.  */
   struct image *img;
+
+  /* Xwidget.  */
+  struct xwidget *xwidget;
 
   /* Slice */
   struct glyph_slice slice;
@@ -1525,6 +1536,13 @@ struct glyph_string
    + (FRAME_LINE_HEIGHT ((F)) - FONT_HEIGHT ((FONT))		\
       + (FRAME_LINE_HEIGHT ((F)) > FONT_HEIGHT ((FONT)))) / 2	\
    - (FONT_DESCENT (FRAME_FONT (F)) - FRAME_BASELINE_OFFSET (F)))
+
+/* A heuristic test for fonts that claim they need a preposterously
+   large vertical space.  The heuristics is in the factor of 3.  We
+   ignore the ascent and descent values reported by such fonts, and
+   instead go by the values reported for individual glyphs.  */
+#define FONT_TOO_HIGH(ft)						\
+  ((ft)->pixel_size > 0 && (ft)->ascent + (ft)->descent > 3*(ft)->pixel_size)
 
 
 /***********************************************************************
@@ -1794,36 +1812,46 @@ struct face_cache
   bool_bf menu_face_changed_p : 1;
 };
 
+/* Return a non-null pointer to the cached face with ID on frame F.  */
+
+#define FACE_FROM_ID(F, ID)					\
+  (eassert (UNSIGNED_CMP (ID, <, FRAME_FACE_CACHE (F)->used)),	\
+   FRAME_FACE_CACHE (F)->faces_by_id[ID])
+
 /* Return a pointer to the face with ID on frame F, or null if such a
    face doesn't exist.  */
 
-#define FACE_FROM_ID(F, ID)				\
-     (UNSIGNED_CMP (ID, <, FRAME_FACE_CACHE (F)->used)	\
-      ? FRAME_FACE_CACHE (F)->faces_by_id[ID]		\
-      : NULL)
+#define FACE_FROM_ID_OR_NULL(F, ID)			\
+  (UNSIGNED_CMP (ID, <, FRAME_FACE_CACHE (F)->used)	\
+   ? FRAME_FACE_CACHE (F)->faces_by_id[ID]		\
+   : NULL)
 
+/* True if FACE is suitable for displaying ASCII characters.  */
+INLINE bool
+FACE_SUITABLE_FOR_ASCII_CHAR_P (struct face *face)
+{
 #ifdef HAVE_WINDOW_SYSTEM
-
-/* Non-zero if FACE is suitable for displaying character CHAR.  */
-
-#define FACE_SUITABLE_FOR_ASCII_CHAR_P(FACE, CHAR)	\
-  ((FACE) == (FACE)->ascii_face)
+  return face == face->ascii_face;
+#else
+  return true;
+#endif
+}
 
 /* Return the id of the realized face on frame F that is like the face
-   FACE, but is suitable for displaying character CHAR at buffer or
+   FACE, but is suitable for displaying character CHARACTER at buffer or
    string position POS.  OBJECT is the string object, or nil for
    buffer.  This macro is only meaningful for multibyte character
    CHAR.  */
-
-#define FACE_FOR_CHAR(F, FACE, CHAR, POS, OBJECT)	\
-  face_for_char ((F), (FACE), (CHAR), (POS), (OBJECT))
-
-#else /* not HAVE_WINDOW_SYSTEM */
-
-#define FACE_SUITABLE_FOR_ASCII_CHAR_P(FACE, CHAR) true
-#define FACE_FOR_CHAR(F, FACE, CHAR, POS, OBJECT) ((FACE)->id)
-
-#endif /* not HAVE_WINDOW_SYSTEM */
+INLINE int
+FACE_FOR_CHAR (struct frame *f, struct face *face, int character,
+	       ptrdiff_t pos, Lisp_Object object)
+{
+#ifdef HAVE_WINDOW_SYSTEM
+  return face_for_char (f, face, character, pos, object);
+#else
+  return face->id;
+#endif
+}
 
 /* Return true if G contains a valid character code.  */
 INLINE bool
@@ -1956,8 +1984,8 @@ struct bidi_it {
 				   resolving weak and neutral types */
   bidi_type_t type_after_wn;	/* bidi type after overrides and Wn */
   bidi_type_t orig_type;	/* original bidi type, as found in the buffer */
-  char resolved_level;		/* final resolved level of this character */
-  char isolate_level;		/* count of isolate initiators unmatched by PDI */
+  signed char resolved_level;	/* final resolved level of this character */
+  signed char isolate_level;	/* count of isolate initiators unmatched by PDI */
   ptrdiff_t invalid_levels;	/* how many PDFs to ignore */
   ptrdiff_t invalid_isolates;	/* how many PDIs to ignore */
   struct bidi_saved_info prev;	/* info about previous character */
@@ -2095,7 +2123,10 @@ enum display_element_type
   IT_TRUNCATION,
 
   /* Continuation glyphs.  See the comment for IT_TRUNCATION.  */
-  IT_CONTINUATION
+  IT_CONTINUATION,
+
+  /* Xwidget.  */
+  IT_XWIDGET
 };
 
 
@@ -2159,6 +2190,7 @@ enum it_method {
   GET_FROM_C_STRING,
   GET_FROM_IMAGE,
   GET_FROM_STRETCH,
+  GET_FROM_XWIDGET,
   NUM_IT_METHODS
 };
 
@@ -2183,7 +2215,7 @@ struct composition_it
      the automatic composition.  Provided that ELT is an element of
      Vcomposition_function_table for CH, (nth ELT RULE_IDX) is the
      rule for the composition.  */
-  int rule_idx;
+  EMACS_INT rule_idx;
   /* If this is an automatic composition, how many characters to look
      back from the position where a character triggering the
      composition exists.  */
@@ -2204,7 +2236,7 @@ struct composition_it
   /* Indices of the glyphs for the current grapheme cluster.  */
   int from, to;
   /* Width of the current grapheme cluster in units of columns it will
-     occupy on display; see CHAR_WIDTH.  */
+     occupy on display; see CHARACTER_WIDTH.  */
   int width;
 };
 
@@ -2372,14 +2404,14 @@ struct it
 	struct it_slice slice;
 	ptrdiff_t image_id;
       } image;
-      /* method == GET_FROM_COMPOSITION */
-      struct {
-	Lisp_Object object;
-      } comp;
       /* method == GET_FROM_STRETCH */
       struct {
 	Lisp_Object object;
       } stretch;
+      /* method == GET_FROM_XWIDGET */
+      struct {
+	Lisp_Object object;
+      } xwidget;
     } u;
 
     /* Current text and display positions.  */
@@ -2503,6 +2535,9 @@ struct it
 
   /* If what == IT_IMAGE, the id of the image to display.  */
   ptrdiff_t image_id;
+
+  /* If what == IT_XWIDGET.  */
+  struct xwidget *xwidget;
 
   /* Values from `slice' property.  */
   struct it_slice slice;
@@ -2941,6 +2976,10 @@ struct image
   /* Pixmaps of the image.  */
   Pixmap pixmap, mask;
 
+#ifdef USE_CAIRO
+  void *cr_data;
+  void *cr_data2;
+#endif
 #ifdef HAVE_X_WINDOWS
   /* X images of the image, corresponding to the above Pixmaps.
      Non-NULL means it and its Pixmap counterpart may be out of sync
@@ -3054,13 +3093,19 @@ struct image_cache
 };
 
 
+/* A non-null pointer to the image with id ID on frame F.  */
+
+#define IMAGE_FROM_ID(F, ID)					\
+  (eassert (UNSIGNED_CMP (ID, <, FRAME_IMAGE_CACHE (F)->used)),	\
+   FRAME_IMAGE_CACHE (F)->images[ID])
+
 /* Value is a pointer to the image with id ID on frame F, or null if
    no image with that id exists.  */
 
-#define IMAGE_FROM_ID(F, ID)					\
-     (((ID) >= 0 && (ID) < (FRAME_IMAGE_CACHE (F)->used))	\
-      ? FRAME_IMAGE_CACHE (F)->images[ID]			\
-      : NULL)
+#define IMAGE_OPT_FROM_ID(F, ID)				\
+  (UNSIGNED_CMP (ID, <, FRAME_IMAGE_CACHE (F)->used)		\
+   ? FRAME_IMAGE_CACHE (F)->images[ID]				\
+   : NULL)
 
 /* Size of bucket vector of image caches.  Should be prime.  */
 
@@ -3218,6 +3263,7 @@ void move_it_past_eol (struct it *);
 void move_it_in_display_line (struct it *it,
 			      ptrdiff_t to_charpos, int to_x,
 			      enum move_operation_enum op);
+int partial_line_height (struct it *it_origin);
 bool in_display_vector_p (struct it *);
 int frame_mode_line_height (struct frame *);
 extern bool redisplaying_p;
@@ -3235,6 +3281,9 @@ extern ptrdiff_t compute_display_string_end (ptrdiff_t,
 					     struct bidi_string_data *);
 extern void produce_stretch_glyph (struct it *);
 extern int merge_glyphless_glyph_face (struct it *);
+extern void forget_escape_and_glyphless_faces (void);
+
+extern void get_font_ascent_descent (struct font *, int *, int *);
 
 #ifdef HAVE_WINDOW_SYSTEM
 
@@ -3302,8 +3351,13 @@ bool update_window_fringes (struct window *, bool);
 void w32_init_fringe (struct redisplay_interface *);
 void w32_reset_fringes (void);
 #endif
+#ifdef USE_CAIRO
+void x_cr_init_fringe (struct redisplay_interface *);
+#endif
 
 extern unsigned row_hash (struct glyph_row *);
+
+extern bool buffer_flipping_blocked_p (void);
 
 /* Defined in image.c */
 
@@ -3358,7 +3412,6 @@ void unrequest_sigio (void);
 bool tabs_safe_p (int);
 void init_baud_rate (int);
 void init_sigio (int);
-void ignore_sigio (void);
 
 /* Defined in xfaces.c.  */
 

@@ -1,6 +1,6 @@
-;;; url-auth.el --- Uniform Resource Locator authorization modules
+;;; url-auth.el --- Uniform Resource Locator authorization modules -*- lexical-binding: t -*-
 
-;; Copyright (C) 1996-1999, 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2017 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes, hypermedia
 
@@ -50,10 +50,10 @@
 Must be a symbol pointing to another variable that will actually store
 the information.  The value of this variable is an assoc list of assoc
 lists.  The first assoc list is keyed by the server name.  The cdr of
-this is an assoc list based on the 'directory' specified by the URL we
+this is an assoc list based on the \"directory\" specified by the URL we
 are looking up.")
 
-(defun url-basic-auth (url &optional prompt overwrite realm args)
+(defun url-basic-auth (url &optional prompt overwrite realm _args)
   "Get the username/password for the specified URL.
 If optional argument PROMPT is non-nil, ask for the username/password
 to use for the url and its descendants.  If optional third argument
@@ -80,6 +80,9 @@ instead of the filename inheritance method."
 	  byserv (cdr-safe (assoc server
 				  (symbol-value url-basic-auth-storage))))
     (cond
+     ((and user pass)
+      ;; Explicit http://user:pass@foo/ URL.  Just return the credentials.
+      (setq retval (base64-encode-string (format "%s:%s" user pass))))
      ((and prompt (not byserv))
       (setq user (or
 		  (url-do-auth-source-search server type :user)
@@ -138,7 +141,7 @@ instead of the filename inheritance method."
   "Where usernames and passwords are stored.
 Its value is an assoc list of assoc lists.  The first assoc list is
 keyed by the server name.  The cdr of this is an assoc list based
-on the 'directory' specified by the url we are looking up.")
+on the \"directory\" specified by the url we are looking up.")
 
 (defun url-digest-auth-create-key (username password realm method uri)
   "Create a key for digest authentication method"
@@ -262,12 +265,12 @@ URL    is the url you are requesting authorization to.  This can be either a
        string representing the URL, or the parsed representation returned by
        `url-generic-parse-url'
 REALM  is the realm at a specific site we are looking for.  This should be a
-       string specifying the exact realm, or nil or the symbol 'any' to
+       string specifying the exact realm, or nil or the symbol `any' to
        specify that the filename portion of the URL should be used as the
        realm
 TYPE   is the type of authentication to be returned.  This is either a string
-       representing the type (basic, digest, etc), or nil or the symbol 'any'
-       to specify that any authentication is acceptable.  If requesting 'any'
+       representing the type (basic, digest, etc), or nil or the symbol `any'
+       to specify that any authentication is acceptable.  If requesting `any'
        the strongest matching authentication will be returned.  If this is
        wrong, it's no big deal, the error from the server will specify exactly
        what type of auth to use
@@ -336,11 +339,11 @@ RATING   a rating between 1 and 10 of the strength of the authentication.
 		  (t rating)))
 	 (node (assoc type url-registered-auth-schemes)))
     (if (not (fboundp function))
-	(url-warn 'security
-		  (format (concat
-			   "Tried to register `%s' as an auth scheme"
-			   ", but it is not a function!") function)))
-
+	(url-warn
+	 'security
+	 (format-message
+	  "Tried to register `%s' as an auth scheme, but it is not a function!"
+	  function)))
     (if node
 	(setcdr node (cons function rating))
       (setq url-registered-auth-schemes

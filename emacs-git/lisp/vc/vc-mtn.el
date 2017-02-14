@@ -1,6 +1,6 @@
 ;;; vc-mtn.el --- VC backend for Monotone  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: vc
@@ -102,6 +102,10 @@ switches."
   "Return the administrative directory of FILE."
   (expand-file-name vc-mtn-admin-dir (vc-mtn-root file)))
 
+(defun vc-mtn-find-ignore-file (file)
+  "Return the mtn ignore file that controls FILE."
+  (expand-file-name ".mtnignore" (vc-mtn-root file)))
+
 (defun vc-mtn-registered (file)
   (let ((root (vc-mtn-root file)))
     (when root
@@ -179,15 +183,18 @@ switches."
 (defun vc-mtn-mode-line-string (file)
   "Return a string for `vc-mode-line' to put in the mode line for FILE."
   (let ((branch (vc-mtn-workfile-branch file)))
-    (dolist (rule vc-mtn-mode-line-rewrite)
-      (if (string-match (car rule) branch)
-	  (setq branch (replace-match (cdr rule) t nil branch))))
-    (format "Mtn%c%s"
-	    (pcase (vc-state file)
-	      ((or `up-to-date `needs-update) ?-)
-	      (`added ?@)
-	      (_ ?:))
-	    branch)))
+    (if branch
+        (progn
+          (dolist (rule vc-mtn-mode-line-rewrite)
+            (if (string-match (car rule) branch)
+                (setq branch (replace-match (cdr rule) t nil branch))))
+          (format "Mtn%c%s"
+                  (pcase (vc-state file)
+                    ((or `up-to-date `needs-update) ?-)
+                    (`added ?@)
+                    (_ ?:))
+                  branch))
+      "")))
 
 (defun vc-mtn-register (files &optional _comment)
   (vc-mtn-command nil 0 files "add"))
@@ -196,7 +203,7 @@ switches."
 
 (declare-function log-edit-extract-headers "log-edit" (headers string))
 
-(defun vc-mtn-checkin (files comment)
+(defun vc-mtn-checkin (files comment &optional _rev)
   (apply 'vc-mtn-command nil 0 files
 	 (nconc (list "commit" "-m")
 		(log-edit-extract-headers '(("Author" . "--author")
@@ -204,7 +211,10 @@ switches."
 					  comment))))
 
 (defun vc-mtn-find-revision (file rev buffer)
-  (vc-mtn-command buffer 0 file "cat" "-r" rev))
+  ;; null rev means latest revision
+  (if rev
+      (vc-mtn-command buffer 0 file "cat" "-r" rev)
+    (vc-mtn-command buffer 0 file "cat")))
 
 ;; (defun vc-mtn-checkout (file &optional rev)
 ;;   )
@@ -247,10 +257,10 @@ If LIMIT is non-nil, show no more than this many entries."
 
 (autoload 'vc-switches "vc")
 
-(defun vc-mtn-diff (files &optional rev1 rev2 buffer async)
+(defun vc-mtn-diff (files &optional rev1 rev2 buffer _async)
   "Get a difference report using monotone between two revisions of FILES."
   (apply 'vc-mtn-command (or buffer "*vc-diff*")
-	 (if async 'async 1)
+	 1 ; bug#21969
 	 files "diff"
          (append
            (vc-switches 'mtn 'diff)

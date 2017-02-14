@@ -1,6 +1,6 @@
 ;;; vc-annotate.el --- VC Annotate Support  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1997-1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author:     Martin Lorentzson  <emwson@emw.ericsson.se>
 ;; Maintainer: emacs-devel@gnu.org
@@ -175,7 +175,6 @@ List of factors, used to expand/compress the time scale.  See `vc-annotate'."
     (define-key m "p" 'vc-annotate-prev-revision)
     (define-key m "w" 'vc-annotate-working-revision)
     (define-key m "v" 'vc-annotate-toggle-annotation-visibility)
-    (define-key m "v" 'vc-annotate-toggle-annotation-visibility)
     (define-key m "\C-m" 'vc-annotate-goto-line)
     m)
   "Local keymap used for VC-Annotate mode.")
@@ -270,7 +269,7 @@ cover the range from the oldest annotation to the newest."
      (/ (- (if full newest current) oldest)
         (vc-annotate-oldest-in-map vc-annotate-color-map))
      (if full newest))
-    (message "Redisplaying annotation...done \(%s\)"
+    (message "Redisplaying annotation...done (%s)"
 	     (if full
 		 (format "Spanned from %.1f to %.1f days old"
 			 (- current oldest)
@@ -433,6 +432,15 @@ should be applied to the background or to the foreground."
     (with-output-to-temp-buffer temp-buffer-name
       (let ((backend (or vc-bk (vc-backend file)))
 	    (coding-system-for-read buffer-file-coding-system))
+        ;; For a VC backend running on DOS/Windows, it's normal to
+        ;; produce CRLF EOLs even if the original file has Unix EOLs,
+        ;; which will show ^M characters in the Annotate buffer.  (One
+        ;; known case in point is "svn annotate".)  Prevent that by
+        ;; forcing DOS EOL decoding.
+        (if (memq system-type '(windows-nt ms-dos))
+            (setq coding-system-for-read
+                  (coding-system-change-eol-conversion coding-system-for-read
+                                                       'dos)))
         (vc-call-backend backend 'annotate-command file
                          (get-buffer temp-buffer-name) rev)
         ;; we must setup the mode first, and then set our local
@@ -583,17 +591,15 @@ the file in question, search for the log entry required and move point."
 	(setq prev-rev
 	      (vc-call-backend vc-annotate-backend 'previous-revision
                                (if filediff fname nil) rev))
-	(if (not prev-rev)
-	    (message "Cannot diff from any revision prior to %s" rev)
-          (vc-diff-internal
-           t
-           ;; The value passed here should follow what
-           ;; `vc-deduce-fileset' returns.
-           (list vc-annotate-backend
-                 (if filediff
-                     (list fname)
-                   nil))
-           prev-rev rev))))))
+	(vc-diff-internal
+         t
+         ;; The value passed here should follow what
+         ;; `vc-deduce-fileset' returns.
+         (list vc-annotate-backend
+               (if filediff
+                   (list fname)
+                 nil))
+         prev-rev rev)))))
 
 (defun vc-annotate-show-diff-revision-at-line ()
   "Visit the diff of the revision at line from its previous revision."
@@ -605,7 +611,10 @@ the file in question, search for the log entry required and move point."
   (interactive)
   (when (eq 'file (vc-call-backend vc-annotate-backend 'revision-granularity))
     (error "The %s backend does not support changeset diffs" vc-annotate-backend))
-  (vc-annotate-show-diff-revision-at-line-internal nil))
+  ;; Make sure `diff-goto-source' will be able to find all files.
+  (let ((default-directory (vc-call-backend vc-annotate-backend
+                                            'root default-directory)))
+    (vc-annotate-show-diff-revision-at-line-internal nil)))
 
 (defun vc-annotate-warp-revision (revspec &optional file)
   "Annotate the revision described by REVSPEC.

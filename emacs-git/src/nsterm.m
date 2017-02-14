@@ -1,14 +1,14 @@
-/* NeXT/Open/GNUstep / MacOSX communication module.
+/* NeXT/Open/GNUstep / macOS communication module.      -*- coding: utf-8 -*-
 
-Copyright (C) 1989, 1993-1994, 2005-2006, 2008-2015 Free Software
+Copyright (C) 1989, 1993-1994, 2005-2006, 2008-2017 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,7 +22,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 Originally by Carl Edman
 Updated by Christian Limpach (chris@nice.ch)
 OpenStep/Rhapsody port by Scott Bender (sbender@harmony-ds.com)
-MacOSX/Aqua port by Christophe de Dinechin (descubes@earthlink.net)
+macOS/Aqua port by Christophe de Dinechin (descubes@earthlink.net)
 GNUstep port and post-20 update by Adrian Robert (arobert@cogsci.ucsd.edu)
 */
 
@@ -68,38 +68,64 @@ GNUstep port and post-20 update by Adrian Robert (arobert@cogsci.ucsd.edu)
 #include "macfont.h"
 #endif
 
-/* call tracing */
-#if 0
-int term_trace_num = 0;
-#define NSTRACE(x)        fprintf (stderr, "%s:%d: [%d] " #x "\n",         \
-                                __FILE__, __LINE__, ++term_trace_num)
-#else
-#define NSTRACE(x)
+static EmacsMenu *dockMenu;
+#ifdef NS_IMPL_COCOA
+static EmacsMenu *mainMenu;
 #endif
 
-/* Detailed tracing. "S" means "size" and "LL" stands for "lower left". */
-#if 0
-int term_trace_num = 0;
-#define NSTRACE_SIZE(str,size) fprintf (stderr,                         \
-                                   "%s:%d: [%d]   " str                 \
-                                   " (S:%.0f x %.0f)\n", \
-                                   __FILE__, __LINE__, ++term_trace_num,\
-                                   size.height,                       \
-                                   size.width)
-#define NSTRACE_RECT(s,r) fprintf (stderr,                              \
-                                   "%s:%d: [%d]   " s                   \
-                                   " (LL:%.0f x %.0f -> S:%.0f x %.0f)\n", \
-                                   __FILE__, __LINE__, ++term_trace_num,\
-                                   r.origin.x,                          \
-                                   r.origin.y,                          \
-                                   r.size.height,                       \
-                                   r.size.width)
-#else
-#define NSTRACE_SIZE(str,size)
-#define NSTRACE_RECT(s,r)
+/* ==========================================================================
+
+   NSTRACE, Trace support.
+
+   ========================================================================== */
+
+#if NSTRACE_ENABLED
+
+/* The following use "volatile" since they can be accessed from
+   parallel threads. */
+volatile int nstrace_num = 0;
+volatile int nstrace_depth = 0;
+
+/* When 0, no trace is emitted.  This is used by NSTRACE_WHEN and
+   NSTRACE_UNLESS to silence functions called.
+
+   TODO: This should really be a thread-local variable, to avoid that
+   a function with disabled trace thread silence trace output in
+   another.  However, in practice this seldom is a problem. */
+volatile int nstrace_enabled_global = 1;
+
+/* Called when nstrace_enabled goes out of scope. */
+void nstrace_leave(int * pointer_to_nstrace_enabled)
+{
+  if (*pointer_to_nstrace_enabled)
+    {
+      --nstrace_depth;
+    }
+}
+
+
+/* Called when nstrace_saved_enabled_global goes out of scope. */
+void nstrace_restore_global_trace_state(int * pointer_to_saved_enabled_global)
+{
+  nstrace_enabled_global = *pointer_to_saved_enabled_global;
+}
+
+
+char const * nstrace_fullscreen_type_name (int fs_type)
+{
+  switch (fs_type)
+    {
+    case -1:                   return "-1";
+    case FULLSCREEN_NONE:      return "FULLSCREEN_NONE";
+    case FULLSCREEN_WIDTH:     return "FULLSCREEN_WIDTH";
+    case FULLSCREEN_HEIGHT:    return "FULLSCREEN_HEIGHT";
+    case FULLSCREEN_BOTH:      return "FULLSCREEN_BOTH";
+    case FULLSCREEN_MAXIMIZED: return "FULLSCREEN_MAXIMIZED";
+    default:                   return "FULLSCREEN_?????";
+    }
+}
 #endif
 
-extern NSString *NSMenuDidBeginTrackingNotification;
 
 /* ==========================================================================
 
@@ -205,32 +231,33 @@ static unsigned convert_ns_to_X_keysym[] =
   NSNewlineCharacter,		0x0D,
   NSEnterCharacter,		0x8D,
 
-  0x41|NSNumericPadKeyMask,	0xAE,  /* KP_Decimal */
-  0x43|NSNumericPadKeyMask,	0xAA,  /* KP_Multiply */
-  0x45|NSNumericPadKeyMask,	0xAB,  /* KP_Add */
-  0x4B|NSNumericPadKeyMask,	0xAF,  /* KP_Divide */
-  0x4E|NSNumericPadKeyMask,	0xAD,  /* KP_Subtract */
-  0x51|NSNumericPadKeyMask,	0xBD,  /* KP_Equal */
-  0x52|NSNumericPadKeyMask,	0xB0,  /* KP_0 */
-  0x53|NSNumericPadKeyMask,	0xB1,  /* KP_1 */
-  0x54|NSNumericPadKeyMask,	0xB2,  /* KP_2 */
-  0x55|NSNumericPadKeyMask,	0xB3,  /* KP_3 */
-  0x56|NSNumericPadKeyMask,	0xB4,  /* KP_4 */
-  0x57|NSNumericPadKeyMask,	0xB5,  /* KP_5 */
-  0x58|NSNumericPadKeyMask,	0xB6,  /* KP_6 */
-  0x59|NSNumericPadKeyMask,	0xB7,  /* KP_7 */
-  0x5B|NSNumericPadKeyMask,	0xB8,  /* KP_8 */
-  0x5C|NSNumericPadKeyMask,	0xB9,  /* KP_9 */
+  0x41|NSEventModifierFlagNumericPad,	0xAE,  /* KP_Decimal */
+  0x43|NSEventModifierFlagNumericPad,	0xAA,  /* KP_Multiply */
+  0x45|NSEventModifierFlagNumericPad,	0xAB,  /* KP_Add */
+  0x4B|NSEventModifierFlagNumericPad,	0xAF,  /* KP_Divide */
+  0x4E|NSEventModifierFlagNumericPad,	0xAD,  /* KP_Subtract */
+  0x51|NSEventModifierFlagNumericPad,	0xBD,  /* KP_Equal */
+  0x52|NSEventModifierFlagNumericPad,	0xB0,  /* KP_0 */
+  0x53|NSEventModifierFlagNumericPad,	0xB1,  /* KP_1 */
+  0x54|NSEventModifierFlagNumericPad,	0xB2,  /* KP_2 */
+  0x55|NSEventModifierFlagNumericPad,	0xB3,  /* KP_3 */
+  0x56|NSEventModifierFlagNumericPad,	0xB4,  /* KP_4 */
+  0x57|NSEventModifierFlagNumericPad,	0xB5,  /* KP_5 */
+  0x58|NSEventModifierFlagNumericPad,	0xB6,  /* KP_6 */
+  0x59|NSEventModifierFlagNumericPad,	0xB7,  /* KP_7 */
+  0x5B|NSEventModifierFlagNumericPad,	0xB8,  /* KP_8 */
+  0x5C|NSEventModifierFlagNumericPad,	0xB9,  /* KP_9 */
 
   0x1B,				0x1B   /* escape */
 };
 
-/* On OS X picks up the default NSGlobalDomain AppleAntiAliasingThreshold,
+/* On macOS picks up the default NSGlobalDomain AppleAntiAliasingThreshold,
    the maximum font size to NOT antialias.  On GNUstep there is currently
    no way to control this behavior. */
 float ns_antialias_threshold;
 
-NSArray *ns_send_types =0, *ns_return_types =0, *ns_drag_types =0;
+NSArray *ns_send_types = 0, *ns_return_types = 0;
+static NSArray *ns_drag_types = 0;
 NSString *ns_app_name = @"Emacs";  /* default changed later */
 
 /* Display variables */
@@ -242,7 +269,7 @@ static struct frame *ns_updating_frame;
 static NSView *focus_view = NULL;
 static int ns_window_num = 0;
 #ifdef NS_IMPL_GNUSTEP
-static NSRect uRect;
+static NSRect uRect;            // TODO: This is dead, remove it?
 #endif
 static BOOL gsaved = NO;
 static BOOL ns_fake_keydown = NO;
@@ -263,7 +290,6 @@ static int select_nfds = 0, select_valid = 0;
 static struct timespec select_timeout = { 0, 0 };
 static int selfds[2] = { -1, -1 };
 static pthread_mutex_t select_mutex;
-static int apploopnr = 0;
 static NSAutoreleasePool *outerpool;
 static struct input_event *emacs_event = NULL;
 static struct input_event *q_event_ptr = NULL;
@@ -308,28 +334,28 @@ static CGPoint menu_mouse_point;
 
 /* Convert modifiers in a NeXTstep event to emacs style modifiers.  */
 #define NS_FUNCTION_KEY_MASK 0x800000
-#define NSLeftControlKeyMask    (0x000001 | NSControlKeyMask)
-#define NSRightControlKeyMask   (0x002000 | NSControlKeyMask)
-#define NSLeftCommandKeyMask    (0x000008 | NSCommandKeyMask)
-#define NSRightCommandKeyMask   (0x000010 | NSCommandKeyMask)
-#define NSLeftAlternateKeyMask  (0x000020 | NSAlternateKeyMask)
-#define NSRightAlternateKeyMask (0x000040 | NSAlternateKeyMask)
+#define NSLeftControlKeyMask    (0x000001 | NSEventModifierFlagControl)
+#define NSRightControlKeyMask   (0x002000 | NSEventModifierFlagControl)
+#define NSLeftCommandKeyMask    (0x000008 | NSEventModifierFlagCommand)
+#define NSRightCommandKeyMask   (0x000010 | NSEventModifierFlagCommand)
+#define NSLeftAlternateKeyMask  (0x000020 | NSEventModifierFlagOption)
+#define NSRightAlternateKeyMask (0x000040 | NSEventModifierFlagOption)
 #define EV_MODIFIERS2(flags)                          \
-    (((flags & NSHelpKeyMask) ?           \
+    (((flags & NSEventModifierFlagHelp) ?           \
            hyper_modifier : 0)                        \
      | (!EQ (ns_right_alternate_modifier, Qleft) && \
         ((flags & NSRightAlternateKeyMask) \
          == NSRightAlternateKeyMask) ? \
            parse_solitary_modifier (ns_right_alternate_modifier) : 0) \
-     | ((flags & NSAlternateKeyMask) ?                 \
+     | ((flags & NSEventModifierFlagOption) ?                 \
            parse_solitary_modifier (ns_alternate_modifier) : 0)   \
-     | ((flags & NSShiftKeyMask) ?     \
+     | ((flags & NSEventModifierFlagShift) ?     \
            shift_modifier : 0)                        \
      | (!EQ (ns_right_control_modifier, Qleft) && \
         ((flags & NSRightControlKeyMask) \
          == NSRightControlKeyMask) ? \
            parse_solitary_modifier (ns_right_control_modifier) : 0) \
-     | ((flags & NSControlKeyMask) ?      \
+     | ((flags & NSEventModifierFlagControl) ?      \
            parse_solitary_modifier (ns_control_modifier) : 0)     \
      | ((flags & NS_FUNCTION_KEY_MASK) ?  \
            parse_solitary_modifier (ns_function_modifier) : 0)    \
@@ -337,24 +363,24 @@ static CGPoint menu_mouse_point;
         ((flags & NSRightCommandKeyMask) \
          == NSRightCommandKeyMask) ? \
            parse_solitary_modifier (ns_right_command_modifier) : 0) \
-     | ((flags & NSCommandKeyMask) ?      \
+     | ((flags & NSEventModifierFlagCommand) ?      \
            parse_solitary_modifier (ns_command_modifier):0))
 #define EV_MODIFIERS(e) EV_MODIFIERS2 ([e modifierFlags])
 
 #define EV_UDMODIFIERS(e)                                      \
-    ((([e type] == NSLeftMouseDown) ? down_modifier : 0)       \
-     | (([e type] == NSRightMouseDown) ? down_modifier : 0)    \
-     | (([e type] == NSOtherMouseDown) ? down_modifier : 0)    \
-     | (([e type] == NSLeftMouseDragged) ? down_modifier : 0)  \
-     | (([e type] == NSRightMouseDragged) ? down_modifier : 0) \
-     | (([e type] == NSOtherMouseDragged) ? down_modifier : 0) \
-     | (([e type] == NSLeftMouseUp)   ? up_modifier   : 0)     \
-     | (([e type] == NSRightMouseUp)   ? up_modifier   : 0)    \
-     | (([e type] == NSOtherMouseUp)   ? up_modifier   : 0))
+    ((([e type] == NSEventTypeLeftMouseDown) ? down_modifier : 0)       \
+     | (([e type] == NSEventTypeRightMouseDown) ? down_modifier : 0)    \
+     | (([e type] == NSEventTypeOtherMouseDown) ? down_modifier : 0)    \
+     | (([e type] == NSEventTypeLeftMouseDragged) ? down_modifier : 0)  \
+     | (([e type] == NSEventTypeRightMouseDragged) ? down_modifier : 0) \
+     | (([e type] == NSEventTypeOtherMouseDragged) ? down_modifier : 0) \
+     | (([e type] == NSEventTypeLeftMouseUp)   ? up_modifier   : 0)     \
+     | (([e type] == NSEventTypeRightMouseUp)   ? up_modifier   : 0)    \
+     | (([e type] == NSEventTypeOtherMouseUp)   ? up_modifier   : 0))
 
 #define EV_BUTTON(e)                                                         \
-    ((([e type] == NSLeftMouseDown) || ([e type] == NSLeftMouseUp)) ? 0 :    \
-      (([e type] == NSRightMouseDown) || ([e type] == NSRightMouseUp)) ? 2 : \
+    ((([e type] == NSEventTypeLeftMouseDown) || ([e type] == NSEventTypeLeftMouseUp)) ? 0 :    \
+      (([e type] == NSEventTypeRightMouseDown) || ([e type] == NSEventTypeRightMouseUp)) ? 2 : \
      [e buttonNumber] - 1)
 
 /* Convert the time field to a timestamp in milliseconds. */
@@ -388,7 +414,6 @@ static CGPoint menu_mouse_point;
 /* TODO: get rid of need for these forward declarations */
 static void ns_condemn_scroll_bars (struct frame *f);
 static void ns_judge_scroll_bars (struct frame *f);
-void x_set_frame_alpha (struct frame *f);
 
 
 /* ==========================================================================
@@ -412,7 +437,7 @@ ns_init_events (struct input_event* ev)
 }
 
 void
-ns_finish_events ()
+ns_finish_events (void)
 {
   emacs_event = NULL;
 }
@@ -440,10 +465,7 @@ append2 (Lisp_Object list, Lisp_Object item)
    Utility to append to a list
    -------------------------------------------------------------------------- */
 {
-  Lisp_Object array[2];
-  array[0] = list;
-  array[1] = list1 (item);
-  return Fnconc (2, &array[0]);
+  return CALLN (Fnconc, list, list1 (item));
 }
 
 
@@ -562,25 +584,31 @@ ns_load_path (void)
   return NULL;
 }
 
-static void
-ns_timeout (int usecs)
-/* --------------------------------------------------------------------------
-     Blocking timer utility used by ns_ring_bell
-   -------------------------------------------------------------------------- */
+
+void
+ns_init_locale (void)
+/* macOS doesn't set any environment variables for the locale when run
+   from the GUI. Get the locale from the OS and set LANG. */
 {
-  struct timespec wakeup = timespec_add (current_timespec (),
-					 make_timespec (0, usecs * 1000));
+  NSLocale *locale = [NSLocale currentLocale];
 
-  /* Keep waiting until past the time wakeup.  */
-  while (1)
+  NSTRACE ("ns_init_locale");
+
+  @try
     {
-      struct timespec timeout, now = current_timespec ();
-      if (timespec_cmp (wakeup, now) <= 0)
-	break;
-      timeout = timespec_sub (wakeup, now);
+      /* It seems macOS should probably use UTF-8 everywhere.
+         'localeIdentifier' does not specify the encoding, and I can't
+         find any way to get the OS to tell us which encoding to use,
+         so hard-code '.UTF-8'. */
+      NSString *localeID = [NSString stringWithFormat:@"%@.UTF-8",
+                                     [locale localeIdentifier]];
 
-      /* Try to wait that long--but we might wake up sooner.  */
-      pselect (0, NULL, NULL, NULL, &timeout, NULL);
+      /* Set LANG to locale, but not if LANG is already set. */
+      setenv("LANG", [localeID UTF8String], 0);
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"Locale detection failed: %@: %@", [e name], [e reason]);
     }
 }
 
@@ -624,6 +652,134 @@ ns_release_autorelease_pool (void *pool)
   ns_release_object (pool);
 }
 
+
+static BOOL
+ns_menu_bar_should_be_hidden (void)
+/* True, if the menu bar should be hidden.  */
+{
+  return !NILP (ns_auto_hide_menu_bar)
+    && [NSApp respondsToSelector:@selector(setPresentationOptions:)];
+}
+
+
+struct EmacsMargins
+{
+  CGFloat top;
+  CGFloat bottom;
+  CGFloat left;
+  CGFloat right;
+};
+
+
+static struct EmacsMargins
+ns_screen_margins (NSScreen *screen)
+/* The parts of SCREEN used by the operating system.  */
+{
+  NSTRACE ("ns_screen_margins");
+
+  struct EmacsMargins margins;
+
+  NSRect screenFrame = [screen frame];
+  NSRect screenVisibleFrame = [screen visibleFrame];
+
+  /* Sometimes, visibleFrame isn't up-to-date with respect to a hidden
+     menu bar, check this explicitly.  */
+  if (ns_menu_bar_should_be_hidden())
+    {
+      margins.top = 0;
+    }
+  else
+    {
+      CGFloat frameTop = screenFrame.origin.y + screenFrame.size.height;
+      CGFloat visibleFrameTop = (screenVisibleFrame.origin.y
+                                 + screenVisibleFrame.size.height);
+
+      margins.top = frameTop - visibleFrameTop;
+    }
+
+  {
+    CGFloat frameRight = screenFrame.origin.x + screenFrame.size.width;
+    CGFloat visibleFrameRight = (screenVisibleFrame.origin.x
+                                 + screenVisibleFrame.size.width);
+    margins.right = frameRight - visibleFrameRight;
+  }
+
+  margins.bottom = screenVisibleFrame.origin.y - screenFrame.origin.y;
+  margins.left   = screenVisibleFrame.origin.x - screenFrame.origin.x;
+
+  NSTRACE_MSG ("left:%g right:%g top:%g bottom:%g",
+               margins.left,
+               margins.right,
+               margins.top,
+               margins.bottom);
+
+  return margins;
+}
+
+
+/* A screen margin between 1 and DOCK_IGNORE_LIMIT (inclusive) is
+   assumed to contain a hidden dock.  macOS currently use 4 pixels for
+   this, however, to be future compatible, a larger value is used.  */
+#define DOCK_IGNORE_LIMIT 6
+
+static struct EmacsMargins
+ns_screen_margins_ignoring_hidden_dock (NSScreen *screen)
+/* The parts of SCREEN used by the operating system, excluding the parts
+reserved for an hidden dock.  */
+{
+  NSTRACE ("ns_screen_margins_ignoring_hidden_dock");
+
+  struct EmacsMargins margins = ns_screen_margins(screen);
+
+  /* macOS (currently) reserved 4 pixels along the edge where a hidden
+     dock is located.  Unfortunately, it's not possible to find the
+     location and information about if the dock is hidden.  Instead,
+     it is assumed that if the margin of an edge is less than
+     DOCK_IGNORE_LIMIT, it contains a hidden dock.  */
+  if (margins.left <= DOCK_IGNORE_LIMIT)
+    {
+      margins.left = 0;
+    }
+  if (margins.right <= DOCK_IGNORE_LIMIT)
+    {
+      margins.right = 0;
+    }
+  if (margins.top <= DOCK_IGNORE_LIMIT)
+    {
+      margins.top = 0;
+    }
+  /* Note: This doesn't occur in current versions of macOS, but
+     included for completeness and future compatibility.  */
+  if (margins.bottom <= DOCK_IGNORE_LIMIT)
+    {
+      margins.bottom = 0;
+    }
+
+  NSTRACE_MSG ("left:%g right:%g top:%g bottom:%g",
+               margins.left,
+               margins.right,
+               margins.top,
+               margins.bottom);
+
+  return margins;
+}
+
+
+static CGFloat
+ns_menu_bar_height (NSScreen *screen)
+/* The height of the menu bar, if visible.
+
+   Note: Don't use this when fullscreen is enabled -- the screen
+   sometimes includes, sometimes excludes the menu bar area.  */
+{
+  struct EmacsMargins margins = ns_screen_margins(screen);
+
+  CGFloat res = margins.top;
+
+  NSTRACE ("ns_menu_bar_height " NSTRACE_FMT_RETURN " %.0f", res);
+
+  return res;
+}
 
 
 /* ==========================================================================
@@ -674,44 +830,156 @@ ns_release_autorelease_pool (void *pool)
 //    Result: Menu bar visible, frame placed immediately below the menu.
 //
 
+static NSRect constrain_frame_rect(NSRect frameRect, bool isFullscreen)
+{
+  NSTRACE ("constrain_frame_rect(" NSTRACE_FMT_RECT ")",
+             NSTRACE_ARG_RECT (frameRect));
+
+  // --------------------
+  // Collect information about the screen the frame is covering.
+  //
+
+  NSArray *screens = [NSScreen screens];
+  NSUInteger nr_screens = [screens count];
+
+  int i;
+
+  // The height of the menu bar, if present in any screen the frame is
+  // displayed in.
+  int menu_bar_height = 0;
+
+  // A rectangle covering all the screen the frame is displayed in.
+  NSRect multiscreenRect = NSMakeRect(0, 0, 0, 0);
+  for (i = 0; i < nr_screens; ++i )
+    {
+      NSScreen *s = [screens objectAtIndex: i];
+      NSRect scrRect = [s frame];
+
+      NSTRACE_MSG ("Screen %d: " NSTRACE_FMT_RECT,
+                   i, NSTRACE_ARG_RECT (scrRect));
+
+      if (NSIntersectionRect (frameRect, scrRect).size.height != 0)
+        {
+          multiscreenRect = NSUnionRect (multiscreenRect, scrRect);
+
+          if (!isFullscreen)
+            {
+              CGFloat screen_menu_bar_height = ns_menu_bar_height (s);
+              menu_bar_height = max(menu_bar_height, screen_menu_bar_height);
+            }
+        }
+    }
+
+  NSTRACE_RECT ("multiscreenRect", multiscreenRect);
+
+  NSTRACE_MSG ("menu_bar_height: %d", menu_bar_height);
+
+  if (multiscreenRect.size.width == 0
+      || multiscreenRect.size.height == 0)
+    {
+      // Failed to find any monitor, give up.
+      NSTRACE_MSG ("multiscreenRect empty");
+      NSTRACE_RETURN_RECT (frameRect);
+      return frameRect;
+    }
+
+
+  // --------------------
+  // Find a suitable placement.
+  //
+
+  if (ns_menu_bar_should_be_hidden())
+    {
+      // When the menu bar is hidden, the user may place part of the
+      // frame above the top of the screen, for example to hide the
+      // title bar.
+      //
+      // Hence, keep the original position.
+    }
+  else
+    {
+      // Ensure that the frame is below the menu bar, or below the top
+      // of the screen.
+      //
+      // This assume that the menu bar is placed at the top in the
+      // rectangle that covers the monitors.  (It doesn't have to be,
+      // but if it's not it's hard to do anything useful.)
+      CGFloat topOfWorkArea = (multiscreenRect.origin.y
+                               + multiscreenRect.size.height
+                               - menu_bar_height);
+
+      CGFloat topOfFrame = frameRect.origin.y + frameRect.size.height;
+      if (topOfFrame > topOfWorkArea)
+        {
+          frameRect.origin.y -= topOfFrame - topOfWorkArea;
+          NSTRACE_RECT ("After placement adjust", frameRect);
+        }
+    }
+
+  // Include the following section to restrict frame to the screens.
+  // (If so, update it to allow the frame to stretch down below the
+  // screen.)
+#if 0
+  // --------------------
+  // Ensure frame doesn't stretch below the screens.
+  //
+
+  CGFloat diff = multiscreenRect.origin.y - frameRect.origin.y;
+
+  if (diff > 0)
+    {
+      frameRect.origin.y = multiscreenRect.origin.y;
+      frameRect.size.height -= diff;
+    }
+#endif
+
+  NSTRACE_RETURN_RECT (frameRect);
+  return frameRect;
+}
+
+
 static void
 ns_constrain_all_frames (void)
+/* --------------------------------------------------------------------------
+     Ensure that the menu bar doesn't cover any frames.
+   -------------------------------------------------------------------------- */
 {
   Lisp_Object tail, frame;
+
+  NSTRACE ("ns_constrain_all_frames");
+
+  block_input ();
 
   FOR_EACH_FRAME (tail, frame)
     {
       struct frame *f = XFRAME (frame);
       if (FRAME_NS_P (f))
         {
-          NSView *view = FRAME_NS_VIEW (f);
-          /* This no-op will trigger the default window placing
-           * constraint system. */
-          [[view window] setFrameOrigin:[[view window] frame].origin];
+          EmacsView *view = FRAME_NS_VIEW (f);
+
+          if (![view isFullscreen])
+            {
+              [[view window]
+                setFrame:constrain_frame_rect([[view window] frame], false)
+                 display:NO];
+            }
         }
     }
+
+  unblock_input ();
 }
 
-
-/* True, if the menu bar should be hidden.  */
-
-static BOOL
-ns_menu_bar_should_be_hidden (void)
-{
-  return !NILP (ns_auto_hide_menu_bar)
-    && [NSApp respondsToSelector:@selector(setPresentationOptions:)];
-}
-
-
-/* Show or hide the menu bar, based on user setting.  */
 
 static void
 ns_update_auto_hide_menu_bar (void)
+/* --------------------------------------------------------------------------
+     Show or hide the menu bar, based on user setting.
+   -------------------------------------------------------------------------- */
 {
 #ifdef NS_IMPL_COCOA
-  block_input ();
+  NSTRACE ("ns_update_auto_hide_menu_bar");
 
-  NSTRACE (ns_update_auto_hide_menu_bar);
+  block_input ();
 
   if (NSApp != nil && [NSApp isActive])
     {
@@ -752,14 +1020,14 @@ ns_update_begin (struct frame *f)
    -------------------------------------------------------------------------- */
 {
   EmacsView *view = FRAME_NS_VIEW (f);
-  NSTRACE (ns_update_begin);
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_update_begin");
 
   ns_update_auto_hide_menu_bar ();
 
 #ifdef NS_IMPL_COCOA
   if ([view isFullscreen] && [view fsIsNative])
   {
-    // Fix reappearing tool bar in fullscreen for OSX 10.7
+    // Fix reappearing tool bar in fullscreen for Mac OS X 10.7
     BOOL tbar_visible = FRAME_EXTERNAL_TOOL_BAR (f) ? YES : NO;
     NSToolbar *toolbar = [FRAME_NS_VIEW (f) toolbar];
     if (! tbar_visible != ! [toolbar isVisible])
@@ -809,7 +1077,7 @@ ns_update_window_begin (struct window *w)
   struct frame *f = XFRAME (WINDOW_FRAME (w));
   Mouse_HLInfo *hlinfo = MOUSE_HL_INFO (f);
 
-  NSTRACE (ns_update_window_begin);
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_update_window_begin");
   w->output_cursor = w->cursor;
 
   block_input ();
@@ -839,6 +1107,8 @@ ns_update_window_end (struct window *w, bool cursor_on_p,
    external (RIF) call; for one window called before update_end
    -------------------------------------------------------------------------- */
 {
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_update_window_end");
+
   /* note: this fn is nearly identical in all terms */
   if (!w->pseudo_window_p)
     {
@@ -864,8 +1134,6 @@ ns_update_window_end (struct window *w, bool cursor_on_p,
      frame_up_to_date to redisplay the mouse highlight.  */
   if (mouse_face_overwritten_p)
     reset_mouse_highlight (MOUSE_HL_INFO (XFRAME (w->frame)));
-
-  NSTRACE (update_window_end);
 }
 
 
@@ -878,6 +1146,8 @@ ns_update_end (struct frame *f)
 {
   EmacsView *view = FRAME_NS_VIEW (f);
 
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_update_end");
+
 /*   if (f == MOUSE_HL_INFO (f)->mouse_face_mouse_frame) */
   MOUSE_HL_INFO (f)->mouse_face_defer = 0;
 
@@ -888,7 +1158,6 @@ ns_update_end (struct frame *f)
 
   unblock_input ();
   ns_updating_frame = NULL;
-  NSTRACE (ns_update_end);
 }
 
 static void
@@ -902,11 +1171,11 @@ ns_focus (struct frame *f, NSRect *r, int n)
      the entire window.
    -------------------------------------------------------------------------- */
 {
-//  NSTRACE (ns_focus);
-/* static int c =0;
-   fprintf (stderr, "focus: %d", c++);
-   if (r) fprintf (stderr, " (%.0f, %.0f : %.0f x %.0f)", r->origin.x, r->origin.y, r->size.width, r->size.height);
-   fprintf (stderr, "\n"); */
+  NSTRACE_WHEN (NSTRACE_GROUP_FOCUS, "ns_focus");
+  if (r != NULL)
+    {
+      NSTRACE_RECT ("r", *r);
+    }
 
   if (f != ns_updating_frame)
     {
@@ -946,7 +1215,7 @@ ns_unfocus (struct frame *f)
      Internal: Remove focus on given frame
    -------------------------------------------------------------------------- */
 {
-//  NSTRACE (ns_unfocus);
+  NSTRACE_WHEN (NSTRACE_GROUP_FOCUS, "ns_unfocus");
 
   if (gsaved)
     {
@@ -990,46 +1259,161 @@ ns_clip_to_row (struct window *w, struct glyph_row *row,
 }
 
 
+/* ==========================================================================
+
+    Visible bell and beep.
+
+   ========================================================================== */
+
+
+// This bell implementation shows the visual bell image asynchronously
+// from the rest of Emacs. This is done by adding a NSView to the
+// superview of the Emacs window and removing it using a timer.
+//
+// Unfortunately, some Emacs operations, like scrolling, is done using
+// low-level primitives that copy the content of the window, including
+// the bell image. To some extent, this is handled by removing the
+// image prior to scrolling and marking that the window is in need for
+// redisplay.
+//
+// To test this code, make sure that there is no artifacts of the bell
+// image in the following situations. Use a non-empty buffer (like the
+// tutorial) to ensure that a scroll is performed:
+//
+// * Single-window: C-g C-v
+//
+// * Side-by-windows: C-x 3 C-g C-v
+//
+// * Windows above each other: C-x 2 C-g C-v
+
+@interface EmacsBell : NSImageView
+{
+  // Number of currently active bell:s.
+  unsigned int nestCount;
+  NSView * mView;
+  bool isAttached;
+}
+- (void)show:(NSView *)view;
+- (void)hide;
+- (void)remove;
+@end
+
+@implementation EmacsBell
+
+- (id)init;
+{
+  NSTRACE ("[EmacsBell init]");
+  if ((self = [super init]))
+    {
+      nestCount = 0;
+      isAttached = false;
+#ifdef NS_IMPL_GNUSTEP
+      // GNUstep doesn't provide named images.  This was reported in
+      // 2011, see https://savannah.gnu.org/bugs/?33396
+      //
+      // As a drop in replacement, a semitransparent gray square is used.
+      self.image = [[NSImage alloc] initWithSize:NSMakeSize(32 * 5, 32 * 5)];
+      [self.image lockFocus];
+      [[NSColor colorForEmacsRed:0.5 green:0.5 blue:0.5 alpha:0.5] set];
+      NSRectFill(NSMakeRect(0, 0, 32, 32));
+      [self.image unlockFocus];
+#else
+      self.image = [NSImage imageNamed:NSImageNameCaution];
+      [self.image setSize:NSMakeSize(self.image.size.width * 5,
+                                     self.image.size.height * 5)];
+#endif
+    }
+  return self;
+}
+
+- (void)show:(NSView *)view
+{
+  NSTRACE ("[EmacsBell show:]");
+  NSTRACE_MSG ("nestCount: %u", nestCount);
+
+  // Show the image, unless it's already shown.
+  if (nestCount == 0)
+    {
+      NSRect rect = [view bounds];
+      NSPoint pos;
+      pos.x = rect.origin.x + (rect.size.width  - self.image.size.width )/2;
+      pos.y = rect.origin.y + (rect.size.height - self.image.size.height)/2;
+
+      [self setFrameOrigin:pos];
+      [self setFrameSize:self.image.size];
+
+      isAttached = true;
+      mView = view;
+      [[[view window] contentView] addSubview:self
+                                   positioned:NSWindowAbove
+                                   relativeTo:nil];
+    }
+
+  ++nestCount;
+
+  [self performSelector:@selector(hide) withObject:self afterDelay:0.5];
+}
+
+
+- (void)hide
+{
+  // Note: Trace output from this method isn't shown, reason unknown.
+  // NSTRACE ("[EmacsBell hide]");
+
+  if (nestCount > 0)
+    --nestCount;
+
+  // Remove the image once the last bell became inactive.
+  if (nestCount == 0)
+    {
+      [self remove];
+    }
+}
+
+
+-(void)remove
+{
+  NSTRACE ("[EmacsBell remove]");
+  if (isAttached)
+    {
+      NSTRACE_MSG ("removeFromSuperview");
+      [self removeFromSuperview];
+      mView.needsDisplay = YES;
+      isAttached = false;
+    }
+}
+
+@end
+
+
+static EmacsBell * bell_view = nil;
+
 static void
 ns_ring_bell (struct frame *f)
 /* --------------------------------------------------------------------------
      "Beep" routine
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (ns_ring_bell);
+  NSTRACE ("ns_ring_bell");
   if (visible_bell)
     {
-      NSAutoreleasePool *pool;
       struct frame *frame = SELECTED_FRAME ();
       NSView *view;
 
+      if (bell_view == nil)
+        {
+          bell_view = [[EmacsBell alloc] init];
+          [bell_view retain];
+        }
+
       block_input ();
-      pool = [[NSAutoreleasePool alloc] init];
 
       view = FRAME_NS_VIEW (frame);
       if (view != nil)
         {
-          NSRect r, surr;
-          NSPoint dim = NSMakePoint (128, 128);
-
-          r = [view bounds];
-          r.origin.x += (r.size.width - dim.x) / 2;
-          r.origin.y += (r.size.height - dim.y) / 2;
-          r.size.width = dim.x;
-          r.size.height = dim.y;
-          surr = NSInsetRect (r, -2, -2);
-          ns_focus (frame, &surr, 1);
-          [[view window] cacheImageInRect: [view convertRect: surr toView:nil]];
-          [ns_lookup_indexed_color (NS_FACE_FOREGROUND
-                                      (FRAME_DEFAULT_FACE (frame)), frame) set];
-          NSRectFill (r);
-          [[view window] flushWindow];
-          ns_timeout (150000);
-          [[view window] restoreCachedImage];
-          [[view window] flushWindow];
-          ns_unfocus (frame);
+          [bell_view show:view];
         }
-      [pool release];
+
       unblock_input ();
     }
   else
@@ -1037,6 +1421,22 @@ ns_ring_bell (struct frame *f)
       NSBeep ();
     }
 }
+
+
+static void
+hide_bell (void)
+/* --------------------------------------------------------------------------
+     Ensure the bell is hidden.
+   -------------------------------------------------------------------------- */
+{
+  NSTRACE ("hide_bell");
+
+  if (bell_view != nil)
+    {
+      [bell_view remove];
+    }
+}
+
 
 /* ==========================================================================
 
@@ -1052,6 +1452,7 @@ ns_raise_frame (struct frame *f)
    -------------------------------------------------------------------------- */
 {
   NSView *view;
+
   check_window_system (f);
   view = FRAME_NS_VIEW (f);
   block_input ();
@@ -1068,6 +1469,7 @@ ns_lower_frame (struct frame *f)
    -------------------------------------------------------------------------- */
 {
   NSView *view;
+
   check_window_system (f);
   view = FRAME_NS_VIEW (f);
   block_input ();
@@ -1082,7 +1484,7 @@ ns_frame_raise_lower (struct frame *f, bool raise)
      External (hook)
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (ns_frame_raise_lower);
+  NSTRACE ("ns_frame_raise_lower");
 
   if (raise)
     ns_raise_frame (f);
@@ -1100,7 +1502,7 @@ ns_frame_rehighlight (struct frame *frame)
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (frame);
   struct frame *old_highlight = dpyinfo->x_highlight_frame;
 
-  NSTRACE (ns_frame_rehighlight);
+  NSTRACE ("ns_frame_rehighlight");
   if (dpyinfo->x_focus_frame)
     {
       dpyinfo->x_highlight_frame
@@ -1139,7 +1541,7 @@ x_make_frame_visible (struct frame *f)
      External: Show the window (X11 semantics)
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (x_make_frame_visible);
+  NSTRACE ("x_make_frame_visible");
   /* XXX: at some points in past this was not needed, as the only place that
      called this (frame.c:Fraise_frame ()) also called raise_lower;
      if this ends up the case again, comment this out again. */
@@ -1173,7 +1575,7 @@ x_make_frame_invisible (struct frame *f)
    -------------------------------------------------------------------------- */
 {
   NSView *view;
-  NSTRACE (x_make_frame_invisible);
+  NSTRACE ("x_make_frame_invisible");
   check_window_system (f);
   view = FRAME_NS_VIEW (f);
   [[view window] orderOut: NSApp];
@@ -1191,7 +1593,7 @@ x_iconify_frame (struct frame *f)
   NSView *view;
   struct ns_display_info *dpyinfo;
 
-  NSTRACE (x_iconify_frame);
+  NSTRACE ("x_iconify_frame");
   check_window_system (f);
   view = FRAME_NS_VIEW (f);
   dpyinfo = FRAME_DISPLAY_INFO (f);
@@ -1211,7 +1613,12 @@ x_iconify_frame (struct frame *f)
       [[view window] orderOut: NSApp];
       [[view window] setFrame: t display: NO];
     }
+
+  /* Processing input while Emacs is being minimized can cause a
+     crash, so block it for the duration. */
+  block_input();
   [[view window] miniaturize: NSApp];
+  unblock_input();
 }
 
 /* Free X resources of frame F.  */
@@ -1223,7 +1630,7 @@ x_free_frame_resources (struct frame *f)
   struct ns_display_info *dpyinfo;
   Mouse_HLInfo *hlinfo;
 
-  NSTRACE (x_free_frame_resources);
+  NSTRACE ("x_free_frame_resources");
   check_window_system (f);
   view = FRAME_NS_VIEW (f);
   dpyinfo = FRAME_DISPLAY_INFO (f);
@@ -1260,7 +1667,7 @@ x_destroy_window (struct frame *f)
      External: Delete the window
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (x_destroy_window);
+  NSTRACE ("x_destroy_window");
   check_window_system (f);
   x_free_frame_resources (f);
   ns_window_num--;
@@ -1278,7 +1685,7 @@ x_set_offset (struct frame *f, int xoff, int yoff, int change_grav)
   NSScreen *fscreen = [screens objectAtIndex: 0];
   NSScreen *screen = [[view window] screen];
 
-  NSTRACE (x_set_offset);
+  NSTRACE ("x_set_offset");
 
   block_input ();
 
@@ -1304,10 +1711,11 @@ x_set_offset (struct frame *f, int xoff, int yoff, int change_grav)
 #endif
       /* Constrain the setFrameTopLeftPoint so we don't move behind the
          menu bar.  */
-      [[view window] setFrameTopLeftPoint:
-                       NSMakePoint (SCREENMAXBOUND (f->left_pos),
-                                    SCREENMAXBOUND ([fscreen frame].size.height
-                                                    - NS_TOP_POS (f)))];
+      NSPoint pt = NSMakePoint (SCREENMAXBOUND (f->left_pos),
+                                SCREENMAXBOUND ([fscreen frame].size.height
+                                                - NS_TOP_POS (f)));
+      NSTRACE_POINT ("setFrameTopLeftPoint", pt);
+      [[view window] setFrameTopLeftPoint: pt];
       f->size_hint_flags &= ~(XNegative|YNegative);
     }
 
@@ -1332,14 +1740,16 @@ x_set_window_size (struct frame *f,
   NSRect wr = [window frame];
   int tb = FRAME_EXTERNAL_TOOL_BAR (f);
   int pixelwidth, pixelheight;
-  int rows, cols;
+  int orig_height = wr.size.height;
 
-  NSTRACE (x_set_window_size);
+  NSTRACE ("x_set_window_size");
 
   if (view == nil)
     return;
 
-/*fprintf (stderr, "\tsetWindowSize: %d x %d, pixelwise %d, font size %d x %d\n", width, height, pixelwise, FRAME_COLUMN_WIDTH (f), FRAME_LINE_HEIGHT (f));*/
+  NSTRACE_RECT ("current", wr);
+  NSTRACE_MSG ("Width:%d Height:%d Pixelwise:%d", width, height, pixelwise);
+  NSTRACE_MSG ("Font %d x %d", FRAME_COLUMN_WIDTH (f), FRAME_LINE_HEIGHT (f));
 
   block_input ();
 
@@ -1347,15 +1757,11 @@ x_set_window_size (struct frame *f,
     {
       pixelwidth = FRAME_TEXT_TO_PIXEL_WIDTH (f, width);
       pixelheight = FRAME_TEXT_TO_PIXEL_HEIGHT (f, height);
-      cols = FRAME_PIXEL_WIDTH_TO_TEXT_COLS (f, pixelwidth);
-      rows = FRAME_PIXEL_HEIGHT_TO_TEXT_LINES (f, pixelheight);
     }
   else
     {
       pixelwidth =  FRAME_TEXT_COLS_TO_PIXEL_WIDTH   (f, width);
       pixelheight = FRAME_TEXT_LINES_TO_PIXEL_HEIGHT (f, height);
-      cols = width;
-      rows = height;
     }
 
   /* If we have a toolbar, take its height into account. */
@@ -1367,8 +1773,11 @@ x_set_window_size (struct frame *f,
     FRAME_TOOLBAR_HEIGHT (f) =
       NSHeight ([window frameRectForContentRect: NSMakeRect (0, 0, 0, 0)])
         - FRAME_NS_TITLEBAR_HEIGHT (f);
+#if 0
+      /* Only breaks things here, removed by martin 2015-09-30.  */
 #ifdef NS_IMPL_GNUSTEP
       FRAME_TOOLBAR_HEIGHT (f) -= 3;
+#endif
 #endif
     }
   else
@@ -1386,26 +1795,17 @@ x_set_window_size (struct frame *f,
  if (f->output_data.ns->zooming)
    f->output_data.ns->zooming = 0;
  else
-   wr.origin.y += FRAME_PIXEL_HEIGHT (f) - pixelheight;
+   wr.origin.y += orig_height - wr.size.height;
 
-  [view setRows: rows andColumns: cols];
+ frame_size_history_add
+   (f, Qx_set_window_size_1, width, height,
+    list5 (Fcons (make_number (pixelwidth), make_number (pixelheight)),
+	   Fcons (make_number (wr.size.width), make_number (wr.size.height)),
+	   make_number (f->border_width),
+	   make_number (FRAME_NS_TITLEBAR_HEIGHT (f)),
+	   make_number (FRAME_TOOLBAR_HEIGHT (f))));
+
   [window setFrame: wr display: YES];
-
-  /* This is a trick to compensate for Emacs' managing the scrollbar area
-     as a fixed number of standard character columns.  Instead of leaving
-     blank space for the extra, we chopped it off above.  Now for
-     left-hand scrollbars, we shift all rendering to the left by the
-     difference between the real width and Emacs' imagined one.  For
-     right-hand bars, don't worry about it since the extra is never used.
-     (Obviously doesn't work for vertically split windows tho..) */
-  {
-    NSPoint origin = FRAME_HAS_VERTICAL_SCROLL_BARS_ON_LEFT (f)
-      ? NSMakePoint (FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f)
-                     - NS_SCROLL_BAR_WIDTH (f), 0)
-      : NSMakePoint (0, 0);
-    [view setFrame: NSMakeRect (0, 0, pixelwidth, pixelheight)];
-    [view setBoundsOrigin: origin];
-  }
 
   [view updateFrameSize: NO];
   unblock_input ();
@@ -1416,6 +1816,8 @@ static void
 ns_fullscreen_hook (struct frame *f)
 {
   EmacsView *view = (EmacsView *)FRAME_NS_VIEW (f);
+
+  NSTRACE ("ns_fullscreen_hook");
 
   if (!FRAME_VISIBLE_P (f))
     return;
@@ -1496,37 +1898,6 @@ ns_index_color (NSColor *color, struct frame *f)
 }
 
 
-void
-ns_free_indexed_color (unsigned long idx, struct frame *f)
-{
-  struct ns_color_table *color_table;
-  NSColor *color;
-  NSNumber *index;
-
-  if (!f)
-    return;
-
-  color_table = FRAME_DISPLAY_INFO (f)->color_table;
-
-  if (idx <= 0 || idx >= color_table->size) {
-    message1 ("ns_free_indexed_color: Color index out of range.\n");
-    return;
-  }
-
-  index = [NSNumber numberWithUnsignedInt: idx];
-  if ([color_table->empty_indices containsObject: index]) {
-    message1 ("ns_free_indexed_color: attempt to free already freed color.\n");
-    return;
-  }
-
-  color = color_table->colors[idx];
-  [color release];
-  color_table->colors[idx] = nil;
-  [color_table->empty_indices addObject: index];
-/*fprintf(stderr, "color_table: FREED %d\n",idx);*/
-}
-
-
 static int
 ns_get_color (const char *name, NSColor **col)
 /* --------------------------------------------------------------------------
@@ -1542,7 +1913,8 @@ ns_get_color (const char *name, NSColor **col)
   float r = -1.0, g, b;
   NSString *nsname = [NSString stringWithUTF8String: name];
 
-/*fprintf (stderr, "ns_get_color: '%s'\n", name); */
+  NSTRACE ("ns_get_color(%s, **)", name);
+
   block_input ();
 
   if ([nsname isEqualToString: @"ns_selection_bg_color"])
@@ -1567,8 +1939,8 @@ ns_get_color (const char *name, NSColor **col)
     }
   else if ([nsname isEqualToString: @"ns_selection_fg_color"])
     {
-      /* NOTE: OSX applications normally don't set foreground selection, but
-         text may be unreadable if we don't.
+      /* NOTE: macOS applications normally don't set foreground
+         selection, but text may be unreadable if we don't.
       */
       if ((new = [NSColor selectedTextColor]) != nil)
         {
@@ -1607,7 +1979,7 @@ ns_get_color (const char *name, NSColor **col)
 
   if (hex[0])
     {
-      int rr, gg, bb;
+      unsigned int rr, gg, bb;
       float fscale = scaling == 4 ? 65535.0 : (scaling == 2 ? 255.0 : 15.0);
       if (sscanf (hex, "%x/%x/%x", &rr, &gg, &bb))
         {
@@ -1663,52 +2035,12 @@ ns_lisp_to_color (Lisp_Object color, NSColor **col)
      Convert a Lisp string object to a NS color
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (ns_lisp_to_color);
+  NSTRACE ("ns_lisp_to_color");
   if (STRINGP (color))
     return ns_get_color (SSDATA (color), col);
   else if (SYMBOLP (color))
     return ns_get_color (SSDATA (SYMBOL_NAME (color)), col);
   return 1;
-}
-
-
-Lisp_Object
-ns_color_to_lisp (NSColor *col)
-/* --------------------------------------------------------------------------
-     Convert a color to a lisp string with the RGB equivalent
-   -------------------------------------------------------------------------- */
-{
-  EmacsCGFloat red, green, blue, alpha, gray;
-  char buf[1024];
-  const char *str;
-  NSTRACE (ns_color_to_lisp);
-
-  block_input ();
-  if ([[col colorSpaceName] isEqualToString: NSNamedColorSpace])
-
-      if ((str =[[col colorNameComponent] UTF8String]))
-        {
-          unblock_input ();
-          return build_string ((char *)str);
-        }
-
-    [[col colorUsingDefaultColorSpace]
-        getRed: &red green: &green blue: &blue alpha: &alpha];
-  if (red == green && red == blue)
-    {
-      [[col colorUsingColorSpaceName: NSCalibratedWhiteColorSpace]
-            getWhite: &gray alpha: &alpha];
-      snprintf (buf, sizeof (buf), "#%2.2lx%2.2lx%2.2lx",
-		lrint (gray * 0xff), lrint (gray * 0xff), lrint (gray * 0xff));
-      unblock_input ();
-      return build_string (buf);
-    }
-
-  snprintf (buf, sizeof (buf), "#%2.2lx%2.2lx%2.2lx",
-            lrint (red*0xff), lrint (green*0xff), lrint (blue*0xff));
-
-  unblock_input ();
-  return build_string (buf);
 }
 
 
@@ -1749,7 +2081,7 @@ ns_defined_color (struct frame *f,
    -------------------------------------------------------------------------- */
 {
   NSColor *col;
-  NSTRACE (ns_defined_color);
+  NSTRACE_WHEN (NSTRACE_GROUP_COLOR, "ns_defined_color");
 
   block_input ();
   if (ns_get_color (name, &col) != 0) /* Color not found  */
@@ -1774,6 +2106,8 @@ x_set_frame_alpha (struct frame *f)
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
   double alpha = 1.0;
   double alpha_min = 1.0;
+
+  NSTRACE ("x_set_frame_alpha");
 
   if (dpyinfo->x_highlight_frame == f)
     alpha = f->alpha[0];
@@ -1814,7 +2148,7 @@ frame_set_mouse_pixel_position (struct frame *f, int pix_x, int pix_y)
      Programmatically reposition mouse pointer in pixel coordinates
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (frame_set_mouse_pixel_position);
+  NSTRACE ("frame_set_mouse_pixel_position");
   ns_raise_frame (f);
 #if 0
   /* FIXME: this does not work, and what about GNUstep? */
@@ -1837,7 +2171,7 @@ note_mouse_movement (struct frame *frame, CGFloat x, CGFloat y)
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (frame);
   NSRect *r;
 
-//  NSTRACE (note_mouse_movement);
+//  NSTRACE ("note_mouse_movement");
 
   dpyinfo->last_mouse_motion_frame = frame;
   r = &dpyinfo->last_mouse_glyph;
@@ -1878,7 +2212,7 @@ ns_mouse_position (struct frame **fp, int insist, Lisp_Object *bar_window,
   struct frame *f;
   struct ns_display_info *dpyinfo;
 
-  NSTRACE (ns_mouse_position);
+  NSTRACE ("ns_mouse_position");
 
   if (*fp == NULL)
     {
@@ -1911,7 +2245,7 @@ ns_mouse_position (struct frame **fp, int insist, Lisp_Object *bar_window,
       position = [view convertPoint: position fromView: nil];
       remember_mouse_glyph (f, position.x, position.y,
                             &dpyinfo->last_mouse_glyph);
-/*fprintf (stderr, "ns_mouse_position: %.0f, %.0f\n", position.x, position.y); */
+      NSTRACE_POINT ("position", position);
 
       if (bar_window) *bar_window = Qnil;
       if (part) *part = scroll_bar_above_handle;
@@ -1934,7 +2268,7 @@ ns_frame_up_to_date (struct frame *f)
     Can't use FRAME_MOUSE_UPDATE due to ns_frame_begin and ns_frame_end calls.
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (ns_frame_up_to_date);
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_frame_up_to_date");
 
   if (FRAME_NS_P (f))
     {
@@ -1959,7 +2293,7 @@ ns_define_frame_cursor (struct frame *f, Cursor cursor)
     External (RIF): set frame mouse pointer type.
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (ns_define_frame_cursor);
+  NSTRACE ("ns_define_frame_cursor");
   if (FRAME_POINTER_TYPE (f) != cursor)
     {
       EmacsView *view = FRAME_NS_VIEW (f);
@@ -2006,7 +2340,7 @@ x_get_keysym_name (int keysym)
    -------------------------------------------------------------------------- */
 {
   static char value[16];
-  NSTRACE (x_get_keysym_name);
+  NSTRACE ("x_get_keysym_name");
   sprintf (value, "%d", keysym);
   return value;
 }
@@ -2026,7 +2360,7 @@ ns_redraw_scroll_bars (struct frame *f)
   int i;
   id view;
   NSArray *subviews = [[FRAME_NS_VIEW (f) superview] subviews];
-  NSTRACE (ns_redraw_scroll_bars);
+  NSTRACE ("ns_redraw_scroll_bars");
   for (i =[subviews count]-1; i >= 0; i--)
     {
       view = [subviews objectAtIndex: i];
@@ -2045,7 +2379,7 @@ ns_clear_frame (struct frame *f)
   NSView *view = FRAME_NS_VIEW (f);
   NSRect r;
 
-  NSTRACE (ns_clear_frame);
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_clear_frame");
 
  /* comes on initial frame because we have
     after-make-frame-functions = select-frame */
@@ -2058,7 +2392,8 @@ ns_clear_frame (struct frame *f)
 
   block_input ();
   ns_focus (f, &r, 1);
-  [ns_lookup_indexed_color (NS_FACE_BACKGROUND (FRAME_DEFAULT_FACE (f)), f) set];
+  [ns_lookup_indexed_color (NS_FACE_BACKGROUND
+			    (FACE_FROM_ID (f, DEFAULT_FACE_ID)), f) set];
   NSRectFill (r);
   ns_unfocus (f);
 
@@ -2081,7 +2416,7 @@ ns_clear_frame_area (struct frame *f, int x, int y, int width, int height)
   if (!view || !face)
     return;
 
-  NSTRACE (ns_clear_frame_area);
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_clear_frame_area");
 
   r = NSIntersectionRect (r, [view frame]);
   ns_focus (f, &r, 1);
@@ -2096,8 +2431,12 @@ ns_clear_frame_area (struct frame *f, int x, int y, int width, int height)
 static void
 ns_copy_bits (struct frame *f, NSRect src, NSRect dest)
 {
+  NSTRACE ("ns_copy_bits");
+
   if (FRAME_NS_VIEW (f))
     {
+      hide_bell();              // Ensure the bell image isn't scrolled.
+
       ns_focus (f, &dest, 1);
       [FRAME_NS_VIEW (f) scrollRect: src
                                  by: NSMakeSize (dest.origin.x - src.origin.x,
@@ -2115,7 +2454,7 @@ ns_scroll_run (struct window *w, struct run *run)
   struct frame *f = XFRAME (w->frame);
   int x, y, width, height, from_y, to_y, bottom_y;
 
-  NSTRACE (ns_scroll_run);
+  NSTRACE ("ns_scroll_run");
 
   /* begin copy from other terms */
   /* Get frame-relative bounding box of the text display area of W,
@@ -2174,7 +2513,7 @@ ns_after_update_window_line (struct window *w, struct glyph_row *desired_row)
   struct frame *f;
   int width, height;
 
-  NSTRACE (ns_after_update_window_line);
+  NSTRACE_WHEN (NSTRACE_GROUP_UPDATES, "ns_after_update_window_line");
 
   /* begin copy from other terms */
   eassert (w);
@@ -2215,7 +2554,7 @@ ns_shift_glyphs_for_insert (struct frame *f,
   NSRect srcRect = NSMakeRect (x, y, width, height);
   NSRect dstRect = NSMakeRect (x+shift_by, y, width, height);
 
-  NSTRACE (ns_shift_glyphs_for_insert);
+  NSTRACE ("ns_shift_glyphs_for_insert");
 
   ns_copy_bits (f, srcRect, dstRect);
 }
@@ -2278,10 +2617,30 @@ ns_draw_fringe_bitmap (struct window *w, struct glyph_row *row,
     External (RIF); fringe-related
    -------------------------------------------------------------------------- */
 {
+  /* Fringe bitmaps comes in two variants, normal and periodic.  A
+     periodic bitmap is used to create a continuous pattern.  Since a
+     bitmap is rendered one text line at a time, the start offset (dh)
+     of the bitmap varies.  Concretely, this is used for the empty
+     line indicator.
+
+     For a bitmap, "h + dh" is the full height and is always
+     invariant.  For a normal bitmap "dh" is zero.
+
+     For example, when the period is three and the full height is 72
+     the following combinations exists:
+
+       h=72 dh=0
+       h=71 dh=1
+       h=70 dh=2 */
+
   struct frame *f = XFRAME (WINDOW_FRAME (w));
   struct face *face = p->face;
   static EmacsImage **bimgs = NULL;
   static int nBimgs = 0;
+
+  NSTRACE_WHEN (NSTRACE_GROUP_FRINGE, "ns_draw_fringe_bitmap");
+  NSTRACE_MSG ("which:%d cursor:%d overlay:%d width:%d height:%d period:%d",
+               p->which, p->cursor_p, p->overlay_p, p->wd, p->h, p->dh);
 
   /* grow bimgs if needed */
   if (nBimgs < max_used_fringe_bitmap)
@@ -2315,18 +2674,23 @@ ns_draw_fringe_bitmap (struct window *w, struct glyph_row *row,
 
       if (!img)
         {
-          unsigned short *bits = p->bits + p->dh;
-          int len = p->h;
+          // Note: For "periodic" images, allocate one EmacsImage for
+          // the base image, and use it for all dh:s.
+          unsigned short *bits = p->bits;
+          int full_height = p->h + p->dh;
           int i;
-          unsigned char *cbits = xmalloc (len);
+          unsigned char *cbits = xmalloc (full_height);
 
-          for (i = 0; i < len; i++)
-            cbits[i] = ~(bits[i] & 0xff);
-          img = [[EmacsImage alloc] initFromXBM: cbits width: 8 height: p->h
+          for (i = 0; i < full_height; i++)
+            cbits[i] = bits[i];
+          img = [[EmacsImage alloc] initFromXBM: cbits width: 8
+                                         height: full_height
                                              fg: 0 bg: 0];
           bimgs[p->which - 1] = img;
           xfree (cbits);
         }
+
+      NSTRACE_RECT ("r", r);
 
       NSRectClip (r);
       /* Since we composite the bitmap instead of just blitting it, we need
@@ -2346,9 +2710,15 @@ ns_draw_fringe_bitmap (struct window *w, struct glyph_row *row,
       }
 
 #ifdef NS_IMPL_COCOA
+      // Note: For periodic images, the full image height is "h + hd".
+      // By using the height h, a suitable part of the image is used.
+      NSRect fromRect = NSMakeRect(0, 0, p->wd, p->h);
+
+      NSTRACE_RECT ("fromRect", fromRect);
+
       [img drawInRect: r
-              fromRect: NSZeroRect
-             operation: NSCompositeSourceOver
+              fromRect: fromRect
+             operation: NSCompositingOperationSourceOver
               fraction: 1.0
            respectFlipped: YES
                 hints: nil];
@@ -2356,7 +2726,7 @@ ns_draw_fringe_bitmap (struct window *w, struct glyph_row *row,
       {
         NSPoint pt = r.origin;
         pt.y += p->h;
-        [img compositeToPoint: pt operation: NSCompositeSourceOver];
+        [img compositeToPoint: pt operation: NSCompositingOperationSourceOver];
       }
 #endif
     }
@@ -2385,7 +2755,7 @@ ns_draw_window_cursor (struct window *w, struct glyph_row *glyph_row,
      in mini-buffer windows when switching between echo area glyphs
      and mini-buffer.  */
 
-  NSTRACE (dumpcursor);
+  NSTRACE ("ns_draw_window_cursor");
 
   if (!on_p)
     return;
@@ -2422,7 +2792,10 @@ ns_draw_window_cursor (struct window *w, struct glyph_row *glyph_row,
     {
       if (cursor_width < 1)
 	cursor_width = max (FRAME_CURSOR_WIDTH (f), 1);
-      w->phys_cursor_width = cursor_width;
+
+      /* The bar cursor should never be wider than the glyph. */
+      if (cursor_width < w->phys_cursor_width)
+        w->phys_cursor_width = cursor_width;
     }
   /* If we have an HBAR, "cursor_width" MAY specify height. */
   else if (cursor_type == HBAR_CURSOR)
@@ -2439,12 +2812,11 @@ ns_draw_window_cursor (struct window *w, struct glyph_row *glyph_row,
   r.size.height = h;
   r.size.width = w->phys_cursor_width;
 
-  /* TODO: only needed in rare cases with last-resort font in HELLO..
-     should we do this more efficiently? */
-  ns_clip_to_row (w, glyph_row, ANY_AREA, NO); /* do ns_focus(f, &r, 1); if remove */
+  /* Prevent the cursor from being drawn outside the text area. */
+  ns_clip_to_row (w, glyph_row, TEXT_AREA, NO); /* do ns_focus(f, &r, 1); if remove */
 
 
-  face = FACE_FROM_ID (f, phys_cursor_glyph->face_id);
+  face = FACE_FROM_ID_OR_NULL (f, phys_cursor_glyph->face_id);
   if (face && NS_FACE_BACKGROUND (face)
       == ns_index_color (FRAME_CURSOR_COLOR (f), f))
     {
@@ -2514,13 +2886,14 @@ ns_draw_vertical_window_border (struct window *w, int x, int y0, int y1)
   struct face *face;
   NSRect r = NSMakeRect (x, y0, 1, y1-y0);
 
-  NSTRACE (ns_draw_vertical_window_border);
+  NSTRACE ("ns_draw_vertical_window_border");
 
-  face = FACE_FROM_ID (f, VERTICAL_BORDER_FACE_ID);
-  if (face)
-      [ns_lookup_indexed_color(face->foreground, f) set];
+  face = FACE_FROM_ID_OR_NULL (f, VERTICAL_BORDER_FACE_ID);
 
   ns_focus (f, &r, 1);
+  if (face)
+    [ns_lookup_indexed_color(face->foreground, f) set];
+
   NSRectFill(r);
   ns_unfocus (f);
 }
@@ -2536,13 +2909,14 @@ ns_draw_window_divider (struct window *w, int x0, int x1, int y0, int y1)
   struct face *face;
   NSRect r = NSMakeRect (x0, y0, x1-x0, y1-y0);
 
-  NSTRACE (ns_draw_window_divider);
+  NSTRACE ("ns_draw_window_divider");
 
-  face = FACE_FROM_ID (f, WINDOW_DIVIDER_FACE_ID);
-  if (face)
-      [ns_lookup_indexed_color(face->foreground, f) set];
+  face = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_FACE_ID);
 
   ns_focus (f, &r, 1);
+  if (face)
+    [ns_lookup_indexed_color(face->foreground, f) set];
+
   NSRectFill(r);
   ns_unfocus (f);
 }
@@ -2631,7 +3005,7 @@ ns_draw_underwave (struct glyph_string *s, EmacsCGFloat width, EmacsCGFloat x)
 
 
 
-void
+static void
 ns_draw_text_decoration (struct glyph_string *s, struct face *face,
                          NSColor *defaultCol, CGFloat width, CGFloat x)
 /* --------------------------------------------------------------------------
@@ -2793,7 +3167,7 @@ ns_draw_relief (NSRect r, int thickness, char raised_p,
   NSColor *newBaseCol = nil;
   NSRect sr = r;
 
-  NSTRACE (ns_draw_relief);
+  NSTRACE ("ns_draw_relief");
 
   /* set up colors */
 
@@ -2871,7 +3245,8 @@ ns_dumpglyphs_box_or_relief (struct glyph_string *s)
 
   if (s->hl == DRAW_MOUSE_FACE)
     {
-      face = FACE_FROM_ID (s->f, MOUSE_HL_INFO (s->f)->mouse_face_face_id);
+      face = FACE_FROM_ID_OR_NULL (s->f,
+				   MOUSE_HL_INFO (s->f)->mouse_face_face_id);
       if (!face)
         face = FACE_FROM_ID (s->f, MOUSE_FACE_ID);
     }
@@ -2880,7 +3255,7 @@ ns_dumpglyphs_box_or_relief (struct glyph_string *s)
 
   thickness = face->box_line_width;
 
-  NSTRACE (ns_dumpglyphs_box_or_relief);
+  NSTRACE ("ns_dumpglyphs_box_or_relief");
 
   last_x = ((s->row->full_width_p && !s->w->pseudo_window_p)
 	    ? WINDOW_RIGHT_EDGE_X (s->w)
@@ -2922,19 +3297,25 @@ ns_maybe_dumpglyphs_background (struct glyph_string *s, char force_p)
       certain cases.  Others are left to the text rendering routine.
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (ns_maybe_dumpglyphs_background);
+  NSTRACE ("ns_maybe_dumpglyphs_background");
 
   if (!s->background_filled_p/* || s->hl == DRAW_MOUSE_FACE*/)
     {
       int box_line_width = max (s->face->box_line_width, 0);
       if (FONT_HEIGHT (s->font) < s->height - 2 * box_line_width
+	  /* When xdisp.c ignores FONT_HEIGHT, we cannot trust font
+	     dimensions, since the actual glyphs might be much
+	     smaller.  So in that case we always clear the rectangle
+	     with background color.  */
+	  || FONT_TOO_HIGH (s->font)
           || s->font_not_found_p || s->extends_to_end_of_line_p || force_p)
 	{
           struct face *face;
           if (s->hl == DRAW_MOUSE_FACE)
             {
-              face = FACE_FROM_ID (s->f,
-				   MOUSE_HL_INFO (s->f)->mouse_face_face_id);
+              face
+		= FACE_FROM_ID_OR_NULL (s->f,
+					MOUSE_HL_INFO (s->f)->mouse_face_face_id);
               if (!face)
                 face = FACE_FROM_ID (s->f, MOUSE_FACE_ID);
             }
@@ -2980,7 +3361,7 @@ ns_dumpglyphs_image (struct glyph_string *s, NSRect r)
   struct face *face;
   NSColor *tdCol;
 
-  NSTRACE (ns_dumpglyphs_image);
+  NSTRACE ("ns_dumpglyphs_image");
 
   if (s->face->box != FACE_NO_BOX
       && s->first_glyph->left_box_line_p && s->slice.x == 0)
@@ -3000,7 +3381,8 @@ ns_dumpglyphs_image (struct glyph_string *s, NSRect r)
      with its background color), we must clear just the image area. */
   if (s->hl == DRAW_MOUSE_FACE)
     {
-      face = FACE_FROM_ID (s->f, MOUSE_HL_INFO (s->f)->mouse_face_face_id);
+      face = FACE_FROM_ID_OR_NULL (s->f,
+				   MOUSE_HL_INFO (s->f)->mouse_face_face_id);
       if (!face)
        face = FACE_FROM_ID (s->f, MOUSE_FACE_ID);
     }
@@ -3027,17 +3409,18 @@ ns_dumpglyphs_image (struct glyph_string *s, NSRect r)
     {
 #ifdef NS_IMPL_COCOA
       NSRect dr = NSMakeRect (x, y, s->slice.width, s->slice.height);
-      NSRect ir = NSMakeRect (s->slice.x, s->slice.y,
+      NSRect ir = NSMakeRect (s->slice.x,
+                              s->img->height - s->slice.y - s->slice.height,
                               s->slice.width, s->slice.height);
       [img drawInRect: dr
              fromRect: ir
-             operation: NSCompositeSourceOver
+             operation: NSCompositingOperationSourceOver
               fraction: 1.0
            respectFlipped: YES
                 hints: nil];
 #else
       [img compositeToPoint: NSMakePoint (x, y + s->slice.height)
-                  operation: NSCompositeSourceOver];
+                  operation: NSCompositingOperationSourceOver];
 #endif
     }
 
@@ -3117,7 +3500,8 @@ ns_dumpglyphs_stretch (struct glyph_string *s)
 
       if (s->hl == DRAW_MOUSE_FACE)
        {
-         face = FACE_FROM_ID (s->f, MOUSE_HL_INFO (s->f)->mouse_face_face_id);
+         face = FACE_FROM_ID_OR_NULL (s->f,
+				      MOUSE_HL_INFO (s->f)->mouse_face_face_id);
          if (!face)
            face = FACE_FROM_ID (s->f, MOUSE_FACE_ID);
        }
@@ -3191,6 +3575,32 @@ ns_dumpglyphs_stretch (struct glyph_string *s)
       ns_unfocus (s->f);
       s->background_filled_p = 1;
     }
+}
+
+
+static void
+ns_draw_glyph_string_foreground (struct glyph_string *s)
+{
+  int x, flags;
+  struct font *font = s->font;
+
+  /* If first glyph of S has a left box line, start drawing the text
+     of S to the right of that box line.  */
+  if (s->face && s->face->box != FACE_NO_BOX
+      && s->first_glyph->left_box_line_p)
+    x = s->x + eabs (s->face->box_line_width);
+  else
+    x = s->x;
+
+  flags = s->hl == DRAW_CURSOR ? NS_DUMPGLYPH_CURSOR :
+    (s->hl == DRAW_MOUSE_FACE ? NS_DUMPGLYPH_MOUSEFACE :
+     (s->for_overlaps ? NS_DUMPGLYPH_FOREGROUND :
+      NS_DUMPGLYPH_NORMAL));
+
+  font->driver->draw
+    (s, s->cmp_from, s->nchars, x, s->ybase,
+     (flags == NS_DUMPGLYPH_NORMAL && !s->background_filled_p)
+     || flags == NS_DUMPGLYPH_MOUSEFACE);
 }
 
 
@@ -3292,12 +3702,12 @@ ns_draw_glyph_string (struct glyph_string *s)
 {
   /* TODO (optimize): focus for box and contents draw */
   NSRect r[2];
-  int n, flags;
+  int n;
   char box_drawn_p = 0;
   struct font *font = s->face->font;
   if (! font) font = FRAME_FONT (s->f);
 
-  NSTRACE (ns_draw_glyph_string);
+  NSTRACE_WHEN (NSTRACE_GROUP_GLYPHS, "ns_draw_glyph_string");
 
   if (s->next && s->right_overhang && !s->for_overlaps/*&&s->hl!=DRAW_CURSOR*/)
     {
@@ -3362,11 +3772,6 @@ ns_draw_glyph_string (struct glyph_string *s)
         ns_maybe_dumpglyphs_background
           (s, s->first_glyph->type == COMPOSITE_GLYPH);
 
-      flags = s->hl == DRAW_CURSOR ? NS_DUMPGLYPH_CURSOR :
-        (s->hl == DRAW_MOUSE_FACE ? NS_DUMPGLYPH_MOUSEFACE :
-         (s->for_overlaps ? NS_DUMPGLYPH_FOREGROUND :
-          NS_DUMPGLYPH_NORMAL));
-
       if (s->hl == DRAW_CURSOR && s->w->phys_cursor_type == FILLED_BOX_CURSOR)
         {
           unsigned long tmp = NS_FACE_BACKGROUND (s->face);
@@ -3380,10 +3785,7 @@ ns_draw_glyph_string (struct glyph_string *s)
         if (isComposite)
           ns_draw_composite_glyph_string_foreground (s);
         else
-          font->driver->draw
-            (s, s->cmp_from, s->nchars, s->x, s->ybase,
-             (flags == NS_DUMPGLYPH_NORMAL && !s->background_filled_p)
-             || flags == NS_DUMPGLYPH_MOUSEFACE);
+          ns_draw_glyph_string_foreground (s);
       }
 
       {
@@ -3455,10 +3857,10 @@ ns_send_appdefined (int value)
               recognize and take as a command to halt the event loop.
    -------------------------------------------------------------------------- */
 {
-  /*NSTRACE (ns_send_appdefined); */
+  NSTRACE_WHEN (NSTRACE_GROUP_EVENTS, "ns_send_appdefined(%d)", value);
 
-#ifdef NS_IMPL_GNUSTEP
   // GNUstep needs postEvent to happen on the main thread.
+  // Cocoa needs nextEventMatchingMask to happen on the main thread too.
   if (! [[NSThread currentThread] isMainThread])
     {
       EmacsApp *app = (EmacsApp *)NSApp;
@@ -3468,7 +3870,6 @@ ns_send_appdefined (int value)
                          waitUntilDone:YES];
       return;
     }
-#endif
 
   /* Only post this event if we haven't already posted one.  This will end
        the [NXApp run] main loop after having processed all events queued at
@@ -3477,10 +3878,10 @@ ns_send_appdefined (int value)
 #ifdef NS_IMPL_COCOA
   if (! send_appdefined)
     {
-      /* OSX 10.10.1 swallows the AppDefined event we are sending ourselves
+      /* OS X 10.10.1 swallows the AppDefined event we are sending ourselves
          in certain situations (rapid incoming events).
          So check if we have one, if not add one.  */
-      NSEvent *appev = [NSApp nextEventMatchingMask:NSApplicationDefinedMask
+      NSEvent *appev = [NSApp nextEventMatchingMask:NSEventMaskApplicationDefined
                                           untilDate:[NSDate distantPast]
                                              inMode:NSDefaultRunLoopMode
                                             dequeue:NO];
@@ -3503,7 +3904,7 @@ ns_send_appdefined (int value)
           timed_entry = nil;
         }
 
-      nxev = [NSEvent otherEventWithType: NSApplicationDefined
+      nxev = [NSEvent otherEventWithType: NSEventTypeApplicationDefined
                                 location: NSMakePoint (0, 0)
                            modifierFlags: 0
                                timestamp: 0
@@ -3609,15 +4010,6 @@ ns_check_pending_open_menu ()
 }
 #endif /* NS_IMPL_COCOA */
 
-static void
-unwind_apploopnr (Lisp_Object not_used)
-{
-  --apploopnr;
-  n_emacs_events_pending = 0;
-  ns_finish_events ();
-  q_event_ptr = NULL;
-}
-
 static int
 ns_read_socket (struct terminal *terminal, struct input_event *hold_quit)
 /* --------------------------------------------------------------------------
@@ -3629,7 +4021,7 @@ ns_read_socket (struct terminal *terminal, struct input_event *hold_quit)
   struct input_event ev;
   int nevents;
 
-/* NSTRACE (ns_read_socket); */
+  NSTRACE_WHEN (NSTRACE_GROUP_EVENTS, "ns_read_socket");
 
 #ifdef HAVE_NATIVE_FS
   check_native_fs ();
@@ -3647,54 +4039,51 @@ ns_read_socket (struct terminal *terminal, struct input_event *hold_quit)
       return i;
     }
 
-  block_input ();
-  n_emacs_events_pending = 0;
-  ns_init_events (&ev);
-  q_event_ptr = hold_quit;
-
-  /* we manage autorelease pools by allocate/reallocate each time around
-     the loop; strict nesting is occasionally violated but seems not to
-     matter.. earlier methods using full nesting caused major memory leaks */
-  [outerpool release];
-  outerpool = [[NSAutoreleasePool alloc] init];
-
-  /* If have pending open-file requests, attend to the next one of those. */
-  if (ns_pending_files && [ns_pending_files count] != 0
-      && [(EmacsApp *)NSApp openFile: [ns_pending_files objectAtIndex: 0]])
+  if ([NSThread isMainThread])
     {
-      [ns_pending_files removeObjectAtIndex: 0];
-    }
-  /* Deal with pending service requests. */
-  else if (ns_pending_service_names && [ns_pending_service_names count] != 0
-    && [(EmacsApp *)
-         NSApp fulfillService: [ns_pending_service_names objectAtIndex: 0]
-                      withArg: [ns_pending_service_args objectAtIndex: 0]])
-    {
-      [ns_pending_service_names removeObjectAtIndex: 0];
-      [ns_pending_service_args removeObjectAtIndex: 0];
-    }
-  else
-    {
-      ptrdiff_t specpdl_count = SPECPDL_INDEX ();
-      /* Run and wait for events.  We must always send one NX_APPDEFINED event
-         to ourself, otherwise [NXApp run] will never exit.  */
-      send_appdefined = YES;
-      ns_send_appdefined (-1);
+      block_input ();
+      n_emacs_events_pending = 0;
+      ns_init_events (&ev);
+      q_event_ptr = hold_quit;
 
-      if (++apploopnr != 1)
+      /* we manage autorelease pools by allocate/reallocate each time around
+         the loop; strict nesting is occasionally violated but seems not to
+         matter.. earlier methods using full nesting caused major memory leaks */
+      [outerpool release];
+      outerpool = [[NSAutoreleasePool alloc] init];
+
+      /* If have pending open-file requests, attend to the next one of those. */
+      if (ns_pending_files && [ns_pending_files count] != 0
+          && [(EmacsApp *)NSApp openFile: [ns_pending_files objectAtIndex: 0]])
         {
-          emacs_abort ();
+          [ns_pending_files removeObjectAtIndex: 0];
         }
-      record_unwind_protect (unwind_apploopnr, Qt);
-      [NSApp run];
-      unbind_to (specpdl_count, Qnil);  /* calls unwind_apploopnr */
-    }
+      /* Deal with pending service requests. */
+      else if (ns_pending_service_names && [ns_pending_service_names count] != 0
+               && [(EmacsApp *)
+                    NSApp fulfillService: [ns_pending_service_names objectAtIndex: 0]
+                                 withArg: [ns_pending_service_args objectAtIndex: 0]])
+        {
+          [ns_pending_service_names removeObjectAtIndex: 0];
+          [ns_pending_service_args removeObjectAtIndex: 0];
+        }
+      else
+        {
+          ptrdiff_t specpdl_count = SPECPDL_INDEX ();
+          /* Run and wait for events.  We must always send one NX_APPDEFINED event
+             to ourself, otherwise [NXApp run] will never exit.  */
+          send_appdefined = YES;
+          ns_send_appdefined (-1);
 
-  nevents = n_emacs_events_pending;
-  n_emacs_events_pending = 0;
-  ns_finish_events ();
-  q_event_ptr = NULL;
-  unblock_input ();
+          [NSApp run];
+        }
+
+      nevents = n_emacs_events_pending;
+      n_emacs_events_pending = 0;
+      ns_finish_events ();
+      q_event_ptr = NULL;
+      unblock_input ();
+    }
 
   return nevents;
 }
@@ -3713,7 +4102,7 @@ ns_select (int nfds, fd_set *readfds, fd_set *writefds,
   struct input_event event;
   char c;
 
-/*  NSTRACE (ns_select); */
+  NSTRACE_WHEN (NSTRACE_GROUP_EVENTS, "ns_select");
 
 #ifdef HAVE_NATIVE_FS
   check_native_fs ();
@@ -3734,6 +4123,7 @@ ns_select (int nfds, fd_set *readfds, fd_set *writefds,
     }
 
   if (NSApp == nil
+      || ![NSThread isMainThread]
       || (timeout && timeout->tv_sec == 0 && timeout->tv_nsec == 0))
     return pselect (nfds, readfds, writefds, exceptfds, timeout, sigmask);
 
@@ -3790,17 +4180,8 @@ ns_select (int nfds, fd_set *readfds, fd_set *writefds,
 
   block_input ();
   ns_init_events (&event);
-  if (++apploopnr != 1)
-    {
-      emacs_abort ();
-    }
 
-  {
-    ptrdiff_t specpdl_count = SPECPDL_INDEX ();
-    record_unwind_protect (unwind_apploopnr, Qt);
-    [NSApp run];
-    unbind_to (specpdl_count, Qnil);  /* calls unwind_apploopnr */
-  }
+  [NSApp run];
 
   ns_finish_events ();
   if (nr > 0 && readfds)
@@ -3889,13 +4270,13 @@ ns_set_vertical_scroll_bar (struct window *window,
         }
     }
 
-  NSTRACE (ns_set_vertical_scroll_bar);
+  NSTRACE ("ns_set_vertical_scroll_bar");
 
   /* Get dimensions.  */
   window_box (window, ANY_AREA, 0, &window_y, 0, &window_height);
   top = window_y;
   height = window_height;
-  width = WINDOW_CONFIG_SCROLL_BAR_COLS (window) * FRAME_COLUMN_WIDTH (f);
+  width = NS_SCROLL_BAR_WIDTH (f);
   left = WINDOW_SCROLL_BAR_AREA_X (window);
 
   r = NSMakeRect (left, top, width, height);
@@ -3983,36 +4364,22 @@ ns_set_horizontal_scroll_bar (struct window *window,
         }
     }
 
-  NSTRACE (ns_set_horizontal_scroll_bar);
+  NSTRACE ("ns_set_horizontal_scroll_bar");
 
   /* Get dimensions.  */
-  window_box (window, ANY_AREA, 0, &window_x, &window_width, 0);
+  window_box (window, ANY_AREA, &window_x, 0, &window_width, 0);
   left = window_x;
   width = window_width;
-  height = WINDOW_CONFIG_SCROLL_BAR_LINES (window) * FRAME_LINE_HEIGHT (f);
+  height = NS_SCROLL_BAR_HEIGHT (f);
   top = WINDOW_SCROLL_BAR_AREA_Y (window);
 
   r = NSMakeRect (left, top, width, height);
   /* the parent view is flipped, so we need to flip y value */
   v = [view frame];
-  /* ??????? PXW/scrollbars !!!!!!!!!!!!!!!!!!!! */
   r.origin.y = (v.size.height - r.size.height - r.origin.y);
 
   XSETWINDOW (win, window);
   block_input ();
-
-  if (WINDOW_TOTAL_COLS (window) < 5)
-    {
-      if (!NILP (window->horizontal_scroll_bar))
-        {
-          bar = XNS_SCROLL_BAR (window->horizontal_scroll_bar);
-          [bar removeFromSuperview];
-          wset_horizontal_scroll_bar (window, Qnil);
-        }
-      ns_clear_frame_area (f, left, top, width, height);
-      unblock_input ();
-      return;
-    }
 
   if (NILP (window->horizontal_scroll_bar))
     {
@@ -4028,15 +4395,21 @@ ns_set_horizontal_scroll_bar (struct window *window,
       NSRect oldRect;
       bar = XNS_SCROLL_BAR (window->horizontal_scroll_bar);
       oldRect = [bar frame];
-      r.size.width = oldRect.size.width;
       if (FRAME_LIVE_P (f) && !NSEqualRects (oldRect, r))
         {
-          if (oldRect.origin.x != r.origin.x)
-              ns_clear_frame_area (f, left, top, width, height);
+          if (oldRect.origin.y != r.origin.y)
+            ns_clear_frame_area (f, left, top, width, height);
           [bar setFrame: r];
           update_p = YES;
         }
     }
+
+  /* If there are both horizontal and vertical scroll-bars they leave
+     a square that belongs to neither. We need to clear it otherwise
+     it fills with junk. */
+  if (!NILP (window->vertical_scroll_bar))
+    ns_clear_frame_area (f, WINDOW_SCROLL_BAR_AREA_X (window), top,
+                         NS_SCROLL_BAR_HEIGHT (f), height);
 
   if (update_p)
     [bar setPosition: position portion: portion whole: whole];
@@ -4055,7 +4428,7 @@ ns_condemn_scroll_bars (struct frame *f)
   id view;
   NSArray *subviews = [[FRAME_NS_VIEW (f) superview] subviews];
 
-  NSTRACE (ns_condemn_scroll_bars);
+  NSTRACE ("ns_condemn_scroll_bars");
 
   for (i =[subviews count]-1; i >= 0; i--)
     {
@@ -4074,14 +4447,16 @@ ns_redeem_scroll_bar (struct window *window)
    -------------------------------------------------------------------------- */
 {
   id bar;
-  NSTRACE (ns_redeem_scroll_bar);
-  if (!NILP (window->vertical_scroll_bar))
+  NSTRACE ("ns_redeem_scroll_bar");
+  if (!NILP (window->vertical_scroll_bar)
+      && WINDOW_HAS_VERTICAL_SCROLL_BAR (window))
     {
       bar = XNS_SCROLL_BAR (window->vertical_scroll_bar);
       [bar reprieve];
     }
 
-  if (!NILP (window->horizontal_scroll_bar))
+  if (!NILP (window->horizontal_scroll_bar)
+      && WINDOW_HAS_HORIZONTAL_SCROLL_BAR (window))
     {
       bar = XNS_SCROLL_BAR (window->horizontal_scroll_bar);
       [bar reprieve];
@@ -4102,7 +4477,7 @@ ns_judge_scroll_bars (struct frame *f)
   NSArray *subviews = [[eview superview] subviews];
   BOOL removed = NO;
 
-  NSTRACE (ns_judge_scroll_bars);
+  NSTRACE ("ns_judge_scroll_bars");
   for (i = [subviews count]-1; i >= 0; --i)
     {
       view = [subviews objectAtIndex: i];
@@ -4280,6 +4655,8 @@ ns_delete_terminal (struct terminal *terminal)
 {
   struct ns_display_info *dpyinfo = terminal->display_info.ns;
 
+  NSTRACE ("ns_delete_terminal");
+
   /* Protect against recursive calls.  delete_frame in
      delete_terminal calls us back when it deletes our last frame.  */
   if (!terminal->name)
@@ -4301,7 +4678,7 @@ ns_create_terminal (struct ns_display_info *dpyinfo)
 {
   struct terminal *terminal;
 
-  NSTRACE (ns_create_terminal);
+  NSTRACE ("ns_create_terminal");
 
   terminal = create_terminal (output_ns, &ns_redisplay_interface);
 
@@ -4347,12 +4724,14 @@ ns_term_init (Lisp_Object display_name)
   if (ns_initialized) return x_display_list;
   ns_initialized = 1;
 
-  NSTRACE (ns_term_init);
+  block_input ();
+
+  NSTRACE ("ns_term_init");
 
   [outerpool release];
   outerpool = [[NSAutoreleasePool alloc] init];
 
-  /* count object allocs (About, click icon); on OS X use ObjectAlloc tool */
+  /* count object allocs (About, click icon); on macOS use ObjectAlloc tool */
   /*GSDebugAllocationActive (YES); */
   block_input ();
 
@@ -4429,6 +4808,8 @@ ns_term_init (Lisp_Object display_name)
       ns_antialias_threshold = NILP (tmp) ? 10.0 : XFLOATINT (tmp);
     }
 
+  NSTRACE_MSG ("Colors");
+
   {
     NSColorList *cl = [NSColorList colorListNamed: @"Emacs"];
 
@@ -4462,6 +4843,8 @@ ns_term_init (Lisp_Object display_name)
       }
   }
 
+  NSTRACE_MSG ("Versions");
+
   {
 #ifdef NS_IMPL_GNUSTEP
     Vwindow_system_version = build_string (gnustep_base_version);
@@ -4477,7 +4860,10 @@ ns_term_init (Lisp_Object display_name)
 
   ns_app_name = [[NSProcessInfo processInfo] processName];
 
-/* Set up OS X app menu */
+  /* Set up macOS app menu */
+
+  NSTRACE_MSG ("Menu init");
+
 #ifdef NS_IMPL_COCOA
   {
     NSMenu *appMenu;
@@ -4514,7 +4900,7 @@ ns_term_init (Lisp_Object display_name)
                           action: @selector (hideOtherApplications:)
                    keyEquivalent: @"h"
                          atIndex: 7];
-    [item setKeyEquivalentModifierMask: NSCommandKeyMask | NSAlternateKeyMask];
+    [item setKeyEquivalentModifierMask: NSEventModifierFlagCommand | NSEventModifierFlagOption];
     [appMenu insertItem: [NSMenuItem separatorItem] atIndex: 8];
     [appMenu insertItemWithTitle: @"Quit Emacs"
                           action: @selector (terminate:)
@@ -4546,10 +4932,13 @@ ns_term_init (Lisp_Object display_name)
          selector: @selector (trackingNotification:)
              name: NSMenuDidEndTrackingNotification object: mainMenu];
   }
-#endif /* MAC OS X menu setup */
+#endif /* macOS menu setup */
 
   /* Register our external input/output types, used for determining
      applicable services and also drag/drop eligibility. */
+
+  NSTRACE_MSG ("Input/output types");
+
   ns_send_types = [[NSArray arrayWithObjects: NSStringPboardType, nil] retain];
   ns_return_types = [[NSArray arrayWithObjects: NSStringPboardType, nil]
                       retain];
@@ -4563,6 +4952,8 @@ ns_term_init (Lisp_Object display_name)
      right for fullscreen windows, so set this.  */
   [NSApp activateIgnoringOtherApps:YES];
 
+  NSTRACE_MSG ("Call NSApp run");
+
   [NSApp run];
   ns_do_open_file = YES;
 
@@ -4571,6 +4962,11 @@ ns_term_init (Lisp_Object display_name)
      We must re-catch it so subprocess works.  */
   catch_child_signal ();
 #endif
+
+  NSTRACE_MSG ("ns_term_init done");
+
+  unblock_input ();
+
   return dpyinfo;
 }
 
@@ -4606,6 +5002,8 @@ ns_term_shutdown (int sig)
 
 - (id)init
 {
+  NSTRACE ("[EmacsApp init]");
+
   if ((self = [super init]))
     {
 #ifdef NS_IMPL_COCOA
@@ -4622,6 +5020,8 @@ ns_term_shutdown (int sig)
 #ifdef NS_IMPL_COCOA
 - (void)run
 {
+  NSTRACE ("[EmacsApp run]");
+
 #ifndef NSAppKitVersionNumber10_9
 #define NSAppKitVersionNumber10_9 1265
 #endif
@@ -4644,7 +5044,7 @@ ns_term_shutdown (int sig)
       pool = [[NSAutoreleasePool alloc] init];
 
       NSEvent *event =
-        [self nextEventMatchingMask:NSAnyEventMask
+        [self nextEventMatchingMask:NSEventMaskAny
                           untilDate:[NSDate distantFuture]
                              inMode:NSDefaultRunLoopMode
                             dequeue:YES];
@@ -4658,6 +5058,8 @@ ns_term_shutdown (int sig)
 
 - (void)stop: (id)sender
 {
+  NSTRACE ("[EmacsApp stop:]");
+
     shouldKeepRunning = NO;
     // Stop possible dialog also.  Noop if no dialog present.
     // The file dialog still leaks 7k - 10k on 10.9 though.
@@ -4667,6 +5069,8 @@ ns_term_shutdown (int sig)
 
 - (void)logNotification: (NSNotification *)notification
 {
+  NSTRACE ("[EmacsApp logNotification:]");
+
   const char *name = [[notification name] UTF8String];
   if (!strstr (name, "Update") && !strstr (name, "NSMenu")
       && !strstr (name, "WindowNumber"))
@@ -4683,13 +5087,13 @@ ns_term_shutdown (int sig)
   int type = [theEvent type];
   NSWindow *window = [theEvent window];
 
-/*  NSTRACE (sendEvent); */
-/*fprintf (stderr, "received event of type %d\t%d\n", type);*/
+  NSTRACE_WHEN (NSTRACE_GROUP_EVENTS, "[EmacsApp sendEvent:]");
+  NSTRACE_MSG ("Type: %d", type);
 
 #ifdef NS_IMPL_GNUSTEP
   // Keyboard events aren't propagated to file dialogs for some reason.
   if ([NSApp modalWindow] != nil &&
-      (type == NSKeyDown || type == NSKeyUp || type == NSFlagsChanged))
+      (type == NSEventTypeKeyDown || type == NSEventTypeKeyUp || type == NSEventTypeFlagsChanged))
     {
       [[NSApp modalWindow] sendEvent: theEvent];
       return;
@@ -4713,7 +5117,7 @@ ns_term_shutdown (int sig)
       represented_frame = NULL;
     }
 
-  if (type == NSApplicationDefined)
+  if (type == NSEventTypeApplicationDefined)
     {
       switch ([theEvent data2])
         {
@@ -4730,13 +5134,13 @@ ns_term_shutdown (int sig)
         }
     }
 
-  if (type == NSCursorUpdate && window == nil)
+  if (type == NSEventTypeCursorUpdate && window == nil)
     {
       fprintf (stderr, "Dropping external cursor update event.\n");
       return;
     }
 
-  if (type == NSApplicationDefined)
+  if (type == NSEventTypeApplicationDefined)
     {
       /* Events posted by ns_send_appdefined interrupt the run loop here.
          But, if a modal window is up, an appdefined can still come through,
@@ -4756,10 +5160,10 @@ ns_term_shutdown (int sig)
 
 #ifdef NS_IMPL_COCOA
   /* If no dialog and none of our frames have focus and it is a move, skip it.
-     It is a mouse move in an auxiliary menu, i.e. on the top right on OSX,
+     It is a mouse move in an auxiliary menu, i.e. on the top right on macOS,
      such as Wifi, sound, date or similar.
      This prevents "spooky" highlighting in the frame under the menu.  */
-  if (type == NSMouseMoved && [NSApp modalWindow] == nil)
+  if (type == NSEventTypeMouseMoved && [NSApp modalWindow] == nil)
     {
       struct ns_display_info *di;
       BOOL has_focus = NO;
@@ -4769,6 +5173,8 @@ ns_term_shutdown (int sig)
         return;
     }
 #endif
+
+  NSTRACE_UNSILENCE();
 
   [super sendEvent: theEvent];
 }
@@ -4790,6 +5196,8 @@ ns_term_shutdown (int sig)
 
 - (void)newFrame: (id)sender
 {
+  NSTRACE ("[EmacsApp newFrame:]");
+
   struct frame *emacsframe = SELECTED_FRAME ();
   NSEvent *theEvent = [NSApp currentEvent];
 
@@ -4805,6 +5213,8 @@ ns_term_shutdown (int sig)
 /* Open a file (used by below, after going into queue read by ns_read_socket) */
 - (BOOL) openFile: (NSString *)fileName
 {
+  NSTRACE ("[EmacsApp openFile:]");
+
   struct frame *emacsframe = SELECTED_FRAME ();
   NSEvent *theEvent = [NSApp currentEvent];
 
@@ -4833,7 +5243,8 @@ ns_term_shutdown (int sig)
      When application is loaded, terminate event loop in ns_term_init
    -------------------------------------------------------------------------- */
 {
-  NSTRACE (applicationDidFinishLaunching);
+  NSTRACE ("[EmacsApp applicationDidFinishLaunching:]");
+
 #ifdef NS_IMPL_GNUSTEP
   ((EmacsApp *)self)->applicationDidFinishLaunchingCalled = YES;
 #endif
@@ -4882,6 +5293,8 @@ ns_term_shutdown (int sig)
 
 - (void) terminate: (id)sender
 {
+  NSTRACE ("[EmacsApp terminate:]");
+
   struct frame *emacsframe = SELECTED_FRAME ();
 
   if (!emacs_event)
@@ -4905,7 +5318,7 @@ runAlertPanel(NSString *title,
     == NSAlertDefaultReturn;
 #else
   NSAlert *alert = [[NSAlert alloc] init];
-  [alert setAlertStyle: NSCriticalAlertStyle];
+  [alert setAlertStyle: NSAlertStyleCritical];
   [alert setMessageText: msgFormat];
   [alert addButtonWithTitle: defaultButton];
   [alert addButtonWithTitle: alternateButton];
@@ -4918,20 +5331,18 @@ runAlertPanel(NSString *title,
 
 - (NSApplicationTerminateReply)applicationShouldTerminate: (id)sender
 {
+  NSTRACE ("[EmacsApp applicationShouldTerminate:]");
+
   bool ret;
 
   if (NILP (ns_confirm_quit)) //   || ns_shutdown_properly  --> TO DO
     return NSTerminateNow;
 
-    ret = runAlertPanel(ns_app_name,
-                        @"Exit requested.  Would you like to Save Buffers and Exit, or Cancel the request?",
-                        @"Save Buffers and Exit", @"Cancel");
+  ret = runAlertPanel(ns_app_name,
+		      @"Exit requested.  Would you like to Save Buffers and Exit, or Cancel the request?",
+		      @"Save Buffers and Exit", @"Cancel");
 
-    if (ret)
-        return NSTerminateNow;
-    else
-        return NSTerminateCancel;
-    return NSTerminateNow;  /* just in case */
+  return ret ? NSTerminateNow : NSTerminateCancel;
 }
 
 static int
@@ -4997,11 +5408,13 @@ not_in_argv (NSString *arg)
 /* TODO: these may help w/IO switching btwn terminal and NSApp */
 - (void)applicationWillBecomeActive: (NSNotification *)notification
 {
+  NSTRACE ("[EmacsApp applicationWillBecomeActive:]");
   //ns_app_active=YES;
 }
+
 - (void)applicationDidBecomeActive: (NSNotification *)notification
 {
-  NSTRACE (applicationDidBecomeActive);
+  NSTRACE ("[EmacsApp applicationDidBecomeActive:]");
 
 #ifdef NS_IMPL_GNUSTEP
   if (! applicationDidFinishLaunchingCalled)
@@ -5015,6 +5428,8 @@ not_in_argv (NSString *arg)
 }
 - (void)applicationDidResignActive: (NSNotification *)notification
 {
+  NSTRACE ("[EmacsApp applicationDidResignActive:]");
+
   //ns_app_active=NO;
   ns_send_appdefined (-1);
 }
@@ -5033,16 +5448,14 @@ not_in_argv (NSString *arg)
      The timeout specified to ns_select has passed.
    -------------------------------------------------------------------------- */
 {
-  /*NSTRACE (timeout_handler); */
+  /*NSTRACE ("timeout_handler"); */
   ns_send_appdefined (-2);
 }
 
-#ifdef NS_IMPL_GNUSTEP
 - (void)sendFromMainThread:(id)unused
 {
   ns_send_appdefined (nextappdefined);
 }
-#endif
 
 - (void)fd_handler:(id)unused
 /* --------------------------------------------------------------------------
@@ -5057,7 +5470,7 @@ not_in_argv (NSString *arg)
   struct timespec timeout, *tmo;
   NSAutoreleasePool *pool = nil;
 
-  /* NSTRACE (fd_handler); */
+  /* NSTRACE ("fd_handler"); */
 
   for (;;)
     {
@@ -5158,6 +5571,8 @@ not_in_argv (NSString *arg)
   struct frame *emacsframe = SELECTED_FRAME ();
   NSEvent *theEvent = [NSApp currentEvent];
 
+  NSTRACE ("[EmacsApp fulfillService:withArg:]");
+
   if (!emacs_event)
     return NO;
 
@@ -5188,13 +5603,15 @@ not_in_argv (NSString *arg)
 /* needed to inform when window closed from LISP */
 - (void) setWindowClosing: (BOOL)closing
 {
+  NSTRACE ("[EmacsView setWindowClosing:%d]", closing);
+
   windowClosing = closing;
 }
 
 
 - (void)dealloc
 {
-  NSTRACE (EmacsView_dealloc);
+  NSTRACE ("[EmacsView dealloc]");
   [toolbar release];
   if (fs_state == FULLSCREEN_BOTH)
     [nonfs_window release];
@@ -5206,13 +5623,13 @@ not_in_argv (NSString *arg)
 - (void)changeFont: (id)sender
 {
   NSEvent *e = [[self window] currentEvent];
-  struct face *face = FRAME_DEFAULT_FACE (emacsframe);
+  struct face *face = FACE_FROM_ID (emacsframe, DEFAULT_FACE_ID);
   struct font *font = face->font;
   id newFont;
   CGFloat size;
   NSFont *nsfont;
 
-  NSTRACE (changeFont);
+  NSTRACE ("[EmacsView changeFont:]");
 
   if (!emacs_event)
     return;
@@ -5242,7 +5659,7 @@ not_in_argv (NSString *arg)
 
 - (BOOL)acceptsFirstResponder
 {
-  NSTRACE (acceptsFirstResponder);
+  NSTRACE ("[EmacsView acceptsFirstResponder]");
   return YES;
 }
 
@@ -5251,7 +5668,7 @@ not_in_argv (NSString *arg)
 {
   NSRect visible = [self visibleRect];
   NSCursor *currentCursor = FRAME_POINTER_TYPE (emacsframe);
-  NSTRACE (resetCursorRects);
+  NSTRACE ("[EmacsView resetCursorRects]");
 
   if (currentCursor == nil)
     currentCursor = [NSCursor arrowCursor];
@@ -5276,12 +5693,12 @@ not_in_argv (NSString *arg)
   int left_is_none;
   unsigned int flags = [theEvent modifierFlags];
 
-  NSTRACE (keyDown);
+  NSTRACE ("[EmacsView keyDown:]");
 
-  /* Rhapsody and OS X give up and down events for the arrow keys */
+  /* Rhapsody and macOS give up and down events for the arrow keys */
   if (ns_fake_keydown == YES)
     ns_fake_keydown = NO;
-  else if ([theEvent type] != NSKeyDown)
+  else if ([theEvent type] != NSEventTypeKeyDown)
     return;
 
   if (!emacs_event)
@@ -5325,12 +5742,12 @@ not_in_argv (NSString *arg)
       /* (Carbon way: [theEvent keyCode]) */
 
       /* is it a "function key"? */
-      /* Note: Sometimes a plain key will have the NSNumericPadKeyMask
+      /* Note: Sometimes a plain key will have the NSEventModifierFlagNumericPad
          flag set (this is probably a bug in the OS).
       */
-      if (code < 0x00ff && (flags&NSNumericPadKeyMask))
+      if (code < 0x00ff && (flags&NSEventModifierFlagNumericPad))
         {
-          fnKeysym = ns_convert_key ([theEvent keyCode] | NSNumericPadKeyMask);
+          fnKeysym = ns_convert_key ([theEvent keyCode] | NSEventModifierFlagNumericPad);
         }
       if (fnKeysym == 0)
         {
@@ -5359,15 +5776,15 @@ not_in_argv (NSString *arg)
       /* are there modifiers? */
       emacs_event->modifiers = 0;
 
-      if (flags & NSHelpKeyMask)
+      if (flags & NSEventModifierFlagHelp)
           emacs_event->modifiers |= hyper_modifier;
 
-      if (flags & NSShiftKeyMask)
+      if (flags & NSEventModifierFlagShift)
         emacs_event->modifiers |= shift_modifier;
 
       is_right_key = (flags & NSRightCommandKeyMask) == NSRightCommandKeyMask;
       is_left_key = (flags & NSLeftCommandKeyMask) == NSLeftCommandKeyMask
-        || (! is_right_key && (flags & NSCommandKeyMask) == NSCommandKeyMask);
+        || (! is_right_key && (flags & NSEventModifierFlagCommand) == NSEventModifierFlagCommand);
 
       if (is_right_key)
         emacs_event->modifiers |= parse_solitary_modifier
@@ -5388,7 +5805,7 @@ not_in_argv (NSString *arg)
             {
               /* XXX: the code we get will be unshifted, so if we have
                  a shift modifier, must convert ourselves */
-              if (!(flags & NSShiftKeyMask))
+              if (!(flags & NSEventModifierFlagShift))
                 code = [[theEvent characters] characterAtIndex: 0];
 #if 0
               /* this is ugly and also requires linking w/Carbon framework
@@ -5403,7 +5820,7 @@ not_in_argv (NSString *arg)
                   UCKeyTranslate ((UCKeyboardLayout*)*uchrHandle,
                                  [[theEvent characters] characterAtIndex: 0],
                                  kUCKeyActionDisplay,
-                                 (flags & ~NSCommandKeyMask) >> 8,
+                                 (flags & ~NSEventModifierFlagCommand) >> 8,
                                  LMGetKbdType (), kUCKeyTranslateNoDeadKeysMask,
                                  &dummy, 1, &dummy, &code);
                   code &= 0xFF;
@@ -5414,7 +5831,7 @@ not_in_argv (NSString *arg)
 
       is_right_key = (flags & NSRightControlKeyMask) == NSRightControlKeyMask;
       is_left_key = (flags & NSLeftControlKeyMask) == NSLeftControlKeyMask
-        || (! is_right_key && (flags & NSControlKeyMask) == NSControlKeyMask);
+        || (! is_right_key && (flags & NSEventModifierFlagControl) == NSEventModifierFlagControl);
 
       if (is_right_key)
           emacs_event->modifiers |= parse_solitary_modifier
@@ -5437,7 +5854,7 @@ not_in_argv (NSString *arg)
         == NSRightAlternateKeyMask;
       is_left_key = (flags & NSLeftAlternateKeyMask) == NSLeftAlternateKeyMask
         || (! is_right_key
-            && (flags & NSAlternateKeyMask) == NSAlternateKeyMask);
+            && (flags & NSEventModifierFlagOption) == NSEventModifierFlagOption);
 
       if (is_right_key)
         {
@@ -5476,7 +5893,7 @@ not_in_argv (NSString *arg)
 
   if (NS_KEYLOG)
     fprintf (stderr, "keyDown: code =%x\tfnKey =%x\tflags = %x\tmods = %x\n",
-             code, fnKeysym, flags, emacs_event->modifiers);
+             (unsigned) code, fnKeysym, flags, emacs_event->modifiers);
 
       /* if it was a function key or had modifiers, pass it directly to emacs */
       if (fnKeysym || (emacs_event->modifiers
@@ -5512,7 +5929,7 @@ not_in_argv (NSString *arg)
 
 
 #ifdef NS_IMPL_COCOA
-/* Needed to pick up Ctrl-tab and possibly other events that OS X has
+/* Needed to pick up Ctrl-tab and possibly other events that Mac OS X
    decided not to send key-down for.
    See http://osdir.com/ml/editors.vim.mac/2007-10/msg00141.html
    This only applies on Tiger and earlier.
@@ -5521,8 +5938,11 @@ not_in_argv (NSString *arg)
 {
   int flags = [theEvent modifierFlags];
   int code = [theEvent keyCode];
+
+  NSTRACE ("[EmacsView keyUp:]");
+
   if (floor (NSAppKitVersionNumber) <= 824 /*NSAppKitVersionNumber10_4*/ &&
-      code == 0x30 && (flags & NSControlKeyMask) && !(flags & NSCommandKeyMask))
+      code == 0x30 && (flags & NSEventModifierFlagControl) && !(flags & NSEventModifierFlagCommand))
     {
       if (NS_KEYLOG)
         fprintf (stderr, "keyUp: passed test");
@@ -5544,6 +5964,8 @@ not_in_argv (NSString *arg)
   int code;
   int len = [(NSString *)aString length];
   int i;
+
+  NSTRACE ("[EmacsView insertText:]");
 
   if (NS_KEYLOG)
     NSLog (@"insertText '%@'\tlen = %d", aString, len);
@@ -5578,6 +6000,9 @@ not_in_argv (NSString *arg)
 {
   NSString *str = [aString respondsToSelector: @selector (string)] ?
     [aString string] : aString;
+
+  NSTRACE ("[EmacsView setMarkedText:selectedRange:]");
+
   if (NS_KEYLOG)
     NSLog (@"setMarkedText '%@' len =%lu range %lu from %lu",
            str, (unsigned long)[str length],
@@ -5605,6 +6030,8 @@ not_in_argv (NSString *arg)
 /* delete display of composing characters [not in <NSTextInput>] */
 - (void)deleteWorkingText
 {
+  NSTRACE ("[EmacsView deleteWorkingText]");
+
   if (workingText == nil)
     return;
   if (NS_KEYLOG)
@@ -5624,12 +6051,16 @@ not_in_argv (NSString *arg)
 
 - (BOOL)hasMarkedText
 {
+  NSTRACE ("[EmacsView hasMarkedText]");
+
   return workingText != nil;
 }
 
 
 - (NSRange)markedRange
 {
+  NSTRACE ("[EmacsView markedRange]");
+
   NSRange rng = workingText != nil
     ? NSMakeRange (0, [workingText length]) : NSMakeRange (NSNotFound, 0);
   if (NS_KEYLOG)
@@ -5640,6 +6071,8 @@ not_in_argv (NSString *arg)
 
 - (void)unmarkText
 {
+  NSTRACE ("[EmacsView unmarkText]");
+
   if (NS_KEYLOG)
     NSLog (@"unmark (accept) text");
   [self deleteWorkingText];
@@ -5653,6 +6086,9 @@ not_in_argv (NSString *arg)
   NSRect rect;
   NSPoint pt;
   struct window *win = XWINDOW (FRAME_SELECTED_WINDOW (emacsframe));
+
+  NSTRACE ("[EmacsView firstRectForCharacterRange:]");
+
   if (NS_KEYLOG)
     NSLog (@"firstRectForCharRange request");
 
@@ -5663,8 +6099,14 @@ not_in_argv (NSString *arg)
                                        +FRAME_LINE_HEIGHT (emacsframe));
 
   pt = [self convertPoint: pt toView: nil];
+#if !defined (NS_IMPL_COCOA) || \
+  MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_7
   pt = [[self window] convertBaseToScreen: pt];
   rect.origin = pt;
+#else
+  rect.origin = pt;
+  rect = [[self window] convertRectToScreen: rect];
+#endif
   return rect;
 }
 
@@ -5677,6 +6119,8 @@ not_in_argv (NSString *arg)
 
 - (void)doCommandBySelector: (SEL)aSelector
 {
+  NSTRACE ("[EmacsView doCommandBySelector:]");
+
   if (NS_KEYLOG)
     NSLog (@"doCommandBySelector: %@", NSStringFromSelector (aSelector));
 
@@ -5739,7 +6183,7 @@ not_in_argv (NSString *arg)
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (emacsframe);
   NSPoint p = [self convertPoint: [theEvent locationInWindow] fromView: nil];
 
-  NSTRACE (mouseDown);
+  NSTRACE ("[EmacsView mouseDown:]");
 
   [self deleteWorkingText];
 
@@ -5751,7 +6195,7 @@ not_in_argv (NSString *arg)
      button clicks */
   emacsframe->mouse_moved = 0;
 
-  if ([theEvent type] == NSScrollWheel)
+  if ([theEvent type] == NSEventTypeScrollWheel)
     {
       CGFloat delta = [theEvent deltaY];
       /* Mac notebooks send wheel events w/delta =0 when trackpad scrolling */
@@ -5760,7 +6204,7 @@ not_in_argv (NSString *arg)
           delta = [theEvent deltaX];
           if (delta == 0)
             {
-              NSTRACE (deltaIsZero);
+              NSTRACE_MSG ("deltaIsZero");
               return;
             }
           emacs_event->kind = HORIZ_WHEEL_EVENT;
@@ -5787,42 +6231,42 @@ not_in_argv (NSString *arg)
 
 - (void)rightMouseDown: (NSEvent *)theEvent
 {
-  NSTRACE (rightMouseDown);
+  NSTRACE ("[EmacsView rightMouseDown:]");
   [self mouseDown: theEvent];
 }
 
 
 - (void)otherMouseDown: (NSEvent *)theEvent
 {
-  NSTRACE (otherMouseDown);
+  NSTRACE ("[EmacsView otherMouseDown:]");
   [self mouseDown: theEvent];
 }
 
 
 - (void)mouseUp: (NSEvent *)theEvent
 {
-  NSTRACE (mouseUp);
+  NSTRACE ("[EmacsView mouseUp:]");
   [self mouseDown: theEvent];
 }
 
 
 - (void)rightMouseUp: (NSEvent *)theEvent
 {
-  NSTRACE (rightMouseUp);
+  NSTRACE ("[EmacsView rightMouseUp:]");
   [self mouseDown: theEvent];
 }
 
 
 - (void)otherMouseUp: (NSEvent *)theEvent
 {
-  NSTRACE (otherMouseUp);
+  NSTRACE ("[EmacsView otherMouseUp:]");
   [self mouseDown: theEvent];
 }
 
 
 - (void) scrollWheel: (NSEvent *)theEvent
 {
-  NSTRACE (scrollWheel);
+  NSTRACE ("[EmacsView scrollWheel:]");
   [self mouseDown: theEvent];
 }
 
@@ -5835,7 +6279,7 @@ not_in_argv (NSString *arg)
   Lisp_Object frame;
   NSPoint pt;
 
-//  NSTRACE (mouseMoved);
+  NSTRACE_WHEN (NSTRACE_GROUP_EVENTS, "[EmacsView mouseMoved:]");
 
   dpyinfo->last_mouse_movement_time = EV_TIMESTAMP (e);
   pt = [self convertPoint: [e locationInWindow] fromView: nil];
@@ -5855,7 +6299,7 @@ not_in_argv (NSString *arg)
 
   if (!NILP (Vmouse_autoselect_window))
     {
-      NSTRACE (mouse_autoselect_window);
+      NSTRACE_MSG ("mouse_autoselect_window");
       static Lisp_Object last_mouse_window;
       Lisp_Object window
 	= window_from_coordinates (emacsframe, pt.x, pt.y, 0, 0);
@@ -5867,7 +6311,7 @@ not_in_argv (NSString *arg)
               || (EQ (XWINDOW (window)->frame,
                       XWINDOW (selected_window)->frame))))
         {
-          NSTRACE (in_window);
+          NSTRACE_MSG ("in_window");
           emacs_event->kind = SELECT_WINDOW_EVENT;
           emacs_event->frame_or_window = window;
           EV_TRAILER2 (e);
@@ -5897,21 +6341,21 @@ not_in_argv (NSString *arg)
 
 - (void)mouseDragged: (NSEvent *)e
 {
-  NSTRACE (mouseDragged);
+  NSTRACE ("[EmacsView mouseDragged:]");
   [self mouseMoved: e];
 }
 
 
 - (void)rightMouseDragged: (NSEvent *)e
 {
-  NSTRACE (rightMouseDragged);
+  NSTRACE ("[EmacsView rightMouseDragged:]");
   [self mouseMoved: e];
 }
 
 
 - (void)otherMouseDragged: (NSEvent *)e
 {
-  NSTRACE (otherMouseDragged);
+  NSTRACE ("[EmacsView otherMouseDragged:]");
   [self mouseMoved: e];
 }
 
@@ -5920,7 +6364,7 @@ not_in_argv (NSString *arg)
 {
   NSEvent *e =[[self window] currentEvent];
 
-  NSTRACE (windowShouldClose);
+  NSTRACE ("[EmacsView windowShouldClose:]");
   windowClosing = YES;
   if (!emacs_event)
     return NO;
@@ -5942,8 +6386,11 @@ not_in_argv (NSString *arg)
   int oldh = FRAME_PIXEL_HEIGHT (emacsframe);
   int neww, newh;
 
-  NSTRACE (updateFrameSize);
+  NSTRACE ("[EmacsView updateFrameSize:]");
   NSTRACE_SIZE ("Original size", NSMakeSize (oldw, oldh));
+  NSTRACE_RECT ("Original frame", wr);
+  NSTRACE_MSG  ("Original columns: %d", cols);
+  NSTRACE_MSG  ("Original rows: %d", rows);
 
   if (! [self isFullscreen])
     {
@@ -5960,12 +6407,18 @@ not_in_argv (NSString *arg)
   if (wait_for_tool_bar)
     {
       if (FRAME_TOOLBAR_HEIGHT (emacsframe) == 0)
-        return;
+        {
+          NSTRACE_MSG ("Waiting for toolbar");
+          return;
+        }
       wait_for_tool_bar = NO;
     }
 
   neww = (int)wr.size.width - emacsframe->border_width;
   newh = (int)wr.size.height - extra;
+
+  NSTRACE_SIZE ("New size", NSMakeSize (neww, newh));
+  NSTRACE_MSG ("tool_bar_height: %d", emacsframe->tool_bar_height);
 
   cols = FRAME_PIXEL_WIDTH_TO_TEXT_COLS (emacsframe, neww);
   rows = FRAME_PIXEL_HEIGHT_TO_TEXT_LINES (emacsframe, newh);
@@ -5976,11 +6429,12 @@ not_in_argv (NSString *arg)
   if (rows < MINHEIGHT)
     rows = MINHEIGHT;
 
+  NSTRACE_MSG ("New columns: %d", cols);
+  NSTRACE_MSG ("New rows: %d", rows);
+
   if (oldr != rows || oldc != cols || neww != oldw || newh != oldh)
     {
       NSView *view = FRAME_NS_VIEW (emacsframe);
-      NSWindow *win = [view window];
-      NSSize sz = [win resizeIncrements];
 
       change_frame_size (emacsframe,
                          FRAME_PIXEL_TO_TEXT_WIDTH (emacsframe, neww),
@@ -5989,22 +6443,18 @@ not_in_argv (NSString *arg)
       SET_FRAME_GARBAGED (emacsframe);
       cancel_mouse_face (emacsframe);
 
-      // Did resize increments change because of a font change?
-      if (sz.width != FRAME_COLUMN_WIDTH (emacsframe) ||
-          sz.height != FRAME_LINE_HEIGHT (emacsframe) ||
-          (frame_resize_pixelwise && sz.width != 1))
-        {
-          sz.width = frame_resize_pixelwise
-            ? 1 : FRAME_COLUMN_WIDTH (emacsframe);
-          sz.height = frame_resize_pixelwise
-            ? 1 : FRAME_LINE_HEIGHT (emacsframe);
-          [win setResizeIncrements: sz];
+      wr = NSMakeRect (0, 0, neww, newh);
 
-          NSTRACE_SIZE ("New size", NSMakeSize (neww, newh));
-        }
+      [view setFrame: wr];
 
-      [view setFrame: NSMakeRect (0, 0, neww, newh)];
-      [self windowDidMove:nil];   // Update top/left.
+      // to do: consider using [NSNotificationCenter postNotificationName:].
+      [self windowDidMove: // Update top/left.
+	      [NSNotification notificationWithName:NSWindowDidMoveNotification
+					    object:[view window]]];
+    }
+  else
+    {
+      NSTRACE_MSG ("No change");
     }
 }
 
@@ -6013,9 +6463,10 @@ not_in_argv (NSString *arg)
 {
   int extra = 0;
 
-  NSTRACE (windowWillResize);
-  NSTRACE_SIZE ("Original size", frameSize);
-/*fprintf (stderr,"Window will resize: %.0f x %.0f\n",frameSize.width,frameSize.height); */
+  NSTRACE ("[EmacsView windowWillResize:toSize: " NSTRACE_FMT_SIZE "]",
+           NSTRACE_ARG_SIZE (frameSize));
+  NSTRACE_RECT   ("[sender frame]", [sender frame]);
+  NSTRACE_FSTYPE ("fs_state", fs_state);
 
   if (fs_state == FULLSCREEN_MAXIMIZED
       && (maximized_width != (int)frameSize.width
@@ -6027,6 +6478,7 @@ not_in_argv (NSString *arg)
   else if (fs_state == FULLSCREEN_HEIGHT
            && maximized_height != (int)frameSize.height)
     [self setFSValue: FULLSCREEN_NONE];
+
   if (fs_state == FULLSCREEN_NONE)
     maximized_width = maximized_height = -1;
 
@@ -6076,7 +6528,33 @@ not_in_argv (NSString *arg)
       }
   }
 #endif /* NS_IMPL_COCOA */
-/*fprintf (stderr,"    ...size became %.0f x %.0f  (%d x %d)\n",frameSize.width,frameSize.height,cols,rows); */
+
+  NSTRACE_MSG ("cols: %d  rows: %d", cols, rows);
+
+  /* Restrict the new size to the text gird.
+
+     Don't restrict the width if the user only adjusted the height, and
+     vice versa.  (Without this, the frame would shrink, and move
+     slightly, if the window was resized by dragging one of its
+     borders.) */
+  if (!frame_resize_pixelwise)
+    {
+      NSRect r = [[self window] frame];
+
+      if (r.size.width != frameSize.width)
+        {
+          frameSize.width =
+            FRAME_TEXT_COLS_TO_PIXEL_WIDTH  (emacsframe, cols);
+        }
+
+      if (r.size.height != frameSize.height)
+        {
+          frameSize.height =
+            FRAME_TEXT_LINES_TO_PIXEL_HEIGHT (emacsframe, rows) + extra;
+        }
+    }
+
+  NSTRACE_RETURN_SIZE (frameSize);
 
   return frameSize;
 }
@@ -6084,6 +6562,18 @@ not_in_argv (NSString *arg)
 
 - (void)windowDidResize: (NSNotification *)notification
 {
+  NSTRACE ("[EmacsView windowDidResize:]");
+  if (!FRAME_LIVE_P (emacsframe))
+    {
+      NSTRACE_MSG ("Ignored (frame dead)");
+      return;
+    }
+  if (emacsframe->output_data.ns->in_animation)
+    {
+      NSTRACE_MSG ("Ignored (in animation)");
+      return;
+    }
+
   if (! [self fsIsNative])
     {
       NSWindow *theWindow = [notification object];
@@ -6091,6 +6581,8 @@ not_in_argv (NSString *arg)
          fullscreen mode.  */
       if ([self window] != theWindow) return;
     }
+
+  NSTRACE_RECT ("frame", [[notification object] frame]);
 
 #ifdef NS_IMPL_GNUSTEP
   NSWindow *theWindow = [notification object];
@@ -6102,10 +6594,7 @@ not_in_argv (NSString *arg)
   sz = [self windowWillResize: theWindow toSize: sz];
 #endif /* NS_IMPL_GNUSTEP */
 
-  NSTRACE (windowDidResize);
-/*fprintf (stderr,"windowDidResize: %.0f\n",[theWindow frame].size.height); */
-
-if (cols > 0 && rows > 0)
+  if (cols > 0 && rows > 0)
     {
       [self updateFrameSize: YES];
     }
@@ -6116,6 +6605,8 @@ if (cols > 0 && rows > 0)
 #ifdef NS_IMPL_COCOA
 - (void)viewDidEndLiveResize
 {
+  NSTRACE ("[EmacsView viewDidEndLiveResize]");
+
   [super viewDidEndLiveResize];
   if (old_title != 0)
     {
@@ -6131,10 +6622,16 @@ if (cols > 0 && rows > 0)
 - (void)windowDidBecomeKey: (NSNotification *)notification
 /* cf. x_detect_focus_change(), x_focus_changed(), x_new_focus_frame() */
 {
+  [self windowDidBecomeKey];
+}
+
+
+- (void)windowDidBecomeKey      /* for direct calls */
+{
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (emacsframe);
   struct frame *old_focus = dpyinfo->x_focus_frame;
 
-  NSTRACE (windowDidBecomeKey);
+  NSTRACE ("[EmacsView windowDidBecomeKey]");
 
   if (emacsframe != old_focus)
     dpyinfo->x_focus_frame = emacsframe;
@@ -6154,7 +6651,7 @@ if (cols > 0 && rows > 0)
 {
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (emacsframe);
   BOOL is_focus_frame = dpyinfo->x_focus_frame == emacsframe;
-  NSTRACE (windowDidResignKey);
+  NSTRACE ("[EmacsView windowDidResignKey:]");
 
   if (is_focus_frame)
     dpyinfo->x_focus_frame = 0;
@@ -6189,7 +6686,16 @@ if (cols > 0 && rows > 0)
 
 - (void)windowWillMiniaturize: sender
 {
-  NSTRACE (windowWillMiniaturize);
+  NSTRACE ("[EmacsView windowWillMiniaturize:]");
+}
+
+
+- (void)setFrame:(NSRect)frameRect;
+{
+  NSTRACE ("[EmacsView setFrame:" NSTRACE_FMT_RECT "]",
+           NSTRACE_ARG_RECT (frameRect));
+
+  [super setFrame:(NSRect)frameRect];
 }
 
 
@@ -6210,11 +6716,11 @@ if (cols > 0 && rows > 0)
   NSRect r, wr;
   Lisp_Object tem;
   NSWindow *win;
-  NSSize sz;
   NSColor *col;
   NSString *name;
 
-  NSTRACE (initFrameFromEmacs);
+  NSTRACE ("[EmacsView initFrameFromEmacs:]");
+  NSTRACE_MSG ("cols:%d lines:%d", f->text_cols, f->text_lines);
 
   windowClosing = NO;
   processingCompose = NO;
@@ -6228,8 +6734,6 @@ if (cols > 0 && rows > 0)
 #endif
   maximized_width = maximized_height = -1;
   nonfs_window = nil;
-
-/*fprintf (stderr,"init with %d, %d\n",f->text_cols, f->text_lines); */
 
   ns_userRect = NSMakeRect (0, 0, 0, 0);
   r = NSMakeRect (0, 0, FRAME_TEXT_COLS_TO_PIXEL_WIDTH (f, f->text_cols),
@@ -6246,12 +6750,12 @@ if (cols > 0 && rows > 0)
 
   win = [[EmacsWindow alloc]
             initWithContentRect: r
-                      styleMask: (NSResizableWindowMask |
+                      styleMask: (NSWindowStyleMaskResizable |
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
-                                  NSTitledWindowMask |
+                                  NSWindowStyleMaskTitled |
 #endif
-                                  NSMiniaturizableWindowMask |
-                                  NSClosableWindowMask)
+                                  NSWindowStyleMaskMiniaturizable |
+                                  NSWindowStyleMaskClosable)
                         backing: NSBackingStoreBuffered
                           defer: YES];
 
@@ -6269,9 +6773,6 @@ if (cols > 0 && rows > 0)
   MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_9
   [win useOptimizedDrawing: YES];
 #endif
-  sz.width = frame_resize_pixelwise ? 1 : FRAME_COLUMN_WIDTH (f);
-  sz.height = frame_resize_pixelwise ? 1 : FRAME_LINE_HEIGHT (f);
-  [win setResizeIncrements: sz];
 
   [[win contentView] addSubview: self];
 
@@ -6315,16 +6816,23 @@ if (cols > 0 && rows > 0)
     NSScreen *screen = [win screen];
 
     if (screen != 0)
-      [win setFrameTopLeftPoint: NSMakePoint
-           (IN_BOUND (-SCREENMAX, f->left_pos, SCREENMAX),
-            IN_BOUND (-SCREENMAX,
-                     [screen frame].size.height - NS_TOP_POS (f), SCREENMAX))];
+      {
+        NSPoint pt = NSMakePoint
+          (IN_BOUND (-SCREENMAX, f->left_pos, SCREENMAX),
+           IN_BOUND (-SCREENMAX,
+                     [screen frame].size.height - NS_TOP_POS (f), SCREENMAX));
+
+        [win setFrameTopLeftPoint: pt];
+
+        NSTRACE_RECT ("new frame", [win frame]);
+      }
   }
 
   [win makeFirstResponder: self];
 
   col = ns_lookup_indexed_color (NS_FACE_BACKGROUND
-                                  (FRAME_DEFAULT_FACE (emacsframe)), emacsframe);
+				 (FACE_FROM_ID (emacsframe, DEFAULT_FACE_ID)),
+				 emacsframe);
   [win setBackgroundColor: col];
   if ([col alphaComponent] != (EmacsCGFloat) 1.0)
     [win setOpaque: NO];
@@ -6348,7 +6856,7 @@ if (cols > 0 && rows > 0)
   NSArray *screens = [NSScreen screens];
   NSScreen *screen = [screens objectAtIndex: 0];
 
-  NSTRACE (windowDidMove);
+  NSTRACE ("[EmacsView windowDidMove:]");
 
   if (!emacsframe->output_data.ns)
     return;
@@ -6366,6 +6874,10 @@ if (cols > 0 && rows > 0)
    location so set_window_size moves the frame. */
 - (BOOL)windowShouldZoom: (NSWindow *)sender toFrame: (NSRect)newFrame
 {
+  NSTRACE (("[EmacsView windowShouldZoom:toFrame:" NSTRACE_FMT_RECT "]"
+            NSTRACE_FMT_RETURN "YES"),
+           NSTRACE_ARG_RECT (newFrame));
+
   emacsframe->output_data.ns->zooming = 1;
   return YES;
 }
@@ -6377,71 +6889,124 @@ if (cols > 0 && rows > 0)
 - (NSRect)windowWillUseStandardFrame:(NSWindow *)sender
                         defaultFrame:(NSRect)defaultFrame
 {
+  // TODO: Rename to "currentFrame" and assign "result" properly in
+  // all paths.
   NSRect result = [sender frame];
 
-  NSTRACE (windowWillUseStandardFrame);
+  NSTRACE (("[EmacsView windowWillUseStandardFrame:defaultFrame:"
+            NSTRACE_FMT_RECT "]"),
+           NSTRACE_ARG_RECT (defaultFrame));
+  NSTRACE_FSTYPE ("fs_state", fs_state);
+  NSTRACE_FSTYPE ("fs_before_fs", fs_before_fs);
+  NSTRACE_FSTYPE ("next_maximized", next_maximized);
+  NSTRACE_RECT   ("ns_userRect", ns_userRect);
+  NSTRACE_RECT   ("[sender frame]", [sender frame]);
 
   if (fs_before_fs != -1) /* Entering fullscreen */
-      {
-        result = defaultFrame;
-      }
-  else if (next_maximized == FULLSCREEN_HEIGHT
-      || (next_maximized == -1
-          && abs ((int)(defaultFrame.size.height - result.size.height))
-          > FRAME_LINE_HEIGHT (emacsframe)))
     {
-      /* first click */
-      ns_userRect = result;
-      maximized_height = result.size.height = defaultFrame.size.height;
-      maximized_width = -1;
-      result.origin.y = defaultFrame.origin.y;
-      [self setFSValue: FULLSCREEN_HEIGHT];
-#ifdef NS_IMPL_COCOA
-      maximizing_resize = YES;
-#endif
-    }
-  else if (next_maximized == FULLSCREEN_WIDTH)
-    {
-      ns_userRect = result;
-      maximized_width = result.size.width = defaultFrame.size.width;
-      maximized_height = -1;
-      result.origin.x = defaultFrame.origin.x;
-      [self setFSValue: FULLSCREEN_WIDTH];
-    }
-  else if (next_maximized == FULLSCREEN_MAXIMIZED
-           || (next_maximized == -1
-               && abs ((int)(defaultFrame.size.width - result.size.width))
-               > FRAME_COLUMN_WIDTH (emacsframe)))
-    {
-      result = defaultFrame;  /* second click */
-      maximized_width = result.size.width;
-      maximized_height = result.size.height;
-      [self setFSValue: FULLSCREEN_MAXIMIZED];
-#ifdef NS_IMPL_COCOA
-      maximizing_resize = YES;
-#endif
+      NSTRACE_MSG ("Entering fullscreen");
+      result = defaultFrame;
     }
   else
     {
-      /* restore */
-      result = ns_userRect.size.height ? ns_userRect : result;
-      ns_userRect = NSMakeRect (0, 0, 0, 0);
+      // Save the window size and position (frame) before the resize.
+      if (fs_state != FULLSCREEN_MAXIMIZED
+          && fs_state != FULLSCREEN_WIDTH)
+        {
+          ns_userRect.size.width = result.size.width;
+          ns_userRect.origin.x   = result.origin.x;
+        }
+
+      if (fs_state != FULLSCREEN_MAXIMIZED
+          && fs_state != FULLSCREEN_HEIGHT)
+        {
+          ns_userRect.size.height = result.size.height;
+          ns_userRect.origin.y    = result.origin.y;
+        }
+
+      NSTRACE_RECT ("ns_userRect (2)", ns_userRect);
+
+      if (next_maximized == FULLSCREEN_HEIGHT
+          || (next_maximized == -1
+              && abs ((int)(defaultFrame.size.height - result.size.height))
+              > FRAME_LINE_HEIGHT (emacsframe)))
+        {
+          /* first click */
+          NSTRACE_MSG ("FULLSCREEN_HEIGHT");
+          maximized_height = result.size.height = defaultFrame.size.height;
+          maximized_width = -1;
+          result.origin.y = defaultFrame.origin.y;
+          if (ns_userRect.size.height != 0)
+            {
+              result.origin.x = ns_userRect.origin.x;
+              result.size.width = ns_userRect.size.width;
+            }
+          [self setFSValue: FULLSCREEN_HEIGHT];
 #ifdef NS_IMPL_COCOA
-      maximizing_resize = fs_state != FULLSCREEN_NONE;
+          maximizing_resize = YES;
 #endif
-      [self setFSValue: FULLSCREEN_NONE];
-      maximized_width = maximized_height = -1;
+        }
+      else if (next_maximized == FULLSCREEN_WIDTH)
+        {
+          NSTRACE_MSG ("FULLSCREEN_WIDTH");
+          maximized_width = result.size.width = defaultFrame.size.width;
+          maximized_height = -1;
+          result.origin.x = defaultFrame.origin.x;
+          if (ns_userRect.size.width != 0)
+            {
+              result.origin.y = ns_userRect.origin.y;
+              result.size.height = ns_userRect.size.height;
+            }
+          [self setFSValue: FULLSCREEN_WIDTH];
+        }
+      else if (next_maximized == FULLSCREEN_MAXIMIZED
+               || (next_maximized == -1
+                   && abs ((int)(defaultFrame.size.width - result.size.width))
+                   > FRAME_COLUMN_WIDTH (emacsframe)))
+        {
+          NSTRACE_MSG ("FULLSCREEN_MAXIMIZED");
+
+          result = defaultFrame;  /* second click */
+          maximized_width = result.size.width;
+          maximized_height = result.size.height;
+          [self setFSValue: FULLSCREEN_MAXIMIZED];
+#ifdef NS_IMPL_COCOA
+          maximizing_resize = YES;
+#endif
+        }
+      else
+        {
+          /* restore */
+          NSTRACE_MSG ("Restore");
+          result = ns_userRect.size.height ? ns_userRect : result;
+          NSTRACE_RECT ("restore (2)", result);
+          ns_userRect = NSMakeRect (0, 0, 0, 0);
+#ifdef NS_IMPL_COCOA
+          maximizing_resize = fs_state != FULLSCREEN_NONE;
+#endif
+          [self setFSValue: FULLSCREEN_NONE];
+          maximized_width = maximized_height = -1;
+        }
     }
 
   if (fs_before_fs == -1) next_maximized = -1;
+
+  NSTRACE_RECT   ("Final ns_userRect", ns_userRect);
+  NSTRACE_MSG    ("Final maximized_width: %d", maximized_width);
+  NSTRACE_MSG    ("Final maximized_height: %d", maximized_height);
+  NSTRACE_FSTYPE ("Final next_maximized", next_maximized);
+
   [self windowWillResize: sender toSize: result.size];
+
+  NSTRACE_RETURN_RECT (result);
+
   return result;
 }
 
 
 - (void)windowDidDeminiaturize: sender
 {
-  NSTRACE (windowDidDeminiaturize);
+  NSTRACE ("[EmacsView windowDidDeminiaturize:]");
   if (!emacsframe->output_data.ns)
     return;
 
@@ -6459,7 +7024,7 @@ if (cols > 0 && rows > 0)
 
 - (void)windowDidExpose: sender
 {
-  NSTRACE (windowDidExpose);
+  NSTRACE ("[EmacsView windowDidExpose:]");
   if (!emacsframe->output_data.ns)
     return;
 
@@ -6473,7 +7038,7 @@ if (cols > 0 && rows > 0)
 
 - (void)windowDidMiniaturize: sender
 {
-  NSTRACE (windowDidMiniaturize);
+  NSTRACE ("[EmacsView windowDidMiniaturize:]");
   if (!emacsframe->output_data.ns)
     return;
 
@@ -6498,15 +7063,28 @@ if (cols > 0 && rows > 0)
 
 - (void)windowWillEnterFullScreen:(NSNotification *)notification
 {
+  NSTRACE ("[EmacsView windowWillEnterFullScreen:]");
+  [self windowWillEnterFullScreen];
+}
+- (void)windowWillEnterFullScreen /* provided for direct calls */
+{
+  NSTRACE ("[EmacsView windowWillEnterFullScreen]");
   fs_before_fs = fs_state;
 }
 
 - (void)windowDidEnterFullScreen:(NSNotification *)notification
 {
+  NSTRACE ("[EmacsView windowDidEnterFullScreen:]");
+  [self windowDidEnterFullScreen];
+}
+
+- (void)windowDidEnterFullScreen /* provided for direct calls */
+{
+  NSTRACE ("[EmacsView windowDidEnterFullScreen]");
   [self setFSValue: FULLSCREEN_BOTH];
   if (! [self fsIsNative])
     {
-      [self windowDidBecomeKey:notification];
+      [self windowDidBecomeKey];
       [nonfs_window orderOut:self];
     }
   else
@@ -6516,8 +7094,8 @@ if (cols > 0 && rows > 0)
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
       unsigned val = (unsigned)[NSApp presentationOptions];
 
-      // OSX 10.7 bug fix, the menu won't appear without this.
-      // val is non-zero on other OSX versions.
+      // Mac OS X 10.7 bug fix, the menu won't appear without this.
+      // val is non-zero on other macOS versions.
       if (val == 0)
         {
           NSApplicationPresentationOptions options
@@ -6536,12 +7114,36 @@ if (cols > 0 && rows > 0)
 
 - (void)windowWillExitFullScreen:(NSNotification *)notification
 {
+  NSTRACE ("[EmacsView windowWillExitFullScreen:]");
+  [self windowWillExitFullScreen];
+}
+
+- (void)windowWillExitFullScreen /* provided for direct calls */
+{
+  NSTRACE ("[EmacsView windowWillExitFullScreen]");
+  if (!FRAME_LIVE_P (emacsframe))
+    {
+      NSTRACE_MSG ("Ignored (frame dead)");
+      return;
+    }
   if (next_maximized != -1)
     fs_before_fs = next_maximized;
 }
 
 - (void)windowDidExitFullScreen:(NSNotification *)notification
 {
+  NSTRACE ("[EmacsView windowDidExitFullScreen:]");
+  [self windowDidExitFullScreen];
+}
+
+- (void)windowDidExitFullScreen /* provided for direct calls */
+{
+  NSTRACE ("[EmacsView windowDidExitFullScreen]");
+  if (!FRAME_LIVE_P (emacsframe))
+    {
+      NSTRACE_MSG ("Ignored (frame dead)");
+      return;
+    }
   [self setFSValue: fs_before_fs];
   fs_before_fs = -1;
 #ifdef HAVE_NATIVE_FS
@@ -6568,17 +7170,32 @@ if (cols > 0 && rows > 0)
 
 - (BOOL)isFullscreen
 {
-  if (! fs_is_native) return nonfs_window != nil;
+  BOOL res;
+
+  if (! fs_is_native)
+    {
+      res = (nonfs_window != nil);
+    }
+  else
+    {
 #ifdef HAVE_NATIVE_FS
-  return ([[self window] styleMask] & NSFullScreenWindowMask) != 0;
+      res = (([[self window] styleMask] & NSWindowStyleMaskFullScreen) != 0);
 #else
-  return NO;
+      res = NO;
 #endif
+    }
+
+  NSTRACE ("[EmacsView isFullscreen] " NSTRACE_FMT_RETURN " %d",
+           (int) res);
+
+  return res;
 }
 
 #ifdef HAVE_NATIVE_FS
 - (void)updateCollectionBehavior
 {
+  NSTRACE ("[EmacsView updateCollectionBehavior]");
+
   if (! [self isFullscreen])
     {
       NSWindow *win = [self window];
@@ -6599,9 +7216,10 @@ if (cols > 0 && rows > 0)
   NSWindow *w, *fw;
   BOOL onFirstScreen;
   struct frame *f;
-  NSSize sz;
   NSRect r, wr;
   NSColor *col;
+
+  NSTRACE ("[EmacsView toggleFullScreen:]");
 
   if (fs_is_native)
     {
@@ -6616,11 +7234,8 @@ if (cols > 0 && rows > 0)
   f = emacsframe;
   wr = [w frame];
   col = ns_lookup_indexed_color (NS_FACE_BACKGROUND
-                                 (FRAME_DEFAULT_FACE (f)),
+				 (FACE_FROM_ID (f, DEFAULT_FACE_ID)),
                                  f);
-
-  sz.width = frame_resize_pixelwise ? 1 : FRAME_COLUMN_WIDTH (f);
-  sz.height = frame_resize_pixelwise ? 1 : FRAME_LINE_HEIGHT (f);
 
   if (fs_state != FULLSCREEN_BOTH)
     {
@@ -6648,7 +7263,7 @@ if (cols > 0 && rows > 0)
 
       fw = [[EmacsFSWindow alloc]
                        initWithContentRect:[w contentRectForFrameRect:wr]
-                                 styleMask:NSBorderlessWindowMask
+                                 styleMask:NSWindowStyleMaskBorderless
                                    backing:NSBackingStoreBuffered
                                      defer:YES
                                     screen:screen];
@@ -6661,7 +7276,6 @@ if (cols > 0 && rows > 0)
   MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_9
       [fw useOptimizedDrawing: YES];
 #endif
-      [fw setResizeIncrements: sz];
       [fw setBackgroundColor: col];
       if ([col alphaComponent] != (EmacsCGFloat) 1.0)
         [fw setOpaque: NO];
@@ -6673,13 +7287,13 @@ if (cols > 0 && rows > 0)
 
       nonfs_window = w;
 
-      [self windowWillEnterFullScreen:nil];
+      [self windowWillEnterFullScreen];
       [fw makeKeyAndOrderFront:NSApp];
       [fw makeFirstResponder:self];
       [w orderOut:self];
       r = [fw frameRectForContentRect:[screen frame]];
       [fw setFrame: r display:YES animate:ns_use_fullscreen_animation];
-      [self windowDidEnterFullScreen:nil];
+      [self windowDidEnterFullScreen];
       [fw display];
     }
   else
@@ -6698,7 +7312,6 @@ if (cols > 0 && rows > 0)
         }
 
       [w setContentView:[fw contentView]];
-      [w setResizeIncrements: sz];
       [w setBackgroundColor: col];
       if ([col alphaComponent] != (EmacsCGFloat) 1.0)
         [w setOpaque: NO];
@@ -6708,45 +7321,55 @@ if (cols > 0 && rows > 0)
       if (FRAME_EXTERNAL_TOOL_BAR (f))
         FRAME_TOOLBAR_HEIGHT (f) = tobar_height;
 
-      [self windowWillExitFullScreen:nil];
+      // to do: consider using [NSNotificationCenter postNotificationName:] to send notifications.
+
+      [self windowWillExitFullScreen];
       [fw setFrame: [w frame] display:YES animate:ns_use_fullscreen_animation];
       [fw close];
       [w makeKeyAndOrderFront:NSApp];
-      [self windowDidExitFullScreen:nil];
+      [self windowDidExitFullScreen];
       [self updateFrameSize:YES];
     }
 }
 
 - (void)handleFS
 {
+  NSTRACE ("[EmacsView handleFS]");
+
   if (fs_state != emacsframe->want_fullscreen)
     {
       if (fs_state == FULLSCREEN_BOTH)
         {
+          NSTRACE_MSG ("fs_state == FULLSCREEN_BOTH");
           [self toggleFullScreen:self];
         }
 
       switch (emacsframe->want_fullscreen)
         {
         case FULLSCREEN_BOTH:
+          NSTRACE_MSG ("FULLSCREEN_BOTH");
           [self toggleFullScreen:self];
           break;
         case FULLSCREEN_WIDTH:
+          NSTRACE_MSG ("FULLSCREEN_WIDTH");
           next_maximized = FULLSCREEN_WIDTH;
           if (fs_state != FULLSCREEN_BOTH)
             [[self window] performZoom:self];
           break;
         case FULLSCREEN_HEIGHT:
+          NSTRACE_MSG ("FULLSCREEN_HEIGHT");
           next_maximized = FULLSCREEN_HEIGHT;
           if (fs_state != FULLSCREEN_BOTH)
             [[self window] performZoom:self];
           break;
         case FULLSCREEN_MAXIMIZED:
+          NSTRACE_MSG ("FULLSCREEN_MAXIMIZED");
           next_maximized = FULLSCREEN_MAXIMIZED;
           if (fs_state != FULLSCREEN_BOTH)
             [[self window] performZoom:self];
           break;
         case FULLSCREEN_NONE:
+          NSTRACE_MSG ("FULLSCREEN_NONE");
           if (fs_state != FULLSCREEN_BOTH)
             {
               next_maximized = FULLSCREEN_NONE;
@@ -6762,6 +7385,9 @@ if (cols > 0 && rows > 0)
 
 - (void) setFSValue: (int)value
 {
+  NSTRACE ("[EmacsView setFSValue:" NSTRACE_FMT_FSTYPE "]",
+           NSTRACE_ARG_FSTYPE(value));
+
   Lisp_Object lval = Qnil;
   switch (value)
     {
@@ -6784,7 +7410,7 @@ if (cols > 0 && rows > 0)
 
 - (void)mouseEntered: (NSEvent *)theEvent
 {
-  NSTRACE (mouseEntered);
+  NSTRACE ("[EmacsView mouseEntered:]");
   if (emacsframe)
     FRAME_DISPLAY_INFO (emacsframe)->last_mouse_movement_time
       = EV_TIMESTAMP (theEvent);
@@ -6795,7 +7421,7 @@ if (cols > 0 && rows > 0)
 {
   Mouse_HLInfo *hlinfo = emacsframe ? MOUSE_HL_INFO (emacsframe) : NULL;
 
-  NSTRACE (mouseExited);
+  NSTRACE ("[EmacsView mouseExited:]");
 
   if (!hlinfo)
     return;
@@ -6813,7 +7439,7 @@ if (cols > 0 && rows > 0)
 
 - menuDown: sender
 {
-  NSTRACE (menuDown);
+  NSTRACE ("[EmacsView menuDown:]");
   if (context_menu_value == -1)
     context_menu_value = [sender tag];
   else
@@ -6841,7 +7467,7 @@ if (cols > 0 && rows > 0)
   NSEvent *theEvent;
   int idx = [item tag] * TOOL_BAR_ITEM_NSLOTS;
 
-  NSTRACE (toolbarClicked);
+  NSTRACE ("[EmacsView toolbarClicked:]");
 
   if (!emacs_event)
     return self;
@@ -6864,6 +7490,8 @@ if (cols > 0 && rows > 0)
 
 - toggleToolbar: (id)sender
 {
+  NSTRACE ("[EmacsView toggleToolbar:]");
+
   if (!emacs_event)
     return self;
 
@@ -6879,7 +7507,8 @@ if (cols > 0 && rows > 0)
   int x = NSMinX (rect), y = NSMinY (rect);
   int width = NSWidth (rect), height = NSHeight (rect);
 
-  NSTRACE (drawRect);
+  NSTRACE ("[EmacsView drawRect:" NSTRACE_FMT_RECT "]",
+           NSTRACE_ARG_RECT(rect));
 
   if (!emacsframe || !emacsframe->output_data.ns)
     return;
@@ -6890,7 +7519,7 @@ if (cols > 0 && rows > 0)
   unblock_input ();
 
   /*
-    drawRect: may be called (at least in OS X 10.5) for invisible
+    drawRect: may be called (at least in Mac OS X 10.5) for invisible
     views as well for some reason.  Thus, do not infer visibility
     here.
 
@@ -6905,7 +7534,7 @@ if (cols > 0 && rows > 0)
 
 -(NSDragOperation) draggingEntered: (id <NSDraggingInfo>) sender
 {
-  NSTRACE (draggingEntered);
+  NSTRACE ("[EmacsView draggingEntered:]");
   return NSDragOperationGeneric;
 }
 
@@ -6926,7 +7555,7 @@ if (cols > 0 && rows > 0)
   NSDragOperation op = [sender draggingSourceOperationMask];
   int modifiers = 0;
 
-  NSTRACE (performDragOperation);
+  NSTRACE ("[EmacsView performDragOperation:]");
 
   if (!emacs_event)
     return NO;
@@ -6942,11 +7571,11 @@ if (cols > 0 && rows > 0)
       (op & 0xf) != 0xf)
     {
       if (op & NSDragOperationLink)
-        modifiers |= NSControlKeyMask;
+        modifiers |= NSEventModifierFlagControl;
       if (op & NSDragOperationCopy)
-        modifiers |= NSAlternateKeyMask;
+        modifiers |= NSEventModifierFlagOption;
       if (op & NSDragOperationGeneric)
-        modifiers |= NSCommandKeyMask;
+        modifiers |= NSEventModifierFlagCommand;
     }
 
   modifiers = EV_MODIFIERS2 (modifiers);
@@ -7026,7 +7655,7 @@ if (cols > 0 && rows > 0)
 - (id) validRequestorForSendType: (NSString *)typeSent
                       returnType: (NSString *)typeReturned
 {
-  NSTRACE (validRequestorForSendType);
+  NSTRACE ("[EmacsView validRequestorForSendType:returnType:]");
   if (typeSent != nil && [ns_send_types indexOfObject: typeSent] != NSNotFound
       && typeReturned == nil)
     {
@@ -7059,6 +7688,8 @@ if (cols > 0 && rows > 0)
   NSArray *typesDeclared;
   Lisp_Object val;
 
+  NSTRACE ("[EmacsView writeSelectionToPasteboard:types:]");
+
   /* We only support NSStringPboardType */
   if ([types containsObject:NSStringPboardType] == NO) {
     return NO;
@@ -7088,7 +7719,7 @@ if (cols > 0 && rows > 0)
 - setMiniwindowImage: (BOOL) setMini
 {
   id image = [[self window] miniwindowImage];
-  NSTRACE (setMiniwindowImage);
+  NSTRACE ("[EmacsView setMiniwindowImage:%d]", setMini);
 
   /* NOTE: under Cocoa miniwindowImage always returns nil, documentation
      about "AppleDockIconEnabled" notwithstanding, however the set message
@@ -7107,8 +7738,14 @@ if (cols > 0 && rows > 0)
 
 - (void) setRows: (int) r andColumns: (int) c
 {
+  NSTRACE ("[EmacsView setRows:%d andColumns:%d]", r, c);
   rows = r;
   cols = c;
+}
+
+- (int) fullscreenState
+{
+  return fs_state;
 }
 
 @end  /* EmacsView */
@@ -7129,6 +7766,8 @@ if (cols > 0 && rows > 0)
   Lisp_Object str = Qnil;
   struct frame *f = SELECTED_FRAME ();
   struct buffer *curbuf = XBUFFER (XWINDOW (f->selected_window)->contents);
+
+  NSTRACE ("[EmacsWindow accessibilityAttributeValue:]");
 
   if ([attribute isEqualToString:NSAccessibilityRoleAttribute])
     return NSAccessibilityTextFieldRole;
@@ -7180,75 +7819,172 @@ if (cols > 0 && rows > 0)
 }
 #endif /* NS_IMPL_COCOA */
 
-/* If we have multiple monitors, one above the other, we don't want to
-   restrict the height to just one monitor.  So we override this.  */
+/* Constrain size and placement of a frame.
+
+   By returning the original "frameRect", the frame is not
+   constrained. This can lead to unwanted situations where, for
+   example, the menu bar covers the frame.
+
+   The default implementation (accessed using "super") constrains the
+   frame to the visible area of SCREEN, minus the menu bar (if
+   present) and the Dock.  Note that default implementation also calls
+   windowWillResize, with the frame it thinks should have.  (This can
+   make the frame exit maximized mode.)
+
+   Note that this should work in situations where multiple monitors
+   are present.  Common configurations are side-by-side monitors and a
+   monitor on top of another (e.g. when a laptop is placed under a
+   large screen). */
 - (NSRect)constrainFrameRect:(NSRect)frameRect toScreen:(NSScreen *)screen
 {
-  /* When making the frame visible for the first time or if there is just
-     one screen, we want to constrain.  Other times not.  */
-  NSArray *screens = [NSScreen screens];
-  NSUInteger nr_screens = [screens count], nr_eff_screens = 0, i;
-  NSTRACE (constrainFrameRect);
-  NSTRACE_RECT ("input", frameRect);
-
-  if (ns_menu_bar_should_be_hidden ())
-    return frameRect;
-
-  if (nr_screens == 1)
-    return [super constrainFrameRect:frameRect toScreen:screen];
+  NSTRACE ("[EmacsWindow constrainFrameRect:" NSTRACE_FMT_RECT " toScreen:]",
+             NSTRACE_ARG_RECT (frameRect));
 
 #ifdef NS_IMPL_COCOA
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_9
   // If separate spaces is on, it is like each screen is independent.  There is
   // no spanning of frames across screens.
   if ([NSScreen screensHaveSeparateSpaces])
-    return [super constrainFrameRect:frameRect toScreen:screen];
-#endif
-#endif
-
-  for (i = 0; i < nr_screens; ++i)
     {
-      NSScreen *s = [screens objectAtIndex: i];
-      NSRect scrrect = [s frame];
-      NSRect intersect = NSIntersectionRect (frameRect, scrrect);
-
-      if (intersect.size.width > 0 || intersect.size.height > 0)
-        ++nr_eff_screens;
+      NSTRACE_MSG ("Screens have separate spaces");
+      frameRect = [super constrainFrameRect:frameRect toScreen:screen];
+      NSTRACE_RETURN_RECT (frameRect);
+      return frameRect;
     }
+#endif
+#endif
 
-  if (nr_eff_screens == 1)
-    return [super constrainFrameRect:frameRect toScreen:screen];
-
-  /* The default implementation does two things 1) ensure that the top
-     of the rectangle is below the menu bar (or below the top of the
-     screen) and 2) resizes windows larger than the screen. As we
-     don't want the latter, a smaller rectangle is used. */
-#define FAKE_HEIGHT 64
-  float old_top = frameRect.origin.y + frameRect.size.height;
-  NSRect r;
-  r.size.height = FAKE_HEIGHT;
-  r.size.width = frameRect.size.width;
-  r.origin.x = frameRect.origin.x;
-  r.origin.y = old_top - FAKE_HEIGHT;
-
-  NSTRACE_RECT ("input to super", r);
-
-  r = [super constrainFrameRect:r toScreen:screen];
-
-  NSTRACE_RECT ("output from super", r);
-
-  float new_top = r.origin.y + FAKE_HEIGHT;
-  if (new_top < old_top)
-  {
-    frameRect.origin.y = new_top - frameRect.size.height;
-  }
-
-  NSTRACE_RECT ("output", frameRect);
-
-  return frameRect;
-#undef FAKE_HEIGHT
+  return constrain_frame_rect(frameRect,
+                              [(EmacsView *)[self delegate] isFullscreen]);
 }
 
+
+- (void)performZoom:(id)sender
+{
+  NSTRACE ("[EmacsWindow performZoom:]");
+
+  return [super performZoom:sender];
+}
+
+- (void)zoom:(id)sender
+{
+  NSTRACE ("[EmacsWindow zoom:]");
+
+  ns_update_auto_hide_menu_bar();
+
+  // Below are three zoom implementations.  In the final commit, the
+  // idea is that the last should be included.
+
+#if 0
+  // Native zoom done using the standard zoom animation.  Size of the
+  // resulting frame reduced to accommodate the Dock and, if present,
+  // the menu-bar.
+  [super zoom:sender];
+
+#elif 0
+  // Native zoom done using the standard zoom animation, plus an
+  // explicit resize to cover the full screen, except the menu-bar and
+  // dock, if present.
+  [super zoom:sender];
+
+  // After the native zoom, resize the resulting frame to fill the
+  // entire screen, except the menu-bar.
+  //
+  // This works for all practical purposes.  (The only minor oddity is
+  // when transiting from full-height frame to a maximized, the
+  // animation reduces the height of the frame slightly (to the 4
+  // pixels needed to accommodate the Doc) before it snaps back into
+  // full height.  The user would need a very trained eye to spot
+  // this.)
+  NSScreen * screen = [self screen];
+  if (screen != nil)
+    {
+      int fs_state = [(EmacsView *)[self delegate] fullscreenState];
+
+      NSTRACE_FSTYPE ("fullscreenState", fs_state);
+
+      NSRect sr = [screen frame];
+      struct EmacsMargins margins
+        = ns_screen_margins_ignoring_hidden_dock(screen);
+
+      NSRect wr = [self frame];
+      NSTRACE_RECT ("Rect after zoom", wr);
+
+      NSRect newWr = wr;
+
+      if (fs_state == FULLSCREEN_MAXIMIZED
+          || fs_state == FULLSCREEN_HEIGHT)
+        {
+          newWr.origin.y = sr.origin.y + margins.bottom;
+          newWr.size.height = sr.size.height - margins.top - margins.bottom;
+        }
+
+      if (fs_state == FULLSCREEN_MAXIMIZED
+          || fs_state == FULLSCREEN_WIDTH)
+        {
+          newWr.origin.x = sr.origin.x + margins.left;
+          newWr.size.width = sr.size.width - margins.right - margins.left;
+        }
+
+      if (newWr.size.width     != wr.size.width
+          || newWr.size.height != wr.size.height
+          || newWr.origin.x    != wr.origin.x
+          || newWr.origin.y    != wr.origin.y)
+        {
+          NSTRACE_MSG ("New frame different");
+          [self setFrame: newWr display: NO];
+        }
+    }
+#else
+  // Non-native zoom which is done instantaneously.  The resulting
+  // frame covers the entire screen, except the menu-bar and dock, if
+  // present.
+  NSScreen * screen = [self screen];
+  if (screen != nil)
+    {
+      NSRect sr = [screen frame];
+      struct EmacsMargins margins
+        = ns_screen_margins_ignoring_hidden_dock(screen);
+
+      sr.size.height -= (margins.top + margins.bottom);
+      sr.size.width  -= (margins.left + margins.right);
+      sr.origin.x += margins.left;
+      sr.origin.y += margins.bottom;
+
+      sr = [[self delegate] windowWillUseStandardFrame:self
+                                          defaultFrame:sr];
+      [self setFrame: sr display: NO];
+    }
+#endif
+}
+
+- (void)setFrame:(NSRect)windowFrame
+         display:(BOOL)displayViews
+{
+  NSTRACE ("[EmacsWindow setFrame:" NSTRACE_FMT_RECT " display:%d]",
+           NSTRACE_ARG_RECT (windowFrame), displayViews);
+
+  [super setFrame:windowFrame display:displayViews];
+}
+
+- (void)setFrame:(NSRect)windowFrame
+         display:(BOOL)displayViews
+         animate:(BOOL)performAnimation
+{
+  NSTRACE ("[EmacsWindow setFrame:" NSTRACE_FMT_RECT
+           " display:%d performAnimation:%d]",
+           NSTRACE_ARG_RECT (windowFrame), displayViews, performAnimation);
+
+  [super setFrame:windowFrame display:displayViews animate:performAnimation];
+}
+
+- (void)setFrameTopLeftPoint:(NSPoint)point
+{
+  NSTRACE ("[EmacsWindow setFrameTopLeftPoint:" NSTRACE_FMT_POINT "]",
+           NSTRACE_ARG_POINT (point));
+
+  [super setFrameTopLeftPoint:point];
+}
 @end /* EmacsWindow */
 
 
@@ -7288,24 +8024,27 @@ if (cols > 0 && rows > 0)
   MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_7
   r = [NSScroller scrollerWidth];
 #else
-  r = [NSScroller scrollerWidthForControlSize: NSRegularControlSize
+  r = [NSScroller scrollerWidthForControlSize: NSControlSizeRegular
                                 scrollerStyle: NSScrollerStyleLegacy];
 #endif
   return r;
 }
 
-
 - initFrame: (NSRect )r window: (Lisp_Object)nwin
 {
-  NSTRACE (EmacsScroller_initFrame);
+  NSTRACE ("[EmacsScroller initFrame: window:]");
 
-  r.size.width = [EmacsScroller scrollerWidth];
+  if (r.size.width > r.size.height)
+      horizontal = YES;
+  else
+      horizontal = NO;
+
   [super initWithFrame: r/*NSMakeRect (0, 0, 0, 0)*/];
   [self setContinuous: YES];
   [self setEnabled: YES];
 
   /* Ensure auto resizing of scrollbars occurs within the emacs frame's view
-     locked against the top and bottom edges, and right edge on OS X, where
+     locked against the top and bottom edges, and right edge on macOS, where
      scrollers are on right. */
 #ifdef NS_IMPL_GNUSTEP
   [self setAutoresizingMask: NSViewMaxXMargin | NSViewHeightSizable];
@@ -7315,9 +8054,12 @@ if (cols > 0 && rows > 0)
 
   window = XWINDOW (nwin);
   condemned = NO;
-  pixel_height = NSHeight (r);
-  if (pixel_height == 0) pixel_height = 1;
-  min_portion = 20 / pixel_height;
+  if (horizontal)
+    pixel_length = NSWidth (r);
+  else
+    pixel_length = NSHeight (r);
+  if (pixel_length == 0) pixel_length = 1;
+  min_portion = 20 / pixel_length;
 
   frame = XFRAME (window->frame);
   if (FRAME_LIVE_P (frame))
@@ -7343,11 +8085,15 @@ if (cols > 0 && rows > 0)
 
 - (void)setFrame: (NSRect)newRect
 {
-  NSTRACE (EmacsScroller_setFrame);
+  NSTRACE ("[EmacsScroller setFrame:]");
+
 /*  block_input (); */
-  pixel_height = NSHeight (newRect);
-  if (pixel_height == 0) pixel_height = 1;
-  min_portion = 20 / pixel_height;
+  if (horizontal)
+    pixel_length = NSWidth (newRect);
+  else
+    pixel_length = NSHeight (newRect);
+  if (pixel_length == 0) pixel_length = 1;
+  min_portion = 20 / pixel_length;
   [super setFrame: newRect];
 /*  unblock_input (); */
 }
@@ -7355,9 +8101,14 @@ if (cols > 0 && rows > 0)
 
 - (void)dealloc
 {
-  NSTRACE (EmacsScroller_dealloc);
+  NSTRACE ("[EmacsScroller dealloc]");
   if (window)
-    wset_vertical_scroll_bar (window, Qnil);
+    {
+      if (horizontal)
+        wset_horizontal_scroll_bar (window, Qnil);
+      else
+        wset_vertical_scroll_bar (window, Qnil);
+    }
   window = 0;
   [super dealloc];
 }
@@ -7365,7 +8116,7 @@ if (cols > 0 && rows > 0)
 
 - condemn
 {
-  NSTRACE (condemn);
+  NSTRACE ("[EmacsScroller condemn]");
   condemned =YES;
   return self;
 }
@@ -7373,7 +8124,7 @@ if (cols > 0 && rows > 0)
 
 - reprieve
 {
-  NSTRACE (reprieve);
+  NSTRACE ("[EmacsScroller reprieve]");
   condemned =NO;
   return self;
 }
@@ -7381,7 +8132,7 @@ if (cols > 0 && rows > 0)
 
 -(bool)judge
 {
-  NSTRACE (judge);
+  NSTRACE ("[EmacsScroller judge]");
   bool ret = condemned;
   if (condemned)
     {
@@ -7392,7 +8143,12 @@ if (cols > 0 && rows > 0)
       if (view != nil)
         view->scrollbarsNeedingUpdate++;
       if (window)
-        wset_vertical_scroll_bar (window, Qnil);
+        {
+          if (horizontal)
+            wset_horizontal_scroll_bar (window, Qnil);
+          else
+            wset_vertical_scroll_bar (window, Qnil);
+        }
       window = 0;
       [self removeFromSuperview];
       [self release];
@@ -7405,7 +8161,7 @@ if (cols > 0 && rows > 0)
 - (void)resetCursorRects
 {
   NSRect visible = [self visibleRect];
-  NSTRACE (resetCursorRects);
+  NSTRACE ("[EmacsScroller resetCursorRects]");
 
   if (!NSIsEmptyRect (visible))
     [self addCursorRect: visible cursor: [NSCursor arrowCursor]];
@@ -7423,7 +8179,7 @@ if (cols > 0 && rows > 0)
 
 - setPosition: (int)position portion: (int)portion whole: (int)whole
 {
-  NSTRACE (setPosition);
+  NSTRACE ("[EmacsScroller setPosition:portion:whole:]");
 
   em_position = position;
   em_portion = portion;
@@ -7442,7 +8198,7 @@ if (cols > 0 && rows > 0)
     {
       float pos;
       CGFloat por;
-      portion = max ((float)whole*min_portion/pixel_height, portion);
+      portion = max ((float)whole*min_portion/pixel_length, portion);
       pos = (float)position / (whole - portion);
       por = (CGFloat)portion/whole;
 #ifdef NS_IMPL_COCOA
@@ -7460,6 +8216,9 @@ if (cols > 0 && rows > 0)
 - (void) sendScrollEventAtLoc: (float)loc fromEvent: (NSEvent *)e
 {
   Lisp_Object win;
+
+  NSTRACE ("[EmacsScroller sendScrollEventAtLoc:fromEvent:]");
+
   if (!emacs_event)
     return;
 
@@ -7469,10 +8228,20 @@ if (cols > 0 && rows > 0)
   XSETWINDOW (win, window);
   emacs_event->frame_or_window = win;
   emacs_event->timestamp = EV_TIMESTAMP (e);
-  emacs_event->kind = SCROLL_BAR_CLICK_EVENT;
   emacs_event->arg = Qnil;
-  XSETINT (emacs_event->x, loc * pixel_height);
-  XSETINT (emacs_event->y, pixel_height-20);
+
+  if (horizontal)
+    {
+      emacs_event->kind = HORIZONTAL_SCROLL_BAR_CLICK_EVENT;
+      XSETINT (emacs_event->x, em_whole * loc / pixel_length);
+      XSETINT (emacs_event->y, em_whole);
+    }
+  else
+    {
+      emacs_event->kind = SCROLL_BAR_CLICK_EVENT;
+      XSETINT (emacs_event->x, loc);
+      XSETINT (emacs_event->y, pixel_length-20);
+    }
 
   if (q_event_ptr)
     {
@@ -7492,6 +8261,8 @@ if (cols > 0 && rows > 0)
   NSEvent *e = [[self window] currentEvent];
   NSPoint p =  [[self window] mouseLocationOutsideOfEventStream];
   BOOL inKnob = [self testPart: p] == NSScrollerKnob;
+
+  NSTRACE ("[EmacsScroller repeatScroll:]");
 
   /* clear timer if need be */
   if (inKnob || [scroll_repeat_entry timeInterval] == SCROLL_BAR_FIRST_DELAY)
@@ -7525,23 +8296,23 @@ if (cols > 0 && rows > 0)
   NSRect sr, kr;
   /* hitPart is only updated AFTER event is passed on */
   NSScrollerPart part = [self testPart: [e locationInWindow]];
-  CGFloat inc = 0.0, loc, kloc, pos;
+  CGFloat loc, kloc, pos UNINIT;
   int edge = 0;
 
-  NSTRACE (EmacsScroller_mouseDown);
+  NSTRACE ("[EmacsScroller mouseDown:]");
 
   switch (part)
     {
     case NSScrollerDecrementPage:
-        last_hit_part = scroll_bar_above_handle; inc = -1.0; break;
+      last_hit_part = horizontal ? scroll_bar_before_handle : scroll_bar_above_handle; break;
     case NSScrollerIncrementPage:
-        last_hit_part = scroll_bar_below_handle; inc = 1.0; break;
+      last_hit_part = horizontal ? scroll_bar_after_handle : scroll_bar_below_handle; break;
     case NSScrollerDecrementLine:
-      last_hit_part = scroll_bar_up_arrow; inc = -0.1; break;
+      last_hit_part = horizontal ? scroll_bar_left_arrow : scroll_bar_up_arrow; break;
     case NSScrollerIncrementLine:
-      last_hit_part = scroll_bar_down_arrow; inc = 0.1; break;
+      last_hit_part = horizontal ? scroll_bar_right_arrow : scroll_bar_down_arrow; break;
     case NSScrollerKnob:
-      last_hit_part = scroll_bar_handle; break;
+      last_hit_part = horizontal ? scroll_bar_horizontal_handle : scroll_bar_handle; break;
     case NSScrollerKnobSlot:  /* GNUstep-only */
       last_hit_part = scroll_bar_move_ratio; break;
     default:  /* NSScrollerNoPart? */
@@ -7550,7 +8321,67 @@ if (cols > 0 && rows > 0)
       return;
     }
 
-  if (inc != 0.0)
+  if (part == NSScrollerKnob || part == NSScrollerKnobSlot)
+    {
+      /* handle, or on GNUstep possibly slot */
+      NSEvent *fake_event;
+      int length;
+
+      /* compute float loc in slot and mouse offset on knob */
+      sr = [self convertRect: [self rectForPart: NSScrollerKnobSlot]
+                      toView: nil];
+      if (horizontal)
+        {
+          length = NSWidth (sr);
+          loc = ([e locationInWindow].x - NSMinX (sr));
+        }
+      else
+        {
+          length = NSHeight (sr);
+          loc = length - ([e locationInWindow].y - NSMinY (sr));
+        }
+
+      if (loc <= 0.0)
+        {
+          loc = 0.0;
+          edge = -1;
+        }
+      else if (loc >= length)
+        {
+          loc = length;
+          edge = 1;
+        }
+
+      if (edge)
+        kloc = 0.5 * edge;
+      else
+        {
+          kr = [self convertRect: [self rectForPart: NSScrollerKnob]
+                          toView: nil];
+          if (horizontal)
+            kloc = ([e locationInWindow].x - NSMinX (kr));
+          else
+            kloc = NSHeight (kr) - ([e locationInWindow].y - NSMinY (kr));
+        }
+      last_mouse_offset = kloc;
+
+      if (part != NSScrollerKnob)
+        /* this is a slot click on GNUstep: go straight there */
+        pos = loc;
+
+      /* send a fake mouse-up to super to preempt modal -trackKnob: mode */
+      fake_event = [NSEvent mouseEventWithType: NSEventTypeLeftMouseUp
+                                      location: [e locationInWindow]
+                                 modifierFlags: [e modifierFlags]
+                                     timestamp: [e timestamp]
+                                  windowNumber: [e windowNumber]
+                                       context: [e context]
+                                   eventNumber: [e eventNumber]
+                                    clickCount: [e clickCount]
+                                      pressure: [e pressure]];
+      [super mouseUp: fake_event];
+    }
+  else
     {
       pos = 0;      /* ignored */
 
@@ -7563,56 +8394,6 @@ if (cols > 0 && rows > 0)
                                            repeats: YES]
 	    retain];
     }
-  else
-    {
-      /* handle, or on GNUstep possibly slot */
-      NSEvent *fake_event;
-
-      /* compute float loc in slot and mouse offset on knob */
-      sr = [self convertRect: [self rectForPart: NSScrollerKnobSlot]
-                      toView: nil];
-      loc = NSHeight (sr) - ([e locationInWindow].y - NSMinY (sr));
-      if (loc <= 0.0)
-        {
-          loc = 0.0;
-          edge = -1;
-        }
-      else if (loc >= NSHeight (sr))
-        {
-          loc = NSHeight (sr);
-          edge = 1;
-        }
-
-      if (edge)
-        kloc = 0.5 * edge;
-      else
-        {
-          kr = [self convertRect: [self rectForPart: NSScrollerKnob]
-                          toView: nil];
-          kloc = NSHeight (kr) - ([e locationInWindow].y - NSMinY (kr));
-        }
-      last_mouse_offset = kloc;
-
-      /* if knob, tell emacs a location offset by knob pos
-         (to indicate top of handle) */
-      if (part == NSScrollerKnob)
-          pos = (loc - last_mouse_offset) / NSHeight (sr);
-      else
-        /* else this is a slot click on GNUstep: go straight there */
-        pos = loc / NSHeight (sr);
-
-      /* send a fake mouse-up to super to preempt modal -trackKnob: mode */
-      fake_event = [NSEvent mouseEventWithType: NSLeftMouseUp
-                                      location: [e locationInWindow]
-                                 modifierFlags: [e modifierFlags]
-                                     timestamp: [e timestamp]
-                                  windowNumber: [e windowNumber]
-                                       context: [e context]
-                                   eventNumber: [e eventNumber]
-                                    clickCount: [e clickCount]
-                                      pressure: [e pressure]];
-      [super mouseUp: fake_event];
-    }
 
   if (part != NSScrollerKnob)
     [self sendScrollEventAtLoc: pos fromEvent: e];
@@ -7624,29 +8405,42 @@ if (cols > 0 && rows > 0)
 {
     NSRect sr;
     double loc, pos;
+    int length;
 
-    NSTRACE (EmacsScroller_mouseDragged);
+    NSTRACE ("[EmacsScroller mouseDragged:]");
 
       sr = [self convertRect: [self rectForPart: NSScrollerKnobSlot]
                       toView: nil];
-      loc = NSHeight (sr) - ([e locationInWindow].y - NSMinY (sr));
+
+      if (horizontal)
+        {
+          length = NSWidth (sr);
+          loc = ([e locationInWindow].x - NSMinX (sr));
+        }
+      else
+        {
+          length = NSHeight (sr);
+          loc = length - ([e locationInWindow].y - NSMinY (sr));
+        }
 
       if (loc <= 0.0)
         {
           loc = 0.0;
         }
-      else if (loc >= NSHeight (sr) + last_mouse_offset)
+      else if (loc >= length + last_mouse_offset)
         {
-          loc = NSHeight (sr) + last_mouse_offset;
+          loc = length + last_mouse_offset;
         }
 
-      pos = (loc - last_mouse_offset) / NSHeight (sr);
+      pos = (loc - last_mouse_offset);
       [self sendScrollEventAtLoc: pos fromEvent: e];
 }
 
 
 - (void)mouseUp: (NSEvent *)e
 {
+  NSTRACE ("[EmacsScroller mouseUp:]");
+
   if (scroll_repeat_entry)
     {
       [scroll_repeat_entry invalidate];
@@ -7660,6 +8454,8 @@ if (cols > 0 && rows > 0)
 /* treat scrollwheel events in the bar as though they were in the main window */
 - (void) scrollWheel: (NSEvent *)theEvent
 {
+  NSTRACE ("[EmacsScroller scrollWheel:]");
+
   EmacsView *view = (EmacsView *)FRAME_NS_VIEW (frame);
   [view mouseDown: theEvent];
 }
@@ -7687,6 +8483,7 @@ x_new_font (struct frame *f, Lisp_Object font_object, int fontset)
 {
   struct font *font = XFONT_OBJECT (font_object);
   EmacsView *view = FRAME_NS_VIEW (f);
+  int font_ascent, font_descent;
 
   if (fontset < 0)
     fontset = fontset_from_font (font_object);
@@ -7701,7 +8498,8 @@ x_new_font (struct frame *f, Lisp_Object font_object, int fontset)
 
   FRAME_BASELINE_OFFSET (f) = font->baseline_offset;
   FRAME_COLUMN_WIDTH (f) = font->average_width;
-  FRAME_LINE_HEIGHT (f) = font->height;
+  get_font_ascent_descent (font, &font_ascent, &font_descent);
+  FRAME_LINE_HEIGHT (f) = font_ascent + font_descent;
 
   /* Compute the scroll bar width in character columns.  */
   if (FRAME_CONFIG_SCROLL_BAR_WIDTH (f) > 0)
@@ -7731,8 +8529,9 @@ x_new_font (struct frame *f, Lisp_Object font_object, int fontset)
 
   /* Now make the frame display the given font.  */
   if (FRAME_NS_WINDOW (f) != 0 && ! [view isFullscreen])
-    x_set_window_size (f, false, FRAME_COLS (f) * FRAME_COLUMN_WIDTH (f),
-                       FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), true);
+    adjust_frame_size (f, FRAME_COLS (f) * FRAME_COLUMN_WIDTH (f),
+		       FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), 3,
+		       false, Qfont);
 
   return font_object;
 }
@@ -7791,7 +8590,7 @@ ns_xlfd_to_fontname (const char *xlfd)
 void
 syms_of_nsterm (void)
 {
-  NSTRACE (syms_of_nsterm);
+  NSTRACE ("syms_of_nsterm");
 
   ns_antialias_threshold = 10.0;
 
@@ -7843,14 +8642,16 @@ syms_of_nsterm (void)
 
   DEFVAR_LISP ("ns-alternate-modifier", ns_alternate_modifier,
                "This variable describes the behavior of the alternate or option key.\n\
-Set to control, meta, alt, super, or hyper means it is taken to be that key.\n\
+Set to the symbol control, meta, alt, super, or hyper means it is taken to be\n\
+that key.\n\
 Set to none means that the alternate / option key is not interpreted by Emacs\n\
 at all, allowing it to be used at a lower level for accented character entry.");
   ns_alternate_modifier = Qmeta;
 
   DEFVAR_LISP ("ns-right-alternate-modifier", ns_right_alternate_modifier,
                "This variable describes the behavior of the right alternate or option key.\n\
-Set to control, meta, alt, super, or hyper means it is taken to be that key.\n\
+Set to the symbol control, meta, alt, super, or hyper means it is taken to be\n\
+that key.\n\
 Set to left means be the same key as `ns-alternate-modifier'.\n\
 Set to none means that the alternate / option key is not interpreted by Emacs\n\
 at all, allowing it to be used at a lower level for accented character entry.");
@@ -7858,12 +8659,14 @@ at all, allowing it to be used at a lower level for accented character entry.");
 
   DEFVAR_LISP ("ns-command-modifier", ns_command_modifier,
                "This variable describes the behavior of the command key.\n\
-Set to control, meta, alt, super, or hyper means it is taken to be that key.");
+Set to the symbol control, meta, alt, super, or hyper means it is taken to be\n\
+that key.");
   ns_command_modifier = Qsuper;
 
   DEFVAR_LISP ("ns-right-command-modifier", ns_right_command_modifier,
                "This variable describes the behavior of the right command key.\n\
-Set to control, meta, alt, super, or hyper means it is taken to be that key.\n\
+Set to the symbol control, meta, alt, super, or hyper means it is taken to be\n\
+that key.\n\
 Set to left means be the same key as `ns-command-modifier'.\n\
 Set to none means that the command / option key is not interpreted by Emacs\n\
 at all, allowing it to be used at a lower level for accented character entry.");
@@ -7871,12 +8674,14 @@ at all, allowing it to be used at a lower level for accented character entry.");
 
   DEFVAR_LISP ("ns-control-modifier", ns_control_modifier,
                "This variable describes the behavior of the control key.\n\
-Set to control, meta, alt, super, or hyper means it is taken to be that key.");
+Set to the symbol control, meta, alt, super, or hyper means it is taken to be\n\
+that key.");
   ns_control_modifier = Qcontrol;
 
   DEFVAR_LISP ("ns-right-control-modifier", ns_right_control_modifier,
                "This variable describes the behavior of the right control key.\n\
-Set to control, meta, alt, super, or hyper means it is taken to be that key.\n\
+Set to the symbol control, meta, alt, super, or hyper means it is taken to be\n\
+that key.\n\
 Set to left means be the same key as `ns-control-modifier'.\n\
 Set to none means that the control / option key is not interpreted by Emacs\n\
 at all, allowing it to be used at a lower level for accented character entry.");
@@ -7884,7 +8689,8 @@ at all, allowing it to be used at a lower level for accented character entry.");
 
   DEFVAR_LISP ("ns-function-modifier", ns_function_modifier,
                "This variable describes the behavior of the function key (on laptops).\n\
-Set to control, meta, alt, super, or hyper means it is taken to be that key.\n\
+Set to the symbol control, meta, alt, super, or hyper means it is taken to be\n\
+that key.\n\
 Set to none means that the function key is not interpreted by Emacs at all,\n\
 allowing it to be used at a lower level for accented character entry.");
   ns_function_modifier = Qnone;
@@ -7899,14 +8705,14 @@ allowing it to be used at a lower level for accented character entry.");
 
   DEFVAR_LISP ("ns-auto-hide-menu-bar", ns_auto_hide_menu_bar,
                doc: /* Non-nil means that the menu bar is hidden, but appears when the mouse is near.
-Only works on OSX 10.6 or later.  */);
+Only works on Mac OS X 10.6 or later.  */);
   ns_auto_hide_menu_bar = Qnil;
 
   DEFVAR_BOOL ("ns-use-native-fullscreen", ns_use_native_fullscreen,
-     doc: /*Non-nil means to use native fullscreen on OSX >= 10.7.
+     doc: /*Non-nil means to use native fullscreen on Mac OS X 10.7 and later.
 Nil means use fullscreen the old (< 10.7) way.  The old way works better with
-multiple monitors, but lacks tool bar.  This variable is ignored on OSX < 10.7.
-Default is t for OSX >= 10.7, nil otherwise.  */);
+multiple monitors, but lacks tool bar.  This variable is ignored on
+Mac OS X < 10.7.  Default is t for 10.7 and later, nil otherwise.  */);
 #ifdef HAVE_NATIVE_FS
   ns_use_native_fullscreen = YES;
 #else
@@ -7921,9 +8727,9 @@ Default is nil.  */);
   ns_use_fullscreen_animation = NO;
 
   DEFVAR_BOOL ("ns-use-srgb-colorspace", ns_use_srgb_colorspace,
-     doc: /*Non-nil means to use sRGB colorspace on OSX >= 10.7.
+     doc: /*Non-nil means to use sRGB colorspace on Mac OS X 10.7 and later.
 Note that this does not apply to images.
-This variable is ignored on OSX < 10.7 and GNUstep.  */);
+This variable is ignored on Mac OS X < 10.7 and GNUstep.  */);
   ns_use_srgb_colorspace = YES;
 
   /* TODO: move to common code */

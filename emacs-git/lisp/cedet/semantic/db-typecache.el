@@ -1,6 +1,6 @@
 ;;; semantic/db-typecache.el --- Manage Datatypes
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -56,7 +56,7 @@
    (stream :initform nil
 	   :documentation
 	   "The searchable tag stream for this cache.
-NOTE: Can I get rid of this?  Use a hashtable instead?")
+NOTE: Can I get rid of this?  Use a hash table instead?")
    (dependants :initform nil
 	       :documentation
 	       "Any other object that is dependent on typecache results.

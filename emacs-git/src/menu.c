@@ -1,14 +1,14 @@
 /* Platform-independent code for terminal communications.
 
-Copyright (C) 1986, 1988, 1993-1994, 1996, 1999-2015 Free Software
+Copyright (C) 1986, 1988, 1993-1994, 1996, 1999-2017 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,13 +23,14 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <limits.h> /* for INT_MAX */
 
 #include "lisp.h"
+#include "character.h"
+#include "coding.h"
 #include "keyboard.h"
 #include "keymap.h"
 #include "frame.h"
 #include "window.h"
 #include "termhooks.h"
 #include "blockinput.h"
-#include "dispextern.h"
 #include "buffer.h"
 
 #ifdef USE_X_TOOLKIT
@@ -41,12 +42,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #endif /* HAVE_WINDOW_SYSTEM */
 
 #ifdef HAVE_NTGUI
-# ifdef NTGUI_UNICODE
-# define unicode_append_menu AppendMenuW
-# else /* !NTGUI_UNICODE */
 extern AppendMenuW_Proc unicode_append_menu;
-# endif /* NTGUI_UNICODE */
-extern HMENU current_popup_menu;
 #endif /* HAVE_NTGUI  */
 
 #include "menu.h"
@@ -276,7 +272,6 @@ single_keymap_panes (Lisp_Object keymap, Lisp_Object pane_name,
 		     Lisp_Object prefix, int maxdepth)
 {
   struct skp skp;
-  struct gcpro gcpro1;
 
   skp.pending_maps = Qnil;
   skp.maxdepth = maxdepth;
@@ -296,9 +291,7 @@ single_keymap_panes (Lisp_Object keymap, Lisp_Object pane_name,
       skp.notbuttons = menu_items_used;
     }
 
-  GCPRO1 (skp.pending_maps);
   map_keymap_canonical (keymap, single_menu_item, Qnil, &skp);
-  UNGCPRO;
 
   /* Process now any submenus which want to be panes at this level.  */
   while (CONSP (skp.pending_maps))
@@ -325,14 +318,11 @@ static void
 single_menu_item (Lisp_Object key, Lisp_Object item, Lisp_Object dummy, void *skp_v)
 {
   Lisp_Object map, item_string, enabled;
-  struct gcpro gcpro1, gcpro2;
   bool res;
   struct skp *skp = skp_v;
 
   /* Parse the menu item and leave the result in item_properties.  */
-  GCPRO2 (key, item);
   res = parse_menu_item (item, 0);
-  UNGCPRO;
   if (!res)
     return;			/* Not a menu item.  */
 
@@ -413,7 +403,7 @@ single_menu_item (Lisp_Object key, Lisp_Object item, Lisp_Object dummy, void *sk
 
       if (prefix)
 	{
-	  AUTO_STRING (prefix_obj, prefix);
+	  AUTO_STRING_WITH_LEN (prefix_obj, prefix, 4);
 	  item_string = concat2 (prefix_obj, item_string);
 	}
   }
@@ -1055,7 +1045,7 @@ menu_item_width (const unsigned char *str)
       int ch_len;
       int ch = STRING_CHAR_AND_LENGTH (p, ch_len);
 
-      len += CHAR_WIDTH (ch);
+      len += CHARACTER_WIDTH (ch);
       p += ch_len;
     }
   return len;
@@ -1177,7 +1167,6 @@ no quit occurs and `x-popup-menu' returns nil.  */)
   Lisp_Object x, y, window;
   int menuflags = 0;
   ptrdiff_t specpdl_count = SPECPDL_INDEX ();
-  struct gcpro gcpro1;
 
   if (NILP (position))
     /* This is an obsolete call, which wants us to precompute the
@@ -1242,6 +1231,9 @@ no quit occurs and `x-popup-menu' returns nil.  */)
       {
 	/* Use the mouse's current position.  */
 	struct frame *new_f = SELECTED_FRAME ();
+
+	XSETFASTINT (x, 0);
+	XSETFASTINT (y, 0);
 #ifdef HAVE_X_WINDOWS
 	if (FRAME_X_P (new_f))
 	  {
@@ -1329,7 +1321,6 @@ no quit occurs and `x-popup-menu' returns nil.  */)
   record_unwind_protect_void (unuse_menu_items);
 
   title = Qnil;
-  GCPRO1 (title);
 
   /* Decode the menu items from what was specified.  */
 
@@ -1422,7 +1413,6 @@ no quit occurs and `x-popup-menu' returns nil.  */)
     {
       discard_menu_items ();
       FRAME_DISPLAY_INFO (f)->grabbed = 0;
-      UNGCPRO;
       return Qnil;
     }
 #endif
@@ -1448,8 +1438,6 @@ no quit occurs and `x-popup-menu' returns nil.  */)
   if (FRAME_W32_P (f))
     FRAME_DISPLAY_INFO (f)->grabbed = 0;
 #endif
-
-  UNGCPRO;
 
   if (error_name) error ("%s", error_name);
   return selection;
@@ -1552,7 +1540,7 @@ for instance using the window manager, then this produces a quit and
 
   /* Note that xw_popup_dialog can call menu code, so
      Vmenu_updating_frame should be set (Bug#17891).  */
-  eassert (f && FRAME_LIVE_P (f));
+  eassume (f && FRAME_LIVE_P (f));
   XSETFRAME (Vmenu_updating_frame, f);
 
   /* Force a redisplay before showing the dialog.  If a frame is created

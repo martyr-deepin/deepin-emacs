@@ -1,13 +1,13 @@
 /* Call a Lisp function interactively.
-   Copyright (C) 1985-1986, 1993-1995, 1997, 2000-2015 Free Software
+   Copyright (C) 1985-1986, 1993-1995, 1997, 2000-2017 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,10 +23,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "character.h"
 #include "buffer.h"
-#include "commands.h"
 #include "keyboard.h"
 #include "window.h"
-#include "keymap.h"
 
 static Lisp_Object preserved_fns;
 
@@ -43,20 +41,24 @@ For example, write
  (defun foo (arg buf) "Doc string" (interactive "P\\nbbuffer: ") .... )
  to make ARG be the raw prefix argument, and set BUF to an existing buffer,
  when `foo' is called as a command.
-The "call" to `interactive' is actually a declaration rather than a function;
- it tells `call-interactively' how to read arguments
- to pass to the function.
-When actually called, `interactive' just returns nil.
 
-Usually the argument of `interactive' is a string containing a code letter
- followed optionally by a prompt.  (Some code letters do not use I/O to get
- the argument and do not use prompts.)  To get several arguments, concatenate
- the individual strings, separating them by newline characters.
-Prompts are passed to format, and may use % escapes to print the
+The "call" to `interactive' is actually a declaration rather than a
+ function; it tells `call-interactively' how to read arguments to pass
+ to the function.  When actually called, `interactive' just returns
+ nil.
+
+Usually the argument of `interactive' is a string containing a code
+ letter followed optionally by a prompt.  (Some code letters do not
+ use I/O to get the argument and do not use prompts.)  To pass several
+ arguments to the command, concatenate the individual strings,
+ separating them by newline characters.
+
+Prompts are passed to `format', and may use % escapes to print the
  arguments that have already been read.
 If the argument is not a string, it is evaluated to get a list of
- arguments to pass to the function.
-Just `(interactive)' means pass no args when calling interactively.
+ arguments to pass to the command.
+Just `(interactive)' means pass no arguments to the command when
+ calling interactively.
 
 Code letters available are:
 a -- Function name: symbol with a function definition.
@@ -101,7 +103,7 @@ If the string begins with `^' and `shift-select-mode' is non-nil,
  Emacs first calls the function `handle-shift-selection'.
 You may use `@', `*', and `^' together.  They are processed in the
  order that they appear, before reading any arguments.
-usage: (interactive &optional ARGS)  */
+usage: (interactive &optional ARG-DESCRIPTOR)  */
        attributes: const)
   (Lisp_Object args)
 {
@@ -228,11 +230,9 @@ static Lisp_Object
 read_file_name (Lisp_Object default_filename, Lisp_Object mustmatch,
 		Lisp_Object initial, Lisp_Object predicate)
 {
-  struct gcpro gcpro1;
-  GCPRO1 (default_filename);
-  RETURN_UNGCPRO (CALLN (Ffuncall, intern ("read-file-name"),
-			 callint_message, Qnil, default_filename,
-			 mustmatch, initial, predicate));
+  return CALLN (Ffuncall, intern ("read-file-name"),
+		callint_message, Qnil, default_filename,
+		mustmatch, initial, predicate);
 }
 
 /* BEWARE: Calling this directly from C would defeat the purpose!  */
@@ -272,7 +272,7 @@ invoke it.  If KEYS is omitted or nil, the return value of
 {
   /* `args' will contain the array of arguments to pass to the function.
      `visargs' will contain the same list but in a nicer form, so that if we
-     pass it to `Fformat' it will be understandable to a human.  */
+     pass it to `Fformat_message' it will be understandable to a human.  */
   Lisp_Object *args, *visargs;
   Lisp_Object specs;
   Lisp_Object filter_specs;
@@ -298,7 +298,6 @@ invoke it.  If KEYS is omitted or nil, the return value of
   ptrdiff_t i, nargs;
   ptrdiff_t mark;
   bool arg_from_tty = 0;
-  struct gcpro gcpro1, gcpro2, gcpro3, gcpro4, gcpro5;
   ptrdiff_t key_count;
   bool record_then_fail = 0;
 
@@ -340,9 +339,7 @@ invoke it.  If KEYS is omitted or nil, the return value of
   /* Set SPECS to the interactive form, or barf if not interactive.  */
   {
     Lisp_Object form;
-    GCPRO2 (function, prefix_arg);
     form = Finteractive_form (function);
-    UNGCPRO;
     if (CONSP (form))
       specs = filter_specs = Fcar (XCDR (form));
     else
@@ -357,11 +354,9 @@ invoke it.  If KEYS is omitted or nil, the return value of
       uintmax_t events = num_input_events;
       input = specs;
       /* Compute the arg values using the user's expression.  */
-      GCPRO2 (input, filter_specs);
       specs = Feval (specs,
  		     CONSP (funval) && EQ (Qclosure, XCAR (funval))
 		     ? CAR_SAFE (XCDR (funval)) : Qnil);
-      UNGCPRO;
       if (events != num_input_events || !NILP (record_flag))
 	{
 	  /* We should record this command on the command history.  */
@@ -500,10 +495,6 @@ invoke it.  If KEYS is omitted or nil, the return value of
 
   memclear (args, nargs * (2 * word_size + 1));
 
-  GCPRO5 (prefix_arg, function, *args, *visargs, up_event);
-  gcpro3.nvars = nargs;
-  gcpro4.nvars = nargs;
-
   if (!NILP (enable))
     specbind (Qenable_recursive_minibuffers, Qt);
 
@@ -512,7 +503,7 @@ invoke it.  If KEYS is omitted or nil, the return value of
     {
       visargs[1] = make_string (tem + 1, strcspn (tem + 1, "\n"));
       if (strchr (SSDATA (visargs[1]), '%'))
-	callint_message = Fformat (i - 1, visargs + 1);
+	callint_message = Fformat_message (i - 1, visargs + 1);
       else
 	callint_message = visargs[1];
 
@@ -803,7 +794,7 @@ invoke it.  If KEYS is omitted or nil, the return value of
     }
   unbind_to (speccount, Qnil);
 
-  QUIT;
+  maybe_quit ();
 
   args[0] = Qfuncall_interactively;
   args[1] = function;
@@ -846,8 +837,10 @@ invoke it.  If KEYS is omitted or nil, the return value of
   kset_last_command (current_kboard, save_last_command);
 
   {
-    Lisp_Object val = Ffuncall (nargs, args);
-    UNGCPRO;
+    Lisp_Object val;
+    specbind (Qcommand_debug_status, Qnil);
+
+    val = Ffuncall (nargs, args);
     val = unbind_to (speccount, val);
     SAFE_FREE ();
     return val;

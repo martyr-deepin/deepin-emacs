@@ -1,12 +1,12 @@
 /* Font backend for the Microsoft Windows API.
-   Copyright (C) 2007-2015 Free Software Foundation, Inc.
+   Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,12 +26,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "w32term.h"
 #include "frame.h"
-#include "dispextern.h"
-#include "character.h"
-#include "charset.h"
-#include "coding.h"
-#include "fontset.h"
-#include "font.h"
+#include "coding.h"	/* for ENCODE_SYSTEM, DECODE_SYSTEM */
 #include "w32font.h"
 #ifdef WINDOWSNT
 #include "w32.h"
@@ -106,7 +101,6 @@ static void list_all_matching_fonts (struct font_callback_data *);
 
 static BOOL g_b_init_get_outline_metrics_w;
 static BOOL g_b_init_get_text_metrics_w;
-static BOOL g_b_init_get_glyph_outline_w;
 static BOOL g_b_init_get_glyph_outline_w;
 static BOOL g_b_init_get_char_width_32_w;
 
@@ -244,7 +238,7 @@ intern_font_name (char * string)
   Lisp_Object str = DECODE_SYSTEM (build_string (string));
   ptrdiff_t len = SCHARS (str);
   Lisp_Object obarray = check_obarray (Vobarray);
-  Lisp_Object tem = oblookup (obarray, SDATA (str), len, len);
+  Lisp_Object tem = oblookup (obarray, SSDATA (str), len, len);
   /* This code is similar to intern function from lread.c.  */
   return SYMBOLP (tem) ? tem : intern_driver (str, obarray, tem);
 }
@@ -439,14 +433,13 @@ w32font_text_extents (struct font *font, unsigned *code,
   int total_width = 0;
   WORD *wcode;
   SIZE size;
+  bool first;
 
   struct w32font_info *w32_font = (struct w32font_info *) font;
 
   memset (metrics, 0, sizeof (struct font_metrics));
-  metrics->ascent = font->ascent;
-  metrics->descent = font->descent;
 
-  for (i = 0; i < nglyphs; i++)
+  for (i = 0, first = true; i < nglyphs; i++)
     {
       struct w32_metric_cache *char_metric;
       int block = *(code + i) / CACHE_BLOCKSIZE;
@@ -495,11 +488,24 @@ w32font_text_extents (struct font *font, unsigned *code,
 
       if (char_metric->status == W32METRIC_SUCCESS)
 	{
-	  metrics->lbearing = min (metrics->lbearing,
-				   metrics->width + char_metric->lbearing);
-	  metrics->rbearing = max (metrics->rbearing,
-				   metrics->width + char_metric->rbearing);
+	  if (first)
+	    {
+	      metrics->lbearing = char_metric->lbearing;
+	      metrics->rbearing = char_metric->rbearing;
+	      metrics->width    = 0;
+	      metrics->ascent   = char_metric->ascent;
+	      metrics->descent  = char_metric->descent;
+	      first = false;
+	    }
+	  if (metrics->lbearing > char_metric->lbearing)
+	    metrics->lbearing = char_metric->lbearing;
+	  if (metrics->rbearing < char_metric->rbearing)
+	    metrics->rbearing = char_metric->rbearing;
 	  metrics->width += char_metric->width;
+	  if (metrics->ascent < char_metric->ascent)
+	    metrics->ascent = char_metric->ascent;
+	  if (metrics->descent < char_metric->descent)
+	    metrics->descent = char_metric->descent;
 	}
       else
 	/* If we couldn't get metrics for a char,
@@ -574,6 +580,8 @@ w32font_text_extents (struct font *font, unsigned *code,
   metrics->width = total_width - w32_font->metrics.tmOverhang;
   metrics->lbearing = 0;
   metrics->rbearing = total_width;
+  metrics->ascent = font->ascent;
+  metrics->descent = font->descent;
 
   /* Restore state and release DC.  */
   SelectObject (dc, old_font);
@@ -636,12 +644,31 @@ w32font_draw (struct glyph_string *s, int from, int to,
       HBRUSH brush;
       RECT rect;
       struct font *font = s->font;
+      int ascent = font->ascent, descent = font->descent;
 
+      /* Font's global ascent and descent values might be
+	 preposterously large for some fonts.  We fix here the case
+	 when those fonts are used for display of glyphless
+	 characters, because drawing background with font dimensions
+	 in those cases makes the display illegible.  There's only one
+	 more call to the draw method with with_background set to
+	 true, and that's in x_draw_glyph_string_foreground, when
+	 drawing the cursor, where we have no such heuristics
+	 available.  FIXME.  */
+      if (s->first_glyph->type == GLYPHLESS_GLYPH
+	  && (s->first_glyph->u.glyphless.method == GLYPHLESS_DISPLAY_HEX_CODE
+	      || s->first_glyph->u.glyphless.method == GLYPHLESS_DISPLAY_ACRONYM))
+	{
+	  ascent =
+	    s->first_glyph->slice.glyphless.lower_yoff
+	    - s->first_glyph->slice.glyphless.upper_yoff;
+	  descent = 0;
+	}
       brush = CreateSolidBrush (s->gc->background);
       rect.left = x;
-      rect.top = y - font->ascent;
+      rect.top = y - ascent;
       rect.right = x + s->width;
-      rect.bottom = y + font->descent;
+      rect.bottom = y + descent;
       FillRect (s->hdc, &rect, brush);
       DeleteObject (brush);
     }
@@ -768,7 +795,8 @@ w32font_list_internal (struct frame *f, Lisp_Object font_spec,
 	  && !EQ (spec_charset, Qiso10646_1)
 	  && !EQ (spec_charset, Qunicode_bmp)
 	  && !EQ (spec_charset, Qunicode_sip)
-	  && !EQ (spec_charset, Qunknown))
+	  && !EQ (spec_charset, Qunknown)
+	  && !EQ (spec_charset, Qascii_0))
 	return Qnil;
     }
 
@@ -1445,12 +1473,12 @@ add_font_entity_to_list (ENUMLOGFONTEX *logical_font,
      by a foundry, we accept raster fonts if the font name is found
      anywhere within the full name.  */
   if ((logical_font->elfLogFont.lfOutPrecision == OUT_STRING_PRECIS
-       && !strstr (logical_font->elfFullName,
+       && !strstr ((char *)logical_font->elfFullName,
 		   logical_font->elfLogFont.lfFaceName))
       /* Check for well known substitutions that mess things up in the
 	 presence of Type-1 fonts of the same name.  */
       || (!check_face_name (&logical_font->elfLogFont,
-			    logical_font->elfFullName)))
+			    (char *)logical_font->elfFullName)))
     return 1;
 
   /* Make a font entity for the font.  */
@@ -1627,7 +1655,7 @@ registry_to_w32_charset (Lisp_Object charset)
   else if (EQ (charset, Qiso8859_1))
     return ANSI_CHARSET;
   else if (SYMBOLP (charset))
-    return x_to_w32_charset (SDATA (SYMBOL_NAME (charset)));
+    return x_to_w32_charset (SSDATA (SYMBOL_NAME (charset)));
   else
     return DEFAULT_CHARSET;
 }
@@ -1659,7 +1687,7 @@ w32_to_x_charset (int fncharset, char *matching)
       /* Handle startup case of w32-charset-info-alist not
          being set up yet. */
       if (NILP (Vw32_charset_info_alist))
-        return "iso8859-1";
+        return (char *)"iso8859-1";
       charset_type = Qw32_charset_ansi;
       break;
     case DEFAULT_CHARSET:
@@ -1719,7 +1747,7 @@ w32_to_x_charset (int fncharset, char *matching)
 
     default:
       /* Encode numerical value of unknown charset.  */
-      sprintf (buf, "*-#%u", fncharset);
+      sprintf (buf, "*-#%d", fncharset);
       return buf;
     }
 
@@ -1749,7 +1777,7 @@ w32_to_x_charset (int fncharset, char *matching)
             || !SYMBOLP (XCAR (XCDR (this_entry))))
           continue;
 
-        x_charset = SDATA (XCAR (this_entry));
+        x_charset = SSDATA (XCAR (this_entry));
         w32_charset = XCAR (XCDR (this_entry));
         codepage = XCDR (XCDR (this_entry));
 
@@ -1806,7 +1834,7 @@ w32_to_x_charset (int fncharset, char *matching)
     /* If no match, encode the numeric value. */
     if (!best_match)
       {
-        sprintf (buf, "*-#%u", fncharset);
+        sprintf (buf, "*-#%d", fncharset);
         return buf;
       }
 
@@ -1954,7 +1982,7 @@ fill_in_logfont (struct frame *f, LOGFONT *logfont, Lisp_Object font_spec)
       else if (SYMBOLP (tmp))
 	{
 	  strncpy (logfont->lfFaceName,
-		   SDATA (ENCODE_SYSTEM (SYMBOL_NAME (tmp))), LF_FACESIZE);
+		   SSDATA (ENCODE_SYSTEM (SYMBOL_NAME (tmp))), LF_FACESIZE);
 	  logfont->lfFaceName[LF_FACESIZE-1] = '\0';
 	}
     }
@@ -2050,7 +2078,7 @@ list_all_matching_fonts (struct font_callback_data *match_data)
       if (NILP (family))
         continue;
       else if (SYMBOLP (family))
-        name = SDATA (ENCODE_SYSTEM (SYMBOL_NAME (family)));
+        name = SSDATA (ENCODE_SYSTEM (SYMBOL_NAME (family)));
       else
 	continue;
 
@@ -2326,7 +2354,7 @@ w32font_full_name (LOGFONT * font, Lisp_Object font_obj,
     {
       if (outline)
         {
-          float pointsize = height * 72.0 / one_w32_display_info.resy;
+          double pointsize = height * 72.0 / one_w32_display_info.resy;
           /* Round to nearest half point.  floor is used, since round is not
 	     supported in MS library.  */
           pointsize = floor (pointsize * 2 + 0.5) / 2;
@@ -2415,6 +2443,8 @@ compute_metrics (HDC dc, struct w32font_info *w32_font, unsigned int code,
       metrics->lbearing = gm.gmptGlyphOrigin.x;
       metrics->rbearing = gm.gmptGlyphOrigin.x + gm.gmBlackBoxX;
       metrics->width = gm.gmCellIncX;
+      metrics->ascent = gm.gmptGlyphOrigin.y;
+      metrics->descent = gm.gmBlackBoxY - gm.gmptGlyphOrigin.y;
       metrics->status = W32METRIC_SUCCESS;
     }
   else if (get_char_width_32_w (dc, code, code, &width) != 0)
@@ -2422,6 +2452,8 @@ compute_metrics (HDC dc, struct w32font_info *w32_font, unsigned int code,
       metrics->lbearing = 0;
       metrics->rbearing = width;
       metrics->width = width;
+      metrics->ascent = w32_font->font.ascent;
+      metrics->descent = w32_font->font.descent;
       metrics->status = W32METRIC_SUCCESS;
     }
   else
@@ -2503,7 +2535,7 @@ w32font_filter_properties (Lisp_Object font, Lisp_Object alist)
 
 struct font_driver w32font_driver =
   {
-    LISP_INITIALLY_ZERO, /* Qgdi */
+    LISPSYM_INITIALLY (Qgdi),
     false, /* case insensitive */
     w32font_get_cache,
     w32font_list,
@@ -2714,7 +2746,6 @@ versions of Windows) characters.  */);
 
   defsubr (&Sx_select_font);
 
-  w32font_driver.type = Qgdi;
   register_font_driver (&w32font_driver, NULL);
 }
 

@@ -1,6 +1,6 @@
 ;;; tty-colors.el --- color support for character terminals
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Eli Zaretskii
 ;; Maintainer: emacs-devel@gnu.org
@@ -810,9 +810,11 @@ Value is the modified color alist for FRAME."
     (while colors
       (tty-color-define (car color) (cadr color) (cddr color))
       (setq colors (cdr colors) color (car colors)))
-    ;; Modifying color mappings means realized faces don't
-    ;; use the right colors, so clear them.
-    (clear-face-cache)))
+    ;; Modifying color mappings means realized faces don't use the
+    ;; right colors, so clear them, if we modified colors on a TTY
+    ;; frame.
+    (or (display-graphic-p)
+        (clear-face-cache))))
 
 (defun tty-color-canonicalize (color)
   "Return COLOR in canonical form.
@@ -1032,5 +1034,7 @@ A color is considered gray if the 3 components of its RGB value are equal."
 	   (setq count (1+ count)))
       (setq colors (cdr colors)))
     count))
+
+(provide 'term/tty-colors)
 
 ;;; tty-colors.el ends here

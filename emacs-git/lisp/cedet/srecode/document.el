@@ -1,6 +1,6 @@
 ;;; srecode/document.el --- Documentation (comment) generation
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -655,7 +655,7 @@ If there is only one tag in the region, complain."
   "Create documentation for the function defined in TAG.
 If we can identify a verb in the list followed by some
 name part then check the return value to see if we can use that to
-finish off the sentence.  That is, any function with 'alloc' in it will be
+finish off the sentence.  That is, any function with `alloc' in it will be
 allocating something based on its type."
   (let ((al srecode-document-autocomment-return-first-alist)
 	(dropit nil)

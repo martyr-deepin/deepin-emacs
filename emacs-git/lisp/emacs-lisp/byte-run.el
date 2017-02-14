@@ -1,6 +1,6 @@
 ;;; byte-run.el --- byte-compiler support for inlining  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1992, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Jamie Zawinski <jwz@lucid.com>
 ;;	Hallvard Furuseth <hbf@ulrik.uio.no>
@@ -240,6 +240,11 @@ The return value is undefined.
   ;; from
   ;;    (defun foo (arg) (toto)).
   (declare (doc-string 3) (indent 2))
+  (or name (error "Cannot define '%s' as a function" name))
+  (if (null
+       (and (listp arglist)
+            (null (delq t (mapcar #'symbolp arglist)))))
+      (error "Malformed arglist: %s" arglist))
   (let ((decls (cond
                 ((eq (car-safe docstring) 'declare)
                  (prog1 (cdr docstring) (setq docstring nil)))
@@ -355,12 +360,15 @@ was first made obsolete, for example a date or a release number."
 						   &optional when docstring)
   "Set OBSOLETE-NAME's function definition to CURRENT-NAME and mark it obsolete.
 
-\(define-obsolete-function-alias 'old-fun 'new-fun \"22.1\" \"old-fun's doc.\")
+\(define-obsolete-function-alias \\='old-fun \\='new-fun \"22.1\" \"old-fun's doc.\")
 
 is equivalent to the following two lines of code:
 
-\(defalias 'old-fun 'new-fun \"old-fun's doc.\")
-\(make-obsolete 'old-fun 'new-fun \"22.1\")
+\(defalias \\='old-fun \\='new-fun \"old-fun's doc.\")
+\(make-obsolete \\='old-fun \\='new-fun \"22.1\")
+
+If provided, WHEN should be a string indicating when the function
+was first made obsolete, for example a date or a release number.
 
 See the docstrings of `defalias' and `make-obsolete' for more details."
   (declare (doc-string 4)
@@ -404,6 +412,9 @@ dumped with Emacs).  This is so that any user customizations are
 applied before the defcustom tries to initialize the
 variable (this is due to the way `defvaralias' works).
 
+If provided, WHEN should be a string indicating when the variable
+was first made obsolete, for example a date or a release number.
+
 For the benefit of `custom-set-variables', if OBSOLETE-NAME has
 any of the following properties, they are copied to
 CURRENT-NAME, if it does not already have them:
@@ -428,8 +439,8 @@ CURRENT-NAME, if it does not already have them:
 ;; It only really affects M-x describe-face output.
 (defmacro define-obsolete-face-alias (obsolete-face current-face when)
   "Make OBSOLETE-FACE a face alias for CURRENT-FACE and mark it obsolete.
-The string WHEN gives the Emacs version where OBSOLETE-FACE became
-obsolete."
+If provided, WHEN should be a string indicating when the face
+was first made obsolete, for example a date or a release number."
   `(progn
      (put ,obsolete-face 'face-alias ,current-face)
      ;; Used by M-x describe-face.
@@ -463,7 +474,7 @@ load time.  In interpreted code, this is entirely equivalent to
 `progn', except that the value of the expression may be (but is
 not necessarily) computed at load time if eager macro expansion
 is enabled."
-  (declare (debug t) (indent 0))
+  (declare (debug (&rest def-form)) (indent 0))
   ;; When the byte-compiler expands code, this macro is not used, so we're
   ;; either about to run `body' (plain interpretation) or we're doing eager
   ;; macroexpansion.

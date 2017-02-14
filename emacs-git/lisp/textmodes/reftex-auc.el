@@ -1,6 +1,6 @@
 ;;; reftex-auc.el --- RefTeX's interface to AUCTeX
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <dominik@science.uva.nl>
 ;; Maintainer: auctex-devel@gnu.org
@@ -24,7 +24,7 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
+(eval-when-compile (require 'cl-lib))
 
 (require 'reftex)
 
@@ -137,7 +137,7 @@ argument identify one of multiple indices."
        ((stringp tag) tag)
        ((integerp tag)
         (save-excursion
-          (goto-char (match-end 1))
+          (goto-char (match-end 0))
           (or (reftex-nth-arg tag (nth 6 entry)) "idx")))
        (t "idx")))))
 
@@ -237,5 +237,5 @@ of ENTRY-LIST is a list of cons cells (\"MACRONAME\" . LEVEL).  See
 ;;; reftex-auc.el ends here
 
 ;; Local Variables:
-;; generated-autoload-file: "reftex.el"
+;; generated-autoload-file: "reftex-loaddefs.el"
 ;; End:

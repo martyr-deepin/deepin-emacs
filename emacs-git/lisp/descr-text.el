@@ -1,6 +1,6 @@
 ;;; descr-text.el --- describe text mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1994-1996, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1996, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Boris Goldowsky <boris@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -161,8 +161,8 @@ otherwise."
       ;; Buttons
       (when (and button (not (widgetp wid-button)))
 	(newline)
-	(insert "Here is a `" (format "%S" button-type)
-		"' button labeled `" button-label "'.\n\n"))
+	(insert (format-message "Here is a `%S' button labeled `%s'.\n\n"
+                                button-type button-label)))
       ;; Overlays
       (when overlays
 	(newline)
@@ -277,12 +277,12 @@ This function is semi-obsolete.  Use `get-char-code-property'."
 			    'general-category (intern val))
 			   val)))
 	       (list "Combining class"
-		     (let ((val (nth 1 fields)))
+		     (let ((val (nth 2 fields)))
 		       (or (char-code-property-description
 			    'canonical-combining-class (intern val))
 			   val)))
 	       (list "Bidi category"
-		     (let ((val (nth 1 fields)))
+		     (let ((val (nth 3 fields)))
 		       (or (char-code-property-description
 			    'bidi-class (intern val))
 			   val)))
@@ -322,7 +322,7 @@ This function is semi-obsolete.  Use `get-char-code-property'."
 					       (nth 13 fields) 16)))))))))))
 
 ;; Not defined on builds without X, but behind display-graphic-p.
-(declare-function internal-char-font "fontset.c" (position &optional ch))
+(declare-function internal-char-font "font.c" (position &optional ch))
 
 ;; Return information about how CHAR is displayed at the buffer
 ;; position POS.  If the selected frame is on a graphic display,
@@ -539,9 +539,7 @@ relevant to POS."
                ,(let* ((beg      (point-min))
                        (end      (point-max))
                        (total    (buffer-size))
-                       (percent  (if (> total 50000) ; Avoid overflow multiplying by 100
-                                     (/ (+ (/ total 200) (1- pos))  (max (/ total 100) 1))
-                                   (/ (+ (/ total 2) (* 100 (1- pos)))  (max total 1))))
+                       (percent  (round (* 100.0 (1- pos)) (max total 1)))
                        (hscroll  (if (= (window-hscroll) 0)
                                      ""
                                    (format ", Hscroll: %d" (window-hscroll))))
@@ -618,7 +616,22 @@ relevant to POS."
                                    'help-args '(,current-input-method))
 				 "input method")
 			 (list
-			  "type \"C-x 8 RET HEX-CODEPOINT\" or \"C-x 8 RET NAME\"")))))
+                          (let* ((names (ucs-names))
+                                 (name
+                                  (or (when (= char 7)
+				       ;; Special case for "BELL" which is
+				       ;; apparently the only char which
+				       ;; doesn't have a new name and whose
+				       ;; old-name is shadowed by a newer char
+				       ;; with that name (bug#25641).
+				       (car (rassoc char names)))
+                                      (get-char-code-property char 'name)
+                                      (get-char-code-property char 'old-name))))
+                            (if (and name (assoc-string name names))
+                                (format
+                                 "type \"C-x 8 RET %x\" or \"C-x 8 RET %s\""
+                                 char name)
+                              (format "type \"C-x 8 RET %x\"" char))))))))
               ("buffer code"
                ,(if multibyte-p
                     (encoded-string-description
@@ -719,26 +732,17 @@ relevant to POS."
           (when disp-vector
             (insert
              "\nThe display table entry is displayed by ")
-            (if (display-graphic-p (selected-frame))
-                (progn
-                  (insert "these fonts (glyph codes):\n")
-                  (dotimes (i (length disp-vector))
-                    (insert (glyph-char (car (aref disp-vector i))) ?:
-                            (propertize " " 'display '(space :align-to 5))
-                            (or (cdr (aref disp-vector i)) "-- no font --")
-                            "\n")
-                    (let ((face (glyph-face (car (aref disp-vector i)))))
-                      (when face
-                        (insert (propertize " " 'display '(space :align-to 5))
-                                "face: ")
-                        (insert (concat "`" (symbol-name face) "'"))
-                        (insert "\n")))))
-              (insert "these terminal codes:\n")
-              (dotimes (i (length disp-vector))
-                (insert (car (aref disp-vector i))
-                        (propertize " " 'display '(space :align-to 5))
-                        (or (cdr (aref disp-vector i)) "-- not encodable --")
-                        "\n"))))
+            (insert "these fonts (glyph codes):\n")
+            (dotimes (i (length disp-vector))
+              (insert (glyph-char (car (aref disp-vector i))) ?:
+                      (propertize " " 'display '(space :align-to 5))
+                      (or (cdr (aref disp-vector i)) "-- no font --")
+                      "\n")
+              (let ((face (glyph-face (car (aref disp-vector i)))))
+                (when face
+                  (insert (propertize " " 'display '(space :align-to 5))
+                          "face: ")
+                  (insert (format-message "`%s'\n" face))))))
 
           (when composition
             (insert "\nComposed")
@@ -795,7 +799,8 @@ relevant to POS."
                   (insert "\n  " (car elt) ":"
                           (propertize " " 'display '(space :align-to 4))
                           (or (cdr elt) "-- not encodable --"))))
-              (insert "\nSee the variable `reference-point-alist' for "
+              (insert (substitute-command-keys
+		       "\nSee the variable `reference-point-alist' for ")
                       "the meaning of the rule.\n")))
 
           (unless eight-bit-p
@@ -809,9 +814,16 @@ relevant to POS."
                         'describe-char-unidata-list))
              'follow-link t)
             (insert "\n")
-            (dolist (elt (if (eq describe-char-unidata-list t)
-                             (nreverse (mapcar 'car char-code-property-alist))
-                           describe-char-unidata-list))
+            (dolist (elt
+                     (cond ((eq describe-char-unidata-list t)
+                            (nreverse (mapcar 'car char-code-property-alist)))
+                           ((< char 32)
+                            ;; Temporary fix (2016-05-22): The
+                            ;; decomposition item for \n corrupts the
+                            ;; display on a Linux virtual terminal.
+                            ;; (Bug #23594).
+                            (remq 'decomposition describe-char-unidata-list))
+                           (t describe-char-unidata-list)))
               (let ((val (get-char-code-property char elt))
                     description)
                 (when val

@@ -1,17 +1,16 @@
 /* Primitive operations on floating point for GNU Emacs Lisp interpreter.
 
-Copyright (C) 1988, 1993-1994, 1999, 2001-2015 Free Software Foundation,
+Copyright (C) 1988, 1993-1994, 1999, 2001-2017 Free Software Foundation,
 Inc.
 
-Author: Wolfgang Rupprecht
-(according to ack.texi)
+Author: Wolfgang Rupprecht (according to ack.texi)
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -186,8 +185,8 @@ If X is zero, both parts (SGNFCAND and EXP) are zero.  */)
 }
 
 DEFUN ("ldexp", Fldexp, Sldexp, 2, 2, 0,
-       doc: /* Return X * 2**EXP, as a floating point number.
-EXP must be an integer.   */)
+       doc: /* Return SGNFCAND * 2**EXPONENT, as a floating point number.
+EXPONENT must be an integer.   */)
   (Lisp_Object sgnfcand, Lisp_Object exponent)
 {
   CHECK_NUMBER (exponent);
@@ -377,32 +376,22 @@ rounding_driver (Lisp_Object arg, Lisp_Object divisor,
   return arg;
 }
 
-/* With C's /, the result is implementation-defined if either operand
-   is negative, so take care with negative operands in the following
-   integer functions.  */
-
 static EMACS_INT
 ceiling2 (EMACS_INT i1, EMACS_INT i2)
 {
-  return (i2 < 0
-	  ? (i1 < 0  ?  ((-1 - i1) / -i2) + 1  :  - (i1 / -i2))
-	  : (i1 <= 0  ?  - (-i1 / i2)  :  ((i1 - 1) / i2) + 1));
+  return i1 / i2 + ((i1 % i2 != 0) & ((i1 < 0) == (i2 < 0)));
 }
 
 static EMACS_INT
 floor2 (EMACS_INT i1, EMACS_INT i2)
 {
-  return (i2 < 0
-	  ? (i1 <= 0  ?  -i1 / -i2  :  -1 - ((i1 - 1) / -i2))
-	  : (i1 < 0  ?  -1 - ((-1 - i1) / i2)  :  i1 / i2));
+  return i1 / i2 - ((i1 % i2 != 0) & ((i1 < 0) != (i2 < 0)));
 }
 
 static EMACS_INT
 truncate2 (EMACS_INT i1, EMACS_INT i2)
 {
-  return (i2 < 0
-	  ? (i1 < 0  ?  -i1 / -i2  :  - (i1 / -i2))
-	  : (i1 < 0  ?  - (-i1 / i2)  :  i1 / i2));
+  return i1 / i2;
 }
 
 static EMACS_INT
@@ -464,7 +453,7 @@ With optional DIVISOR, return the nearest integer to ARG/DIVISOR.
 
 Rounding a value equidistant between two integers may choose the
 integer closer to zero, or it may prefer an even integer, depending on
-your machine.  For example, \(round 2.5\) can return 3 on some
+your machine.  For example, (round 2.5) can return 3 on some
 systems, but 2 on others.  */)
   (Lisp_Object arg, Lisp_Object divisor)
 {
@@ -501,7 +490,7 @@ fmod_float (Lisp_Object x, Lisp_Object y)
 
 DEFUN ("fceiling", Ffceiling, Sfceiling, 1, 1, 0,
        doc: /* Return the smallest integer no less than ARG, as a float.
-\(Round toward +inf.\)  */)
+\(Round toward +inf.)  */)
   (Lisp_Object arg)
 {
   double d = extract_float (arg);
@@ -511,7 +500,7 @@ DEFUN ("fceiling", Ffceiling, Sfceiling, 1, 1, 0,
 
 DEFUN ("ffloor", Fffloor, Sffloor, 1, 1, 0,
        doc: /* Return the largest integer no greater than ARG, as a float.
-\(Round towards -inf.\)  */)
+\(Round towards -inf.)  */)
   (Lisp_Object arg)
 {
   double d = extract_float (arg);

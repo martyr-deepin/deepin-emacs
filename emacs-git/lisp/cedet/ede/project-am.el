@@ -1,6 +1,6 @@
 ;;; project-am.el --- A project management scheme based on automake files.
 
-;; Copyright (C) 1998-2000, 2003, 2005, 2007-2015 Free Software
+;; Copyright (C) 1998-2000, 2003, 2005, 2007-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
@@ -53,19 +53,19 @@
   )
 
 (defcustom project-am-compile-project-command nil
-  "*Default command used to compile a project."
+  "Default command used to compile a project."
   :group 'project-am
   :type '(choice (const nil) string))
 
 (defcustom project-am-compile-target-command (concat ede-make-command " -k %s")
-  "*Default command used to compile a project."
+  "Default command used to compile a project."
   :group 'project-am
   :type 'string)
 
 (defcustom project-am-debug-target-function 'gdb
-  "*Default Emacs command used to debug a target."
+  "Default Emacs command used to debug a target."
   :group 'project-am
-  :type 'sexp) ; make this be a list some day
+  :type 'function) ; make this be a list some day
 
 (defconst project-am-type-alist
   '(("bin" project-am-program "bin_PROGRAMS" t)
@@ -731,35 +731,35 @@ Strip out duplicates, and recurse on variables."
   (oset this :source (makefile-macro-file-list "EXTRA_DIST")))
 
 (cl-defmethod project-am-macro ((this project-am-objectcode))
-  "Return the default macro to 'edit' for this object type."
+  "Return the default macro to `edit' for this object type."
   (concat (subst-char-in-string ?- ?_ (oref this :name)) "_SOURCES"))
 
 (cl-defmethod project-am-macro ((this project-am-header-noinst))
-  "Return the default macro to 'edit' for this object."
+  "Return the default macro to `edit' for this object."
   "noinst_HEADERS")
 
 (cl-defmethod project-am-macro ((this project-am-header-inst))
-  "Return the default macro to 'edit' for this object."
+  "Return the default macro to `edit' for this object."
   "include_HEADERS")
 
 (cl-defmethod project-am-macro ((this project-am-header-pkg))
-  "Return the default macro to 'edit' for this object."
+  "Return the default macro to `edit' for this object."
   "pkginclude_HEADERS")
 
 (cl-defmethod project-am-macro ((this project-am-header-chk))
-  "Return the default macro to 'edit' for this object."
+  "Return the default macro to `edit' for this object."
   "check_HEADERS")
 
 (cl-defmethod project-am-macro ((this project-am-texinfo))
-  "Return the default macro to 'edit' for this object type."
+  "Return the default macro to `edit' for this object type."
   (concat (file-name-sans-extension (oref this :name)) "_TEXINFOS"))
 
 (cl-defmethod project-am-macro ((this project-am-man))
-  "Return the default macro to 'edit' for this object type."
+  "Return the default macro to `edit' for this object type."
   (oref this :name))
 
 (cl-defmethod project-am-macro ((this project-am-lisp))
-  "Return the default macro to 'edit' for this object."
+  "Return the default macro to `edit' for this object."
   "lisp_LISP")
 
 (defun project-am-buffer-object (amf buffer)

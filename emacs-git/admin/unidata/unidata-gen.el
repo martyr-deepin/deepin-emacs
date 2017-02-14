@@ -1,6 +1,6 @@
 ;; unidata-gen.el -- Create files containing character property data.
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -101,6 +101,7 @@
   (let* ((table (list nil))
 	 (tail table)
 	 (block-names '(("^<CJK Ideograph" . CJK\ IDEOGRAPH)
+                        ("^<Tangut Ideograph" . TANGUT\ IDEOGRAPH)
 			("^<Hangul Syllable" . HANGUL\ SYLLABLE)
 			("^<.*High Surrogate" . HIGH\ SURROGATE)
 			("^<.*Low Surrogate" . LOW\ SURROGATE)
@@ -445,7 +446,7 @@ Property value is a symbol `o' (Open), `c' (Close), or `n' (None)."
 	;; (4) possibly update the switch cases in
 	;;     bidi.c:bidi_get_type and bidi.c:bidi_get_category.
 	(bidi-warning "\
-** Found new bidi-class '%s', please update bidi.c and dispextern.h")
+** Found new bidi-class `%s', please update bidi.c and dispextern.h")
 	tail elt range val val-code idx slot
 	prev-range-data)
     (setq val-list (cons nil (copy-sequence val-list)))
@@ -778,6 +779,8 @@ Property value is a symbol `o' (Open), `c' (Close), or `n' (None)."
 			 (if (= T 0) ""
 			   (aref (aref jamo-name-table 2) (1- T)))))))
 	    ((eq sym 'CJK\ IDEOGRAPH)
+	     (format "%s-%04X" sym char))
+	    ((eq sym 'TANGUT\ IDEOGRAPH)
 	     (format "%s-%04X" sym char))
 	    ((eq sym 'CJK\ COMPATIBILITY\ IDEOGRAPH)
 	     (format "%s-%04X" sym char))
@@ -1302,6 +1305,7 @@ Property value is a symbol `o' (Open), `c' (Close), or `n' (None)."
 	    unidata-text-file (or (pop command-line-args-left)
 				  (expand-file-name "unidata.txt"))))
   (let ((coding-system-for-write 'utf-8-unix)
+        (coding-system-for-read 'utf-8)
 	(charprop-file (expand-file-name "charprop.el" dest-dir))
 	(unidata-dir data-dir))
     (dolist (elt unidata-prop-alist)

@@ -1,6 +1,6 @@
 ;;; hi-lock.el --- minor mode for interactive automatic highlighting  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: David M. Koppelman <koppel@ece.lsu.edu>
 ;; Keywords: faces, minor-mode, matching, display
@@ -332,7 +332,7 @@ which can be called interactively, are:
   (See `font-lock-keywords'.)  They may be edited and re-loaded with \\[hi-lock-find-patterns],
   any valid `font-lock-keywords' form is acceptable.  When a file is
   loaded the patterns are read if `hi-lock-file-patterns-policy' is
-  'ask and the user responds y to the prompt, or if
+  `ask' and the user responds y to the prompt, or if
   `hi-lock-file-patterns-policy' is bound to a function and that
   function returns t.
 
@@ -362,7 +362,7 @@ Hi-lock: end is found.  A mode is excluded if it's in the list
     (setq hi-lock-archaic-interface-message-used t)
     (if hi-lock-archaic-interface-deduce
         (global-hi-lock-mode hi-lock-mode)
-      (warn
+      (warn "%s"
        "Possible archaic use of (hi-lock-mode).
 Use (global-hi-lock-mode 1) in .emacs to enable hi-lock for all buffers,
 use (hi-lock-mode 1) for individual buffers.  For compatibility with Emacs
@@ -727,7 +727,7 @@ with completion and history."
     (font-lock-flush)))
 
 (defun hi-lock-find-patterns ()
-  "Find patterns in current buffer for hi-lock."
+  "Add patterns from the current buffer to the list of hi-lock patterns."
   (interactive)
   (unless (memq major-mode hi-lock-exclude-modes)
     (let ((all-patterns nil)

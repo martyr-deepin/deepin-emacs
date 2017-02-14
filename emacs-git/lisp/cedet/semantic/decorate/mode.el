@@ -1,6 +1,6 @@
 ;;; semantic/decorate/mode.el --- Minor mode for decorating tags
 
-;; Copyright (C) 2000-2005, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2005, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: syntax
@@ -455,7 +455,7 @@ Does not provide overlines for prototypes.")
      (:overline "cyan"))
     (((class color) (background light))
      (:overline "blue")))
-  "*Face used to show long tags in.
+  "Face used to show long tags in.
 Used by decoration style: `semantic-tag-boundary'."
   :group 'semantic-faces)
 
@@ -504,7 +504,7 @@ Used by decoration style: `semantic-tag-boundary'."
      (:background "#200000"))
     (((class color) (background light))
      (:background "#8fffff")))
-  "*Face used to show privately scoped tags in.
+  "Face used to show privately scoped tags in.
 Used by the decoration style: `semantic-decoration-on-private-members'."
   :group 'semantic-faces)
 
@@ -526,7 +526,7 @@ Use a primary decoration."
      (:background "#000020"))
     (((class color) (background light))
      (:background "#fffff8")))
-  "*Face used to show protected scoped tags in.
+  "Face used to show protected scoped tags in.
 Used by the decoration style: `semantic-decoration-on-protected-members'."
   :group 'semantic-faces)
 

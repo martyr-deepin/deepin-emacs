@@ -1,6 +1,6 @@
 ;;; semantic.el --- Semantic buffer evaluator.
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Keywords: syntax tools
@@ -769,8 +769,8 @@ This function returns semantic tags without overlays."
 	       (eq semantic-working-type 'percent)
 	       (progress-reporter-update
 		semantic--progress-reporter
-		(/ (* 100 (semantic-lex-token-start (car stream)))
-		   (point-max))))))
+		(floor (* 100.0 (semantic-lex-token-start (car stream)))
+		       (point-max))))))
     result))
 
 ;;; Parsing Warnings:
@@ -1191,7 +1191,7 @@ This function can be used by `completion-at-point-functions'."
 (defun semantic-analyze-notc-completion-at-point-function ()
   "Return possible analysis completions at point.
 The completions provided are via `semantic-analyze-possible-completions',
-but with the 'no-tc option passed in, which means constraints based
+but with the `no-tc' option passed in, which means constraints based
 on what is being assigned to are ignored.
 This function can be used by `completion-at-point-functions'."
   (when (semantic-active-p)
@@ -1207,7 +1207,7 @@ This function can be used by `completion-at-point-functions'."
 (defun semantic-analyze-nolongprefix-completion-at-point-function ()
   "Return possible analysis completions at point.
 The completions provided are via `semantic-analyze-possible-completions',
-but with the 'no-tc and 'no-longprefix option passed in, which means
+but with the `no-tc' and `no-longprefix' option passed in, which means
 constraints resulting in a long multi-symbol dereference are ignored.
 This function can be used by `completion-at-point-functions'."
   (when (semantic-active-p)

@@ -1,6 +1,6 @@
 ERC NEWS                                                       -*- outline -*-
 
-Copyright (C) 2006-2015 Free Software Foundation, Inc.
+Copyright (C) 2006-2017 Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 * For changes after ERC 5.3, see the main Emacs NEWS file
@@ -1077,7 +1077,7 @@ major changes for implementers, and module writers:
     corresponding hook variables.
 
     The mapping of server commands to hook variables is no longer
-    done via `erc-event-to-hook', but through an #'equal hashtable,
+    done via `erc-event-to-hook', but through an #'equal hash table,
     `erc-server-responses'.  In order to find a hook you do:
 
     (erc-get-hook command)

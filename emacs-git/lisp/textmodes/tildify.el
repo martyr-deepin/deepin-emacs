@@ -1,6 +1,6 @@
 ;;; tildify.el --- adding hard spaces into texts -*- lexical-binding: t -*-
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2017 Free Software Foundation, Inc.
 
 ;; Author:     Milan Zamazal <pdm@zamazal.org>
 ;;             Michal Nazarewicz <mina86@mina86.com>
@@ -54,7 +54,7 @@
 (defgroup tildify nil
   "Add hard spaces or other text fragments to text buffers."
   :version "21.1"
-  :group 'wp)
+  :group 'text)
 
 (defcustom tildify-pattern
   "\\(?:[,:;(][ \t]*[a]\\|\\<[AIKOSUVZikosuvz]\\)\\([ \t]+\\|[ \t]*\n[ \t]*\\)\\(?:\\w\\|[([{\\]\\|<[a-zA-Z]\\)"
@@ -160,7 +160,7 @@ a simple pass through function could be used:
     (setq-local tildify-foreach-region-function
                 (lambda (cb beg end) (funcall cb beg end)))
 or better still:
-    (setq-local tildify-foreach-region-function 'funcall)
+    (setq-local tildify-foreach-region-function \\='funcall)
 See `tildify-foreach-ignore-environments' function for other ways to use the
 variable."
   :version "25.1"
@@ -282,7 +282,7 @@ corresponding text part and can be either:
 
 CALLBACK is a function accepting two arguments -- REG-BEG and REG-END -- that
 will be called for portions of the buffer outside of the environments defined by
-PAIRS regexes.
+PAIRS regexps.
 
 The function will return as soon as CALLBACK returns nil or point goes past END.
 CALLBACK may be called on portions of the buffer outside of [BEG END); in fact
@@ -291,8 +291,8 @@ BEG argument is ignored.
 This function is meant to be used to set `tildify-foreach-region-function'
 variable.  For example, for an XML file one might use:
   (setq-local tildify-foreach-region-function
-    (apply-partially 'tildify-foreach-ignore-environments
-                     '((\"<! *--\" . \"-- *>\") (\"<\" . \">\"))))"
+    (apply-partially \\='tildify-foreach-ignore-environments
+                     \\='((\"<! *--\" . \"-- *>\") (\"<\" . \">\"))))"
   (let ((beg-re (concat "\\(?:" (mapconcat 'car pairs "\\)\\|\\(?:") "\\)"))
         p end-re)
     (save-excursion
@@ -417,7 +417,7 @@ current `case-fold-search' setting."
   "A list of predicate functions for `tildify-space' function."
   :version "25.1"
   :group 'tildify
-  :type '(repeat 'function))
+  :type '(repeat function))
 
 (defcustom tildify-double-space-undos t
   "Weather `tildify-space' should undo hard space when space is typed again."
@@ -431,7 +431,7 @@ current `case-fold-search' setting."
 
 If
  * character before point is a space character,
- * character before that has “w” character syntax (i.e. it's a word
+ * character before that has \"w\" character syntax (i.e. it's a word
    constituent),
  * `tildify-space-pattern' matches when `looking-back' (no more than 10
    characters) from before the space character, and
@@ -479,7 +479,7 @@ which is assumed to be a space character, should be replaced with a hard space."
 
 ;;;###autoload
 (define-minor-mode tildify-mode
-  "Adds electric behaviour to space character.
+  "Adds electric behavior to space character.
 
 When space is inserted into a buffer in a position where hard space is required
 instead (determined by `tildify-space-pattern' and `tildify-space-predicates'),
@@ -507,10 +507,5 @@ variable will be set to the representation."
 ;;; *** Announce ***
 
 (provide 'tildify)
-
-
-;; Local variables:
-;; coding: utf-8
-;; End:
 
 ;;; tildify.el ends here

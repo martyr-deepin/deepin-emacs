@@ -1,6 +1,6 @@
 ;;; minibuffer.el --- Minibuffer completion functions -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Package: emacs
@@ -92,18 +92,21 @@
 ;;; Completion table manipulation
 
 ;; New completion-table operation.
-(defun completion-boundaries (string table pred suffix)
-  "Return the boundaries of the completions returned by TABLE for STRING.
+(defun completion-boundaries (string collection pred suffix)
+  "Return the boundaries of text on which COLLECTION will operate.
 STRING is the string on which completion will be performed.
 SUFFIX is the string after point.
+If COLLECTION is a function, it is called with 3 arguments: STRING,
+PRED, and a cons cell of the form (boundaries . SUFFIX).
+
 The result is of the form (START . END) where START is the position
 in STRING of the beginning of the completion field and END is the position
 in SUFFIX of the end of the completion field.
 E.g. for simple completion tables, the result is always (0 . (length SUFFIX))
 and for file names the result is the positions delimited by
 the closest directory separators."
-  (let ((boundaries (if (functionp table)
-                        (funcall table string pred
+  (let ((boundaries (if (functionp collection)
+                        (funcall collection string pred
                                  (cons 'boundaries suffix)))))
     (if (not (eq (car-safe boundaries) 'boundaries))
         (setq boundaries nil))
@@ -366,13 +369,15 @@ instead of a string, a function that takes the completion and returns the
 
 (defun completion-table-with-predicate (table pred1 strict string pred2 action)
   "Make a completion table equivalent to TABLE but filtered through PRED1.
-PRED1 is a function of one argument which returns non-nil if and only if the
-argument is an element of TABLE which should be considered for completion.
-STRING, PRED2, and ACTION are the usual arguments to completion tables,
-as described in `try-completion', `all-completions', and `test-completion'.
-If STRICT is t, the predicate always applies; if nil it only applies if
-it does not reduce the set of possible completions to nothing.
-Note: TABLE needs to be a proper completion table which obeys predicates."
+PRED1 is a function of one argument which returns non-nil if and
+only if the argument is an element of TABLE which should be
+considered for completion.  STRING, PRED2, and ACTION are the
+usual arguments to completion tables, as described in
+`try-completion', `all-completions', and `test-completion'.  If
+STRICT is non-nil, the predicate always applies; if nil it only
+applies if it does not reduce the set of possible completions to
+nothing.  Note: TABLE needs to be a proper completion table which
+obeys predicates."
   (cond
    ((and (not strict) (eq action 'lambda))
     ;; Ignore pred1 since it doesn't really have to apply anyway.
@@ -687,7 +692,7 @@ for use at QPOS."
 The text is displayed for `minibuffer-message-timeout' seconds,
 or until the next input event arrives, whichever comes first.
 Enclose MESSAGE in [...] if this is not yet the case.
-If ARGS are provided, then pass MESSAGE through `format'."
+If ARGS are provided, then pass MESSAGE through `format-message'."
   (if (not (minibufferp (current-buffer)))
       (progn
         (if args
@@ -702,7 +707,7 @@ If ARGS are provided, then pass MESSAGE through `format'."
                       ;; Make sure we can put-text-property.
                       (copy-sequence message)
                     (concat " [" message "]")))
-    (when args (setq message (apply 'format message args)))
+    (when args (setq message (apply #'format-message message args)))
     (let ((ol (make-overlay (point-max) (point-max) nil t t))
           ;; A quit during sit-for normally only interrupts the sit-for,
           ;; but since minibuffer-message is used at the end of a command,
@@ -828,7 +833,8 @@ styles for specific categories, such as files, buffers, etc."
 
 (defvar completion-category-defaults
   '((buffer (styles . (basic substring)))
-    (unicode-name (styles . (basic substring))))
+    (unicode-name (styles . (basic substring)))
+    (project-file (styles . (basic substring))))
   "Default settings for specific completion categories.
 Each entry has the shape (CATEGORY . ALIST) where ALIST is
 an association list that can specify properties such as:
@@ -1241,16 +1247,12 @@ scroll the window of possible completions."
 (defun minibuffer-force-complete-and-exit ()
   "Complete the minibuffer with first of the matches and exit."
   (interactive)
-  (if (and (eq (minibuffer-prompt-end) (point-max))
-           minibuffer-default)
-      ;; Use the provided default if there's one (bug#17545).
-      (minibuffer-complete-and-exit)
-    (minibuffer-force-complete)
-    (completion--complete-and-exit
-     (minibuffer-prompt-end) (point-max) #'exit-minibuffer
-     ;; If the previous completion completed to an element which fails
-     ;; test-completion, then we shouldn't exit, but that should be rare.
-     (lambda () (minibuffer-message "Incomplete")))))
+  (minibuffer-force-complete)
+  (completion--complete-and-exit
+   (minibuffer-prompt-end) (point-max) #'exit-minibuffer
+   ;; If the previous completion completed to an element which fails
+   ;; test-completion, then we shouldn't exit, but that should be rare.
+   (lambda () (minibuffer-message "Incomplete"))))
 
 (defun minibuffer-force-complete (&optional start end)
   "Complete the minibuffer to an exact match.
@@ -1378,7 +1380,7 @@ appear to be a match."
                      ;; that file.
                      (= (length string) (length compl)))
             (completion--replace beg end compl))))
-    (funcall exit-function))
+      (funcall exit-function))
 
      ((memq minibuffer-completion-confirm '(confirm confirm-after-completion))
       ;; The user is permitted to exit with an input that's rejected
@@ -1395,7 +1397,7 @@ appear to be a match."
 
      (t
       ;; Call do-completion, but ignore errors.
-    (funcall completion-function))))
+      (funcall completion-function))))
 
 (defun completion--try-word-completion (string table predicate point md)
   (let ((comp (completion-try-completion string table predicate point md)))
@@ -1798,7 +1800,7 @@ variables.")
            (if completions "Sole completion" "No completions")))
 
       (let* ((last (last completions))
-             (base-size (cdr last))
+             (base-size (or (cdr last) 0))
              (prefix (unless (zerop base-size) (substring string 0 base-size)))
              (all-md (completion--metadata (buffer-substring-no-properties
                                             start (point))
@@ -1835,7 +1837,7 @@ variables.")
                 'display-buffer-below-selected))
 	    ,(if temp-buffer-resize-mode
 		 '(window-height . resize-temp-buffer-window)
-	       '(window-height . shrink-window-if-larger-than-buffer))
+	       '(window-height . fit-window-to-buffer))
 	    ,(when temp-buffer-resize-mode
 	       '(preserve-size . (nil . t))))
           nil
@@ -1923,7 +1925,8 @@ variables.")
   (exit-minibuffer))
 
 (defvar completion-in-region-functions nil
-  "Wrapper hook around `completion--in-region'.")
+  "Wrapper hook around `completion--in-region'.
+\(See `with-wrapper-hook' for details about wrapper hooks.)")
 (make-obsolete-variable 'completion-in-region-functions
                         'completion-in-region-function "24.4")
 
@@ -1967,8 +1970,9 @@ if there was no valid completion, else t."
 (defun completion--in-region (start end collection &optional predicate)
   "Default function to use for `completion-in-region-function'.
 Its arguments and return value are as specified for `completion-in-region'.
-This respects the wrapper hook `completion-in-region-functions'."
-  (with-wrapper-hook
+Also respects the obsolete wrapper hook `completion-in-region-functions'.
+\(See `with-wrapper-hook' for details about wrapper hooks.)"
+  (subr--with-wrapper-hook-no-warnings
       ;; FIXME: Maybe we should use this hook to provide a "display
       ;; completions" operation as well.
       completion-in-region-functions (start end collection predicate)
@@ -2048,22 +2052,22 @@ This respects the wrapper hook `completion-in-region-functions'."
             minor-mode-map-alist))
 
 (defvar completion-at-point-functions '(tags-completion-at-point-function)
-  "Special hook to find the completion table for the thing at point.
-Each function on this hook is called in turns without any argument and should
-return either nil to mean that it is not applicable at point,
-or a function of no argument to perform completion (discouraged),
-or a list of the form (START END COLLECTION . PROPS) where
+  "Special hook to find the completion table for the entity at point.
+Each function on this hook is called in turn without any argument and
+should return either nil, meaning it is not applicable at point,
+or a function of no arguments to perform completion (discouraged),
+or a list of the form (START END COLLECTION . PROPS), where:
  START and END delimit the entity to complete and should include point,
- COLLECTION is the completion table to use to complete it, and
+ COLLECTION is the completion table to use to complete the entity, and
  PROPS is a property list for additional information.
 Currently supported properties are all the properties that can appear in
 `completion-extra-properties' plus:
  `:predicate'	a predicate that completion candidates need to satisfy.
- `:exclusive'	If `no', means that if the completion table fails to
+ `:exclusive'	value of `no' means that if the completion table fails to
    match the text at point, then instead of reporting a completion
    failure, the completion should try the next completion function.
-As is the case with most hooks, the functions are responsible to preserve
-things like point and current buffer.")
+As is the case with most hooks, the functions are responsible for
+preserving things like point and current buffer.")
 
 (defvar completion--capf-misbehave-funs nil
   "List of functions found on `completion-at-point-functions' that misbehave.
@@ -2247,6 +2251,17 @@ This is only used when the minibuffer area has no active minibuffer.")
   (replace-regexp-in-string "\\$" (lambda (dollar) (concat dollar dollar))
                             str))
 
+(defun minibuffer-maybe-quote-filename (filename)
+  "Protect FILENAME from `substitute-in-file-name', as needed.
+Useful to give the user default values that won't be substituted."
+  (if (and (not (file-name-quoted-p filename))
+           (file-name-absolute-p filename)
+           (string-match-p (if (memq system-type '(windows-nt ms-dos))
+                               "[/\\\\]~" "/~")
+                           (file-local-name filename)))
+      (file-name-quote filename)
+    (minibuffer--double-dollars filename)))
+
 (defun completion--make-envvar-table ()
   (mapcar (lambda (enventry)
             (substring enventry 0 (string-match-p "=" enventry)))
@@ -2416,7 +2431,7 @@ same as `substitute-in-file-name'."
                                    (substitute-in-file-name
                                     (substring qstr 0 (1- qpos)))))
         (setq qpos (1- qpos)))
-      (cons qpos #'minibuffer--double-dollars))))
+      (cons qpos #'minibuffer-maybe-quote-filename))))
 
 (defalias 'completion--file-name-table
   (completion-table-with-quoting #'completion-file-name-table
@@ -2576,7 +2591,7 @@ and `read-file-name-function'."
 (defun read-file-name-default (prompt &optional dir default-filename mustmatch initial predicate)
   "Default method for reading file names.
 See `read-file-name' for the meaning of the arguments."
-  (unless dir (setq dir default-directory))
+  (unless dir (setq dir (or default-directory "~/")))
   (unless (file-name-absolute-p dir) (setq dir (expand-file-name dir)))
   (unless default-filename
     (setq default-filename (if initial (expand-file-name initial dir)
@@ -2592,10 +2607,10 @@ See `read-file-name' for the meaning of the arguments."
   (let ((insdef (cond
                  ((and insert-default-directory (stringp dir))
                   (if initial
-                      (cons (minibuffer--double-dollars (concat dir initial))
-                            (length (minibuffer--double-dollars dir)))
-                    (minibuffer--double-dollars dir)))
-                 (initial (cons (minibuffer--double-dollars initial) 0)))))
+                      (cons (minibuffer-maybe-quote-filename (concat dir initial))
+                            (length (minibuffer-maybe-quote-filename dir)))
+                    (minibuffer-maybe-quote-filename dir)))
+                 (initial (cons (minibuffer-maybe-quote-filename initial) 0)))))
 
     (let ((completion-ignore-case read-file-name-completion-ignore-case)
           (minibuffer-completing-file-name t)
@@ -2689,7 +2704,7 @@ See `read-file-name' for the meaning of the arguments."
             ;; with what we will actually return.  As an exception,
             ;; if that's the same as the second item in
             ;; file-name-history, it's really a repeat (Bug#4657).
-            (let ((val1 (minibuffer--double-dollars val)))
+            (let ((val1 (minibuffer-maybe-quote-filename val)))
               (if history-delete-duplicates
                   (setcdr file-name-history
                           (delete val1 (cdr file-name-history))))
@@ -2699,7 +2714,7 @@ See `read-file-name' for the meaning of the arguments."
           (if add-to-history
               ;; Add the value to the history--but not if it matches
               ;; the last value already there.
-              (let ((val1 (minibuffer--double-dollars val)))
+              (let ((val1 (minibuffer-maybe-quote-filename val)))
                 (unless (and (consp file-name-history)
                              (equal (car file-name-history) val1))
                   (setq file-name-history

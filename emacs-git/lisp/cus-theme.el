@@ -1,6 +1,6 @@
 ;;; cus-theme.el -- custom theme creation user interface
 ;;
-;; Copyright (C) 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Alex Schroeder <alex@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -61,7 +61,8 @@ Do not call this mode function yourself.  It is meant for internal use."
 (defvar custom-theme-insert-face-marker nil)
 
 (defvar custom-theme--listed-faces '(default cursor fixed-pitch
-  variable-pitch escape-glyph minibuffer-prompt highlight region
+  variable-pitch escape-glyph homoglyph
+  minibuffer-prompt highlight region
   shadow secondary-selection trailing-whitespace
   font-lock-builtin-face font-lock-comment-delimiter-face
   font-lock-comment-face font-lock-constant-face
@@ -430,7 +431,7 @@ It includes all variables in list VARS."
       (if (bolp)
 	  (princ " "))
       (princ ")")
-      (unless (looking-at "\n")
+      (when (/= (following-char) ?\n)
 	(princ "\n")))))
 
 (defun custom-theme-write-faces (theme faces)
@@ -462,7 +463,7 @@ It includes all faces in list FACES."
 	      (princ ")")))))
       (if (bolp) (princ " "))
       (princ ")")
-      (unless (looking-at "\n")
+      (when (/= (following-char) ?\n)
 	(princ "\n")))))
 
 
@@ -492,10 +493,10 @@ It includes all faces in list FACES."
 			 '("" "c")))
 	doc)
     (when fn
-      (princ " in `")
+      (princ (substitute-command-keys " in `"))
       (help-insert-xref-button (file-name-nondirectory fn)
 			       'help-theme-def fn)
-      (princ "'"))
+      (princ (substitute-command-keys "'")))
     (princ ".\n")
     (if (custom-theme-p theme)
 	(progn
@@ -517,7 +518,7 @@ It includes all faces in list FACES."
 		 (setq doc (nth 2 sexp)))))))
     (princ "\n\nDocumentation:\n")
     (princ (if (stringp doc)
-	       doc
+	       (substitute-command-keys doc)
 	     "No documentation available.")))
   (princ "\n\nYou can ")
   (help-insert-xref-button "customize" 'help-theme-edit theme)
@@ -587,7 +588,7 @@ Theme files are named *-theme.el in `"))
 		 :follow-link 'mouse-face
 		 :action (lambda (_widget &rest _ignore)
 			   (describe-variable 'custom-theme-load-path)))
-  (widget-insert "'.\n\n")
+  (widget-insert (substitute-command-keys "'.\n\n"))
 
   ;; If the user has made customizations, display a warning and
   ;; provide buttons to disable or convert them.

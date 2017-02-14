@@ -1,6 +1,6 @@
 ;;; opascal.el --- major mode for editing Object Pascal source in Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-1999, 2001-2017 Free Software Foundation, Inc.
 
 ;; Authors: Ray Blaak <blaak@infomatch.com>,
 ;;          Simon South <ssouth@member.fsf.org>
@@ -257,6 +257,7 @@ routine.")
 
 (defvar opascal-mode-syntax-table
   (let ((st (make-syntax-table)))
+    (modify-syntax-entry ?\\ "." st)    ; bug#22224
     ;; Strings.
     (modify-syntax-entry ?\" "\"" st)
     (modify-syntax-entry ?\' "\"" st)
@@ -368,7 +369,7 @@ routine.")
          ;; Report the percentage complete.
          (setq opascal-progress-last-reported-point p)
          (message "%s %s ... %d%%"
-                  desc (buffer-name) (/ (* 100 p) (point-max))))))
+                  desc (buffer-name) (floor (* 100.0 p) (point-max))))))
 
 (defun opascal-next-line-start (&optional from-point)
   ;; Returns the first point of the next line.

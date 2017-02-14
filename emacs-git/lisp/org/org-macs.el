@@ -1,6 +1,6 @@
 ;;; org-macs.el --- Top-level definitions for Org-mode
 
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -45,7 +45,8 @@
       (string (decode-char 'ucs c)))))
 
 (declare-function org-add-props "org-compat" (string plist &rest props))
-(declare-function org-string-match-p "org-compat" (&rest args))
+(declare-function org-string-match-p "org-compat"
+                  (regexp string &optional start))
 
 (defmacro org-with-gensyms (symbols &rest body)
   (declare (debug (sexp body)) (indent 1))
@@ -55,7 +56,7 @@
      ,@body))
 
 (defmacro org-called-interactively-p (&optional kind)
-  (declare (debug (&optional ("quote" symbolp)))) ;Why not just `t'?
+  (declare (debug (&optional ("quote" symbolp)))) ;Why not just t?
   (if (featurep 'xemacs)
       `(interactive-p)
     (if (or (> emacs-major-version 23)
@@ -137,7 +138,7 @@ Otherwise return nil."
 
 ;; FIXME: Slated for removal.  Current Org mode does not support Emacs < 22
 (defmacro org-maybe-intangible (props)
-  "Add '(intangible t) to PROPS if Emacs version is earlier than Emacs 22.
+  "Add (intangible t) to PROPS if Emacs version is earlier than Emacs 22.
 In Emacs 21, invisible text is not avoided by the command loop, so the
 intangible property is needed to make sure point skips this text.
 In Emacs 22, this is not necessary.  The intangible text property has

@@ -1,6 +1,6 @@
 ;;; tvi970.el --- terminal support for the Televideo 970
 
-;; Copyright (C) 1992, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Jim Blandy <jimb@occs.cs.oberlin.edu>
 ;; Keywords: terminals
@@ -105,14 +105,16 @@ With a prefix argument ARG, enable the mode if ARG is positive,
 and disable it otherwise.  If called from Lisp, enable the mode
 if ARG is omitted or nil.
 
-In ``alternate keypad mode'', the keys send distinct escape
+In alternate keypad mode, the keys send distinct escape
 sequences, meaning that they can have their own bindings,
 independent of the normal number keys.
 
-When disabled, the terminal enters ``numeric keypad mode'', in
+When disabled, the terminal enters numeric keypad mode, in
 which the keypad's keys act as ordinary digits."
   :variable (terminal-parameter nil 'tvi970-keypad-numeric)
   (send-string-to-terminal
    (if (terminal-parameter nil 'tvi970-keypad-numeric) "\e=" "\e>")))
+
+(provide 'term/tvi970)
 
 ;;; tvi970.el ends here

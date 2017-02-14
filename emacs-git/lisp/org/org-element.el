@@ -1,6 +1,6 @@
 ;;; org-element.el --- Parser And Applications for Org syntax
 
-;; Copyright (C) 2012-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2017 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -367,8 +367,8 @@ still has an entry since one of its properties (`:title') does.")
 ;; Provide four accessors: `org-element-type', `org-element-property'
 ;; `org-element-contents' and `org-element-restriction'.
 ;;
-;; Setter functions allow to modify elements by side effect.  There is
-;; `org-element-put-property', `org-element-set-contents',
+;; Setter functions allow modification of elements by side effect.
+;; There is `org-element-put-property', `org-element-set-contents',
 ;; `org-element-set-element' and `org-element-adopt-element'.  Note
 ;; that `org-element-set-element' and `org-element-adopt-elements' are
 ;; higher level functions since also update `:parent' property.
@@ -487,7 +487,7 @@ Return parent element."
 ;; cannot contain other greater elements of their own type.
 ;;
 ;; Beside implementing a parser and an interpreter, adding a new
-;; greater element requires to tweak `org-element--current-element'.
+;; greater element requires tweaking `org-element--current-element'.
 ;; Moreover, the newly defined type must be added to both
 ;; `org-element-all-elements' and `org-element-greater-elements'.
 
@@ -4023,8 +4023,8 @@ position of point and CDR is nil."
 ;; `org-element-parse-secondary-string', which parses objects within
 ;; a given string.
 ;;
-;; The (almost) almighty `org-element-map' allows to apply a function
-;; on elements or objects matching some type, and accumulate the
+;; The (almost) almighty `org-element-map' allows applying a function
+;; on elements or objects matching some type, and accumulating the
 ;; resulting values.  In an export situation, it also skips unneeded
 ;; parts of the parse tree.
 
@@ -4141,30 +4141,30 @@ Assuming TREE is a variable containing an Org buffer parse tree,
 the following example will return a flat list of all `src-block'
 and `example-block' elements in it:
 
-  \(org-element-map tree '(example-block src-block) 'identity)
+  (org-element-map tree \\='(example-block src-block) \\='identity)
 
 The following snippet will find the first headline with a level
 of 1 and a \"phone\" tag, and will return its beginning position:
 
-  \(org-element-map tree 'headline
-   \(lambda (hl)
-     \(and (= (org-element-property :level hl) 1)
-          \(member \"phone\" (org-element-property :tags hl))
-          \(org-element-property :begin hl)))
+  (org-element-map tree \\='headline
+   (lambda (hl)
+     (and (= (org-element-property :level hl) 1)
+          (member \"phone\" (org-element-property :tags hl))
+          (org-element-property :begin hl)))
    nil t)
 
 The next example will return a flat list of all `plain-list' type
 elements in TREE that are not a sub-list themselves:
 
-  \(org-element-map tree 'plain-list 'identity nil nil 'plain-list)
+  (org-element-map tree \\='plain-list \\='identity nil nil \\='plain-list)
 
 Eventually, this example will return a flat list of all `bold'
 type objects containing a `latex-snippet' type object, even
 looking into captions:
 
-  \(org-element-map tree 'bold
-   \(lambda (b)
-     \(and (org-element-map b 'latex-snippet 'identity nil t) b))
+  (org-element-map tree \\='bold
+   (lambda (b)
+     (and (org-element-map b \\='latex-snippet \\='identity nil t) b))
    nil nil nil t)"
   ;; Ensure TYPES and NO-RECURSION are a list, even of one element.
   (unless (listp types) (setq types (list types)))

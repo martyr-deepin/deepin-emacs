@@ -1,6 +1,6 @@
 ;;; ls-lisp.el --- emulate insert-directory completely in Emacs Lisp
 
-;; Copyright (C) 1992, 1994, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 1994, 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
 ;; Modified by: Francis J. Wright <F.J.Wright@maths.qmw.ac.uk>
@@ -72,10 +72,10 @@
 
 (defcustom ls-lisp-emulation
   (cond ;; ((eq system-type 'windows-nt) 'MS-Windows)
-	((memq system-type '(hpux usg-unix-v irix berkeley-unix))
+	((memq system-type '(hpux usg-unix-v berkeley-unix))
 	 'UNIX))	; very similar to GNU
   ;; Anything else defaults to nil, meaning GNU.
-  "Platform to emulate: GNU (default), MacOS, MS-Windows, UNIX.
+  "Platform to emulate: GNU (default), macOS, MS-Windows, UNIX.
 Corresponding value is one of: nil, `MacOS', `MS-Windows', `UNIX'.
 Set this to your preferred value; it need not match the actual platform
 you are using.
@@ -144,7 +144,7 @@ value to get similar behavior.
 When this option is non-nil, and `ls-lisp-use-string-collate' is also
 non-nil, the collation order produced on MS-Windows will ignore
 punctuation and symbol characters, which will, for example, place
-\`.foo' near `foo'.  See the documentation of `string-collate-lessp'
+`.foo' near `foo'.  See the documentation of `string-collate-lessp'
 and `w32-collate-ignore-punctuation' for more details.
 
 This option is ignored on platforms other than MS-Windows; to
@@ -222,7 +222,7 @@ current year.  The OLD-TIME-FORMAT is used for older files.  To use ISO
 8601 dates, you could set:
 
 \(setq ls-lisp-format-time-list
-       '(\"%Y-%m-%d %H:%M\"
+       \\='(\"%Y-%m-%d %H:%M\"
          \"%Y-%m-%d      \"))"
   :type '(list (string :tag "Early time format")
 	       (string :tag "Old time format"))
@@ -237,13 +237,13 @@ to fail to line up, e.g. if month names are not all of the same length."
   :type 'boolean
   :group 'ls-lisp)
 
-(defvar ls-lisp-uid-d-fmt "-%d"
+(defvar ls-lisp-uid-d-fmt " %d"
   "Format to display integer UIDs.")
-(defvar ls-lisp-uid-s-fmt "-%s"
+(defvar ls-lisp-uid-s-fmt " %s"
   "Format to display user names.")
-(defvar ls-lisp-gid-d-fmt "-%d"
+(defvar ls-lisp-gid-d-fmt " %d"
   "Format to display integer GIDs.")
-(defvar ls-lisp-gid-s-fmt "-%s"
+(defvar ls-lisp-gid-s-fmt " %s"
   "Format to display user group names.")
 (defvar ls-lisp-filesize-d-fmt "%d"
   "Format to display integer file sizes.")
@@ -348,7 +348,9 @@ SWITCHES is a *list* of characters.  TIME-INDEX is the time index into
 file-attributes according to SWITCHES.  WILDCARD-REGEXP is nil or an *Emacs
 regexp*.  FULL-DIRECTORY-P means file is a directory and SWITCHES does
 not contain `d', so that a full listing is expected."
-  (if (or wildcard-regexp full-directory-p)
+  (if (or (and wildcard-regexp
+               (not (string= "[^~]\\'" wildcard-regexp))) ; Switch -B pseudo-wildcard regexp
+          full-directory-p)
       (let* ((dir (file-name-as-directory file))
 	     (default-directory dir)	; so that file-attributes works
 	     (file-alist
@@ -539,7 +541,7 @@ Responds to the window width as ls should but may not!"
   "Return t if string S1 should sort before string S2.
 Case is significant if `ls-lisp-ignore-case' is nil.
 Uses `string-collate-lessp' if `ls-lisp-use-string-collate' is non-nil,
-\`compare-strings' otherwise.
+`compare-strings' otherwise.
 On GNU/Linux systems, if the locale specifies UTF-8 as the codeset,
 the sorting order will place together file names that differ only
 by punctuation characters, like `.emacs' and `emacs'.  To have a
@@ -669,7 +671,7 @@ SWITCHES is a list of characters.  Default sorting is alphabetic."
 		))))
   ;; Finally reverse file alist if necessary.
   ;; (eq below MUST compare `(not (memq ...))' to force comparison of
-  ;; `t' or `nil', rather than list tails!)
+  ;; t or nil, rather than list tails!)
   (if (eq (eq (not (memq ?U switches))	; unsorted order is reversed
 	      (not (memq ?r switches)))	; reversed sort order requested
 	  ls-lisp-dirs-first)		; already reversed

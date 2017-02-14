@@ -1,6 +1,6 @@
-;;; hideshow.el --- minor mode cmds to selectively display code/comment blocks -*- coding: utf-8 -*-
+;;; hideshow.el --- minor mode cmds to selectively display code/comment blocks
 
-;; Copyright (C) 1994-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2017 Free Software Foundation, Inc.
 
 ;; Author: Thien-Thi Nguyen <ttn@gnu.org>
 ;;      Dan Nicolaescu <dann@ics.uci.edu>
@@ -323,13 +323,13 @@ Hideshow puts a unique overlay on each range of text to be hidden
 in the buffer.  Here is a simple example of how to use this variable:
 
   (defun display-code-line-counts (ov)
-    (when (eq 'code (overlay-get ov 'hs))
-      (overlay-put ov 'display
+    (when (eq \\='code (overlay-get ov \\='hs))
+      (overlay-put ov \\='display
                    (format \"... / %d\"
                            (count-lines (overlay-start ov)
                                         (overlay-end ov))))))
 
-  (setq hs-set-up-overlay 'display-code-line-counts)
+  (setq hs-set-up-overlay \\='display-code-line-counts)
 
 This example shows how to get information from the overlay as well
 as how to set its `display' property.  See `hs-make-overlay' and
@@ -351,6 +351,10 @@ Use the command `hs-minor-mode' to toggle or set this variable.")
     (define-key map "\C-c@\C-\M-s"    'hs-show-all)
     (define-key map "\C-c@\C-l"	      'hs-hide-level)
     (define-key map "\C-c@\C-c"	      'hs-toggle-hiding)
+    (define-key map "\C-c@\C-a"       'hs-show-all)
+    (define-key map "\C-c@\C-t"       'hs-hide-all)
+    (define-key map "\C-c@\C-d"       'hs-hide-block)
+    (define-key map "\C-c@\C-e"       'hs-toggle-hiding)
     (define-key map [(shift mouse-2)] 'hs-mouse-toggle-hiding)
     map)
   "Keymap for hideshow minor mode.")
@@ -439,9 +443,9 @@ See `hs-c-like-adjust-block-beginning' for an example of using this.")
 You can display this in the mode line by adding the symbol `hs-headline'
 to the variable `mode-line-format'.  For example,
 
-  (unless (memq 'hs-headline mode-line-format)
+  (unless (memq \\='hs-headline mode-line-format)
     (setq mode-line-format
-          (append '(\"-\" hs-headline) mode-line-format)))
+          (append \\='(\"-\" hs-headline) mode-line-format)))
 
 Note that `mode-line-format' is buffer-local.")
 
@@ -469,9 +473,9 @@ KIND is either `code' or `comment'.  Optional fourth arg B-OFFSET
 when added to B specifies the actual buffer position where the block
 begins.  Likewise for optional fifth arg E-OFFSET.  If unspecified
 they are taken to be 0 (zero).  The following properties are set
-in the overlay: 'invisible 'hs 'hs-b-offset 'hs-e-offset.  Also,
+in the overlay: `invisible' `hs' `hs-b-offset' `hs-e-offset'.  Also,
 depending on variable `hs-isearch-open', the following properties may
-be present: 'isearch-open-invisible 'isearch-open-invisible-temporary.
+be present: `isearch-open-invisible' `isearch-open-invisible-temporary'.
 If variable `hs-set-up-overlay' is non-nil it should specify a function
 to call with the newly initialized overlay."
   (unless b-offset (setq b-offset 0))
@@ -578,7 +582,7 @@ and then further adjusted to be at the end of the line."
 	  (setq p (line-end-position)))
 	;; `q' is the point at the end of the block
 	(hs-forward-sexp mdata 1)
-	(setq q (if (looking-back hs-block-end-regexp)
+	(setq q (if (looking-back hs-block-end-regexp nil)
 		    (match-beginning 0)
 		  (point)))
         (when (and (< p q) (> (count-lines p q) 1))
@@ -934,7 +938,7 @@ if ARG is omitted or nil.
 
 When hideshow minor mode is on, the menu bar is augmented with hideshow
 commands and the hideshow commands are enabled.
-The value '(hs . t) is added to `buffer-invisibility-spec'.
+The value (hs . t) is added to `buffer-invisibility-spec'.
 
 The main commands are: `hs-hide-all', `hs-show-all', `hs-hide-block',
 `hs-show-block', `hs-hide-level' and `hs-toggle-hiding'.  There is also

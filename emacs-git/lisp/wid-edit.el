@@ -1,6 +1,6 @@
 ;;; wid-edit.el --- Functions for creating and using widgets -*-byte-compile-dynamic: t; lexical-binding:t -*-
 ;;
-;; Copyright (C) 1996-1997, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1997, 1999-2017 Free Software Foundation, Inc.
 ;;
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -102,8 +102,6 @@ This exists as a variable so it can be set locally in certain buffers.")
   "Face used for documentation text."
   :group 'widget-documentation
   :group 'widget-faces)
-(define-obsolete-face-alias 'widget-documentation-face
-  'widget-documentation "22.1")
 
 (defvar widget-button-face 'widget-button
   "Face used for buttons in widgets.
@@ -112,7 +110,6 @@ This exists as a variable so it can be set locally in certain buffers.")
 (defface widget-button '((t (:weight bold)))
   "Face used for widget buttons."
   :group 'widget-faces)
-(define-obsolete-face-alias 'widget-button-face 'widget-button "22.1")
 
 (defcustom widget-mouse-face 'highlight
   "Face used for widget buttons when the mouse is above them."
@@ -135,7 +132,6 @@ This exists as a variable so it can be set locally in certain buffers.")
 			 :slant italic))
   "Face used for editable fields."
   :group 'widget-faces)
-(define-obsolete-face-alias 'widget-field-face 'widget-field "22.1")
 
 (defface widget-single-line-field '((((type tty))
 				     :background "green3"
@@ -150,8 +146,6 @@ This exists as a variable so it can be set locally in certain buffers.")
 				     :slant italic))
   "Face used for editable fields spanning only a single line."
   :group 'widget-faces)
-(define-obsolete-face-alias 'widget-single-line-field-face
-  'widget-single-line-field "22.1")
 
 ;;; This causes display-table to be loaded, and not usefully.
 ;;;(defvar widget-single-line-display-table
@@ -241,7 +235,7 @@ minibuffer."
 	     (while items
 	       (setq choice (pop items))
 	       (when (consp choice)
-                 (let* ((name (car choice))
+                 (let* ((name (substitute-command-keys (car choice)))
                         (function (cdr choice)))
                    (insert (format "%c = %s\n" next-digit name))
                    (define-key map (vector next-digit) function)
@@ -427,8 +421,6 @@ the :notify function can't know the new value.")
   '((t :inherit shadow))
   "Face used for inactive widgets."
   :group 'widget-faces)
-(define-obsolete-face-alias 'widget-inactive-face
-  'widget-inactive "22.1")
 
 (defun widget-specify-inactive (widget from to)
   "Make WIDGET inactive for user modifications."
@@ -905,8 +897,6 @@ Note that such modes will need to require wid-edit.")
      (:weight bold :underline t)))
   "Face used for pressed buttons."
   :group 'widget-faces)
-(define-obsolete-face-alias 'widget-button-pressed-face
-  'widget-button-pressed "22.1")
 
 (defvar widget-button-click-moves-point nil
   "If non-nil, `widget-button-click' moves point to a button after invoking it.
@@ -1267,7 +1257,7 @@ When not inside a field, signal an error."
 
 (defun widget-field-find (pos)
   "Return the field at POS.
-Unlike (get-char-property POS 'field), this works with empty fields too."
+Unlike (get-char-property POS \\='field), this works with empty fields too."
   (let ((fields widget-field-list)
 	field found)
     (while fields
@@ -1503,7 +1493,8 @@ The value of the :type attribute should be an unconverted widget type."
 		  (insert-char ?\s (widget-get widget :indent))))
 	       ((eq escape ?t)
 		(let ((image (widget-get widget :tag-glyph))
-		      (tag (widget-get widget :tag)))
+		      (tag (substitute-command-keys
+			    (widget-get widget :tag))))
 		  (cond (image
 			 (widget-image-insert widget (or tag "image") image))
 			(tag
@@ -1515,7 +1506,7 @@ The value of the :type attribute should be an unconverted widget type."
 		(let ((doc (widget-get widget :doc)))
 		  (when doc
 		    (setq doc-begin (point))
-		    (insert doc)
+		    (insert (substitute-command-keys doc))
 		    (while (eq (preceding-char) ?\n)
 		      (delete-char -1))
 		    (insert ?\n)
@@ -1675,7 +1666,7 @@ as the argument to `documentation-property'."
 		   (cond ((functionp doc-prop)
 			  (funcall doc-prop value))
 			 ((symbolp doc-prop)
-			  (documentation-property value doc-prop)))))))
+			  (documentation-property value doc-prop t)))))))
     (when (and (stringp doc) (> (length doc) 0))
       ;; Remove any redundant `*' in the beginning.
       (when (eq (aref doc 0) ?*)
@@ -1759,7 +1750,7 @@ If END is omitted, it defaults to the length of LIST."
 
 (defun widget-push-button-value-create (widget)
   "Insert text representing the `on' and `off' states."
-  (let* ((tag (or (widget-get widget :tag)
+  (let* ((tag (or (substitute-command-keys (widget-get widget :tag))
 		  (widget-get widget :value)))
 	 (tag-glyph (widget-get widget :tag-glyph))
 	 (text (concat widget-push-button-prefix
@@ -1788,7 +1779,13 @@ If END is omitted, it defaults to the length of LIST."
   "An embedded link."
   :button-prefix 'widget-link-prefix
   :button-suffix 'widget-link-suffix
-  :follow-link 'mouse-face
+  ;; The `follow-link' property should only be used in those contexts where the
+  ;; mouse-1 event normally doesn't follow the link, yet the `link' widget
+  ;; seems to almost always be used in contexts where (down-)mouse-1 is bound
+  ;; to `widget-button-click' and hence the "mouse-1 to mouse-2" remapping is
+  ;; not necessary (and can even be harmful).  So let's not add a :follow-link
+  ;; by default.  See (bug#22434).
+  ;; :follow-link 'mouse-face
   :help-echo "Follow the link."
   :format "%[%t%]")
 
@@ -2167,7 +2164,8 @@ when he invoked the menu."
 (defun widget-toggle-value-create (widget)
   "Insert text representing the `on' and `off' states."
   (let* ((val (widget-value widget))
-	 (text (widget-get widget (if val :on :off)))
+	 (text (substitute-command-keys
+		(widget-get widget (if val :on :off))))
 	 (img (widget-image-find
 	       (widget-get widget (if val :on-glyph :off-glyph)))))
     (widget-image-insert widget (or text "")
@@ -2652,8 +2650,7 @@ Return an alist of (TYPE MATCH)."
   (save-excursion
     (let ((children (widget-get widget :children))
 	  (inhibit-read-only t)
-	  before-change-functions
-	  after-change-functions)
+	  (inhibit-modification-hooks t))
       (cond (before
 	     (goto-char (widget-get before :entry-from)))
 	    (t
@@ -2677,8 +2674,7 @@ Return an alist of (TYPE MATCH)."
     (let ((buttons (copy-sequence (widget-get widget :buttons)))
 	  button
 	  (inhibit-read-only t)
-	  before-change-functions
-	  after-change-functions)
+	  (inhibit-modification-hooks t))
       (while buttons
 	(setq button (car buttons)
 	      buttons (cdr buttons))
@@ -2689,8 +2685,7 @@ Return an alist of (TYPE MATCH)."
     (let ((entry-from (widget-get child :entry-from))
 	  (entry-to (widget-get child :entry-to))
 	  (inhibit-read-only t)
-	  before-change-functions
-	  after-change-functions)
+	  (inhibit-modification-hooks t))
       (widget-delete child)
       (delete-region entry-from entry-to)
       (set-marker entry-from nil)
@@ -2863,7 +2858,7 @@ The following properties have special meanings for this widget:
   :type 'boolean
   :group 'widget-documentation)
 
-(defcustom widget-documentation-link-regexp "`\\([^\n`' ]+\\)'"
+(defcustom widget-documentation-link-regexp "['`‘]\\([^\n `'‘’]+\\)['’]"
   "Regexp for matching potential links in documentation strings.
 The first group should be the link itself."
   :type 'regexp
@@ -2914,7 +2909,7 @@ link for that string."
 
 (defun widget-documentation-string-value-create (widget)
   ;; Insert documentation string.
-  (let ((doc (widget-value widget))
+  (let ((doc (substitute-command-keys (widget-value widget)))
 	(indent (widget-get widget :indent))
 	(shown (widget-get (widget-get widget :parent) :documentation-shown))
 	(start (point)))
@@ -3319,7 +3314,7 @@ It reads a directory name from an editable text field."
 	    ;; Avoid a confusing end-of-file error.
 	    (skip-syntax-forward "\\s-")
 	    (if (eobp)
-		(setq err "Empty sexp -- use `nil'?")
+		(setq err "Empty sexp -- use nil?")
 	      (unless (widget-apply widget :match (read (current-buffer)))
 		(setq err (widget-get widget :type-error))))
 	    ;; Allow whitespace after expression.
@@ -3475,10 +3470,10 @@ themselves.  A list, for example, is defined as either nil, or a cons
 cell whose cdr itself is a list.  The obvious way to translate this
 into a widget type would be
 
-  (define-widget 'my-list 'choice
+  (define-widget \\='my-list \\='choice
     \"A list of sexps.\"
     :tag \"Sexp list\"
-    :args '((const nil) (cons :value (nil) sexp my-list)))
+    :args \\='((const nil) (cons :value (nil) sexp my-list)))
 
 Here we attempt to define my-list as a choice of either the constant
 nil, or a cons-cell containing a sexp and my-lisp.  This will not work
@@ -3487,10 +3482,10 @@ because the `choice' widget does not allow recursion.
 Using the `lazy' widget you can overcome this problem, as in this
 example:
 
-  (define-widget 'sexp-list 'lazy
+  (define-widget \\='sexp-list \\='lazy
     \"A list of sexps.\"
     :tag \"Sexp list\"
-    :type '(choice (const nil) (cons :value (nil) sexp sexp-list)))"
+    :type \\='(choice (const nil) (cons :value (nil) sexp sexp-list)))"
   :format "%{%t%}: %v"
   ;; We don't convert :type because we want to allow recursive
   ;; data structures.  This is slow, so we should not create speed
@@ -3704,9 +3699,9 @@ example:
 	(widget-value-set ',(widget-get widget :parent) color)
 	(let* ((buf (get-buffer "*Colors*"))
 	       (win (get-buffer-window buf 0)))
-	  (bury-buffer buf)
-	  (and win (> (length (window-list)) 1)
-	       (delete-window win)))
+	  (if win
+	      (quit-window nil win)
+	    (bury-buffer buf)))
 	(pop-to-buffer ,(current-buffer))))))
 
 (defun widget-color-sample-face-get (widget)

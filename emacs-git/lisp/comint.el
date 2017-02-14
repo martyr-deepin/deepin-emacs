@@ -1,6 +1,6 @@
 ;;; comint.el --- general command interpreter in a window stuff -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1990, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1988, 1990, 1992-2017 Free Software Foundation, Inc.
 
 ;; Author: Olin Shivers <shivers@cs.cmu.edu>
 ;;	Simon Marshall <simon@gnu.org>
@@ -184,11 +184,11 @@ narrowing in effect.  This way you will be certain that none of
 the remaining prompts will be accidentally messed up.  You may
 wish to put something like the following in your init file:
 
-\(add-hook 'comint-mode-hook
-	  (lambda ()
-	    (define-key comint-mode-map [remap kill-region] 'comint-kill-region)
-	    (define-key comint-mode-map [remap kill-whole-line]
-	      'comint-kill-whole-line)))
+\(add-hook \\='comint-mode-hook
+          (lambda ()
+            (define-key comint-mode-map [remap kill-region] \\='comint-kill-region)
+            (define-key comint-mode-map [remap kill-whole-line]
+              \\='comint-kill-whole-line)))
 
 If you sometimes use comint-mode on text-only terminals or with `emacs -nw',
 you might wish to use another binding for `comint-kill-whole-line'."
@@ -283,6 +283,17 @@ This variable is buffer-local in all Comint buffers."
 		 (const others))
   :group 'comint)
 
+(defcustom comint-move-point-for-matching-input 'after-input
+  "Controls where to place point after matching input.
+\\<comint-mode-map>This influences the commands \\[comint-previous-matching-input-from-input] and \\[comint-next-matching-input-from-input].
+If `after-input', point will be positioned after the input typed
+by the user, but before the rest of the history entry that has
+been inserted.  If `end-of-line', point will be positioned at the
+end of the current logical (not visual) line after insertion."
+  :type '(radio (const :tag "Stay after input" after-input)
+                (const :tag "Move to end of line" end-of-line))
+  :group 'comint)
+
 (defvaralias 'comint-scroll-to-bottom-on-output 'comint-move-point-for-output)
 
 (defcustom comint-scroll-show-maximum-output t
@@ -345,14 +356,16 @@ This variable is buffer-local."
    (regexp-opt
     '("Enter" "enter" "Enter same" "enter same" "Enter the" "enter the"
       "Old" "old" "New" "new" "'s" "login"
-      "Kerberos" "CVS" "UNIX" " SMB" "LDAP" "[sudo]" "Repeat" "Bad") t)
+      "Kerberos" "CVS" "UNIX" " SMB" "LDAP" "PEM"
+      "[sudo]" "Repeat" "Bad" "Retype")
+    t)
    " +\\)"
    "\\(?:" (regexp-opt password-word-equivalents) "\\|Response\\)"
-   "\\(?:\\(?:, try\\)? *again\\| (empty for no passphrase)\\| (again)\\)?\
-\\(?: for [^:：៖]+\\)?[:：៖]\\s *\\'")
+   "\\(?:\\(?:, try\\)? *again\\| (empty for no passphrase)\\| (again)\\)?"
+   "\\(?: for .+\\)?[:：៖]\\s *\\'")
   "Regexp matching prompts for passwords in the inferior process.
 This is used by `comint-watch-for-password-prompt'."
-  :version "24.4"
+  :version "26.1"
   :type 'regexp
   :group 'comint)
 
@@ -1051,7 +1064,7 @@ See also `comint-read-input-ring'."
       (let ((ch (read-event)))
 	(if (eq ch ?\s)
 	    (set-window-configuration conf)
-	  (setq unread-command-events (list ch)))))))
+	  (push ch unread-command-events))))))
 
 
 (defun comint-regexp-arg (prompt)
@@ -1220,7 +1233,8 @@ If N is negative, search forwards for the -Nth following match."
     (comint-previous-matching-input
      (concat "^" (regexp-quote comint-matching-input-from-input-string))
      n)
-    (goto-char opoint)))
+    (when (eq comint-move-point-for-matching-input 'after-input)
+      (goto-char opoint))))
 
 (defun comint-next-matching-input-from-input (n)
   "Search forwards through input history for match for current input.
@@ -1581,7 +1595,7 @@ Go to the history element by the absolute history position HIST-POS."
 (defun comint-within-quotes (beg end)
   "Return t if the number of quotes between BEG and END is odd.
 Quotes are single and double."
-  (let ((countsq (comint-how-many-region "\\(^\\|[^\\\\]\\)\'" beg end))
+  (let ((countsq (comint-how-many-region "\\(^\\|[^\\\\]\\)'" beg end))
 	(countdq (comint-how-many-region "\\(^\\|[^\\\\]\\)\"" beg end)))
     (or (= (mod countsq 2) 1) (= (mod countdq 2) 1))))
 
@@ -2850,7 +2864,7 @@ then the filename reader will only accept a file that exists.
 
 A typical use:
  (interactive (comint-get-source \"Compile file: \" prev-lisp-dir/file
-                                 '(lisp-mode) t))"
+                                 \\='(lisp-mode) t))"
   (let* ((def (comint-source-default prev-dir/file source-modes))
 	 (stringfile (comint-extract-string))
 	 (sfile-p (and stringfile
@@ -3365,7 +3379,8 @@ the completions."
 	    (set-window-configuration comint-dynamic-list-completions-config))
 	(if (eq first ?\s)
 	    (set-window-configuration comint-dynamic-list-completions-config)
-	  (setq unread-command-events (listify-key-sequence key)))))))
+	  (setq unread-command-events
+                (nconc (listify-key-sequence key) unread-command-events)))))))
 
 (defun comint-get-next-from-history ()
   "After fetching a line from input history, this fetches the following line.

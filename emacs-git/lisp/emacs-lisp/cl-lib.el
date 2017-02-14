@@ -1,6 +1,6 @@
 ;;; cl-lib.el --- Common Lisp extensions for Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Version: 1.0
@@ -249,16 +249,6 @@ so that they are registered at compile-time as well as run-time."
       `(progn ,@body))))           ; Avoid loading cl-macs.el for cl-eval-when.
 
 
-;;; Symbols.
-
-(defun cl--random-time ()
-  (let* ((time (copy-sequence (current-time-string))) (i (length time)) (v 0))
-    (while (>= (cl-decf i) 0) (setq v (+ (* v 3) (aref time i))))
-    v))
-
-(defvar cl--gensym-counter (* (logand (cl--random-time) 1023) 100))
-
-
 ;;; Numbers.
 
 (define-obsolete-function-alias 'cl-floatp-safe 'floatp "24.4")
@@ -297,6 +287,11 @@ If true return the decimal value of digit CHAR in RADIX."
       (signal 'args-out-of-range (list 'radix radix '(2 36))))
   (let ((n (aref cl-digit-char-table char)))
     (and n (< n (or radix 10)) n)))
+
+(defun cl--random-time ()
+  (let* ((time (copy-sequence (current-time-string))) (i (length time)) (v 0))
+    (while (>= (cl-decf i) 0) (setq v (+ (* v 3) (aref time i))))
+    v))
 
 (defvar cl--random-state
   (vector 'cl--random-state-tag -1 30 (cl--random-time)))
@@ -418,125 +413,30 @@ Signal an error if X is not a list."
   (declare (gv-setter (lambda (store) `(setcar (nthcdr 9 ,x) ,store))))
   (nth 9 x))
 
-(defun cl-caaar (x)
-  "Return the `car' of the `car' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (car (car x))))
-
-(defun cl-caadr (x)
-  "Return the `car' of the `car' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (car (cdr x))))
-
-(defun cl-cadar (x)
-  "Return the `car' of the `cdr' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (cdr (car x))))
-
-(defun cl-caddr (x)
-  "Return the `car' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (cdr (cdr x))))
-
-(defun cl-cdaar (x)
-  "Return the `cdr' of the `car' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (car (car x))))
-
-(defun cl-cdadr (x)
-  "Return the `cdr' of the `car' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (car (cdr x))))
-
-(defun cl-cddar (x)
-  "Return the `cdr' of the `cdr' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (cdr (car x))))
-
-(defun cl-cdddr (x)
-  "Return the `cdr' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (cdr (cdr x))))
-
-(defun cl-caaaar (x)
-  "Return the `car' of the `car' of the `car' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (car (car (car x)))))
-
-(defun cl-caaadr (x)
-  "Return the `car' of the `car' of the `car' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (car (car (cdr x)))))
-
-(defun cl-caadar (x)
-  "Return the `car' of the `car' of the `cdr' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (car (cdr (car x)))))
-
-(defun cl-caaddr (x)
-  "Return the `car' of the `car' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (car (cdr (cdr x)))))
-
-(defun cl-cadaar (x)
-  "Return the `car' of the `cdr' of the `car' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (cdr (car (car x)))))
-
-(defun cl-cadadr (x)
-  "Return the `car' of the `cdr' of the `car' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (cdr (car (cdr x)))))
-
-(defun cl-caddar (x)
-  "Return the `car' of the `cdr' of the `cdr' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (cdr (cdr (car x)))))
-
-(defun cl-cadddr (x)
-  "Return the `car' of the `cdr' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (car (cdr (cdr (cdr x)))))
-
-(defun cl-cdaaar (x)
-  "Return the `cdr' of the `car' of the `car' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (car (car (car x)))))
-
-(defun cl-cdaadr (x)
-  "Return the `cdr' of the `car' of the `car' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (car (car (cdr x)))))
-
-(defun cl-cdadar (x)
-  "Return the `cdr' of the `car' of the `cdr' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (car (cdr (car x)))))
-
-(defun cl-cdaddr (x)
-  "Return the `cdr' of the `car' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (car (cdr (cdr x)))))
-
-(defun cl-cddaar (x)
-  "Return the `cdr' of the `cdr' of the `car' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (cdr (car (car x)))))
-
-(defun cl-cddadr (x)
-  "Return the `cdr' of the `cdr' of the `car' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (cdr (car (cdr x)))))
-
-(defun cl-cdddar (x)
-  "Return the `cdr' of the `cdr' of the `cdr' of the `car' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (cdr (cdr (car x)))))
-
-(defun cl-cddddr (x)
-  "Return the `cdr' of the `cdr' of the `cdr' of the `cdr' of X."
-  (declare (compiler-macro internal--compiler-macro-cXXr))
-  (cdr (cdr (cdr (cdr x)))))
+(defalias 'cl-caaar 'caaar)
+(defalias 'cl-caadr 'caadr)
+(defalias 'cl-cadar 'cadar)
+(defalias 'cl-caddr 'caddr)
+(defalias 'cl-cdaar 'cdaar)
+(defalias 'cl-cdadr 'cdadr)
+(defalias 'cl-cddar 'cddar)
+(defalias 'cl-cdddr 'cdddr)
+(defalias 'cl-caaaar 'caaaar)
+(defalias 'cl-caaadr 'caaadr)
+(defalias 'cl-caadar 'caadar)
+(defalias 'cl-caaddr 'caaddr)
+(defalias 'cl-cadaar 'cadaar)
+(defalias 'cl-cadadr 'cadadr)
+(defalias 'cl-caddar 'caddar)
+(defalias 'cl-cadddr 'cadddr)
+(defalias 'cl-cdaaar 'cdaaar)
+(defalias 'cl-cdaadr 'cdaadr)
+(defalias 'cl-cdadar 'cdadar)
+(defalias 'cl-cdaddr 'cdaddr)
+(defalias 'cl-cddaar 'cddaar)
+(defalias 'cl-cddadr 'cddadr)
+(defalias 'cl-cdddar 'cdddar)
+(defalias 'cl-cddddr 'cddddr)
 
 ;;(defun last* (x &optional n)
 ;;  "Returns the last link in the list LIST.
@@ -665,10 +565,12 @@ If ALIST is non-nil, the new pairs are prepended to it."
 (gv-define-setter face-underline-p (x f &optional s)
   `(set-face-underline ,f ,x ,s))
 (gv-define-simple-setter file-modes set-file-modes t)
-(gv-define-simple-setter frame-height set-screen-height t)
+(gv-define-setter frame-height (x &optional frame)
+  `(set-frame-height (or ,frame (selected-frame)) ,x))
 (gv-define-simple-setter frame-parameters modify-frame-parameters t)
 (gv-define-simple-setter frame-visible-p cl--set-frame-visible-p)
-(gv-define-simple-setter frame-width set-screen-width t)
+(gv-define-setter frame-width (x &optional frame)
+  `(set-frame-width (or ,frame (selected-frame)) ,x))
 (gv-define-simple-setter getenv setenv t)
 (gv-define-simple-setter get-register set-register)
 (gv-define-simple-setter global-key-binding global-set-key)

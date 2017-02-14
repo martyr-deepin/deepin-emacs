@@ -1,6 +1,6 @@
 ;;; mm-partial.el --- showing message/partial
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: Shenghuo Zhu <zsh@cs.rochester.edu>
 ;; Keywords: message partial
@@ -136,13 +136,6 @@ If NO-DISPLAY is nil, display it. Otherwise, do nothing after replacing."
 	   handle
 	   `(lambda ()
 	      (let (buffer-read-only)
-		(condition-case nil
-		    ;; This is only valid on XEmacs.
-		    (mapcar (lambda (prop)
-			    (remove-specifier
-			     (face-property 'default prop) (current-buffer)))
-			    '(background background-pixmap foreground))
-		  (error nil))
 		(delete-region ,(point-min-marker) ,(point-max-marker))))))))))
 
 (provide 'mm-partial)

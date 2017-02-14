@@ -1,4 +1,4 @@
-# Copyright (C) 1992-1998, 2000-2015 Free Software Foundation, Inc.
+# Copyright (C) 1992-1998, 2000-2017 Free Software Foundation, Inc.
 #
 # This file is part of GNU Emacs.
 #
@@ -72,9 +72,6 @@ end
 
 define xgetsym
   xgetptr $arg0
-  if (!USE_LSB_TAG)
-    set $ptr = ($ptr << GCTYPEBITS)
-  end
   set $ptr = ((struct Lisp_Symbol *) ((char *)lispsym + $ptr))
 end
 
@@ -1218,21 +1215,6 @@ document xwhichsymbols
   maximum number of symbols referencing it to produce.
 end
 
-define xbytecode
-  set $bt = byte_stack_list
-  while $bt
-    xgetptr $bt->byte_string
-    set $ptr = (struct Lisp_String *) $ptr
-    xprintbytestr $ptr
-    printf "\n0x%x => ", $bt->byte_string
-    xwhichsymbols $bt->byte_string 5
-    set $bt = $bt->next
-  end
-end
-document xbytecode
-  Print a backtrace of the byte code stack.
-end
-
 # Show Lisp backtrace after normal backtrace.
 define hookpost-backtrace
   set $bt = backtrace_top ()
@@ -1270,8 +1252,7 @@ break terminate_due_to_signal
 tbreak init_sys_modes
 commands
   silent
-  xgetptr globals.f_Vinitial_window_system
-  xsymname $ptr
+  xsymname globals.f_Vinitial_window_system
   xgetptr $symname
   set $tem = (struct Lisp_String *) $ptr
   set $tem = (char *) $tem->data

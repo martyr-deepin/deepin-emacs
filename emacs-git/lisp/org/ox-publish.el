@@ -1,5 +1,5 @@
 ;;; ox-publish.el --- Publish Related Org Mode Files as a Website
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2017 Free Software Foundation, Inc.
 
 ;; Author: David O'Toole <dto@gnu.org>
 ;; Maintainer: Carsten Dominik <carsten DOT dominik AT gmail DOT com>
@@ -61,7 +61,7 @@ Blocks could hash sha1 values here.")
 
 (defcustom org-publish-project-alist nil
   "Association list to control publishing behavior.
-Each element of the alist is a publishing 'project.'  The CAR of
+Each element of the alist is a publishing “project”.  The CAR of
 each element is a string, uniquely identifying the project.  The
 CDR of each element is in one of the following forms:
 
@@ -69,12 +69,12 @@ CDR of each element is in one of the following forms:
    alternating keys and values, specifying parameters for the
    publishing process.
 
-     \(:property value :property value ... )
+     (:property value :property value ... )
 
 2. A meta-project definition, specifying of a list of
    sub-projects:
 
-     \(:components (\"project-1\" \"project-2\" ...))
+     (:components (\"project-1\" \"project-2\" ...))
 
 When the CDR of an element of org-publish-project-alist is in
 this second form, the elements of the list after `:components'
@@ -662,6 +662,13 @@ See `org-publish-projects'."
 	 filename pub-dir publishing-function base-dir)))
     (unless no-cache (org-publish-write-cache-file))))
 
+(defun org-publish--run-functions (functions)
+  (cond
+   ((null functions) nil)
+   ((functionp functions) (funcall functions))
+   ((consp functions) (mapc #'funcall functions))
+   (t (error "Neither a function nor a list: %S" functions))))
+
 (defun org-publish-projects (projects)
   "Publish all files belonging to the PROJECTS alist.
 If `:auto-sitemap' is set, publish the sitemap too.  If
@@ -690,7 +697,7 @@ If `:auto-sitemap' is set, publish the sitemap too.  If
 	    (theindex
 	     (expand-file-name "theindex.org"
 			       (plist-get project-plist :base-directory))))
-       (when preparation-function (run-hooks 'preparation-function))
+       (org-publish--run-functions preparation-function)
        (if sitemap-p (funcall sitemap-function project sitemap-filename))
        ;; Publish all files from PROJECT excepted "theindex.org".  Its
        ;; publishing will be deferred until "theindex.inc" is
@@ -704,14 +711,14 @@ If `:auto-sitemap' is set, publish the sitemap too.  If
 	 (org-publish-index-generate-theindex
 	  project (plist-get project-plist :base-directory))
 	 (org-publish-file theindex project t))
-       (when completion-function (run-hooks 'completion-function))
+       (org-publish--run-functions completion-function)
        (org-publish-write-cache-file)))
    (org-publish-expand-projects projects)))
 
 (defun org-publish-org-sitemap (project &optional sitemap-filename)
   "Create a sitemap of pages in set defined by PROJECT.
 Optionally set the filename of the sitemap with SITEMAP-FILENAME.
-Default for SITEMAP-FILENAME is 'sitemap.org'."
+Default for SITEMAP-FILENAME is `sitemap.org'."
   (let* ((project-plist (cdr project))
 	 (dir (file-name-as-directory
 	       (plist-get project-plist :base-directory)))
@@ -1078,7 +1085,7 @@ publishing directory."
   "Return numbering for headline matching FUZZY search in FILE.
 
 Return value is a list of numbers, or nil.  This function allows
-to resolve external fuzzy links like:
+the resolution of external fuzzy links like:
 
   [[file.org::*fuzzy][description]]"
   (when org-publish-cache
@@ -1171,9 +1178,13 @@ the file including them will be republished as well."
 	(goto-char (point-min))
 	(while (re-search-forward
 		"^#\\+INCLUDE:[ \t]+\"\\([^\t\n\r\"]*\\)\"[ \t]*.*$" nil t)
-	  (let* ((included-file (expand-file-name (match-string 1))))
-	    (add-to-list 'included-files-ctime
-			 (org-publish-cache-ctime-of-src included-file) t))))
+	  (let* ((included-file (expand-file-name (match-string 1)))
+                 (ctime (org-publish-cache-ctime-of-src included-file)))
+            (unless (member ctime included-files-ctime)
+              ;; FIXME: The original code insisted on appending this ctime
+              ;; to the end of the list, even tho the order seems irrelevant.
+              (setq included-files-ctime
+                    (append included-files-ctime (list ctime)))))))
       (unless visiting (kill-buffer buf)))
     (if (null pstamp) t
       (let ((ctime (org-publish-cache-ctime-of-src filename)))

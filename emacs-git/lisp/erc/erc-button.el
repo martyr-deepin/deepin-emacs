@@ -1,6 +1,6 @@
 ;; erc-button.el --- A way of buttonizing certain things in ERC buffers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-2004, 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2004, 2006-2017 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -165,11 +165,11 @@ REGEXP is the string matching text around the button or a symbol
   entries in lists or alists are considered to be nicks or other
   complete words.  Therefore they are enclosed in \\< and \\>
   while searching.  REGEXP can also be the quoted symbol
-  'nicknames, which matches the nickname of any user on the
+  \\='nicknames, which matches the nickname of any user on the
   current server.
 
 BUTTON is the number of the regexp grouping actually matching the
-  button,  This is ignored if REGEXP is 'nicknames.
+  button,  This is ignored if REGEXP is \\='nicknames.
 
 FORM is a lisp expression which must eval to true for the button to
   be added,
@@ -180,7 +180,7 @@ CALLBACK is the function to call when the user push this button.
 
 PAR is a number of a regexp grouping whose text will be passed to
   CALLBACK.  There can be several PAR arguments.  If REGEXP is
-  'nicknames, these are ignored, and CALLBACK will be called with
+  \\='nicknames, these are ignored, and CALLBACK will be called with
   the nickname matched as the argument."
   :group 'erc-button
   :version "24.1"                       ; remove finger (bug#4443)
@@ -300,14 +300,14 @@ specified by `erc-button-alist'."
     (when (or (eq t form)
               (eval form))
       (goto-char (point-min))
-      (while (forward-word 1)
-        (setq bounds (bounds-of-thing-at-point 'word))
-        (setq word (buffer-substring-no-properties
-                    (car bounds) (cdr bounds)))
-        (when (or (and (erc-server-buffer-p) (erc-get-server-user word))
-                  (and erc-channel-users (erc-get-channel-user word)))
-          (erc-button-add-button (car bounds) (cdr bounds)
-                                 fun t (list word)))))))
+      (while (erc-forward-word)
+        (when (setq bounds (erc-bounds-of-word-at-point))
+          (setq word (buffer-substring-no-properties
+                      (car bounds) (cdr bounds)))
+          (when (or (and (erc-server-buffer-p) (erc-get-server-user word))
+                    (and erc-channel-users (erc-get-channel-user word)))
+            (erc-button-add-button (car bounds) (cdr bounds)
+                                   fun t (list word))))))))
 
 (defun erc-button-add-buttons-1 (regexp entry)
   "Search through the buffer for matches to ENTRY and add buttons."
@@ -390,9 +390,9 @@ REGEXP is the regular expression which matched for this button."
   ;; merged correctly.  If we use overlays, then redisplay will be
   ;; very slow with lots of buttons.  This is why we manually merge
   ;; face text properties.
-  (let ((old (erc-list (get-text-property from 'face)))
+  (let ((old (erc-list (get-text-property from 'font-lock-face)))
         (pos from)
-        (end (next-single-property-change from 'face nil to))
+        (end (next-single-property-change from 'font-lock-face nil to))
         new)
     ;; old is the face at pos, in list form.  It is nil if there is no
     ;; face at pos.  If nil, the new face is FACE.  If not nil, the
@@ -400,10 +400,10 @@ REGEXP is the regular expression which matched for this button."
     ;; where this face changes.
     (while (< pos to)
       (setq new (if old (cons face old) face))
-      (put-text-property pos end 'face new)
+      (put-text-property pos end 'font-lock-face new)
       (setq pos end
-            old (erc-list (get-text-property pos 'face))
-            end (next-single-property-change pos 'face nil to)))))
+            old (erc-list (get-text-property pos 'font-lock-face))
+            end (next-single-property-change pos 'font-lock-face nil to)))))
 
 ;; widget-button-click calls with two args, we ignore the first.
 ;; Since Emacs runs this directly, rather than with
@@ -511,7 +511,8 @@ Examples:
 
 (defun erc-nick-popup (nick)
   (let* ((completion-ignore-case t)
-         (action (completing-read (concat "What action to take on '" nick "'? ")
+         (action (completing-read (format-message
+                                   "What action to take on `%s'? " nick)
                                   erc-nick-popup-alist))
          (code (cdr (assoc action erc-nick-popup-alist))))
     (when code
@@ -537,8 +538,8 @@ and `apropos' for other symbols."
                      (- (car (current-time-zone)))))
          (hours (mod (floor seconds 3600) 24))
          (minutes (mod (round seconds 60) 60)))
-    (message (format "@%s is %d:%02d local time"
-                     beats hours minutes))))
+    (message "@%s is %d:%02d local time"
+             beats hours minutes)))
 
 (provide 'erc-button)
 
@@ -546,4 +547,3 @@ and `apropos' for other symbols."
 ;; Local Variables:
 ;; indent-tabs-mode: nil
 ;; End:
-

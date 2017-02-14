@@ -1,6 +1,6 @@
 ;;; org-compat.el --- Compatibility code for Org-mode
 
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -33,8 +33,6 @@
   (require 'cl))
 
 (require 'org-macs)
-
-(declare-function w32-focus-frame "term/w32-win" (frame))
 
 ;; The following constant is for backward compatibility.  We do not use
 ;; it in org-mode, because the Byte compiler evaluates (featurep 'xemacs)
@@ -241,7 +239,7 @@ ignored in this case."
   (or window (selected-window)))
 
 (defun org-number-sequence (from &optional to inc)
-  "Call `number-sequence or emulate it."
+  "Call `number-sequence' or emulate it."
   (if (fboundp 'number-sequence)
       (number-sequence from to inc)
     (if (or (not to) (= from to))
@@ -411,12 +409,15 @@ Pass BUFFER to the XEmacs version of `move-to-column'."
 	 (when focus-follows-mouse
 	   (set-mouse-position frame (1- (frame-width frame)) 0)))))
 
-(defalias 'org-float-time
-  (if (featurep 'xemacs) 'time-to-seconds 'float-time))
+(define-obsolete-function-alias 'org-float-time 'float-time "26.1")
 
-;; `user-error' is only available from 24.2.50 on
+;; `user-error' is only available from 24.3 on
 (unless (fboundp 'user-error)
   (defalias 'user-error 'error))
+
+;; ‘format-message’ is available only from 25 on
+(unless (fboundp 'format-message)
+  (defalias 'format-message 'format))
 
 (defmacro org-no-popups (&rest body)
   "Suppress popup windows.
@@ -475,9 +476,9 @@ LIMIT."
       (not (null pos)))))
 
 (defalias 'org-font-lock-ensure
-  (if (fboundp 'org-font-lock-ensure)
+  (if (fboundp 'font-lock-ensure)
       #'font-lock-ensure
-    (lambda (_beg _end) (font-lock-fontify-buffer))))
+    (lambda (&optional _beg _end) (font-lock-fontify-buffer))))
 
 (defun org-floor* (x &optional y)
   "Return a list of the floor of X and the fractional part of X.

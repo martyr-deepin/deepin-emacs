@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2015 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2017 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node System Interface
@@ -19,6 +19,7 @@ terminal and the screen.
 * System Environment::  Distinguish the name and kind of system.
 * User Identification:: Finding the name and user id of the user.
 * Time of Day::         Getting the current time.
+* Time Zone Rules::     Rules for time zones and daylight saving time.
 * Time Conversion::     Converting a time from numeric form to
                           calendrical data and vice versa.
 * Time Parsing::        Converting a time from numeric form to text
@@ -37,6 +38,7 @@ terminal and the screen.
 * Desktop Notifications:: Desktop notifications.
 * File Notifications::  File notifications.
 * Dynamic Libraries::   On-demand loading of support libraries.
+* Security Considerations:: Running Emacs in an unfriendly environment.
 @end menu
 
 @node Starting Up
@@ -110,8 +112,8 @@ compiled into the Emacs executable when it was built.
 It runs the normal hook @code{before-init-hook}.
 
 @item
-If appropriate, it creates a graphical frame.  This is not done if the
-options @samp{--batch} or @samp{--daemon} were specified.
+If appropriate, it creates a graphical frame.  This is not done in
+batch (noninteractive) or daemon mode.
 
 @item
 It initializes the initial frame's faces, and sets up the menu bar
@@ -153,9 +155,13 @@ It loads your abbrevs from the file specified by
 option @samp{--batch} was specified.
 
 @item
-If @code{package-enable-at-startup} is non-@code{nil}, it calls the
-function @code{package-initialize} to activate any optional Emacs Lisp
-package that has been installed.  @xref{Packaging Basics}.
+It calls the function @code{package-initialize} to activate any
+optional Emacs Lisp package that has been installed.  @xref{Packaging
+Basics}.  However, Emacs doesn't initialize packages when
+@code{package-enable-at-startup} is @code{nil} or when it's started
+with one of the options @samp{-q}, @samp{-Q}, or @samp{--batch}.  To
+initialize packages in the latter case, @code{package-initialize}
+should be called explicitly (e.g., via the @samp{--funcall} option).
 
 @vindex after-init-time
 @item
@@ -194,16 +200,23 @@ It processes any command-line options that were not handled earlier.
 It now exits if the option @code{--batch} was specified.
 
 @item
+If the @file{*scratch*} buffer exists and is empty, it inserts
+@code{(substitute-command-keys initial-scratch-message)} into that buffer.
+
+@item
 If @code{initial-buffer-choice} is a string, it visits the file (or
 directory) with that name.  If it is a function, it calls the function
-with no arguments and selects the buffer that it returns.
+with no arguments and selects the buffer that it returns.  If one file
+is given as a command line argument, that file is visited and its
+buffer displayed alongside @code{initial-buffer-choice}.  If more than
+one file is given, all of the files are visited and the @file{*Buffer
+List*} buffer is displayed alongside @code{initial-buffer-choice}.
+
 @ignore
 @c I do not think this should be mentioned.  AFAICS it is just a dodge
 @c around inhibit-startup-screen not being settable on a site-wide basis.
 If it is @code{t}, it selects the @file{*scratch*} buffer.
 @end ignore
-If the @file{*scratch*} buffer exists and is empty, it inserts
-@code{initial-scratch-message} into that buffer.
 
 @c To make things nice and confusing, the next three items can be
 @c called from two places.  If displaying a startup screen, they are
@@ -243,10 +256,10 @@ options were specified.
 @c last few bits of command-line-1 are not done in batch mode.
 
 @item
-If the option @code{--daemon} was specified, it calls
-@code{server-start}, and on Posix systems also detaches from the
-controlling terminal.  @xref{Emacs Server,,, emacs, The GNU Emacs
-Manual}.
+If a daemon was requested, it calls @code{server-start}.
+(On Posix systems, if a background daemon was requested, it then
+detaches from the controlling terminal.)  @xref{Emacs
+Server,,, emacs, The GNU Emacs Manual}.
 
 @item
 If started by the X session manager, it calls
@@ -307,6 +320,7 @@ file will not inhibit the message for someone else.
 
 @defopt initial-scratch-message
 This variable, if non-@code{nil}, should be a string, which is
+treated as documentation to be
 inserted into the @file{*scratch*} buffer when Emacs starts up.  If it
 is @code{nil}, the @file{*scratch*} buffer is empty.
 @end defopt
@@ -323,7 +337,10 @@ Do not display a splash screen.
 Run without an interactive terminal.  @xref{Batch Mode}.
 
 @item --daemon
-Do not initialize any display; just start a server in the background.
+@itemx --old-daemon
+@itemx --new-daemon
+Do not initialize any display; just start a server.
+(An ``old-style'' daemon automatically runs in the background.)
 
 @item --no-init-file
 @itemx -q
@@ -717,7 +734,7 @@ another application without doing anything special to Emacs.
 @c have SIGTSTP?
 @cindex SIGTSTP
   Some operating systems (those without @code{SIGTSTP}, or MS-DOS) do
-not support suspension of jobs; on these systems, ``suspension''
+not support suspension of jobs; on these systems, suspension
 actually creates a new shell temporarily as a subprocess of Emacs.
 Then you would exit the shell to return to Emacs.
 
@@ -874,7 +891,7 @@ Berkeley BSD and its variants.
 Cygwin, a Posix layer on top of MS-Windows.
 
 @item darwin
-Darwin (Mac OS X).
+Darwin (macOS).
 
 @item gnu
 The GNU system (using the GNU kernel, which consists of the HURD and Mach).
@@ -890,8 +907,8 @@ A GNU (glibc-based) system with a FreeBSD kernel.
 @item hpux
 Hewlett-Packard HPUX operating system.
 
-@item irix
-Silicon Graphics Irix system.
+@item nacl
+Google Native Client (@acronym{NaCl}) sandboxing system.
 
 @item ms-dos
 Microsoft's DOS@.  Emacs compiled with DJGPP for MS-DOS binds
@@ -902,7 +919,7 @@ AT&T Unix System V.
 
 @item windows-nt
 Microsoft Windows NT, 9X and later.  The value of @code{system-type}
-is always @code{windows-nt}, e.g., even on Windows 7.
+is always @code{windows-nt}, e.g., even on Windows 10.
 
 @end table
 
@@ -923,9 +940,7 @@ string.
 If this variable is non-@code{nil}, it is used instead of
 @code{system-name} for purposes of generating email addresses.  For
 example, it is used when constructing the default value of
-@code{user-mail-address}.  @xref{User Identification}.  (Since this is
-done when Emacs starts up, the value actually used is the one saved when
-Emacs was dumped.  @xref{Building Emacs}.)
+@code{user-mail-address}.  @xref{User Identification}.
 @c FIXME sounds like should probably give this a :set-after and some
 @c custom-initialize-delay voodoo.
 @end defopt
@@ -1005,9 +1020,9 @@ process-environment
 @end group
 @end smallexample
 
-If @code{process-environment} contains ``duplicate'' elements that
+If @code{process-environment} contains multiple elements that
 specify the same environment variable, the first of these elements
-specifies the variable, and the other ``duplicates'' are ignored.
+specifies the variable, and the others are ignored.
 @end defvar
 
 @defvar initial-environment
@@ -1040,8 +1055,9 @@ value is a string, and does not include a directory name.
 @end defvar
 
 @defvar invocation-directory
-This variable holds the directory from which the Emacs executable was
-invoked, or @code{nil} if that directory cannot be determined.
+This variable holds the directory in which the Emacs executable was
+located when it was run, or @code{nil} if that directory cannot be
+determined.
 @end defvar
 
 @defvar installation-directory
@@ -1159,7 +1175,7 @@ user-id or login name that isn't defined, it returns @code{nil}.
   The symbols @code{user-login-name}, @code{user-real-login-name} and
 @code{user-full-name} are variables as well as functions.  The functions
 return the same values that the variables hold.  These variables allow
-you to ``fake out'' Emacs by telling the functions what to return.  The
+you to fake out Emacs by telling the functions what to return.  The
 variables are also useful for constructing frame titles (@pxref{Frame
 Titles}).
 
@@ -1227,7 +1243,7 @@ three-element lists, with omitted @var{microsec} and @var{picosec}
 components defaulting to zero.
 
 @cindex time value
-  Function arguments, e.g., the @var{time-value} argument to
+  Function arguments, e.g., the @var{time} argument to
 @code{current-time-string}, accept a more-general @dfn{time value}
 format, which can be a list of integers as above, or a single number
 for seconds since the epoch, or @code{nil} for the current time.  You
@@ -1237,7 +1253,7 @@ of integers using @code{seconds-to-time}, and into other forms using
 @code{decode-time} and @code{float-time}.  These functions are
 described in the following sections.
 
-@defun current-time-string &optional time-value
+@defun current-time-string &optional time zone
 This function returns the current time and date as a human-readable
 string.  The format does not vary for the initial part of the string,
 which contains the day of week, month, day of month, and time of day
@@ -1248,8 +1264,9 @@ characters from the beginning of the string rather than from the end,
 as the year might not have exactly four digits, and additional
 information may some day be added at the end.
 
-The argument @var{time-value}, if given, specifies a time to format,
-instead of the current time.
+The argument @var{time}, if given, specifies a time to format,
+instead of the current time.  The optional argument @var{zone}
+defaults to the current time zone rule.  @xref{Time Zone Rules}.
 
 @example
 @group
@@ -1268,9 +1285,9 @@ multiple of 1000, but this may change as higher-resolution clocks
 become available.
 @end defun
 
-@defun float-time &optional time-value
+@defun float-time &optional time
 This function returns the current time as a floating-point number of
-seconds since the epoch.  The optional argument @var{time-value}, if
+seconds since the epoch.  The optional argument @var{time}, if
 given, specifies a time to convert instead of the current time.
 
 @emph{Warning}: Since the result is floating point, it may not be
@@ -1279,38 +1296,71 @@ exact.  Do not use this function if precise time stamps are required.
 @code{time-to-seconds} is an alias for this function.
 @end defun
 
-@defun seconds-to-time time-value
+@defun seconds-to-time time
 This function converts a time value to list-of-integer form.
-For example, if @var{time-value} is a number, @code{(time-to-seconds
-(seconds-to-time @var{time-value}))} equals the number unless overflow
+For example, if @var{time} is a number, @code{(time-to-seconds
+(seconds-to-time @var{time}))} equals the number unless overflow
 or rounding errors occur.
 @end defun
 
-@defun current-time-zone &optional time-value
+@node Time Zone Rules
+@section Time Zone Rules
+@cindex time zone rules
+
+@vindex TZ, environment variable
+The default time zone is determined by the @env{TZ} environment
+variable.  @xref{System Environment}.  For example, you can tell Emacs
+to default to Universal Time with @code{(setenv "TZ" "UTC0")}.  If
+@env{TZ} is not in the environment, Emacs uses system wall clock time,
+which is a platform-dependent default time zone.
+
+The set of supported @env{TZ} strings is system-dependent.  GNU and
+many other systems support the tzdata database, e.g.,
+@samp{"America/New_York"} specifies the time zone and daylight saving
+time history for locations near New York City.  GNU and most other
+systems support POSIX-style @env{TZ} strings, e.g.,
+@samp{"EST+5EDT,M4.1.0/2,M10.5.0/2"} specifies the rules used in New
+York from 1987 through 2006.  All systems support the string
+@samp{"UTC0"} meaning Universal Time.
+
+@cindex time zone rule
+Functions that convert to and from local time accept an optional
+@dfn{time zone rule} argument, which specifies the conversion's time
+zone and daylight saving time history.  If the time zone rule is
+omitted or @code{nil}, the conversion uses Emacs's default time zone.
+If it is @code{t}, the conversion uses Universal Time.  If it is
+@code{wall}, the conversion uses the system wall clock time.  If it is
+a string, the conversion uses the time zone rule equivalent to setting
+@env{TZ} to that string.  If it is an integer @var{offset}, the
+conversion uses a fixed time zone with the given offset and a numeric
+abbreviation on POSIX-compatible platforms and an unspecified abbreviation
+on MS-Windows.  If it is a list (@var{offset} @var{abbr}), where
+@var{offset} is an integer number of seconds east of Universal Time
+and @var{abbr} is a string, the conversion uses a fixed time zone with
+the given offset and abbreviation.
+
+@defun current-time-zone &optional time zone
 @cindex time zone, current
 This function returns a list describing the time zone that the user is
 in.
 
-The value has the form @code{(@var{offset} @var{name})}.  Here
-@var{offset} is an integer giving the number of seconds ahead of UTC
+The value has the form @code{(@var{offset} @var{abbr})}.  Here
+@var{offset} is an integer giving the number of seconds ahead of Universal Time
 (east of Greenwich).  A negative value means west of Greenwich.  The
-second element, @var{name}, is a string giving the name of the time
-zone.  Both elements change when daylight saving time begins or ends;
-if the user has specified a time zone that does not use a seasonal time
-adjustment, then the value is constant through time.
+second element, @var{abbr}, is a string giving an abbreviation for the
+time zone, e.g., @samp{"CST"} for China Standard Time or for
+U.S. Central Standard Time.  Both elements can change when daylight
+saving time begins or ends; if the user has specified a time zone that
+does not use a seasonal time adjustment, then the value is constant
+through time.
 
 If the operating system doesn't supply all the information necessary to
 compute the value, the unknown elements of the list are @code{nil}.
 
-The argument @var{time-value}, if given, specifies a time value to
-analyze instead of the current time.
+The argument @var{time}, if given, specifies a time value to
+analyze instead of the current time.  The optional argument @var{zone}
+defaults to the current time zone rule.
 @end defun
-
-The current time zone is determined by the @env{TZ} environment
-variable.  @xref{System Environment}.  For example, you can tell Emacs
-to use universal time with @code{(setenv "TZ" "UTC0")}.  If @env{TZ}
-is not in the environment, Emacs uses a platform-dependent default
-time zone.
 
 @node Time Conversion
 @section Time Conversion
@@ -1322,8 +1372,8 @@ calendrical information and vice versa.
 
   Many 32-bit operating systems are limited to system times containing
 32 bits of information in their seconds component; these systems
-typically handle only the times from 1901-12-13 20:45:52 UTC through
-2038-01-19 03:14:07 UTC@.  However, 64-bit and some 32-bit operating
+typically handle only the times from 1901-12-13 20:45:52 through
+2038-01-19 03:14:07 Universal Time.  However, 64-bit and some 32-bit operating
 systems have larger seconds components, and can represent times far in
 the past or future.
 
@@ -1333,13 +1383,14 @@ count the number of years since the year 1 B.C., and do not skip zero
 as traditional Gregorian years do; for example, the year number
 @minus{}37 represents the Gregorian year 38 B.C@.
 
-@defun decode-time &optional time-value
+@defun decode-time &optional time zone
 This function converts a time value into calendrical information.  If
-you don't specify @var{time-value}, it decodes the current time.  The return
-value is a list of nine elements, as follows:
+you don't specify @var{time}, it decodes the current time, and similarly
+@var{zone} defaults to the current time zone rule.  @xref{Time Zone Rules}.
+The return value is a list of nine elements, as follows:
 
 @example
-(@var{seconds} @var{minutes} @var{hour} @var{day} @var{month} @var{year} @var{dow} @var{dst} @var{zone})
+(@var{seconds} @var{minutes} @var{hour} @var{day} @var{month} @var{year} @var{dow} @var{dst} @var{utcoff})
 @end example
 
 Here is what the elements mean:
@@ -1363,13 +1414,13 @@ The day of week, as an integer between 0 and 6, where 0 stands for
 Sunday.
 @item dst
 @code{t} if daylight saving time is effect, otherwise @code{nil}.
-@item zone
-An integer indicating the time zone, as the number of seconds east of
-Greenwich.
+@item utcoff
+An integer indicating the Universal Time offset in seconds, i.e., the number of
+seconds east of Greenwich.
 @end table
 
 @strong{Common Lisp Note:} Common Lisp has different meanings for
-@var{dow} and @var{zone}.
+@var{dow} and @var{utcoff}.
 @end defun
 
 @defun encode-time seconds minutes hour day month year &optional zone
@@ -1382,12 +1433,8 @@ Year numbers less than 100 are not treated specially.  If you want them
 to stand for years above 1900, or years above 2000, you must alter them
 yourself before you call @code{encode-time}.
 
-The optional argument @var{zone} defaults to the current time zone and
-its daylight saving time rules.  If specified, it can be either a list
-(as you would get from @code{current-time-zone}), a string as in the
-@env{TZ} environment variable, @code{t} for Universal Time, or an
-integer (as you would get from @code{decode-time}).  The specified
-zone is used without any further alteration for daylight saving time.
+The optional argument @var{zone} defaults to the current time zone rule.
+@xref{Time Zone Rules}.
 
 If you pass more than seven arguments to @code{encode-time}, the first
 six are used as @var{seconds} through @var{year}, the last argument is
@@ -1423,11 +1470,12 @@ This function parses the time-string @var{string} and returns the
 corresponding time value.
 @end defun
 
-@defun format-time-string format-string &optional time-value universal
+@defun format-time-string format-string &optional time zone
 
-This function converts @var{time-value} (or the current time, if
-@var{time-value} is omitted) to a string according to
-@var{format-string}.  The argument
+This function converts @var{time} (or the current time, if
+@var{time} is omitted or @code{nil}) to a string according to
+@var{format-string}.  The conversion uses the time zone rule @var{zone}, which
+defaults to the current time zone rule.  @xref{Time Zone Rules}.  The argument
 @var{format-string} may contain @samp{%}-sequences which say to
 substitute parts of the time.  Here is a table of what the
 @samp{%}-sequences mean:
@@ -1452,6 +1500,12 @@ This stands for the day of month, zero-padded.
 This is a synonym for @samp{%m/%d/%y}.
 @item %e
 This stands for the day of month, blank-padded.
+@item %F
+This stands for the ISO 8601 date format, i.e., @samp{"%Y-%m-%d"}.
+@item %g
+This stands for the year corresponding to the ISO week within the century.
+@item %G
+This stands for the year corresponding to the ISO week.
 @item %h
 This is a synonym for @samp{%b}.
 @item %H
@@ -1476,6 +1530,8 @@ fewer digits, use @samp{%3N} for milliseconds, @samp{%6N} for
 microseconds, etc.  Any excess digits are discarded, without rounding.
 @item %p
 This stands for @samp{AM} or @samp{PM}, as appropriate.
+@item %q
+This stands for the calendar quarter (1--4).
 @item %r
 This is a synonym for @samp{%I:%M:%S %p}.
 @item %R
@@ -1486,9 +1542,13 @@ This stands for the seconds (00--59).
 This stands for a tab character.
 @item %T
 This is a synonym for @samp{%H:%M:%S}.
+@item %u
+This stands for the numeric day of week (1--7).  Monday is day 1.
 @item %U
 This stands for the week of the year (01--52), assuming that weeks
 start on Sunday.
+@item %V
+This stands for the week of the year according to ISO 8601.
 @item %w
 This stands for the numeric day of week (0--6).  Sunday is day 0.
 @item %W
@@ -1523,19 +1583,15 @@ because that is how @samp{%S} normally pads to two positions.
 
 The characters @samp{E} and @samp{O} act as modifiers when used between
 @samp{%} and one of the letters in the table above.  @samp{E} specifies
-using the current locale's ``alternative'' version of the date and time.
+using the current locale's alternative version of the date and time.
 In a Japanese locale, for example, @code{%Ex} might yield a date format
 based on the Japanese Emperors' reigns.  @samp{E} is allowed in
 @samp{%Ec}, @samp{%EC}, @samp{%Ex}, @samp{%EX}, @samp{%Ey}, and
 @samp{%EY}.
 
-@samp{O} means to use the current locale's ``alternative''
+@samp{O} means to use the current locale's alternative
 representation of numbers, instead of the ordinary decimal digits.  This
 is allowed with most letters, all the ones that output numbers.
-
-If @var{universal} is non-@code{nil}, that means to describe the time as
-Universal Time; @code{nil} means describe it using what Emacs believes
-is the local time zone (see @code{current-time-zone}).
 
 This function uses the C library function @code{strftime}
 (@pxref{Formatting Calendar Time,,, libc, The GNU C Library Reference
@@ -1647,7 +1703,9 @@ interactively, it prints the duration in the echo area.
 @cindex calendrical computations
 
   These functions perform calendrical computations using time values
-(@pxref{Time of Day}).
+(@pxref{Time of Day}).  A value of @code{nil} for any of their
+time-value arguments stands for the current system time, and a single
+integer number stands for the number of seconds since the epoch.
 
 @defun time-less-p t1 t2
 This returns @code{t} if time value @var{t1} is less than time value
@@ -1656,12 +1714,15 @@ This returns @code{t} if time value @var{t1} is less than time value
 
 @defun time-subtract t1 t2
 This returns the time difference @var{t1} @minus{} @var{t2} between
-two time values, as a time value.
+two time values, as a time value.  If you need the difference in units
+of elapsed seconds, use @code{float-time} (@pxref{Time of Day,
+float-time}) to convert the result into seconds.
 @end defun
 
 @defun time-add t1 t2
 This returns the sum of two time values, as a time value.
-One argument should represent a time difference rather than a point in time.
+One argument should represent a time difference rather than a point in time,
+either as a list or as a single number of elapsed seconds.
 Here is how to add a number of seconds to a time value:
 
 @example
@@ -1684,10 +1745,17 @@ This function returns @code{t} if @var{year} is a leap year.
 
 @node Timers
 @section Timers for Delayed Execution
-@cindex timer
+@cindex timers
 
   You can set up a @dfn{timer} to call a function at a specified
-future time or after a certain length of idleness.
+future time or after a certain length of idleness.  A timer is a
+special object that stores the information about the next invocation
+times and the function to invoke.
+
+@defun timerp object
+This predicate function returns non-@code{nil} of @code{object} is a
+timer.
+@end defun
 
   Emacs cannot run timers at any arbitrary point in a Lisp program; it
 can run them only when Emacs could accept output from a subprocess:
@@ -1822,6 +1890,12 @@ timer---usually, one previously returned by @code{run-at-time} or
 one of these functions; the arrival of the specified time will not
 cause anything special to happen.
 @end defun
+
+@findex timer-list
+The @code{timer-list} command lists all the currently active timers.
+There's only one command available in the buffer displayed: @kbd{c}
+(@code{timer-list-cancel}) that will cancel the timer on the line
+under point.
 
 @node Idle Timers
 @section Idle Timers
@@ -2059,6 +2133,8 @@ than optimal.  To fix the problem, set @code{baud-rate}.
 @defun send-string-to-terminal string &optional terminal
 This function sends @var{string} to @var{terminal} without alteration.
 Control characters in @var{string} have terminal-dependent effects.
+(If you need to display non-ASCII text on the terminal, encode it
+using one of the functions described in @ref{Explicit Encoding}.)
 This function operates only on text terminals.  @var{terminal} may be
 a terminal object, a frame, or @code{nil} for the selected frame's
 terminal.  In batch mode, @var{string} is sent to @code{stdout} when
@@ -2170,7 +2246,7 @@ To define system-specific X11 keysyms, set the variable
 This variable's value should be an alist with one element for each
 system-specific keysym.  Each element has the form @code{(@var{code}
 . @var{symbol})}, where @var{code} is the numeric keysym code (not
-including the ``vendor specific'' bit,
+including the vendor-specific bit,
 @ifnottex
 @minus{}2**28),
 @end ifnottex
@@ -2197,14 +2273,16 @@ The variable is always local to the current terminal, and cannot be
 buffer-local.  @xref{Multiple Terminals}.
 @end defvar
 
-You can specify which keysyms Emacs should use for the Meta, Alt, Hyper, and Super modifiers by setting these variables:
+You can specify which keysyms Emacs should use for the Control, Meta,
+Alt, Hyper, and Super modifiers by setting these variables:
 
-@defvar x-alt-keysym
+@defvar x-ctrl-keysym
+@defvarx x-alt-keysym
 @defvarx x-meta-keysym
 @defvarx x-hyper-keysym
 @defvarx x-super-keysym
-The name of the keysym that should stand for the Alt modifier
-(respectively, for Meta, Hyper, and Super).  For example, here is
+The name of the keysym that should stand for the Control modifier
+(respectively, for Alt, Meta, Hyper, and Super).  For example, here is
 how to swap the Meta and Alt modifiers within Emacs:
 @lisp
 (setq x-alt-keysym 'meta)
@@ -2226,13 +2304,21 @@ loads the library named @var{file}, or @samp{-f @var{function}}, which
 calls @var{function} with no arguments, or @samp{--eval @var{form}}.
 
   Any Lisp program output that would normally go to the echo area,
-either using @code{message}, or using @code{prin1}, etc., with @code{t}
-as the stream, goes instead to Emacs's standard error descriptor when
-in batch mode.  Similarly, input that would normally come from the
-minibuffer is read from the standard input descriptor.
-Thus, Emacs behaves much like a noninteractive
-application program.  (The echo area output that Emacs itself normally
-generates, such as command echoing, is suppressed entirely.)
+either using @code{message}, or using @code{prin1}, etc., with
+@code{t} as the stream, goes instead to Emacs's standard descriptors
+when in batch mode: @code{message} writes to the standard error
+descriptor, while @code{prin1} and other print functions write to the
+standard output.  Similarly, input that would normally come from the
+minibuffer is read from the standard input descriptor.  Thus, Emacs
+behaves much like a noninteractive application program.  (The echo
+area output that Emacs itself normally generates, such as command
+echoing, is suppressed entirely.)
+
+Non-ASCII text written to the standard output or error descriptors is
+by default encoded using @code{locale-coding-system} (@pxref{Locales})
+if it is non-@code{nil}; this can be overridden by binding
+@code{coding-system-for-write} to a coding system of you choice
+(@pxref{Explicit Encoding}).
 
 @defvar noninteractive
 This variable is non-@code{nil} when Emacs is running in batch mode.
@@ -2300,10 +2386,11 @@ Emacs is restarted by the session manager.
 @cindex notifications, on desktop
 
 Emacs is able to send @dfn{notifications} on systems that support the
-freedesktop.org Desktop Notifications Specification.  In order to use
-this functionality, Emacs must have been compiled with D-Bus support,
-and the @code{notifications} library must be loaded.  @xref{Top, ,
-D-Bus,dbus,D-Bus integration in Emacs}.
+freedesktop.org Desktop Notifications Specification and on MS-Windows.
+In order to use this functionality on Posix hosts, Emacs must have
+been compiled with D-Bus support, and the @code{notifications} library
+must be loaded.  @xref{Top, , D-Bus,dbus,D-Bus integration in Emacs}.
+The following function is supported when D-Bus support is available:
 
 @defun notifications-notify &rest params
 This function sends a notification to the desktop via D-Bus,
@@ -2458,7 +2545,7 @@ argument of another @code{notifications-notify} call.  For example:
 @end group
 
 @group
-A message window opens on the desktop.  Press "I agree"
+A message window opens on the desktop.  Press ``I agree''.
      @result{} Message 22, key "Confirm" pressed
         Message 22, closed due to "dismissed"
 @end group
@@ -2536,6 +2623,79 @@ If @var{spec_version} is @code{nil}, the server supports a
 specification prior to @samp{"1.0"}.
 @end defun
 
+@cindex tray notifications, MS-Windows
+When Emacs runs on MS-Windows as a GUI session, it supports a small
+subset of the D-Bus notifications functionality via a native
+primitive:
+
+@defun w32-notification-notify &rest params
+This function displays an MS-Windows tray notification as specified by
+@var{params}.  MS-Windows tray notifications are displayed in a
+balloon from an icon in the notification area of the taskbar.
+
+Value is the integer unique ID of the notification that can be used to
+remove the notification using @code{w32-notification-close}, described
+below.  If the function fails, the return value is @code{nil}.
+
+The arguments @var{params} are specified as keyword/value pairs.  All the
+parameters are optional, but if no parameters are specified, the
+function will do nothing and return @code{nil}.
+
+The following parameters are supported:
+
+@table @code
+@item :icon @var{icon}
+Display @var{icon} in the system tray.  If @var{icon} is a string, it
+should specify a file name from which to load the icon; the specified
+file should be a @file{.ico} Windows icon file.  If @var{icon} is not
+a string, or if this parameter is not specified, the standard Emacs
+icon will be used.
+
+@item :tip @var{tip}
+Use @var{tip} as the tooltip for the notification.  If @var{tip} is a
+string, this is the text of a tooltip that will be shown when the
+mouse pointer hovers over the tray icon added by the notification.  If
+@var{tip} is not a string, or if this parameter is not specified, the
+default tooltip text is @samp{Emacs notification}.  The tooltip text can
+be up to 127 characters long (63 on Windows versions before W2K).
+Longer strings will be truncated.
+
+@item :level @var{level}
+Notification severity level, one of @code{info}, @code{warning}, or
+@code{error}.  If given, the value determines the icon displayed to the
+left of the notification title, but only if the @code{:title} parameter
+(see below) is also specified and is a string.
+
+@item :title @var{title}
+The title of the notification.  If @var{title} is a string, it is
+displayed in a larger font immediately above the body text.  The title
+text can be up to 63 characters long; longer text will be truncated.
+
+@item :body @var{body}
+The body of the notification.  If @var{body} is a string, it specifies
+the text of the notification message.  Use embedded newlines to
+control how the text is broken into lines.  The body text can be up to
+255 characters long, and will be truncated if it's longer.  Unlike
+with D-Bus, the body text should be plain text, with no markup.
+@end table
+
+Note that versions of Windows before W2K support only @code{:icon} and
+@code{:tip}.  The other parameters can be passed, but they will be
+ignored on those old systems.
+
+There can be at most one active notification at any given time.  An
+active notification must be removed by calling
+@code{w32-notification-close} before a new one can be shown.
+@end defun
+
+To remove the notification and its icon from the taskbar, use the
+following function:
+
+@defun w32-notification-close id
+This function removes the tray notification given by its unique
+@var{id}.
+@end defun
+
 @node File Notifications
 @section Notifications on File Changes
 @cindex file notifications
@@ -2543,9 +2703,9 @@ specification prior to @samp{"1.0"}.
 
 Several operating systems support watching of filesystems for changes
 of files.  If configured properly, Emacs links a respective library
-like @file{gfilenotify}, @file{inotify}, or  @file{w32notify}
-statically.  These libraries enable watching of filesystems on the
-local machine.
+like @file{inotify}, @file{kqueue}, @file{gfilenotify}, or
+@file{w32notify} statically.  These libraries enable watching of
+filesystems on the local machine.
 
 It is also possible to watch filesystems on remote machines,
 @pxref{Remote Files,, Remote Files, emacs, The GNU Emacs Manual}
@@ -2603,12 +2763,26 @@ any one of the following symbols:
 @item deleted
 @var{file} was deleted
 @item changed
-@var{file} has changed
+@var{file}'s contents has changed; with @file{w32notify} library,
+reports attribute changes as well
 @item renamed
 @var{file} has been renamed to @var{file1}
 @item attribute-changed
 a @var{file} attribute was changed
+@item stopped
+watching @var{file} has been stopped
 @end table
+
+Note that the @file{w32notify} library does not report
+@code{attribute-changed} events.  When some file's attribute, like
+permissions or modification time, has changed, this library reports a
+@code{changed} event.  Likewise, the @file{kqueue} library does not
+report reliably file attribute changes when watching a directory.
+
+The @code{stopped} event reports, that watching the file has been
+stopped.  This could be because @code{file-notify-rm-watch} was called
+(see below), or because the file being watched was deleted, or due to
+another error reported from the underlying library.
 
 @var{file} and @var{file1} are the name of the file(s) whose event is
 being reported.  For example:
@@ -2642,7 +2816,7 @@ being reported.  For example:
 @group
 (write-region "bla" nil "/tmp/foo")
      @result{} Event (35025468 created "/tmp/.#foo")
-        Event (35025468 changed "/tmp/foo") [2 times]
+        Event (35025468 changed "/tmp/foo")
         Event (35025468 deleted "/tmp/.#foo")
 @end group
 
@@ -2653,10 +2827,8 @@ being reported.  For example:
 @end example
 
 Whether the action @code{renamed} is returned, depends on the used
-watch library.  It can be expected, when a directory is watched, and
-both @var{file} and @var{file1} belong to this directory.  Otherwise,
-the actions @code{deleted} and @code{created} could be returned in a
-random order.
+watch library.  Otherwise, the actions @code{deleted} and
+@code{created} could be returned in a random order.
 
 @example
 @group
@@ -2665,19 +2837,8 @@ random order.
 @end group
 
 @group
-(file-notify-add-watch
-  "/var/tmp" '(change attribute-change) 'my-notify-callback)
-     @result{} 35025504
-@end group
-
-@group
-(rename-file "/tmp/bla" "/var/tmp/bla")
-     @result{} ;; gfilenotify
-        Event (35025468 renamed "/tmp/bla" "/var/tmp/bla")
-
-     @result{} ;; inotify
-        Event (35025504 created "/var/tmp/bla")
-        Event (35025468 deleted "/tmp/bla")
+(delete-file "/tmp/bla")
+     @result{} Event (35025468 deleted "/tmp/bla")
 @end group
 @end example
 @end defun
@@ -2686,6 +2847,73 @@ random order.
 Removes an existing file watch specified by its @var{descriptor}.
 @var{descriptor} should be an object returned by
 @code{file-notify-add-watch}.
+@end defun
+
+@defun file-notify-valid-p descriptor
+Checks a watch specified by its @var{descriptor} for validity.
+@var{descriptor} should be an object returned by
+@code{file-notify-add-watch}.
+
+A watch can become invalid if the file or directory it watches is
+deleted, or if the watcher thread exits abnormally for any other
+reason.  Removing the watch by calling @code{file-notify-rm-watch}
+also makes it invalid.
+
+@example
+@group
+(make-directory "/tmp/foo")
+     @result{} Event (35025468 created "/tmp/foo")
+@end group
+
+@group
+(setq desc
+      (file-notify-add-watch
+        "/tmp/foo" '(change) 'my-notify-callback))
+     @result{} 11359632
+@end group
+
+@group
+(file-notify-valid-p desc)
+     @result{} t
+@end group
+
+@group
+(write-region "bla" nil "/tmp/foo/bla")
+     @result{} Event (11359632 created "/tmp/foo/.#bla")
+        Event (11359632 created "/tmp/foo/bla")
+        Event (11359632 changed "/tmp/foo/bla")
+        Event (11359632 deleted "/tmp/foo/.#bla")
+@end group
+
+@group
+;; Deleting a file in the directory doesn't invalidate the watch.
+(delete-file "/tmp/foo/bla")
+     @result{} Event (11359632 deleted "/tmp/foo/bla")
+@end group
+
+@group
+(write-region "bla" nil "/tmp/foo/bla")
+     @result{} Event (11359632 created "/tmp/foo/.#bla")
+        Event (11359632 created "/tmp/foo/bla")
+        Event (11359632 changed "/tmp/foo/bla")
+        Event (11359632 deleted "/tmp/foo/.#bla")
+@end group
+
+@group
+;; Deleting the directory invalidates the watch.
+;; Events arrive for different watch descriptors.
+(delete-directory "/tmp/foo" 'recursive)
+     @result{} Event (35025468 deleted "/tmp/foo")
+        Event (11359632 deleted "/tmp/foo/bla")
+        Event (11359632 deleted "/tmp/foo")
+        Event (11359632 stopped "/tmp/foo")
+@end group
+
+@group
+(file-notify-valid-p desc)
+     @result{} nil
+@end group
+@end example
 @end defun
 
 @node Dynamic Libraries
@@ -2725,7 +2953,7 @@ of setting this variable for supporting images on MS-Windows:
         (svg "librsvg-2-2.dll")
         (gdk-pixbuf "libgdk_pixbuf-2.0-0.dll")
         (glib "libglib-2.0-0.dll")
-	(gobject "libgobject-2.0-0.dll")))
+        (gobject "libgobject-2.0-0.dll")))
 @end example
 
 Note that image types @code{pbm} and @code{xbm} do not need entries in
@@ -2739,3 +2967,125 @@ be loaded through it.
 This variable is ignored if the given @var{library} is statically
 linked into Emacs.
 @end defvar
+
+@node Security Considerations
+@section Security Considerations
+@cindex security
+@cindex hardening
+
+Like any application, Emacs can be run in a secure environment, where
+the operating system enforces rules about access and the like.  With
+some care, Emacs-based applications can also be part of a security
+perimeter that checks such rules.  Although the default settings for
+Emacs work well for a typical software development environment, they
+may require adjustment in environments containing untrusted users that
+may include attackers.  Here is a compendium of security issues that
+may be helpful if you are developing such applications.  It is by no
+means complete; it is intended to give you an idea of the security
+issues involved, rather than to be a security checklist.
+
+@table @asis
+@item File local variables
+@cindex file local variables
+A file that Emacs visits can contain variable settings that affects
+the buffer visiting that file; @xref{File Local Variables}.
+Similarly, a directory can specify local variable values common to all
+files in that directory; @xref{Directory Local Variables}.  Although
+Emacs takes some effort to protect against misuse of these variables,
+a security hole can be created merely by a package setting
+@code{safe-local-variable} too optimistically, a problem that is all
+too common.  To disable this feature for both files and directories,
+set @code{enable-local-variables} to @code{nil}.
+
+@item Access control
+Although Emacs normally respects access permissions of the underlying
+operating system, in some cases it handles accesses specially.  For
+example, file names can have handlers that treat the files specially,
+with their own access checking.  @xref{Magic File Names}.  Also, a
+buffer can be read-only even if the corresponding file is writeable,
+and vice versa, which can result in messages such as @samp{File passwd
+is write-protected; try to save anyway? (yes or no)}.  @xref{Read Only
+Buffers}.
+
+@item Authentication
+Emacs has several functions that deal with passwords, e.g.,
+@code{read-passwd}.  @xref{Reading a Password}.
+Although these functions do not attempt to
+broadcast passwords to the world, their implementations are not proof
+against determined attackers with access to Emacs internals.  For
+example, even if Elisp code uses @code{clear-string} to scrub a password from
+its memory after using it, remnants of the password may still reside
+in the garbage-collected free list.  @xref{Modifying Strings}.
+
+@item Code injection
+Emacs can send commands to many other applications, and applications
+should take care that strings sent as operands of these commands are
+not misinterpreted as directives.  For example, when using a shell
+command to rename a file @var{a} to @var{b}, do not simply use the
+string @code{mv @var{a} @var{b}}, because either file name might start
+with @samp{-}, or might contain shell metacharacters like @samp{;}.
+Although functions like @code{shell-quote-argument} can help avoid
+this sort of problem, they are not panaceas; for example, on a POSIX
+platform @code{shell-quote-argument} quotes shell metacharacters but
+not leading @samp{-}.  @xref{Shell Arguments}.  Typically it is safer
+to use @code{call-process} than a subshell.  @xref{Synchronous
+Processes}.  And it is safer yet to use builtin Emacs functions; for
+example, use @code{(rename-file "@var{a}" "@var{b}" t)} instead of
+invoking @command{mv}.  @xref{Changing Files}.
+
+@item Coding systems
+Emacs attempts to infer the coding systems of the files and network
+connections it accesses.  @xref{Coding Systems}.
+If Emacs infers incorrectly, or if the other
+parties to the network connection disagree with Emacs's inferences,
+the resulting system could be unreliable.  Also, even when it infers
+correctly, Emacs often can use bytes that other programs cannot.  For
+example, although to Emacs the null byte is just a
+character like any other, many other applications treat it as a string
+terminator and mishandle strings or files containing null bytes.
+
+@item Environment and configuration variables
+POSIX specifies several environment variables that can affect how
+Emacs behaves.  Any environment variable whose name consists entirely
+of uppercase ASCII letters, digits, and the underscore may affect the
+internal behavior of Emacs.  Emacs uses several such variables, e.g.,
+@env{EMACSLOADPATH}.  @xref{Library Search}.  On some platforms some
+environment variables (e.g., @env{PATH}, @env{POSIXLY_CORRECT},
+@env{SHELL}, @env{TMPDIR}) need to have properly-configured values in
+order to get standard behavior for any utility Emacs might invoke.
+Even seemingly-benign variables like @env{TZ} may have security
+implications.  @xref{System Environment}.
+
+Emacs has customization and other variables with similar
+considerations.  For example, if the variable @code{shell-file-name}
+specifies a shell with nonstandard behavior, an Emacs-based
+application may misbehave.
+
+@item Installation
+When Emacs is installed, if the installation directory hierarchy can
+be modified by untrusted users, the application cannot be trusted.
+This applies also to the directory hierarchies of the programs that
+Emacs uses, and of the files that Emacs reads and writes.
+
+@item Network access
+Emacs often accesses the network, and you may want to configure it to
+avoid network accesses that it would normally do.  For example, unless
+you set @code{tramp-mode} to @code{nil}, file names using a certain
+syntax are interpreted as being network files, and are retrieved
+across the network.  @xref{Top, The Tramp Manual,, tramp, The Tramp
+Manual}.
+
+@item Race conditions
+Emacs applications have the same sort of race-condition issues that
+other applications do.  For example, even when
+@code{(file-readable-p "foo.txt")} returns @code{t}, it could be that
+@file{foo.txt} is unreadable because some other program changed the
+file's permissions between the call to @code{file-readable-p} and now.
+@xref{Testing Accessibility}.
+
+@item Resource limits
+When Emacs exhausts memory or other operating system resources, its
+behavior can be less reliable, in that computations that ordinarily
+run to completion may abort back to the top level.  This may cause
+Emacs to neglect operations that it normally would have done.
+@end table

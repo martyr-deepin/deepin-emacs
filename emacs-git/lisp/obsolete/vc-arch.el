@@ -1,6 +1,6 @@
 ;;; vc-arch.el --- VC backend for the Arch version-control system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
 
 ;; Author:      FSF (see vc.el for full credits)
 ;; Maintainer:  Stefan Monnier <monnier@gnu.org>
@@ -315,7 +315,7 @@ Only the value `maybe' can be trusted :-(."
 (declare-function vc-exec-after "vc-dispatcher" (code))
 
 (defun vc-arch-dir-status-files (dir _files callback)
-  "Run 'tla inventory' for DIR and pass results to CALLBACK.
+  "Run `tla inventory' for DIR and pass results to CALLBACK.
 CALLBACK expects (ENTRIES &optional MORE-TO-COME); see
 `vc-dir-refresh'."
   (let ((default-directory dir))
@@ -397,7 +397,7 @@ CALLBACK expects (ENTRIES &optional MORE-TO-COME); see
 	    (pcase (vc-state file)
 	      ((or `up-to-date `needs-update) ?-)
 	      (`added ?@)
-	      (t ?:))
+	      (_ ?:))
 	    rev)))
 
 (defun vc-arch-diff3-rej-p (rej)

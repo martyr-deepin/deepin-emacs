@@ -1,6 +1,6 @@
 ;;; gnus-dup.el --- suppression of duplicate articles in Gnus
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -39,19 +39,19 @@
   :group 'gnus)
 
 (defcustom gnus-save-duplicate-list nil
-  "*If non-nil, save the duplicate list when shutting down Gnus.
+  "If non-nil, save the duplicate list when shutting down Gnus.
 If nil, duplicate suppression will only work on duplicates
 seen in the same session."
   :group 'gnus-duplicate
   :type 'boolean)
 
 (defcustom gnus-duplicate-list-length 10000
-  "*The number of Message-IDs to keep in the duplicate suppression list."
+  "The number of Message-IDs to keep in the duplicate suppression list."
   :group 'gnus-duplicate
   :type 'integer)
 
 (defcustom gnus-duplicate-file (nnheader-concat gnus-directory "suppression")
-  "*The name of the file to store the duplicate suppression list."
+  "The name of the file to store the duplicate suppression list."
   :group 'gnus-duplicate
   :type 'file)
 

@@ -1,6 +1,6 @@
 ;;; semantic/senator.el --- SEmantic NAvigaTOR
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2017 Free Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
 ;; Maintainer: emacs-devel@gnu.org
@@ -507,7 +507,7 @@ filters in `senator-search-tag-filter-functions' remain active."
 (define-overloadable-function semantic-up-reference (tag)
   "Return a tag that is referred to by TAG.
 A \"reference\" could be any interesting feature of TAG.
-In C++, a function may have a 'parent' which is non-local.
+In C++, a function may have a `parent' which is non-local.
 If that parent which is only a reference in the function tag
 is found, we can jump to it.
 Some tags such as includes have other reference features.")
@@ -516,7 +516,7 @@ Some tags such as includes have other reference features.")
 (defun senator-go-to-up-reference (&optional tag)
   "Move up one reference from the current TAG.
 A \"reference\" could be any interesting feature of TAG.
-In C++, a function may have a 'parent' which is non-local.
+In C++, a function may have a `parent' which is non-local.
 If that parent which is only a reference in the function tag
 is found, we can jump to it.
 Some tags such as includes have other reference features."
@@ -803,7 +803,7 @@ if available."
   (setq isearch-adjusted t)
   (isearch-update))
 
-;; Recent versions of GNU Emacs allow to override the isearch search
+;; Recent versions of GNU Emacs allow overriding the isearch search
 ;; function for special needs, and avoid to advice the built-in search
 ;; function :-)
 (defun senator-isearch-search-fun ()
@@ -813,7 +813,7 @@ Use a senator search function when semantic isearch mode is enabled."
    (concat (if senator-isearch-semantic-mode
                "senator-"
              "")
-           (cond (isearch-word "word-")
+           (cond (isearch-regexp-function "word-")
                  (isearch-regexp "re-")
                  (t ""))
            "search-"

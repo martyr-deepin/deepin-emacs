@@ -1,7 +1,7 @@
 /* The lwlib interface to Athena widgets.
 
 Copyright (C) 1993 Chuck Thompson <cthomp@cs.uiuc.edu>
-Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 1994, 2001-2017 Free Software Foundation, Inc.
 
 This file is part of the Lucid Widget Library.
 
@@ -21,6 +21,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <config.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <setjmp.h>
 
 #include <lisp.h>

@@ -1,6 +1,6 @@
 ;;; ob-scheme.el --- org-babel functions for Scheme
 
-;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2017 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	    Michael Gauland
@@ -45,10 +45,11 @@
 (defvar geiser-default-implementation) ; Defined in geiser-impl.el
 (defvar geiser-active-implementations) ; Defined in geiser-impl.el
 
-(declare-function run-geiser "geiser-repl" (impl))
-(declare-function geiser-mode "geiser-mode" ())
-(declare-function geiser-eval-region "geiser-mode" (start end &optional and-go raw nomsg))
-(declare-function geiser-repl-exit "geiser-repl" (&optional arg))
+(declare-function run-geiser "ext:geiser-repl" (impl))
+(declare-function geiser-mode "ext:geiser-mode" ())
+(declare-function geiser-eval-region "ext:geiser-mode"
+                  (start end &optional and-go raw nomsg))
+(declare-function geiser-repl-exit "ext:geiser-repl" (&optional arg))
 
 (defvar org-babel-default-header-args:scheme '()
   "Default header arguments for scheme code blocks.")
@@ -109,7 +110,7 @@ For a named session, the buffer name will be the session name.
 
 If the session is unnamed (nil), generate a name.
 
-If the session is 'none', use nil for the session name, and
+If the session is `none', use nil for the session name, and
 org-babel-scheme-execute-with-geiser will use a temporary session."
   (let ((result
 	 (cond ((not name)

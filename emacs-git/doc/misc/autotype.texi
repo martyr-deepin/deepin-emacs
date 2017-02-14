@@ -11,7 +11,7 @@
 @c  @cindex autotypist
 
 @copying
-Copyright @copyright{} 1994--1995, 1999, 2001--2015
+Copyright @copyright{} 1994--1995, 1999, 2001--2017
 Free Software Foundation, Inc.
 
 @quotation
@@ -200,7 +200,7 @@ the output from @kbd{M-x list-abbrevs} to make it look like this:
 
 @example
 (c-mode-abbrev-table)
-"if"           0    ""         c-if
+"ifst"           0    ""         c-if
 @end example
 
 @noindent
@@ -517,12 +517,6 @@ is only done with @kbd{M-x executable-set-magic}.  When this is
 called as a function, such as when Emacs puts a buffer in Shell script
 mode.  Otherwise you are always queried.
 
-@findex executable-self-display
-  @kbd{M-x executable-self-display} adds a magic number to the buffer, which
-will turn it into a self displaying text file, when called as a Un*x command.
-The ``interpreter'' used is @code{executable-self-display} with argument
-@samp{+2}.
-
 @node Timestamps
 @chapter Maintaining Timestamps in Modified Files
 @cindex timestamps
@@ -537,15 +531,17 @@ then @code{time-stamp} is conveniently listed as an option in the
 customization buffer.
 
 @vindex time-stamp-active
+@findex time-stamp-toggle-active
 @vindex time-stamp-format
-@vindex time-stamp-start
+@vindex time-stamp-time-zone
 The time stamp is updated only if the customizable variable
 @code{time-stamp-active} is on, which it is by default; the command
 @code{time-stamp-toggle-active} can be used to toggle it.  The format of
-the time stamp is set by the customizable variable
-@code{time-stamp-format}.
+the time stamp is set by the customizable variables
+@code{time-stamp-format} and @code{time-stamp-time-zone}.
 
 @vindex time-stamp-line-limit
+@vindex time-stamp-start
 @vindex time-stamp-end
 @vindex time-stamp-count
 @vindex time-stamp-inserts-lines

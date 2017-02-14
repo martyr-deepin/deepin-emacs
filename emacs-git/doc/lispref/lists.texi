@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2015 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2017 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Lists
@@ -41,7 +41,7 @@ pronounced ``could-er''.
   We say that ``the @sc{car} of this cons cell is'' whatever object
 its @sc{car} slot currently holds, and likewise for the @sc{cdr}.
 
-  A list is a series of cons cells ``chained together'', so that each
+  A list is a series of cons cells chained together, so that each
 cell refers to the next one.  There is one cons cell for each element
 of the list.  By convention, the @sc{car}s of the cons cells hold the
 elements of the list, and the @sc{cdr}s are used to chain the list
@@ -361,6 +361,39 @@ This is the same as @code{(cdr (car @var{cons-cell}))}.
 This is the same as @code{(cdr (cdr @var{cons-cell}))}
 or @code{(nthcdr 2 @var{cons-cell})}.
 @end defun
+
+@findex caaar
+@findex caadr
+@findex cadar
+@findex caddr
+@findex cdaar
+@findex cdadr
+@findex cddar
+@findex cdddr
+@findex caaaar
+@findex caaadr
+@findex caadar
+@findex caaddr
+@findex cadaar
+@findex cadadr
+@findex caddar
+@findex cadddr
+@findex cdaaar
+@findex cdaadr
+@findex cdadar
+@findex cdaddr
+@findex cddaar
+@findex cddadr
+@findex cdddar
+@findex cddddr
+In addition to the above, 24 additional compositions of @code{car} and
+@code{cdr} are defined as @code{c@var{xxx}r} and @code{c@var{xxxx}r},
+where each @code{@var{x}} is either @code{a} or @code{d}.  @code{cadr},
+@code{caddr}, and @code{cadddr} pick out the second, third or fourth
+elements of a list, respectively.  @file{cl-lib} provides the same
+under the names @code{cl-second}, @code{cl-third}, and
+@code{cl-fourth}.  @xref{List Functions,,, cl, Common Lisp
+Extensions}.
 
 @defun butlast x &optional n
 This function returns the list @var{x} with the last element,
@@ -799,7 +832,7 @@ foo                       ;; @r{@code{foo} was changed.}
 @cindex destructive list operations
 
   You can modify the @sc{car} and @sc{cdr} contents of a cons cell with the
-primitives @code{setcar} and @code{setcdr}.  We call these ``destructive''
+primitives @code{setcar} and @code{setcdr}.  These are destructive
 operations because they change existing list structure.
 
 @cindex CL note---@code{rplaca} vs @code{setcar}
@@ -1035,9 +1068,9 @@ x1
 @cindex reordering, of elements in lists
 @cindex modification of lists
 
-  Here are some functions that rearrange lists ``destructively'' by
-modifying the @sc{cdr}s of their component cons cells.  We call these
-functions ``destructive'' because they chew up the original lists passed
+  Here are some functions that rearrange lists destructively by
+modifying the @sc{cdr}s of their component cons cells.  These functions
+are destructive because they chew up the original lists passed
 to them as arguments, relinking their cons cells to form a new list that
 is the returned value.
 
@@ -1522,7 +1555,7 @@ a @sc{cdr} @code{equal} to @var{value}.
 
 @code{rassoc} is like @code{assoc} except that it compares the @sc{cdr} of
 each @var{alist} association instead of the @sc{car}.  You can think of
-this as ``reverse @code{assoc}'', finding the key for a given value.
+this as reverse @code{assoc}, finding the key for a given value.
 @end defun
 
 @defun assq key alist
@@ -1556,6 +1589,18 @@ keys may not be symbols:
 @end smallexample
 @end defun
 
+@defun alist-get key alist &optional default remove
+This function is like @code{assq}, but instead of returning the entire
+association for @var{key} in @var{alist},
+@w{@code{(@var{key} . @var{value})}}, it returns just the @var{value}.
+If @var{key} is not found in @var{alist}, it returns @var{default}.
+
+This is a generalized variable (@pxref{Generalized Variables}) that
+can be used to change a value with @code{setf}.  When using it to set
+a value, optional argument @var{remove} non-@code{nil} means to remove
+@var{key} from @var{alist} if the new value is @code{eql} to @var{default}.
+@end defun
+
 @defun rassq value alist
 This function returns the first association with value @var{value} in
 @var{alist}.  It returns @code{nil} if no association in @var{alist} has
@@ -1563,7 +1608,7 @@ a @sc{cdr} @code{eq} to @var{value}.
 
 @code{rassq} is like @code{assq} except that it compares the @sc{cdr} of
 each @var{alist} association instead of the @sc{car}.  You can think of
-this as ``reverse @code{assq}'', finding the key for a given value.
+this as reverse @code{assq}, finding the key for a given value.
 
 For example:
 

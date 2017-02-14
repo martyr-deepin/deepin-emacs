@@ -1,6 +1,6 @@
 ;;; nnml.el --- mail spool access for Gnus
 
-;; Copyright (C) 1995-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-2017 Free Software Foundation, Inc.
 
 ;; Authors: Didier Verna <didier@xemacs.org> (adding compaction)
 ;;	Simon Josefsson <simon@josefsson.org>
@@ -128,13 +128,13 @@ non-nil.")
   "Return a decoded group name of GROUP on SERVER-OR-METHOD."
   (if nnmail-group-names-not-encoded-p
       group
-    (mm-decode-coding-string
+    (decode-coding-string
      group
      (nnml-group-name-charset group server-or-method))))
 
 (defun nnml-encoded-group-name (group &optional server-or-method)
   "Return an encoded group name of GROUP on SERVER-OR-METHOD."
-  (mm-encode-coding-string
+  (encode-coding-string
    group
    (nnml-group-name-charset group server-or-method)))
 
@@ -178,7 +178,7 @@ non-nil.")
 		   (> number nnmail-large-newsgroup)
 		   (zerop (% count 20))
 		   (nnheader-message 6 "nnml: Receiving headers... %d%%"
-				     (/ (* count 100) number))))
+				     (floor (* count 100.0) number))))
 
 	    (and (numberp nnmail-large-newsgroup)
 		 (> number nnmail-large-newsgroup)
@@ -271,7 +271,15 @@ non-nil.")
 (deffoo nnml-request-scan (&optional group server)
   (setq nnml-article-file-alist nil)
   (nnml-possibly-change-directory group server)
-  (nnmail-get-new-mail 'nnml 'nnml-save-incremental-nov nnml-directory group))
+  (cond
+   (group
+    (nnmail-get-new-mail 'nnml 'nnml-save-incremental-nov nnml-directory group))
+   ((nnmail-get-new-mail-per-group)
+    (nnml-request-list)
+    (dolist (entry nnml-group-alist)
+      (nnml-request-scan (car entry) server)))
+   (t
+    (nnmail-get-new-mail 'nnml 'nnml-save-incremental-nov nnml-directory nil))))
 
 (deffoo nnml-close-group (group &optional server)
   (setq nnml-article-file-alist nil)
@@ -1069,8 +1077,7 @@ Use the nov database for the current group if available."
 		;; 1/ Move the article to a new file:
 		(let* ((oldfile (nnml-article-to-file old-number))
 		       (newfile
-			(gnus-replace-in-string
-			 oldfile
+			(replace-regexp-in-string
 			 ;; nnml-use-compressed-files might be any string, but
 			 ;; probably it's sufficient to take into account only
 			 ;; "\\.[a-z0-9]+".  Note that we can't only use the
@@ -1079,7 +1086,8 @@ Use the nov database for the current group if available."
 			 ;; value.
 			 (concat
 			  "\\(" old-number-string "\\)\\(\\(\\.[a-z0-9]+\\)?\\)$")
-			 (concat new-number-string "\\2"))))
+			 (concat new-number-string "\\2")
+			 oldfile)))
 		  (with-current-buffer nntp-server-buffer
 		    (nnmail-find-file oldfile)
 		    ;; Update the Xref header in the article itself:

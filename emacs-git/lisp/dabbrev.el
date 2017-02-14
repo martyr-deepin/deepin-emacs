@@ -1,6 +1,6 @@
 ;;; dabbrev.el --- dynamic abbreviation package  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1992, 1994, 1996-1997, 2000-2015 Free
+;; Copyright (C) 1985-1986, 1992, 1994, 1996-1997, 2000-2017 Free
 ;; Software Foundation, Inc.
 
 ;; Author: Don Morrison
@@ -120,7 +120,7 @@
 
 Example: Set this to \"\\\\$\" for programming languages
 in which variable names may appear with or without a leading `$'.
-\(For example, in Makefiles.\)
+\(For example, in Makefiles.)
 
 Set this to nil if no characters should be skipped."
   :type '(choice regexp
@@ -433,7 +433,10 @@ Expands to the most recent, preceding word for which this is a prefix.
 If no suitable preceding word is found, words following point are
 considered.  If still no suitable word is found, then look in the
 buffers accepted by the function pointed out by variable
-`dabbrev-friend-buffer-function'.
+`dabbrev-friend-buffer-function', if `dabbrev-check-other-buffers'
+says so.  Then, if `dabbrev-check-all-buffers' is non-nil, look in
+all the other buffers, subject to constraints specified
+by `dabbrev-ignored-buffer-names' and `dabbrev-ignored-regexps'.
 
 A positive prefix argument, N, says to take the Nth backward *distinct*
 possibility.  A negative argument says search forward.
@@ -534,7 +537,7 @@ See also `dabbrev-abbrev-char-regexp' and \\[dabbrev-completion]."
       (if (not (or (eq dabbrev--last-buffer dabbrev--last-buffer-found)
 		   (minibuffer-window-active-p (selected-window))))
 	  (progn
-	    (message "Expansion found in '%s'"
+	    (message "Expansion found in `%s'"
 		     (buffer-name dabbrev--last-buffer))
 	    (setq dabbrev--last-buffer-found dabbrev--last-buffer))
 	(message nil))
@@ -546,8 +549,8 @@ See also `dabbrev-abbrev-char-regexp' and \\[dabbrev-completion]."
 		(copy-marker dabbrev--last-expansion-location)))
       ;; Success: stick it in and return.
       (setq buffer-undo-list (cons orig-point buffer-undo-list))
-      (dabbrev--substitute-expansion old abbrev expansion
-				     record-case-pattern)
+      (setq expansion (dabbrev--substitute-expansion old abbrev expansion
+                                                     record-case-pattern))
 
       ;; Save state for re-expand.
       (setq dabbrev--last-expansion expansion)
@@ -902,7 +905,9 @@ to record whether we upcased the expansion, downcased it, or did neither."
     ;; and (2) the replacement itself is all lower case.
     (dabbrev--safe-replace-match expansion
 				 (not use-case-replace)
-				 t)))
+				 t))
+  ;; Return the expansion actually used.
+  expansion)
 
 
 ;;;----------------------------------------------------------------

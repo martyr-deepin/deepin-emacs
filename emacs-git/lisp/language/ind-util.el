@@ -1,6 +1,6 @@
 ;;; ind-util.el --- Transliteration and Misc. Tools for Indian Languages -*- coding: utf-8-emacs; -*-
 
-;; Copyright (C) 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2017 Free Software Foundation, Inc.
 
 ;; Maintainer:  KAWABATA, Taichi <kawabata@m17n.org>
 ;; Keywords: multilingual, Indian, Devanagari
@@ -39,7 +39,7 @@
 (eval-and-compile
 
 (defun indian-regexp-of-hashtbl-keys (hashtbl)
-  "Returns the regular expression of hashtable keys."
+  "Return the regular expression of hash table keys."
   (let (keys)
     (maphash (lambda (key val) (push key keys)) hashtbl)
     (regexp-opt keys)))

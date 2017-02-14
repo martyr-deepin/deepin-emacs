@@ -1,6 +1,6 @@
 ;;; log-edit.el --- Major mode for editing CVS commit messages -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: pcl-cvs cvs commit log vc
@@ -97,7 +97,7 @@
 
 (defcustom log-edit-confirm 'changed
   "If non-nil, `log-edit-done' will request confirmation.
-If 'changed, only request confirmation if the list of files has
+If `changed', only request confirmation if the list of files has
   changed since the beginning of the log-edit session."
   :group 'log-edit
   :type '(choice (const changed) (const t) (const nil)))
@@ -115,7 +115,7 @@ Enforce it silently if t, query if non-nil and don't do anything if nil."
 
 (defcustom log-edit-setup-invert nil
   "Non-nil means `log-edit' should invert the meaning of its SETUP arg.
-If SETUP is 'force, this variable has no effect."
+If SETUP is `force', this variable has no effect."
   :group 'log-edit
   :type 'boolean)
 
@@ -167,7 +167,7 @@ can be obtained from `log-edit-files'."
 
 (defvar log-edit-changelog-full-paragraphs t
   "If non-nil, include full ChangeLog paragraphs in the log.
-This may be set in the ``local variables'' section of a ChangeLog, to
+This may be set in the \"local variables\" section of a ChangeLog, to
 indicate the policy for that ChangeLog.
 
 A ChangeLog paragraph is a bunch of log text containing no blank lines;
@@ -872,7 +872,8 @@ Return non-nil if it is."
 		  (and (boundp 'user-mail-address) user-mail-address)))
 	(time (or (and (boundp 'add-log-time-format)
 		       (functionp add-log-time-format)
-		       (funcall add-log-time-format))
+		       (funcall add-log-time-format
+				nil add-log-time-zone-rule))
 		  (format-time-string "%Y-%m-%d"))))
     (if (null log-edit-changelog-use-first)
         (looking-at (regexp-quote (format "%s  %s  <%s>" time name mail)))
@@ -904,7 +905,7 @@ Return non-nil if it is."
 The return value looks like this:
   (LOGBUFFER (ENTRYSTART ENTRYEND) ...)
 where LOGBUFFER is the name of the ChangeLog buffer, and each
-\(ENTRYSTART . ENTRYEND\) pair is a buffer region."
+\(ENTRYSTART . ENTRYEND) pair is a buffer region."
   (let ((changelog-file-name
          (let ((default-directory
                  (file-name-directory (expand-file-name file)))

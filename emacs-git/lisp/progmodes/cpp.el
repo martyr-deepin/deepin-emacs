@@ -1,6 +1,6 @@
 ;;; cpp.el --- highlight or hide text according to cpp conditionals
 
-;; Copyright (C) 1994-1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1995, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Keywords: c, faces, tools
@@ -57,7 +57,7 @@
   :group 'cpp)
 
 (define-widget 'cpp-face 'lazy
-  "Either a face or the special symbol 'invisible'."
+  "Either a face or the special symbol `invisible'."
   :type '(choice (const invisible) (face)))
 
 (defcustom cpp-known-face 'invisible
@@ -103,6 +103,14 @@ Each entry is a list with the following elements:
 			       (const :tag "False branch writable" nil)
 			       (const :tag "Both branches writable" both))))
   :group 'cpp)
+
+(defcustom cpp-message-min-time-interval 1.0
+  "Minimum time interval in seconds for `cpp-progress-message' messages.
+If nil, `cpp-progress-message' prints no progress messages."
+  :type '(choice (const :tag "Disable progress messages" nil)
+                 float)
+  :group 'cpp
+  :version "26.1")
 
 (defvar cpp-overlay-list nil)
 ;; List of cpp overlays active in the current buffer.
@@ -234,7 +242,8 @@ A prefix arg suppresses display of that buffer."
       (cpp-progress-message "Parsing...")
       (while (re-search-forward cpp-parse-regexp nil t)
 	(cpp-progress-message "Parsing...%d%%"
-			  (/ (* 100 (- (point) (point-min))) (buffer-size)))
+			      (floor (* 100.0 (- (point) (point-min)))
+				     (buffer-size)))
 	(let ((match (buffer-substring (match-beginning 0) (match-end 0))))
 	  (cond ((or (string-equal match "'")
 		     (string-equal match "\""))
@@ -277,7 +286,7 @@ A prefix arg suppresses display of that buffer."
 			  (cpp-parse-close from to))
 			 (t
 			  (cpp-parse-error "Parser error"))))))))
-      (message "Parsing...done"))
+      (cpp-progress-message "Parsing...done"))
     (if cpp-state-stack
       (save-excursion
 	(goto-char (nth 3 (car cpp-state-stack)))
@@ -493,9 +502,10 @@ You can also use the keyboard accelerators indicated like this: [K]ey."
     (set-buffer buffer)
     (setq cpp-edit-symbols symbols)
     (erase-buffer)
-    (insert "CPP Display Information for `")
+    (insert (substitute-command-keys "CPP Display Information for `"))
     (cpp-make-button (buffer-name cpp-edit-buffer) 'cpp-edit-home)
-    (insert "'\n\nClick mouse-2 on item you want to change or use\n"
+    (insert (substitute-command-keys
+	     "'\n\nClick mouse-2 on item you want to change or use\n")
 	    "or switch to this buffer and type the keyboard equivalents.\n"
 	    "Keyboard equivalents are indicated with brackets like [T]his.\n\n")
     (cpp-make-button "[H]ome (display the C file)" 'cpp-edit-home)
@@ -662,7 +672,7 @@ otherwise make them unwritable."
 
 (defun cpp-edit-write (symbol branch)
   "Set which branches of SYMBOL should be writable to BRANCH.
-BRANCH should be either nil (false branch), t (true branch) or 'both."
+BRANCH should be either nil (false branch), t (true branch) or `both'."
   (interactive (list (cpp-choose-symbol) (cpp-choose-branch)))
   (setcar (nthcdr 3 (cpp-edit-list-entry-get-or-create symbol)) branch)
   (cpp-edit-reset))
@@ -817,16 +827,21 @@ BRANCH should be either nil (false branch), t (true branch) or 'both."
 
 ;;; Utilities:
 
-(defvar cpp-progress-time 0)
-;; Last time we issued a progress message.
+(defvar cpp-progress-time 0
+  "Last time `cpp-progress-message' issued a progress message.")
 
 (defun cpp-progress-message (&rest args)
-  ;; Report progress at most once a second.  Take same ARGS as `message'.
-  (let ((time (nth 1 (current-time))))
-    (if (= time cpp-progress-time)
-	()
-      (setq cpp-progress-time time)
-      (apply 'message args))))
+  "Report progress by printing messages used by \"cpp-\" functions.
+
+Print messages at most once every `cpp-message-min-time-interval' seconds.
+If that option is nil, don't prints messages.
+ARGS are the same as for `message'."
+  (when cpp-message-min-time-interval
+    (let ((time (current-time)))
+      (when (>= (float-time (time-subtract time cpp-progress-time))
+                cpp-message-min-time-interval)
+        (setq cpp-progress-time time)
+        (apply 'message args)))))
 
 (provide 'cpp)
 

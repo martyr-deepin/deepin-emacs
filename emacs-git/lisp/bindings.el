@@ -1,6 +1,6 @@
 ;;; bindings.el --- define standard key bindings and some variables
 
-;; Copyright (C) 1985-1987, 1992-1996, 1999-2015 Free Software
+;; Copyright (C) 1985-1987, 1992-1996, 1999-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -338,6 +338,10 @@ mouse-3: Toggle minor modes"
 (defvar mode-line-column-line-number-mode-map
   (let ((map (make-sparse-keymap))
 	(menu-map (make-sparse-keymap "Toggle Line and Column Number Display")))
+    (bindings--define-key menu-map [size-indication-mode]
+      '(menu-item "Display Size Indication" size-indication-mode
+		  :help "Toggle displaying a size indication in the mode-line"
+		  :button (:toggle . size-indication-mode)))
     (bindings--define-key menu-map [line-number-mode]
       '(menu-item "Display Line Numbers" line-number-mode
 		  :help "Toggle displaying line numbers in the mode-line"
@@ -430,11 +434,9 @@ Major modes that edit things other than ordinary files may change this
 (make-variable-buffer-local 'mode-line-buffer-identification)
 
 (defvar mode-line-misc-info
-  '((which-func-mode ("" which-func-format " "))
-    (global-mode-string ("" global-mode-string " ")))
+  '((global-mode-string ("" global-mode-string " ")))
   "Mode line construct for miscellaneous information.
-By default, this shows the information specified by
-`which-func-mode' and `global-mode-string'.")
+By default, this shows the information specified by `global-mode-string'.")
 (put 'mode-line-misc-info 'risky-local-variable t)
 
 (defvar mode-line-end-spaces '(:eval (unless (display-graphic-p) "-%-"))
@@ -633,7 +635,7 @@ okay.  See `mode-line-format'.")
       ;; file-supersession should all be user-errors!
       `(beginning-of-line beginning-of-buffer end-of-line
 	end-of-buffer end-of-file buffer-read-only
-	file-supersession
+	file-supersession mark-inactive
         user-error ;; That's the main one!
         ))
 
@@ -1265,9 +1267,9 @@ if `inhibit-field-text-motion' is non-nil."
 (define-key abbrev-map "e" 'expand-abbrev)
 (define-key abbrev-map "'" 'expand-abbrev)
 ;; (define-key ctl-x-map "\C-a" 'add-mode-abbrev)
-;; (define-key ctl-x-map "\+" 'add-global-abbrev)
+;; (define-key ctl-x-map "+" 'add-global-abbrev)
 ;; (define-key ctl-x-map "\C-h" 'inverse-add-mode-abbrev)
-;; (define-key ctl-x-map "\-" 'inverse-add-global-abbrev)
+;; (define-key ctl-x-map "-" 'inverse-add-global-abbrev)
 (define-key esc-map "'" 'abbrev-prefix-mark)
 (define-key ctl-x-map "'" 'expand-abbrev)
 (define-key ctl-x-map "\C-b" 'list-buffers)

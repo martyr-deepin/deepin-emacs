@@ -157,7 +157,7 @@ CC Mode
 @copying
 This manual is for CC Mode in Emacs.
 
-Copyright @copyright{} 1995--2015 Free Software Foundation, Inc.
+Copyright @copyright{} 1995--2017 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -338,14 +338,15 @@ Line-Up Functions
 * Comment Line-Up::
 * Misc Line-Up::
 
+
 Customizing Macros
 
 * Macro Backslashes::
 * Macros with ;::
+* Noise Macros::
 
 @end detailmenu
 @end menu
-
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @node    Introduction, Overview, Top, Top
 @comment node-name, next, previous, up
@@ -378,7 +379,7 @@ This manual describes @ccmode{}
 version 5.32.
 @comment Release.py script can update the version number automatically
 
-@ccmode{} supports the editing of K&R and ANSI C, C++, Objective-C,
+@ccmode{} supports the editing of C, C++, Objective-C,
 Java, CORBA's Interface Definition Language, Pike@footnote{A C-like
 scripting language with its roots in the LPC language used in some MUD
 engines.  See @uref{http://pike.ida.liu.se/}.} and AWK files.  In this
@@ -2461,7 +2462,7 @@ handled a little differently from the other style variables.  It's
 default global binding is the empty list @code{nil}, rather than
 @code{set-from-style}.  Before the style system is initialized, you
 can add individual elements to @code{c-offsets-alist} by calling
-@code{c-set-offset}(@pxref{c-offsets-alist}) just like you would set
+@code{c-set-offset} (@pxref{c-offsets-alist}) just like you would set
 other style variables with @code{setq}.  Those elements will then
 prevail when the style system later initializes a buffer-local copy of
 @code{c-offsets-alist}.
@@ -2553,7 +2554,9 @@ for C code in GNU programs.
 
 @item k&r
 @cindex K&R style
-The classic Kernighan and Ritchie style for C code.
+The classic Kernighan and Ritchie style for C code. If you're looking
+for the style used in the 2nd edition of their book ``The C
+Programming Language'', then check out the @code{stroustrup} style.
 
 @item bsd
 @cindex BSD style
@@ -3541,10 +3544,11 @@ use, add this function to the front of the
 @example
 (defun c-semi&comma-no-newlines-before-nonblanks ()
   (save-excursion
-    (if (and (eq last-command-char ?\;)
-             (zerop (forward-line 1))
-             (not (looking-at "^[ \t]*$")))
-        'stop
+    (if (and (= (c-last-command-char) ?\;)
+	     (zerop (forward-line 1))
+	     (bolp)      ; forward-line has funny behavior at eob.
+	     (not (looking-at "^[ \t]*$")))
+	'stop
       nil)))
 @end example
 @end defun
@@ -3887,9 +3891,19 @@ of the variables associated with indentation, not even
 @cindex syntactic element
 @cindex syntactic context
 The first thing @ccmode{} does when indenting a line of code, is to
-analyze the line, determining the @dfn{syntactic context} of the
-(first) construct on that line.  It's a list of @dfn{syntactic
-elements}, where each syntactic element in turn is a list@footnote{In
+analyze the line by calling @code{c-guess-basic-syntax}, determining
+the syntactic context of the (first) construct on that line.  Although
+this function is mainly used internally, it can sometimes be useful in
+Line-up functions (@pxref{Custom Line-Up}) or in functions on
+@code{c-special-indent-hook} (@pxref{Other Indentation}).
+
+@defun c-guess-basic-syntax
+@findex guess-basic-syntax (c-)
+Determine the syntactic context of the current line.
+@end defun
+
+The @dfn{syntactic context} is a list of @dfn{syntactic elements},
+where each syntactic element in turn is a list@footnote{In
 @ccmode 5.28 and earlier, a syntactic element was a dotted pair; the
 cons was the syntactic symbol and the cdr was the anchor position.
 For compatibility's sake, the parameter passed to a line-up function
@@ -4127,7 +4141,8 @@ Open brace of an enum or static array list.  @ref{Brace List Symbols}.
 @item brace-list-close
 Close brace of an enum or static array list.  @ref{Brace List Symbols}.
 @item brace-list-intro
-First line in an enum or static array list.  @ref{Brace List Symbols}.
+First line after the opening @samp{@{} in an enum or static array
+list.  @ref{Brace List Symbols}.
 @item brace-list-entry
 Subsequent lines in an enum or static array list.  @ref{Brace List
 Symbols}.
@@ -4621,11 +4636,18 @@ example:
 
 Here, you've already seen the analysis of lines 1, 2, 3, and 11.  On
 line 4, things get interesting; this line is assigned
-@code{brace-entry-open} syntactic symbol because it's a bracelist entry
-line that starts with an open brace.  Lines 5 and 6 (and line 9) are
-pretty standard, and line 7 is a @code{brace-list-close} as you'd
-expect.  Once again, line 8 is assigned as @code{brace-entry-open} as is
-line 10.
+@code{brace-entry-open} syntactic symbol because it's a bracelist
+entry line that starts with an open brace.  Lines 5 and 6 are pretty
+standard, and line 7 is a @code{brace-list-close} as you'd expect.
+Once again, line 8 is assigned as @code{brace-entry-open} as is line
+10.  Line 9 is assigned two syntactic elements, @code{brace-list-intro}
+with anchor point at the @samp{@{} of line 8@footnote{This extra
+syntactic element was introduced in @ccmode{} 5.33.1 to allow extra
+flexibility in indenting the second line of such a construct.  You can
+preserve the behaviour resulting from the former syntactic analysis by
+giving @code{brace-list-entry} an offset of
+@code{c-lineup-under-anchor} (@pxref{Misc Line-Up}).}, and
+@code{brace-list-entry} anchored on the @samp{1} of line 8.
 
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @node    External Scope Symbols, Paren List Symbols, Brace List Symbols, Syntactic Symbols
@@ -5234,13 +5256,13 @@ This command changes the entry for a syntactic symbol in the current
 binding of @code{c-offsets-alist}, or it inserts a new entry if there
 isn't already one for that syntactic symbol.
 
-You can use @code{c-set-offsets} interactively within a @ccmode{}
+You can use @code{c-set-offset} interactively within a @ccmode{}
 buffer to make experimental changes to your indentation settings.
 @kbd{C-c C-o} prompts you for the syntactic symbol to change
 (defaulting to that of the current line) and the new offset
 (defaulting to the current offset).
 
-@code{c-set-offsets} takes two arguments when used programmatically:
+@code{c-set-offset} takes two arguments when used programmatically:
 @var{symbol}, the syntactic element symbol to change and @var{offset},
 the new offset for that syntactic element.  You can call the command
 in your @file{.emacs} to change the global binding of
@@ -6274,6 +6296,17 @@ already has; think of it as an identity function for lineups.
 
 @comment ------------------------------------------------------------
 
+@defun c-lineup-under-anchor
+
+Line up a line directly underneath its anchor point.  This is like
+@samp{0}, except any previously calculated offset contributions are
+disregarded.
+
+@workswith Any syntactic symbol which has an anchor point.
+@end defun
+
+@comment ------------------------------------------------------------
+
 @defun c-lineup-cpp-define
 @findex lineup-cpp-define (c-)
 Line up macro continuation lines according to the indentation of the
@@ -6553,6 +6586,11 @@ only meaningful when used on syntactic elements taken from
 @code{c-syntactic-element} or @code{c-syntactic-context}.
 @end defun
 
+Sometimes you may need to use the syntactic context of a line other
+than the one being indented.  You can determine this by (temporarily)
+moving point onto this line and calling @code{c-guess-basic-syntax}
+(@pxref{Syntactic Analysis}).
+
 Custom line-up functions can be as simple or as complex as you like, and
 any syntactic symbol that appears in @code{c-offsets-alist} can have a
 custom line-up function associated with it.
@@ -6639,15 +6677,18 @@ Because a macro can expand into anything at all, near where one is
 invoked @ccmode{} can only indent and fontify code heuristically.
 Sometimes it gets it wrong.  Usually you should try to design your
 macros so that they ''look like ordinary code'' when you invoke them.
-However, one situation is so common that @ccmode{} handles it
+However, two situations are so common that @ccmode{} handles them
 specially: that is when certain macros needn't (or mustn't) be
-followed by a @samp{;}.  You need to configure @ccmode{} to handle
-these macros properly, see @ref{Macros with ;}.
+followed by a @samp{;}, and when certain macros (or compiler
+directives) expand to nothing.  You need to configure @ccmode{} to
+handle these macros properly, see @ref{Macros with ;} and @ref{Noise
+Macros}.
 
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @menu
 * Macro Backslashes::
 * Macros with ;::
+* Noise Macros::
 @end menu
 
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -6699,7 +6740,7 @@ get aligned only when you explicitly invoke the command
 @end defopt
 
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-@node Macros with ;,  , Macro Backslashes, Custom Macros
+@node Macros with ;, Noise Macros, Macro Backslashes, Custom Macros
 @comment  node-name,  next,  previous,  up
 @section Macros with semicolons
 @cindex macros with semicolons
@@ -6708,9 +6749,11 @@ Macros which needn't (or mustn't) be followed by a semicolon when you
 invoke them, @dfn{macros with semicolons}, are very common.  These can
 cause @ccmode{} to parse the next line wrongly as a
 @code{statement-cont} (@pxref{Function Symbols}) and thus mis-indent
-it.
+it.  At the top level, a macro invocation before a defun start can
+cause, for example, @code{c-beginning-of-defun} (@kbd{C-M-a}) not to
+find the correct start of the current function.
 
-You can prevent this by specifying which macros have semicolons.  It
+You can prevent these by specifying which macros have semicolons.  It
 doesn't matter whether or not such a macro has a parameter list:
 
 @defopt c-macro-names-with-semicolon
@@ -6748,10 +6791,65 @@ example:
 @defun c-make-macro-with-semi-re
 @findex make-macro-with-semi-re (c-)
 Call this (non-interactive) function, which sets internal variables,
-each time you change the value of
-@code{c-macro-names-with-semicolon}.  It takes no arguments, and its
+each time you change the value of @code{c-macro-names-with-semicolon}
+after the major mode function has run.  It takes no arguments, and its
 return value has no meaning.  This function is called by @ccmode{}'s
-initialization code.
+initialization code, after the mode hooks have run.
+@end defun
+
+@comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+@node    Noise Macros,  , Macros with ;, Custom Macros
+@comment node-name, next, previous, up
+@section Noise Macros
+@cindex noise macros
+@comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+In @ccmode{}, @dfn{noise macros} are macros which expand to nothing,
+or compiler directives (such as GCC's @code{__attribute__}) which play
+no part in the syntax of the C (etc.) language.  Some noise macros are
+followed by arguments in parentheses (possibly optionally), others
+are not.
+
+Noise macros can easily confuse @ccmode{}'s analysis of function
+headers, causing them to be mis-fontified, or even mis-indented.  You
+can prevent this confusion by specifying the identifiers which
+constitute noise macros.
+
+@defopt c-noise-macro-names
+@vindex noise-macro-names (c-)
+This variable is a list of names of noise macros which never have
+parenthesized arguments.  Each element is a string, and must be a
+valid identifier.  An element in @code{c-noise-macro-names} must not
+also be in @code{c-noise-macro-with-parens-names}.  Such an element is
+treated as whitespace by @ccmode{}.
+@end defopt
+
+@defopt c-noise-macro-with-parens-names
+@vindex noise-macro-with-parens-names (c-)
+This variable is a list of names of noise macros which optionally have
+arguments in parentheses.  Each element of the list is a string, and
+must be a valid identifier.  An element in
+@code{c-noise-macro-with-parens-names} must not also be in
+@code{c-noise-macro-names}.  For performance reasons, such an element,
+together with the optional parenthesized arguments, is specially
+handled, but it is only handled when used in declaration
+contexts@footnote{If this restriction causes your project
+difficulties, please get in touch with @email{bug-cc-mode@@gnu.org}.}.
+
+The two compiler directives @code{__attribute__} and @code{__declspec}
+have traditionally been handled specially in @ccmode{}; for example
+they are fontified with font-lock-keyword-face.  You don't need to
+include these directives in @code{c-noise-macro-with-parens-names},
+but doing so is OK.
+@end defopt
+
+@defun c-make-noise-macro-regexps
+@findex make-noise-macro-regexps (c-)
+Call this (non-interactive) function, which sets internal variables,
+on changing the value of @code{c-noise-macro-names} or
+@code{c-noise-macro-with-parens-names} after the major mode's function
+has run.  This function is called by @ccmode{}'s initialization code,
+after the mode hooks have run.
 @end defun
 
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -6860,7 +6958,7 @@ to change some of the actual values.
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @node    Performance Issues, Limitations and Known Bugs, Sample Init File, Top
 @comment node-name, next, previous, up
-@chapter Performance Issues
+@appendix Performance Issues
 @cindex performance
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -6969,7 +7067,7 @@ more info.
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @node    Limitations and Known Bugs, FAQ, Performance Issues, Top
 @comment node-name, next, previous, up
-@chapter Limitations and Known Bugs
+@appendix Limitations and Known Bugs
 @cindex limitations
 @cindex bugs
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -7173,11 +7271,12 @@ configuration.  In that case, we'd appreciate it if you isolate the
 Emacs Lisp code that triggers the bug and include it in your report.
 
 @cindex bug report mailing list
-Bug reports should be sent to @email{bug-cc-mode@@gnu.org}.  You can
-also send other questions and suggestions (kudos?@: @t{;-)} to that
-address.  It's a mailing list which you can join or browse an archive
-of; see the web site at @uref{http://cc-mode.sourceforge.net/} for
-further details.
+Reporting a bug using @code{c-submit-bug-report} files it in
+the GNU Bug Tracker at @url{http://debbugs.gnu.org}, then sends it on
+to @email{bug-cc-mode@@gnu.org}.  You can also send reports, other
+questions, and suggestions (kudos?@: @t{;-)} to that address.  It's a
+mailing list which you can join or browse an archive of; see the web site at
+@uref{http://cc-mode.sourceforge.net/} for further details.
 
 @cindex announcement mailing list
 If you want to get announcements of new @ccmode{} releases, send the

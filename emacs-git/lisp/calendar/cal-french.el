@@ -1,6 +1,6 @@
 ;;; cal-french.el --- calendar functions for the French Revolutionary calendar
 
-;; Copyright (C) 1988-1989, 1992, 1994-1995, 1997, 2001-2015 Free
+;; Copyright (C) 1988-1989, 1992, 1994-1995, 1997, 2001-2017 Free
 ;; Software Foundation, Inc.
 
 ;; Author: Edward M. Reingold <reingold@cs.uiuc.edu>
@@ -255,9 +255,5 @@ Echo French Revolutionary date unless NOECHO is non-nil."
       (format "French Revolutionary date: %s" f))))
 
 (provide 'cal-french)
-
-;; Local Variables:
-;; coding: utf-8
-;; End:
 
 ;;; cal-french.el ends here

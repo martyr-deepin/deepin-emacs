@@ -1,6 +1,6 @@
 ;;; gud.el --- Grand Unified Debugger mode for running GDB and other debuggers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-1996, 1998, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1992-1996, 1998, 2000-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
@@ -733,9 +733,15 @@ It should return a list of completion strings.")
 ;; The old gdb command (text command mode).  The new one is in gdb-mi.el.
 ;;;###autoload
 (defun gud-gdb (command-line)
-  "Run gdb on program FILE in buffer *gud-FILE*.
-The directory containing FILE becomes the initial working
-directory and source-file directory for your debugger."
+  "Run gdb passing it COMMAND-LINE as arguments.
+If COMMAND-LINE names a program FILE to debug, gdb will run in
+a buffer named *gud-FILE*, and the directory containing FILE
+becomes the initial working directory and source-file directory
+for your debugger.
+If COMMAND-LINE requests that gdb attaches to a process PID, gdb
+will run in *gud-PID*, otherwise it will run in *gud*; in these
+cases the initial working directory is the default-directory of
+the buffer in which this command was invoked."
   (interactive (list (gud-query-cmdline 'gud-gdb)))
 
   (when (and gud-comint-buffer
@@ -1182,36 +1188,30 @@ containing the executable being debugged."
 ;; correct line number, but life's too short.
 ;;   d.love@dl.ac.uk (Dave Love) can be blamed for this
 
-(defvar gud-irix-p
-  (and (string-match "^mips-[^-]*-irix" system-configuration)
-       (not (string-match "irix[6-9]\\.[1-9]" system-configuration)))
+(defvar gud-irix-p nil
   "Non-nil to assume the interface appropriate for IRIX dbx.
 This works in IRIX 4, 5 and 6, but `gud-dbx-use-stopformat-p' provides
 a better solution in 6.1 upwards.")
-(defvar gud-dbx-use-stopformat-p
-  (string-match "irix[6-9]\\.[1-9]" system-configuration)
+(defvar gud-dbx-use-stopformat-p nil
   "Non-nil to use the dbx feature present at least from Irix 6.1
 whereby $stopformat=1 produces an output format compatible with
 `gud-dbx-marker-filter'.")
-;; [Irix dbx seems to be a moving target.  The dbx output changed
+;; [Irix dbx seemed to be a moving target.  The dbx output changed
 ;; subtly sometime between OS v4.0.5 and v5.2 so that, for instance,
 ;; the output from `up' is no longer spotted by gud (and it's probably
 ;; not distinctive enough to try to match it -- use C-<, C->
 ;; exclusively) .  For 5.3 and 6.0, the $curline variable changed to
 ;; `long long'(why?!), so the printf stuff needed changing.  The line
 ;; number was cast to `long' as a compromise between the new `long
-;; long' and the original `int'.  This is reported not to work in 6.2,
+;; long' and the original `int'.  This was reported not to work in 6.2,
 ;; so it's changed back to int -- don't make your sources too long.
-;; From Irix6.1 (but not 6.0?) dbx supports an undocumented feature
+;; From Irix6.1 (but not 6.0?) dbx supported an undocumented feature
 ;; whereby `set $stopformat=1' reportedly produces output compatible
 ;; with `gud-dbx-marker-filter', which we prefer.
 
 ;; The process filter is also somewhat
 ;; unreliable, sometimes not spotting the markers; I don't know
-;; whether there's anything that can be done about that.  It would be
-;; much better if SGI could be persuaded to (re?)instate the MIPS
-;; -emacs flag for gdb-like output (which ought to be possible as most
-;; of the communication I've had over it has been from sgi.com).]
+;; whether there's anything that can be done about that.]
 
 ;; this filter is influenced by the xdb one rather than the gdb one
 (defun gud-irixdbx-marker-filter (string)
@@ -1742,6 +1742,7 @@ and source-file directory for your debugger."
 (defcustom gud-guiler-command-name "guile"
   "File name for executing the Guile debugger.
 This should be an executable on your path, or an absolute file name."
+  :version "25.1"
   :type 'string
   :group 'gud)
 
@@ -1952,10 +1953,10 @@ the source code display in sync with the debugging session.")
 PATH gives the directories in which to search for files with
 extension EXTN.  Normally EXTN is given as the regular expression
  \"\\.java$\" ."
-  (apply 'nconc (mapcar (lambda (d)
-			  (when (file-directory-p d)
-			    (directory-files d t extn nil)))
-			path)))
+  (mapcan (lambda (d)
+            (when (file-directory-p d)
+              (directory-files d t extn nil)))
+          path))
 
 ;; Move point past whitespace.
 (defun gud-jdb-skip-whitespace ()
@@ -2566,9 +2567,6 @@ comint mode, which see."
   :group 'gud
   :type 'boolean)
 
-(declare-function tramp-file-name-localname "tramp" (vec))
-(declare-function tramp-dissect-file-name "tramp" (name &optional nodefault))
-
 ;; Perform initializations common to all debuggers.
 ;; The first arg is the specified command line,
 ;; which starts with the program to debug.
@@ -2623,13 +2621,8 @@ comint mode, which see."
     (let ((w args))
       (while (and w (not (eq (car w) t)))
 	(setq w (cdr w)))
-      (if w
- 	  (setcar w
- 		  (if (file-remote-p file)
-		      ;; Tramp has already been loaded if we are here.
-		      (setq file (tramp-file-name-localname
-				  (tramp-dissect-file-name file)))
- 		    file))))
+      ;; Tramp has already been loaded if we are here.
+      (if w (setcar w (setq file (file-local-name file)))))
     (apply 'make-comint (concat "gud" filepart) program nil
 	   (if massage-args (funcall massage-args file args) args))
     ;; Since comint clobbered the mode, we don't set it until now.
@@ -2855,6 +2848,9 @@ Obeying it means displaying in another window the specified file and line."
 (defun gud-format-command (str arg)
   (let ((insource (not (eq (current-buffer) gud-comint-buffer)))
 	(frame (or gud-last-frame gud-last-last-frame))
+	(buffer-file-name-localized
+         (and (buffer-file-name)
+              (file-local-name (buffer-file-name))))
 	result)
     (while (and str
 		(let ((case-fold-search nil))
@@ -2864,15 +2860,15 @@ Obeying it means displaying in another window the specified file and line."
 	(cond
 	 ((eq key ?f)
 	  (setq subst (file-name-nondirectory (if insource
-						  (buffer-file-name)
+						  buffer-file-name-localized
 						(car frame)))))
 	 ((eq key ?F)
 	  (setq subst (file-name-base (if insource
-                                          (buffer-file-name)
+                                          buffer-file-name-localized
                                         (car frame)))))
 	 ((eq key ?d)
 	  (setq subst (file-name-directory (if insource
-					       (buffer-file-name)
+					       buffer-file-name-localized
 					     (car frame)))))
 	 ((eq key ?l)
 	  (setq subst (int-to-string
@@ -3076,7 +3072,7 @@ the character after the end of the expr."
   "Scan from SPAN-START to SPAN-END for punctuation characters.
 If `->' is found, return `?.'.  If `.' is found, return `?.'.
 If any other punctuation is found, return `??'.
-If no punctuation is found, return `? '."
+If no punctuation is found, return `?\\s'."
   (let ((result ?\s)
 	(syntax))
     (while (< span-start span-end)
@@ -3401,7 +3397,7 @@ it if ARG is omitted or nil."
 (defcustom gud-tooltip-modes '(gud-mode c-mode c++-mode fortran-mode
 					python-mode)
   "List of modes for which to enable GUD tooltips."
-  :type 'sexp
+  :type '(repeat (symbol :tag "Major mode"))
   :group 'gud
   :group 'tooltip)
 
@@ -3416,6 +3412,7 @@ it if ARG is omitted or nil."
 Forms in the list are combined with AND.  The default is to display
 only tooltips in the buffer containing the overlay arrow."
   :type 'sexp
+  :risky t
   :group 'gud
   :group 'tooltip)
 

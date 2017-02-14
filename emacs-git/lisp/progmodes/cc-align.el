@@ -1,6 +1,6 @@
 ;;; cc-align.el --- custom indentation functions for CC Mode
 
-;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2017 Free Software Foundation, Inc.
 
 ;; Authors:    2004- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -325,10 +325,10 @@ operator you typically want to use it together with some other line-up
 settings, e.g. as follows \(the arglist-close setting is just a
 suggestion to get a consistent style):
 
-\(c-set-offset 'arglist-cont '(c-lineup-arglist-operators 0))
-\(c-set-offset 'arglist-cont-nonempty '(c-lineup-arglist-operators
+\(c-set-offset \\='arglist-cont \\='(c-lineup-arglist-operators 0))
+\(c-set-offset \\='arglist-cont-nonempty \\='(c-lineup-arglist-operators
                                         c-lineup-arglist))
-\(c-set-offset 'arglist-close '(c-lineup-arglist-close-under-paren))
+\(c-set-offset \\='arglist-close \\='(c-lineup-arglist-close-under-paren))
 
 Works with: arglist-cont, arglist-cont-nonempty."
   (save-excursion
@@ -449,7 +449,7 @@ class Foo             class Foo
 Works with: inher-cont."
   (save-excursion
     (goto-char (c-langelem-pos langelem))
-    (forward-word 1)
+    (forward-word-strictly 1)
     (if (looking-at "[ \t]*$")
 	c-basic-offset
       (c-forward-syntactic-ws)
@@ -1075,7 +1075,7 @@ Works with: brace-list-entry, brace-entry-open, statement,
 arglist-cont."
   (save-excursion
     (goto-char (c-langelem-pos langelem))
-    (when (looking-at "\\s\(")
+    (when (looking-at "\\s(")
       (if (c-go-up-list-backward)
 	  (let ((pos (point)))
 	    (back-to-indentation)
@@ -1093,24 +1093,24 @@ v beg of preceding constr      v beg of preceding constr
 const char msg[] =             if (!running)
   \"Some text.\";	         error(\"Not running!\");
 
-#define X(A, B)  \           #define X(A, B)    \
-do {             \    <->      do {             \    <- c-lineup-cpp-define
-  printf (A, B); \               printf (A, B); \
+#define X(A, B)  \\           #define X(A, B)    \\
+do {             \\    <->      do {             \\    <- c-lineup-cpp-define
+  printf (A, B); \\               printf (A, B); \\
 } while (0)                    } while (0)
 
 If `c-syntactic-indentation-in-macros' is non-nil, the function
 returns the relative indentation to the macro start line to allow
 accumulation with other offsets.  E.g. in the following cases,
 cpp-define-intro is combined with the statement-block-intro that comes
-from the \"do {\" that hangs on the \"#define\" line:
+from the `do {' that hangs on the `#define' line:
 
                              int dribble() {
 const char msg[] =             if (!running)
   \"Some text.\";	         error(\"Not running!\");
 
-#define X(A, B) do { \       #define X(A, B) do { \
-  printf (A, B);     \  <->      printf (A, B);   \  <- c-lineup-cpp-define
-  this->refs++;      \           this->refs++;    \
+#define X(A, B) do { \\       #define X(A, B) do { \\
+  printf (A, B);     \\  <->      printf (A, B);   \\  <- c-lineup-cpp-define
+  this->refs++;      \\           this->refs++;    \\
 } while (0)             <->    } while (0)           <- c-lineup-cpp-define
 
 The relative indentation returned by `c-lineup-cpp-define' is zero and
@@ -1220,6 +1220,18 @@ Works with: arglist-cont, arglist-cont-nonempty."
 	      (c-in-gcc-asm-p))
 
        (vector (progn (goto-char alignto) (current-column)))))))
+
+(defun c-lineup-under-anchor (langelem)
+  "Line up the current line directly under the anchor position in LANGELEM.
+
+This is like 0, except it supersedes any indentation already calculated for
+previous syntactic elements in the syntactic context.
+
+Works with: Any syntactic symbol which has an anchor position."
+  (save-excursion
+    (goto-char (c-langelem-pos langelem))
+    (vector (current-column))))
+    
 
 (defun c-lineup-dont-change (langelem)
   "Do not change the indentation of the current line.
@@ -1345,8 +1357,8 @@ For other semicolon contexts, no determination is made."
 
 (cc-provide 'cc-align)
 
-;;; Local Variables:
-;;; indent-tabs-mode: t
-;;; tab-width: 8
-;;; End:
+;; Local Variables:
+;; indent-tabs-mode: t
+;; tab-width: 8
+;; End:
 ;;; cc-align.el ends here

@@ -1,6 +1,6 @@
 ;;; newcomment.el --- (un)comment regions of buffers -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
 
 ;; Author: code extracted from Emacs-20's simple.el
 ;; Maintainer: Stefan Monnier <monnier@iro.umontreal.ca>
@@ -179,6 +179,11 @@ comments always start in column zero.")
   "Non-nil if nested comments should be quoted.
 This should be locally set by each major mode if needed.")
 
+(defvar comment-quote-nested-function #'comment-quote-nested-default
+  "Function to quote nested comments in a region.
+It takes the same arguments as `comment-quote-nested-default',
+and is called with the buffer narrowed to a single comment.")
+
 (defvar comment-continue nil
   "Continuation string to insert for multiline comments.
 This string will be added at the beginning of each line except the very
@@ -286,8 +291,8 @@ makes the comment easier to read.  Default is 1.  nil means 0."
 This is useful when style-conventions require a certain minimal offset.
 Python's PEP8 for example recommends two spaces, so you could do:
 
-\(add-hook 'python-mode-hook
-   (lambda () (set (make-local-variable 'comment-inline-offset) 2)))
+\(add-hook \\='python-mode-hook
+   (lambda () (set (make-local-variable \\='comment-inline-offset) 2)))
 
 See `comment-padding' for whole-line comments."
   :version "24.3"
@@ -382,7 +387,7 @@ function should first call this function explicitly."
 	   (concat (unless (eq comment-use-syntax t)
                      ;; `syntax-ppss' will detect escaping.
                      "\\(\\(^\\|[^\\\n]\\)\\(\\\\\\\\\\)*\\)")
-                   "\\(\\s<+\\|"
+                   "\\(?:\\s<+\\|"
 		   (regexp-quote (comment-string-strip comment-start t t))
 		   ;; Let's not allow any \s- but only [ \t] since \n
 		   ;; might be both a comment-end marker and \s-.
@@ -412,28 +417,44 @@ function should first call this function explicitly."
 If UNP is non-nil, unquote nested comment markers."
   (setq cs (comment-string-strip cs t t))
   (setq ce (comment-string-strip ce t t))
-  (when (and comment-quote-nested (> (length ce) 0))
-    (let ((re (concat (comment-quote-re ce unp)
-		      "\\|" (comment-quote-re cs unp))))
-      (goto-char (point-min))
-      (while (re-search-forward re nil t)
-	(goto-char (match-beginning 0))
-	(forward-char 1)
-	(if unp (delete-char 1) (insert "\\"))
-	(when (= (length ce) 1)
-	  ;; If the comment-end is a single char, adding a \ after that
-	  ;; "first" char won't deactivate it, so we turn such a CE
-	  ;; into !CS.  I.e. for pascal, we turn } into !{
-	  (if (not unp)
-	      (when (string= (match-string 0) ce)
-		(replace-match (concat "!" cs) t t))
-	    (when (and (< (point-min) (match-beginning 0))
-		       (string= (buffer-substring (1- (match-beginning 0))
-						  (1- (match-end 0)))
-				(concat "!" cs)))
-	      (backward-char 2)
-	      (delete-char (- (match-end 0) (match-beginning 0)))
-	      (insert ce))))))))
+  (when (and comment-quote-nested
+	     (> (length ce) 0))
+    (funcall comment-quote-nested-function cs ce unp)))
+
+(defun comment-quote-nested-default (cs ce unp)
+  "Quote comment delimiters in the buffer.
+It expects to be called with the buffer narrowed to a single comment.
+It is used as a default for `comment-quote-nested-function'.
+
+The arguments CS and CE are strings matching comment starting and
+ending delimiters respectively.
+
+If UNP is non-nil, comments are unquoted instead.
+
+To quote the delimiters, a \\ is inserted after the first
+character of CS or CE.  If CE is a single character it will
+change CE into !CS."
+  (let ((re (concat (comment-quote-re ce unp)
+		    "\\|" (comment-quote-re cs unp))))
+    (goto-char (point-min))
+    (while (re-search-forward re nil t)
+      (goto-char (match-beginning 0))
+      (forward-char 1)
+      (if unp (delete-char 1) (insert "\\"))
+      (when (= (length ce) 1)
+	;; If the comment-end is a single char, adding a \ after that
+	;; "first" char won't deactivate it, so we turn such a CE
+	;; into !CS.  I.e. for pascal, we turn } into !{
+	(if (not unp)
+	    (when (string= (match-string 0) ce)
+	      (replace-match (concat "!" cs) t t))
+	  (when (and (< (point-min) (match-beginning 0))
+		     (string= (buffer-substring (1- (match-beginning 0))
+						(1- (match-end 0)))
+			      (concat "!" cs)))
+	    (backward-char 2)
+	    (delete-char (- (match-end 0) (match-beginning 0)))
+	    (insert ce)))))))
 
 ;;;;
 ;;;; Navigation
@@ -969,6 +990,14 @@ comment markers."
 	  (goto-char (point-max))))))
   (set-marker end nil))
 
+(defun comment-make-bol-ws (len)
+  "Make a white-space string of width LEN for use at BOL.
+When `indent-tabs-mode' is non-nil, tab characters will be used."
+  (if (and indent-tabs-mode (> tab-width 0))
+      (concat (make-string (/ len tab-width) ?\t)
+	      (make-string (% len tab-width) ? ))
+    (make-string len ? )))
+
 (defun comment-make-extra-lines (cs ce ccs cce min-indent max-indent &optional block)
   "Make the leading and trailing extra lines.
 This is used for `extra-line' style (or `box' style if BLOCK is specified)."
@@ -1004,8 +1033,8 @@ This is used for `extra-line' style (or `box' style if BLOCK is specified)."
 	  (setq cs (replace-match fill t t s)))
 	(string-match re e)
 	(setq ce (replace-match fill t t e))))
-    (cons (concat cs "\n" (make-string min-indent ? ) ccs)
-	  (concat cce "\n" (make-string (+ min-indent eindent) ? ) ce))))
+    (cons (concat cs "\n" (comment-make-bol-ws min-indent) ccs)
+	  (concat cce "\n" (comment-make-bol-ws (+ min-indent eindent)) ce))))
 
 (defmacro comment-with-narrowing (beg end &rest body)
   "Execute BODY with BEG..END narrowing.
@@ -1266,7 +1295,7 @@ Else, call `comment-indent'.
 You can configure `comment-style' to change the way regions are commented."
   (interactive "*P")
   (comment-normalize-vars)
-  (if (and mark-active transient-mark-mode)
+  (if (use-region-p)
       (comment-or-uncomment-region (region-beginning) (region-end) arg)
     (if (save-excursion (beginning-of-line) (not (looking-at "\\s-*$")))
 	;; FIXME: If there's no comment to kill on this line and ARG is

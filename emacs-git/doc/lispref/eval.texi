@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1994, 1998, 2001-2015 Free Software Foundation,
+@c Copyright (C) 1990-1994, 1998, 2001-2017 Free Software Foundation,
 @c Inc.
 @c See the file elisp.texi for copying conditions.
 @node Evaluation
@@ -104,9 +104,9 @@ interpretation.  @xref{Command Loop}.
   A Lisp object that is intended to be evaluated is called a
 @dfn{form} (or an @dfn{expression}).  How Emacs evaluates a form
 depends on its data type.  Emacs has three different kinds of form
-that are evaluated differently: symbols, lists, and ``all other
-types''.  This section describes all three kinds, one by one, starting
-with the ``all other types'' which are self-evaluating forms.
+that are evaluated differently: symbols, lists, and all other
+types.  This section describes all three kinds, one by one, starting
+with the other types, which are self-evaluating forms.
 
 @menu
 * Self-Evaluating Forms::   Forms that evaluate to themselves.
@@ -116,7 +116,7 @@ with the ``all other types'' which are self-evaluating forms.
                               we find the real function via the symbol.
 * Function Forms::          Forms that call functions.
 * Macro Forms::             Forms that call macros.
-* Special Forms::           "Special forms" are idiosyncratic primitives,
+* Special Forms::           Special forms are idiosyncratic primitives,
                               most of them extremely important.
 * Autoloading::             Functions set up to load files
                               containing their real definitions.
@@ -146,7 +146,7 @@ contents unchanged.
      @result{} 123
 @end group
 @group
-(eval '123)        ; @r{Evaluated ``by hand''---result is the same.}
+(eval '123)        ; @r{Evaluated "by hand"---result is the same.}
      @result{} 123
 @end group
 @group
@@ -328,13 +328,12 @@ This function returns the meaning of @var{function} as a function.  If
 definition and starts over with that value.  If @var{function} is not a
 symbol, then it returns @var{function} itself.
 
-This function signals a @code{void-function} error if the final symbol
-is unbound and optional argument @var{noerror} is @code{nil} or
-omitted.  Otherwise, if @var{noerror} is non-@code{nil}, it returns
-@code{nil} if the final symbol is unbound.
+This function returns @code{nil} if the final symbol is unbound.  It
+signals a @code{cyclic-function-indirection} error if there is a loop
+in the chain of symbols.
 
-It signals a @code{cyclic-function-indirection} error if there is a
-loop in the chain of symbols.
+The optional argument @var{noerror} is obsolete, kept for backward
+compatibility, and has no effect.
 
 Here is how you could define @code{indirect-function} in Lisp:
 
@@ -780,7 +779,8 @@ to specify this function, but it is more robust to use the
 @deffn Command eval-buffer &optional buffer-or-name stream filename unibyte print
 This is similar to @code{eval-region}, but the arguments provide
 different optional features.  @code{eval-buffer} operates on the
-entire accessible portion of buffer @var{buffer-or-name}.
+entire accessible portion of buffer @var{buffer-or-name}
+(@pxref{Narrowing,,, emacs, The GNU Emacs Manual}).
 @var{buffer-or-name} can be a buffer, a buffer name (a string), or
 @code{nil} (or omitted), which means to use the current buffer.
 @var{stream} is used as in @code{eval-region}, unless @var{stream} is
@@ -833,9 +833,9 @@ The value of this variable is a list of the values returned by all the
 expressions that were read, evaluated, and printed from buffers
 (including the minibuffer) by the standard Emacs commands which do
 this.  (Note that this does @emph{not} include evaluation in
-@file{*ielm*} buffers, nor evaluation using @kbd{C-j} in
-@code{lisp-interaction-mode}.)  The elements are ordered most recent
-first.
+@file{*ielm*} buffers, nor evaluation using @kbd{C-j}, @kbd{C-x C-e},
+and similar evaluation commands in @code{lisp-interaction-mode}.)  The
+elements are ordered most recent first.
 
 @example
 @group

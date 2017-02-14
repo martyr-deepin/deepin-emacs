@@ -1,6 +1,6 @@
                                             -*-mode: text; coding: utf-8;-*-
 
-Copyright (C) 2002-2015 Free Software Foundation, Inc.
+Copyright (C) 2002-2017 Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 Importing a new Unicode Standard version into Emacs
@@ -10,13 +10,17 @@ Emacs uses the following files from the Unicode Character Database
 (a.k.a. "UCD):
 
   . UnicodeData.txt
+  . Blocks.txt
   . BidiMirroring.txt
+  . BidiBrackets.txt
   . IVD_Sequences.txt
+  . NormalizationTest.txt
+  . BidiCharacterTest.txt
 
-First, these files need to be copied into admin/unidata/, and then
-Emacs should be rebuilt for them to take effect.  Rebuilding Emacs
-updates several derived files elsewhere in the Emacs source tree,
-mainly in lisp/international/.
+First, the first 6 files need to be copied into admin/unidata/, and
+then Emacs should be rebuilt for them to take effect.  Rebuilding
+Emacs updates several derived files elsewhere in the Emacs source
+tree, mainly in lisp/international/.
 
 When Emacs is rebuilt for the first time after importing the new
 files, pay attention to any warning or error messages.  In particular,
@@ -27,19 +31,45 @@ so will cause aborts in redisplay.
 
 Next, review the changes in UnicodeData.txt vs the previous version
 used by Emacs.  Any changes, be it introduction of new scripts or
-addition of codepoints to existing scripts, need corresponding changes
-in the data used for filling char-script-table, see characters.el
-around line 1300.  Other databases and settings in characters.el, such
-as the data for char-width-table, might also need changes.
+addition of codepoints to existing scripts, might need corresponding
+changes in the data used for filling the category-table, case-table,
+and char-width-table.  The additional scripts should cause automatic
+updates in charscript.el, but it is a good idea to look at the results
+and see if any changes in admin/unidata/blocks.awk are required.
+
+The setting of char-width-table around line 1200 of characters.el
+should be checked against the latest version of the Unicode file
+EastAsianWidth.txt, and any discrepancies fixed.
 
 Any new scripts added by UnicodeData.txt will also need updates to
-script-representative-chars defined in fontset.el.  Other databases in
-fontset.el might also need to be updated as needed.
+script-representative-chars defined in fontset.el, and also the list
+of OTF script tags in otf-script-alist, whose source is on this page:
+
+  https://www.microsoft.com/typography/otspec/scripttags.htm
+
+Other databases in fontset.el might also need to be updated as needed.
+
+The function 'ucs-names', defined in lisp/international/mule-cmds.el,
+might need to be updated because it knows about used and unused ranges
+of Unicode codepoints, which a new release of the Unicode Standard
+could change.
+
+Next, test normalization functions against NormalizationTests.txt,
+in the test/ directory run:
+
+  make lisp/international/ucs-normalize-tests
+
+See commentary in test/lisp/international/ucs-normalize-tests.el
+regarding failing lines.
+
+The file BidiCharacterTest.txt should be copied to the test suite, and
+if its format has changed, the file biditest.el there should be
+modified to follow suit.
 
 Problems, fixmes and other unicode-related issues
 -------------------------------------------------------------
 
-Notes by fx to record various things of variable importance.  handa
+Notes by fx to record various things of variable importance.  Handa
 needs to check them -- don't take too seriously, especially with
 regard to completeness.
 
@@ -97,11 +127,11 @@ regard to completeness.
 
  * iso-2022 charsets get unified on i/o.
 
-	With the change on 2003-01-06, decoding routines put `charset'
-	property to decoded text, and iso-2022 encoder pay attention
+	With the change on 2003-01-06, decoding routines put the 'charset'
+	property onto decoded text, and iso-2022 encoder pay attention
 	to it.  Thus, for instance, reading and writing by
 	iso-2022-7bit preserve the original designation sequences.
-	The property name `preferred-charset' may be better?
+	The property name 'preferred-charset' may be better?
 
 	We may have to utilize this property to decide a font.
 
@@ -118,8 +148,6 @@ regard to completeness.
 
  * Need multibyte text in menus, e.g. for the above.  (Not specific to
    Unicode -- see Emacs etc/TODO, but now mostly works with gtk.)
-
- * There's currently no support for Unicode normalization.
 
  * Populate char-width-table correctly for Unicode characters and
    worry about what happens when double-width charsets covering
@@ -226,7 +254,6 @@ nontrivial changes to the build process.
 	lisp/leim/quail/japanese.el
 	lisp/leim/quail/py-punct.el
 	lisp/leim/quail/pypunct-b5.el
-	lisp/term/x-win.el
 
      This file contains just Chinese characters, and has same problem.
      Also, it contains characters that cannot be encoded in UTF-8.
@@ -244,6 +271,25 @@ nontrivial changes to the build process.
 	lisp/language/tibetan.el
 	lisp/leim/quail/ethiopic.el
 	lisp/leim/quail/tibetan.el
+
+ * binary files
+
+     These files contain binary data, and are not text files.
+     Some of the entries in this list are patterns, and stand for any
+     files with the listed extension.
+
+	*.gz
+	*.icns
+	*.ico
+	*.pbm
+	*.pdf
+	*.png
+	*.sig
+	etc/e/eterm-color
+	etc/package-keyring.gpg
+	msdos/emacs.pif
+	nextstep/GNUstep/Emacs.base/Resources/emacs.tiff
+	nt/icons/hand.cur
 
 
 This file is part of GNU Emacs.

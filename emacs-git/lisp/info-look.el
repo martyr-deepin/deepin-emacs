@@ -1,7 +1,7 @@
 ;;; info-look.el --- major-mode-sensitive Info index lookup facility -*- lexical-binding: t -*-
 ;; An older version of this was known as libc.el.
 
-;; Copyright (C) 1995-1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1999, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Ralph Schleicher <rs@nunatak.allgaeu.org>
 ;;         (did not show signs of life (Nov 2001)  -stef)
@@ -43,6 +43,7 @@
 ;;; Code:
 
 (require 'info)
+(require 'subr-x)
 
 (defgroup info-lookup nil
   "Major mode sensitive help agent."
@@ -142,7 +143,7 @@ OTHER-MODES is a list of cross references to other help modes.")
   "Add or update a help specification.
 Function arguments are specified as keyword/argument pairs:
 
-    \(KEYWORD . ARGUMENT)
+    (KEYWORD . ARGUMENT)
 
 KEYWORD is either `:topic', `:mode', `:regexp', `:ignore-case',
  `:doc-spec', `:parse-rule', or `:other-modes'.
@@ -613,8 +614,8 @@ Return nil if there is nothing appropriate in the buffer near point."
   (condition-case nil
       (save-excursion
 	(let ((case-fold-search t)
-	      (ignored-chars "][()`',:.\" \t\n")
-	      (significant-chars "^][()`',:.\" \t\n")
+	      (ignored-chars "][()`'‘’,:.\" \t\n")
+	      (significant-chars "^][()`'‘’,:.\" \t\n")
 	      beg end)
 	  (cond
 	   ((and (memq (get-char-property (point) 'face)
@@ -646,6 +647,26 @@ Return nil if there is nothing appropriate in the buffer near point."
 		     (setq end (point))
 		     (> end beg)))
 	    (buffer-substring-no-properties beg end)))))
+    (error nil)))
+
+(defun info-lookup-guess-gdb-script-symbol ()
+  "Get symbol at point in GDB script buffers."
+  (condition-case nil
+      (save-excursion
+        (back-to-indentation)
+        ;; Try to find the current line's full command in the index;
+        ;; and default to the longest subset that is found.
+        (when (looking-at "[-a-z]+\\(\\s-[-a-z]+\\)*")
+          (let ((str-list (split-string (match-string-no-properties 0)
+                                        "\\s-+" t))
+                (completions (info-lookup->completions 'symbol
+                                                       'gdb-script-mode)))
+            (catch 'result
+              (while str-list
+                (let ((str (string-join str-list " ")))
+                  (when (assoc str completions)
+                    (throw 'result str))
+                  (nbutlast str-list)))))))
     (error nil)))
 
 ;;;###autoload
@@ -899,7 +920,7 @@ Return nil if there is nothing appropriate in the buffer near point."
 
 (info-lookup-maybe-add-help
  :mode 'emacs-lisp-mode
- :regexp "[^][()`',\" \t\n]+"
+ :regexp "[^][()`'‘’,\" \t\n]+"
  :doc-spec '(;; Commands with key sequences appear in nodes as `foo' and
              ;; those without as `M-x foo'.
              ("(emacs)Command Index"  nil "['`‘]\\(M-x[ \t\n]+\\)?" "['’]")
@@ -912,29 +933,31 @@ Return nil if there is nothing appropriate in the buffer near point."
              ;; for things that should go to Function: etc, and those latter
              ;; are much more important.  Perhaps this could change if some
              ;; sort of fallback match scheme existed.
-             ("(elisp)Index"          nil "^ -+ .*: " "\\( \\|$\\)")))
+             ("(elisp)Index"          nil "^ -+ .*: " "\\( \\|$\\)")
+             ("(cl)Function Index"    nil "^ -+ .*: " "\\( \\|$\\)")
+             ("(cl)Variable Index"    nil "^ -+ .*: " "\\( \\|$\\)")))
 
 ;; docstrings talk about elisp, so have apropos-mode follow emacs-lisp-mode
 (info-lookup-maybe-add-help
  :mode 'apropos-mode
- :regexp "[^][()`',\" \t\n]+" ;; same as emacs-lisp-mode above
+ :regexp "[^][()`'‘’,\" \t\n]+" ;; same as emacs-lisp-mode above
  :other-modes '(emacs-lisp-mode))
 
 (info-lookup-maybe-add-help
  :mode 'lisp-interaction-mode
- :regexp "[^][()`',\" \t\n]+"
+ :regexp "[^][()`'‘’,\" \t\n]+"
  :parse-rule 'ignore
  :other-modes '(emacs-lisp-mode))
 
 (info-lookup-maybe-add-help
  :mode 'lisp-mode
- :regexp "[^()`',\" \t\n]+"
+ :regexp "[^()`'‘’,\" \t\n]+"
  :parse-rule 'ignore
  :other-modes '(emacs-lisp-mode))
 
 (info-lookup-maybe-add-help
  :mode 'scheme-mode
- :regexp "[^()`',\" \t\n]+"
+ :regexp "[^()`'‘’,\" \t\n]+"
  :ignore-case t
  ;; Aubrey Jaffer's rendition from <URL:ftp://ftp-swiss.ai.mit.edu/pub/scm>
  :doc-spec '(("(r5rs)Index" nil
@@ -1041,14 +1064,22 @@ Return nil if there is nothing appropriate in the buffer near point."
 (info-lookup-maybe-add-help
  :mode 'Custom-mode
  :ignore-case t
- :regexp "[^][()`',:\" \t\n]+"
+ :regexp "[^][()`'‘’,:\" \t\n]+"
  :parse-rule 'info-lookup-guess-custom-symbol
  :other-modes '(emacs-lisp-mode))
 
 (info-lookup-maybe-add-help
  :mode 'help-mode
- :regexp "[^][()`',:\" \t\n]+"
+ :regexp "[^][()`'‘’,:\" \t\n]+"
  :other-modes '(emacs-lisp-mode))
+
+(info-lookup-maybe-add-help
+ :mode 'gdb-script-mode
+ :ignore-case nil
+ :regexp "\\([-a-z]+\\(\\s-+[-a-z]+\\)*\\)"
+ :doc-spec '(("(gdb)Command and Variable Index" nil
+              nil nil))
+ :parse-rule 'info-lookup-guess-gdb-script-symbol)
 
 (provide 'info-look)
 

@@ -1,6 +1,6 @@
 ;;; quail.el --- provides simple input method for multilingual text
 
-;; Copyright (C) 1997-1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2000-2017 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -252,15 +252,16 @@ This activates input method defined by PACKAGE-NAME by running
 		(with-output-to-temp-buffer "*Help*"
 		  (princ "Quail package \"")
 		  (princ package-name)
-		  (princ "\" can't be activated\n  because library \"")
+		  (princ (substitute-command-keys
+			  "\" can't be activated\n  because library \""))
 		  (princ (car libraries))
-		  (princ "\" is not in `load-path'.
+		  (princ (substitute-command-keys "\" is not in `load-path'.
 
 The most common case is that you have not yet installed appropriate
 libraries in LEIM (Libraries of Emacs Input Method) which is
 distributed separately from Emacs.
 
-LEIM is available from the same ftp directory as Emacs."))
+LEIM is available from the same ftp directory as Emacs.")))
 		(error "Can't use the Quail package `%s'" package-name))
 	    (setq libraries (cdr libraries))))))
   (quail-select-package package-name)
@@ -625,7 +626,7 @@ While this input method is active, the variable
   "Standard keyboard layout of printable characters Quail assumes.
 See the documentation of `quail-keyboard-layout' for this format.
 This layout is almost the same as that of VT100,
- but the location of key \\ (backslash) is just right of key ' (single-quote),
+ but the location of key \\ (backslash) is just right of key \\=' (single-quote),
  not right of RETURN key.")
 
 (defconst quail-keyboard-layout-len 180)
@@ -1305,7 +1306,7 @@ The returned value is a Quail map specific to KEY."
 
 (define-error 'quail-error nil)
 (defun quail-error (&rest args)
-  (signal 'quail-error (apply 'format args)))
+  (signal 'quail-error (apply #'format-message args)))
 
 (defun quail-input-string-to-events (str)
   "Convert input string STR to a list of events.
@@ -1332,7 +1333,15 @@ If STR has `advice' text property, append the following special event:
 
 (defun quail-input-method (key)
   (if (or buffer-read-only
-	  overriding-terminal-local-map
+	  (and overriding-terminal-local-map
+               ;; If the overriding map is `universal-argument-map', that
+               ;; must mean the user has pressed 'C-u KEY'.  If KEY has a
+               ;; binding in `universal-argument-map' just return
+               ;; (list KEY), otherwise act as if there was no
+               ;; overriding map.
+               (or (not (eq (cadr overriding-terminal-local-map)
+                            universal-argument-map))
+                   (lookup-key overriding-terminal-local-map (vector key))))
 	  overriding-local-map)
       (list key)
     (quail-setup-overlays (quail-conversion-keymap))
@@ -1415,7 +1424,8 @@ Return the input string."
 	      ;; KEYSEQ is not defined in the translation keymap.
 	      ;; Let's return the event(s) to the caller.
 	      (setq unread-command-events
-		    (string-to-list (this-single-command-raw-keys)))
+		    (append (this-single-command-raw-keys)
+                            unread-command-events))
 	      (setq quail-translating nil))))
 	(quail-delete-region)
 	quail-current-str)
@@ -1491,7 +1501,8 @@ Return the input string."
 	      ;; KEYSEQ is not defined in the conversion keymap.
 	      ;; Let's return the event(s) to the caller.
 	      (setq unread-command-events
-		    (string-to-list (this-single-command-raw-keys)))
+		    (append (this-single-command-raw-keys)
+                            unread-command-events))
 	      (setq quail-converting nil))))
 	(setq quail-translating nil)
 	(if (overlay-start quail-conv-overlay)
@@ -2513,7 +2524,7 @@ package to describe."
 	      ")\n\n")
       (save-restriction
 	(narrow-to-region (point) (point))
-	(insert (quail-docstring))
+	(insert (substitute-command-keys (quail-docstring)))
 	(goto-char (point-min))
 	(with-syntax-table emacs-lisp-mode-syntax-table
 	  (while (re-search-forward "\\\\<\\sw\\(\\sw\\|\\s_\\)+>" nil t)
@@ -2531,35 +2542,37 @@ package to describe."
       (let ((done-list nil))
 	;; Show keyboard layout if the current package requests it..
 	(when (quail-show-layout)
-	  (insert "
+	  (insert (substitute-command-keys "
 KEYBOARD LAYOUT
 ---------------
 This input method works by translating individual input characters.
-Assuming that your actual keyboard has the `")
+Assuming that your actual keyboard has the `"))
 	  (help-insert-xref-button
 	   quail-keyboard-layout-type
 	   'quail-keyboard-layout-button
 	   quail-keyboard-layout-type)
-	  (insert "' layout,
+	  (insert (substitute-command-keys "' layout,
 translation results in the following \"virtual\" keyboard layout
 \(the labels on the keys indicate what character will be produced
 by each key, with and without holding Shift):
-")
+"))
 	  (setq done-list
 		(quail-insert-kbd-layout quail-keyboard-layout))
-	  (insert "If your keyboard has a different layout, rearranged from
-`")
+	  (insert (substitute-command-keys "\
+If your keyboard has a different layout, rearranged from
+`"))
 	  (help-insert-xref-button
 	   "standard"
 	   'quail-keyboard-layout-button "standard")
-	  (insert "', the \"virtual\" keyboard you get with this input method
+	  (insert (substitute-command-keys "\
+', the \"virtual\" keyboard you get with this input method
 will be rearranged in the same way.
 
 You can set the variable `quail-keyboard-layout-type' to specify
 the physical layout of your keyboard; the tables shown in
 documentation of input methods including this one are based on the
 physical keyboard layout as specified with that variable.
-")
+"))
 	  (help-insert-xref-button
 	   "[customize keyboard layout]"
 	   'quail-keyboard-customize-button 'quail-keyboard-layout-type)

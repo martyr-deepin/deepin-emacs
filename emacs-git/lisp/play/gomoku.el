@@ -1,6 +1,6 @@
 ;;; gomoku.el --- Gomoku game between you and Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1988, 1994, 1996, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1988, 1994, 1996, 2001-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Philippe Schnoebelen <phs@lsv.ens-cachan.fr>
@@ -551,7 +551,7 @@ that DVAL has been added on SQUARE."
 ;;;
 
 ;; Several variables are used to monitor a game, including a GAME-HISTORY (the
-;; list of all (SQUARE . PREVSCORE) played) that allows to take moves back
+;; list of all (SQUARE . PREVSCORE) played) that allows you to take moves back
 ;; (anti-updating the score table) and to compute the table from scratch in
 ;; case of an interruption.
 
@@ -977,7 +977,7 @@ If the game is finished, this command requests for another game."
   (move-to-column (+ gomoku-x-offset (* gomoku-square-width (1- x)))))
 
 (defun gomoku-plot-square (square value)
-  "Draw 'X', 'O' or '.' on SQUARE depending on VALUE, leave point there."
+  "Draw `X', `O' or `.' on SQUARE depending on VALUE, leave point there."
   (or (= value 1)
       (gomoku-goto-square square))
   (let ((inhibit-read-only t))

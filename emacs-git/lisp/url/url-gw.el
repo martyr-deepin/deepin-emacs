@@ -1,6 +1,6 @@
 ;;; url-gw.el --- Gateway munging for URL loading
 
-;; Copyright (C) 1997-1998, 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2004-2017 Free Software Foundation, Inc.
 
 ;; Author: Bill Perry <wmperry@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -39,7 +39,7 @@
   :group 'url-gateway)
 
 (defcustom url-gateway-prompt-pattern
-  "^[^#$%>;]*[#$%>;] *" ;; "bash\\|\$ *\r?$\\|> *\r?"
+  "^[^#$%>;]*[#$%>;] *" ;; "bash\\|[$>] *\r?$"
   "A regular expression matching a shell prompt."
   :type 'regexp
   :group 'url-gateway)
@@ -246,8 +246,8 @@ overriding the value of `url-gateway-method'."
 			   :type gw-method
 			   ;; Use non-blocking socket if we can.
 			   :nowait (featurep 'make-network-process
-					     '(:nowait t))))
-			 (`socks
+                                             '(:nowait t))))
+                         (`socks
 			  (socks-open-network-stream name buffer host service))
 			 (`telnet
 			  (url-open-telnet name buffer host service))

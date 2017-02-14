@@ -1,13 +1,13 @@
 /* sound.c -- sound support.
 
-Copyright (C) 1998-1999, 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 1998-1999, 2001-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -46,7 +46,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <errno.h>
 
 #include "lisp.h"
-#include "dispextern.h"
 #include "atimer.h"
 #include "syssignal.h"
 /* END: Common Includes */
@@ -311,12 +310,13 @@ sound_perror (const char *msg)
   }
 #endif
   if (saved_errno != 0)
-    error ("%s: %s", msg, strerror (saved_errno));
+    error ("%s: %s", msg, emacs_strerror (saved_errno));
   else
     error ("%s", msg);
 }
 
 
+#ifndef WINDOWSNT
 /* Display a warning message.  */
 
 static void
@@ -324,6 +324,7 @@ sound_warning (const char *msg)
 {
   message1 (msg);
 }
+#endif	/* !WINDOWSNT */
 
 
 /* Parse sound specification SOUND, and fill ATTRS with what is
@@ -1351,7 +1352,6 @@ Internal use only, use `play-sound' instead.  */)
 {
   Lisp_Object attrs[SOUND_ATTR_SENTINEL];
   ptrdiff_t count = SPECPDL_INDEX ();
-  struct gcpro gcpro1, gcpro2;
 
 #ifdef WINDOWSNT
   unsigned long ui_volume_tmp = UINT_MAX;
@@ -1363,7 +1363,6 @@ Internal use only, use `play-sound' instead.  */)
     error ("Invalid sound specification");
 
   Lisp_Object file = Qnil;
-  GCPRO2 (sound, file);
 
 #ifndef WINDOWSNT
   current_sound_device = xzalloc (sizeof *current_sound_device);
@@ -1452,7 +1451,6 @@ Internal use only, use `play-sound' instead.  */)
 
 #endif /* WINDOWSNT */
 
-  UNGCPRO;
   return unbind_to (count, Qnil);
 }
 

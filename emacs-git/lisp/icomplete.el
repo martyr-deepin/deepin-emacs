@@ -1,6 +1,6 @@
 ;;; icomplete.el --- minibuffer completion incremental feedback
 
-;; Copyright (C) 1992-1994, 1997, 1999, 2001-2015 Free Software
+;; Copyright (C) 1992-1994, 1997, 1999, 2001-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Ken Manheimer <klm@i.am>
@@ -122,7 +122,7 @@ This hook is run during minibuffer setup if Icomplete is active.
 It is intended for use in customizing Icomplete for interoperation
 with other features and packages.  For instance:
 
-  (add-hook 'icomplete-minibuffer-setup-hook
+  (add-hook \\='icomplete-minibuffer-setup-hook
 	     (lambda () (setq-local max-mini-window-height 3)))
 
 will constrain Emacs to a maximum minibuffer height of 3 lines when
@@ -149,16 +149,26 @@ icompletion is occurring."
 (defvar icomplete-minibuffer-map
   (let ((map (make-sparse-keymap)))
     (define-key map [?\M-\t] 'minibuffer-force-complete)
-    (define-key map [?\C-j]  'minibuffer-force-complete-and-exit)
+    (define-key map [?\C-j]  'icomplete-force-complete-and-exit)
     (define-key map [?\C-.]  'icomplete-forward-completions)
     (define-key map [?\C-,]  'icomplete-backward-completions)
     map)
   "Keymap used by `icomplete-mode' in the minibuffer.")
 
+(defun icomplete-force-complete-and-exit ()
+  "Complete the minibuffer and exit.
+Use the first of the matches if there are any displayed, and use
+the default otherwise."
+  (interactive)
+  (if (or icomplete-show-matches-on-no-input
+          (> (icomplete--field-end) (icomplete--field-beg)))
+      (minibuffer-force-complete-and-exit)
+    (minibuffer-complete-and-exit)))
+
 (defun icomplete-forward-completions ()
   "Step forward completions by one entry.
 Second entry becomes the first and can be selected with
-`minibuffer-force-complete-and-exit'."
+`icomplete-force-complete-and-exit'."
   (interactive)
   (let* ((beg (icomplete--field-beg))
          (end (icomplete--field-end))
@@ -171,7 +181,7 @@ Second entry becomes the first and can be selected with
 (defun icomplete-backward-completions ()
   "Step backward completions by one entry.
 Last entry becomes the first and can be selected with
-`minibuffer-force-complete-and-exit'."
+`icomplete-force-complete-and-exit'."
   (interactive)
   (let* ((beg (icomplete--field-beg))
          (end (icomplete--field-end))
@@ -378,6 +388,9 @@ matches exist."
 	(progn ;;(debug (format "Candidates=%S field=%S" candidates name))
 	       (format " %sNo matches%s" open-bracket close-bracket))
       (if last (setcdr last nil))
+      (when (and minibuffer-completing-file-name
+                 icomplete-with-completion-tables)
+        (setq comps (completion-pcm--filename-try-filter comps)))
       (let* ((most-try
               (if (and base-size (> base-size 0))
                   (completion-try-completion

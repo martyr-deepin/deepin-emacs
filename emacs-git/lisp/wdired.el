@@ -1,6 +1,6 @@
-;;; wdired.el --- Rename files editing their names in dired buffers
+;;; wdired.el --- Rename files editing their names in dired buffers -*- coding: utf-8; -*-
 
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2017 Free Software Foundation, Inc.
 
 ;; Filename: wdired.el
 ;; Author: Juan León Lahoz García <juanleon1@gmail.com>
@@ -152,6 +152,16 @@ renamed by `dired-do-rename' and `dired-do-rename-regexp'."
   :version "24.3"
   :group 'wdired)
 
+(defcustom wdired-create-parent-directories t
+  "If non-nil, create parent directories of destination files.
+If non-nil, when you rename a file to a destination path within a
+nonexistent directory, wdired will create any parent directories
+necessary.  When nil, attempts to rename a file into a
+nonexistent directory will fail."
+  :version "26.1"
+  :type 'boolean
+  :group 'wdired)
+
 (defvar wdired-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-x\C-s" 'wdired-finish-edit)
@@ -294,14 +304,15 @@ or \\[wdired-abort-changes] to abort changes")))
       (put-text-property b-protection (point-max) 'read-only t))))
 
 ;; This code is a copy of some dired-get-filename lines.
-(defsubst wdired-normalize-filename (file)
-  (setq file
-	;; FIXME: shouldn't we check for a `b' argument or somesuch before
-	;; doing such unquoting?  --Stef
-	(read (concat
-	       "\"" (replace-regexp-in-string
-		     "\\([^\\]\\|\\`\\)\"" "\\1\\\\\"" file)
-	       "\"")))
+(defsubst wdired-normalize-filename (file unquotep)
+  (when unquotep
+    (setq file
+          ;; FIXME: shouldn't we check for a `b' argument or somesuch before
+          ;; doing such unquoting?  --Stef
+          (read (concat
+                 "\"" (replace-regexp-in-string
+                       "\\([^\\]\\|\\`\\)\"" "\\1\\\\\"" file)
+                 "\""))))
   (and file buffer-file-coding-system
        (not file-name-coding-system)
        (not default-file-name-coding-system)
@@ -329,7 +340,8 @@ non-nil means return old filename."
 	  ;; deletion.
 	  (setq end (next-single-property-change beg 'end-name))
 	  (setq file (buffer-substring-no-properties (1+ beg) end)))
-	(and file (setq file (wdired-normalize-filename file))))
+	;; Don't unquote the old name, it wasn't quoted in the first place
+        (and file (setq file (wdired-normalize-filename file (not old)))))
       (if (or no-dir old)
 	  file
 	(and file (> (length file) 0)
@@ -490,15 +502,22 @@ non-nil means return old filename."
               (require 'dired-aux)
               (condition-case err
                   (let ((dired-backup-overwrite nil))
+                    (and wdired-create-parent-directories
+                         (wdired-create-parentdirs file-new))
                     (dired-rename-file file-ori file-new
                                        overwrite))
                 (error
                  (setq errors (1+ errors))
-                 (dired-log (concat "Rename `" file-ori "' to `"
-                                    file-new "' failed:\n%s\n")
+                 (dired-log "Rename `%s' to `%s' failed:\n%s\n"
+                            file-ori file-new
                             err)))))))))
     errors))
 
+(defun wdired-create-parentdirs (file-new)
+  "Create parent directories for FILE-NEW if they don't exist."
+  (and (not (file-exists-p (file-name-directory file-new)))
+       (message "Creating directory for file %s" file-new)
+       (make-directory (file-name-directory file-new) t)))
 
 (defun wdired-exit ()
   "Exit wdired and return to dired mode.
@@ -571,7 +590,7 @@ Optional arguments are ignored."
   "Move down lines then position at filename or the current column.
 See `wdired-use-dired-vertical-movement'.  Optional prefix ARG
 says how many lines to move; default is one line."
-  (interactive "p")
+  (interactive "^p")
   (with-no-warnings (next-line arg))
   (if (or (eq wdired-use-dired-vertical-movement t)
 	  (and wdired-use-dired-vertical-movement
@@ -584,7 +603,7 @@ says how many lines to move; default is one line."
   "Move up lines then position at filename or the current column.
 See `wdired-use-dired-vertical-movement'.  Optional prefix ARG
 says how many lines to move; default is one line."
-  (interactive "p")
+  (interactive "^p")
   (with-no-warnings (previous-line arg))
   (if (or (eq wdired-use-dired-vertical-movement t)
 	  (and wdired-use-dired-vertical-movement
@@ -627,7 +646,7 @@ If OLD, return the old target.  If MOVE, move point before it."
 	    (setq end (next-single-property-change beg 'end-link))
 	    (setq target (buffer-substring-no-properties (1+ beg) end)))
 	  (if move (goto-char (1- beg)))))
-    (and target (wdired-normalize-filename target))))
+    (and target (wdired-normalize-filename target t))))
 
 (declare-function make-symbolic-link "fileio.c")
 
@@ -651,8 +670,8 @@ If OLD, return the old target.  If MOVE, move point before it."
                (substitute-in-file-name link-to-new) link-from))
           (error
            (setq errors (1+ errors))
-           (dired-log (concat "Link `" link-from "' to `"
-                              link-to-new "' failed:\n%s\n")
+           (dired-log "Link `%s' to `%s' failed:\n%s\n"
+                      link-from link-to-new
                       err)))))
     (cons changes errors)))
 
@@ -666,7 +685,7 @@ If OLD, return the old target.  If MOVE, move point before it."
             (funcall command 1)
             (setq arg (1- arg)))
         (error
-         (if (forward-word)
+         (if (forward-word-strictly)
 	     ;; Skip any non-word characters to avoid triggering a read-only
 	     ;; error which would cause skipping the next word characters too.
 	     (skip-syntax-forward "^w")
@@ -837,11 +856,11 @@ Like original function but it skips read-only words."
               (unless (equal 0 (process-file dired-chmod-program
 					     nil nil nil perm-tmp filename))
                 (setq errors (1+ errors))
-                (dired-log (concat dired-chmod-program " " perm-tmp
-                                   " `" filename "' failed\n\n"))))
+                (dired-log "%s %s `%s' failed\n\n"
+                           dired-chmod-program perm-tmp filename)))
           (setq errors (1+ errors))
-          (dired-log (concat "Cannot parse permission `" perms-new
-                             "' for file `" filename "'\n\n"))))
+          (dired-log "Cannot parse permission `%s' for file `%s'\n\n"
+                     perms-new filename)))
       (goto-char (next-single-property-change (1+ (point)) prop-wanted
 					      nil (point-max))))
     (cons changes errors)))
@@ -849,7 +868,6 @@ Like original function but it skips read-only words."
 (provide 'wdired)
 
 ;; Local Variables:
-;; coding: utf-8
 ;; byte-compile-dynamic: t
 ;; End:
 

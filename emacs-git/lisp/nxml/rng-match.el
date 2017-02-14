@@ -1,6 +1,6 @@
 ;;; rng-match.el --- matching of RELAX NG patterns against XML events  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
 
 ;; Author: James Clark
 ;; Keywords: wp, hypermedia, languages, XML, RelaxNG
@@ -56,9 +56,8 @@ Used to detect invalid recursive references.")
 ;;; Inline functions
 
 (defsubst rng-update-match-state (new-state)
-  (if (and (eq new-state rng-not-allowed-ipattern)
-	   (not (eq rng-match-state rng-not-allowed-ipattern)))
-      nil
+  (if (eq new-state rng-not-allowed-ipattern)
+      (eq rng-match-state rng-not-allowed-ipattern)
     (setq rng-match-state new-state)
     t))
 
@@ -1504,7 +1503,7 @@ nullable and y1 isn't, return a choice
 
 (defun rng-compile-error (&rest args)
   (signal 'rng-compile-error
-	  (list (apply 'format args))))
+	  (list (apply #'format-message args))))
 
 (define-error 'rng-compile-error "Incorrect schema" 'rng-error)
 

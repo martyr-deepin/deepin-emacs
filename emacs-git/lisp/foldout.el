@@ -1,6 +1,6 @@
 ;;; foldout.el --- folding extensions for outline-mode and outline-minor-mode
 
-;; Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Kevin Broadey <KevinB@bartley.demon.co.uk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -250,7 +250,7 @@ An end marker of nil means the fold ends after (point-max).")
   "Open the subtree under the current heading and narrow to it.
 
 Normally the body and the immediate subheadings are exposed, but
-optional arg EXPOSURE \(interactively with prefix arg\) changes this:-
+optional arg EXPOSURE \(interactively with prefix arg) changes this:-
 
 	EXPOSURE > 0	exposes n levels of subheadings (c.f. show-children)
 	EXPOSURE < 0	exposes only the body

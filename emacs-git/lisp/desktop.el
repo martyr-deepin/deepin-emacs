@@ -1,6 +1,6 @@
 ;;; desktop.el --- save partial status of Emacs when killed -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1995, 1997, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1993-1995, 1997, 2000-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Morten Welinder <terra@diku.dk>
@@ -83,8 +83,10 @@
 ;;    (add-to-list 'desktop-minor-mode-handlers
 ;;                 '(bar-mode . bar-desktop-restore))
 
-;; in the module itself, and make sure that the mode function is
-;; autoloaded.  See the docstrings of `desktop-buffer-mode-handlers' and
+;; in the module itself.  The mode function must either be autoloaded,
+;; or of the form "foobar-mode" and defined in library "foobar", so that
+;; desktop can guess how to load its definition.
+;; See the docstrings of `desktop-buffer-mode-handlers' and
 ;; `desktop-minor-mode-handlers' for more info.
 
 ;; Minor modes.
@@ -138,8 +140,15 @@
 
 (defvar desktop-file-version "208"
   "Version number of desktop file format.
-Written into the desktop file and used at desktop read to provide
-backward compatibility.")
+Used at desktop read to provide backward compatibility.")
+
+(defconst desktop-native-file-version 208
+  "Format version of the current desktop package, an integer.")
+(defvar desktop-io-file-version nil
+  "The format version of the current desktop file (an integer) or nil.")
+;; Note: Historically, the version number is embedded in the entry for
+;; each buffer.  It is highly inadvisable for different buffer entries
+;; to have different format versions.
 
 ;; ----------------------------------------------------------------------------
 ;; USER OPTIONS -- settings you might want to play with.
@@ -163,8 +172,8 @@ one session to another.  In particular, Emacs will save the desktop when
 it exits (this may prompt you; see the option `desktop-save').  The next
 time Emacs starts, if this mode is active it will restore the desktop.
 
-To manually save the desktop at any time, use the command `M-x desktop-save'.
-To load it, use `M-x desktop-read'.
+To manually save the desktop at any time, use the command `\\[desktop-save]'.
+To load it, use `\\[desktop-read]'.
 
 Once a desktop file exists, Emacs will auto-save it according to the
 option `desktop-auto-save-timeout'.
@@ -358,6 +367,7 @@ these won't be deleted."
     column-number-mode
     size-indication-mode
     buffer-file-coding-system
+    buffer-display-time
     indent-tabs-mode
     tab-width
     indicate-buffer-boundaries
@@ -370,7 +380,10 @@ modes are restored automatically; they should not be listed here."
   :group 'desktop)
 
 (defcustom desktop-buffers-not-to-save "\\` "
-  "Regexp identifying buffers that are to be excluded from saving."
+  "Regexp identifying buffers that are to be excluded from saving.
+This is in effect only for buffers that don't visit files.
+To exclude buffers that visit files, use `desktop-files-not-to-save'
+or `desktop-modes-not-to-save'."
   :type '(choice (const :tag "None" nil)
 		 regexp)
   :version "24.4"		    ; skip invisible temporary buffers
@@ -399,7 +412,7 @@ See related options `desktop-restore-reuses-frames',
   :group 'desktop
   :version "24.4")
 
-(defcustom desktop-restore-in-current-display nil
+(defcustom desktop-restore-in-current-display t
   "Controls how restoring of frames treats displays.
 If t, restores frames into the current display.
 If nil, restores frames into their original displays (if possible).
@@ -517,10 +530,12 @@ code like
 
    (defun foo-restore-desktop-buffer
    ...
-   (add-to-list 'desktop-buffer-mode-handlers
-                '(foo-mode . foo-restore-desktop-buffer))
+   (add-to-list \\='desktop-buffer-mode-handlers
+                \\='(foo-mode . foo-restore-desktop-buffer))
 
-Furthermore the major mode function must be autoloaded.")
+The major mode function must either be autoloaded, or of the form
+\"foobar-mode\" and defined in library \"foobar\", so that desktop
+can guess how to load the mode's definition.")
 
 ;;;###autoload
 (put 'desktop-buffer-mode-handlers 'risky-local-variable t)
@@ -543,7 +558,9 @@ RESTORE-FUNCTION nil means don't try to restore the minor mode.
 Only minor modes for which the name of the buffer-local variable
 and the name of the minor mode function are different have to be added to
 this table.  See also `desktop-minor-mode-handlers'."
-  :type 'sexp
+  :type '(alist :key-type (symbol :tag "Minor mode")
+                :value-type (list :tag "Restore function"
+                                  (choice (const nil) function)))
   :group 'desktop)
 
 ;;;###autoload
@@ -582,10 +599,12 @@ code like
 
    (defun foo-desktop-restore
    ...
-   (add-to-list 'desktop-minor-mode-handlers
-                '(foo-mode . foo-desktop-restore))
+   (add-to-list \\='desktop-minor-mode-handlers
+                \\='(foo-mode . foo-desktop-restore))
 
-Furthermore the minor mode function must be autoloaded.
+The minor mode function must either be autoloaded, or of the form
+\"foobar-mode\" and defined in library \"foobar\", so that desktop
+can guess how to load the mode's definition.
 
 See also `desktop-minor-mode-table'.")
 
@@ -687,6 +706,7 @@ deletes all frames except the selected one (and its minibuffer frame,
 if different)."
   (interactive)
   (desktop-lazy-abort)
+  (setq desktop-io-file-version nil)
   (dolist (var desktop-globals-to-clear)
     (if (symbolp var)
 	(eval `(setq-default ,var nil))
@@ -775,44 +795,46 @@ buffer, which is (in order):
     local variables;
     auxiliary information given by `desktop-var-serdes-funs'."
   (set-buffer buffer)
-  (list
-   ;; base name of the buffer; replaces the buffer name if managed by uniquify
-   (and (fboundp 'uniquify-buffer-base-name) (uniquify-buffer-base-name))
-   ;; basic information
-   (desktop-file-name (buffer-file-name) desktop-dirname)
-   (buffer-name)
-   major-mode
-   ;; minor modes
-   (let (ret)
-     (dolist (minor-mode (mapcar #'car minor-mode-alist) ret)
-       (and (boundp minor-mode)
-            (symbol-value minor-mode)
-            (let* ((special (assq minor-mode desktop-minor-mode-table))
-                   (value (cond (special (cadr special))
-                                ((functionp minor-mode) minor-mode))))
-              (when value (cl-pushnew value ret))))))
-   ;; point and mark, and read-only status
-   (point)
-   (list (mark t) mark-active)
-   buffer-read-only
-   ;; auxiliary information
-   (when (functionp desktop-save-buffer)
-     (funcall desktop-save-buffer desktop-dirname))
-   ;; local variables
-   (let ((loclist (buffer-local-variables))
-	 (ll nil))
-     (dolist (local desktop-locals-to-save)
-       (let ((here (assq local loclist)))
-	 (cond (here
-		(push here ll))
-	       ((member local loclist)
-		(push local ll)))))
-     ll)
-   (mapcar (lambda (record)
-	     (let ((var (car record)))
-	       (list var
-		     (funcall (cadr record) (symbol-value var)))))
-	   desktop-var-serdes-funs)))
+  `(
+    ;; base name of the buffer; replaces the buffer name if managed by uniquify
+    ,(and (fboundp 'uniquify-buffer-base-name) (uniquify-buffer-base-name))
+    ;; basic information
+    ,(desktop-file-name (buffer-file-name) desktop-dirname)
+    ,(buffer-name)
+    ,major-mode
+    ;; minor modes
+    ,(let (ret)
+       (dolist (minor-mode (mapcar #'car minor-mode-alist) ret)
+         (and (boundp minor-mode)
+              (symbol-value minor-mode)
+              (let* ((special (assq minor-mode desktop-minor-mode-table))
+                     (value (cond (special (cadr special))
+                                  ((functionp minor-mode) minor-mode))))
+                (when value (cl-pushnew value ret))))))
+    ;; point and mark, and read-only status
+    ,(point)
+    ,(list (mark t) mark-active)
+    ,buffer-read-only
+    ;; auxiliary information
+    ,(when (functionp desktop-save-buffer)
+       (funcall desktop-save-buffer desktop-dirname))
+    ;; local variables
+    ,(let ((loclist (buffer-local-variables))
+           (ll nil))
+       (dolist (local desktop-locals-to-save)
+         (let ((here (assq local loclist)))
+           (cond (here
+                  (push here ll))
+                 ((member local loclist)
+                  (push local ll)))))
+       ll)
+   ,@(when (>= desktop-io-file-version 208)
+       (list
+        (mapcar (lambda (record)
+                  (let ((var (car record)))
+                    (list var
+                          (funcall (cadr record) (symbol-value var)))))
+                desktop-var-serdes-funs)))))
 
 ;; ----------------------------------------------------------------------------
 (defun desktop--v2s (value)
@@ -977,20 +999,41 @@ Frames with a non-nil `desktop-dont-save' parameter are not saved."
 			    :predicate #'desktop--check-dont-save))))
 
 ;;;###autoload
-(defun desktop-save (dirname &optional release only-if-changed)
+(defun desktop-save (dirname &optional release only-if-changed version)
   "Save the desktop in a desktop file.
 Parameter DIRNAME specifies where to save the desktop file.
-Optional parameter RELEASE says whether we're done with this desktop.
-If ONLY-IF-CHANGED is non-nil, compare the current desktop information
-to that in the desktop file, and if the desktop information has not
-changed since it was last saved then do not rewrite the file."
+Optional parameter RELEASE says whether we're done with this
+desktop.  If ONLY-IF-CHANGED is non-nil, compare the current
+desktop information to that in the desktop file, and if the
+desktop information has not changed since it was last saved then
+do not rewrite the file.
+
+This function can save the desktop in either format version
+208 (which only Emacs 25.1 and later can read) or version
+206 (which is readable by any Emacs from version 22.1 onwards).
+By default, it will use the same format the desktop file had when
+it was last saved, or version 208 when writing a fresh desktop
+file.
+
+To upgrade a version 206 file to version 208, call this command
+explicitly with a bare prefix argument: C-u M-x desktop-save.
+You are recommended to do this once you have firmly upgraded to
+Emacs 25.1 (or later).  To downgrade a version 208 file to version
+206, use a double command prefix: C-u C-u M-x desktop-save.
+Confirmation will be requested in either case.  In a non-interactive
+call, VERSION can be given as an integer, either 206 or 208, which
+will be accepted as the format version in which to save the file
+without further confirmation."
   (interactive (list
                 ;; Or should we just use (car desktop-path)?
                 (let ((default (if (member "." desktop-path)
                                    default-directory
                                  user-emacs-directory)))
                   (read-directory-name "Directory to save desktop file in: "
-                                       default default t))))
+                                       default default t))
+                nil
+                nil
+                current-prefix-arg))
   (setq desktop-dirname (file-name-as-directory (expand-file-name dirname)))
   (save-excursion
     (let ((eager desktop-restore-eager)
@@ -1011,12 +1054,34 @@ changed since it was last saved then do not rewrite the file."
 	    (desktop-release-lock)
 	  (unless (and new-modtime (desktop-owner)) (desktop-claim-lock)))
 
+        ;; What format are we going to write the file in?
+        (setq desktop-io-file-version
+              (cond
+               ((equal version '(4))
+                (if (or (eq desktop-io-file-version 208)
+                        (yes-or-no-p "Save desktop file in format 208 \
+\(Readable by Emacs 25.1 and later only)? "))
+                    208
+                  (or desktop-io-file-version desktop-native-file-version)))
+               ((equal version '(16))
+                (if (or (eq desktop-io-file-version 206)
+                        (yes-or-no-p "Save desktop file in format 206 \
+\(Readable by all Emacs versions since 22.1)? "))
+                    206
+                  (or desktop-io-file-version desktop-native-file-version)))
+               ((memq version '(206 208))
+                version)
+               ((null desktop-io-file-version) ; As yet, no desktop file exists.
+                desktop-native-file-version)
+               (t
+                desktop-io-file-version)))
+
 	(with-temp-buffer
 	  (insert
 	   ";; -*- mode: emacs-lisp; coding: emacs-mule; -*-\n"
 	   desktop-header
 	   ";; Created " (current-time-string) "\n"
-	   ";; Desktop file format version " desktop-file-version "\n"
+	   ";; Desktop file format version " (format "%d" desktop-io-file-version) "\n"
 	   ";; Emacs version " emacs-version "\n")
 	  (save-excursion (run-hooks 'desktop-save-hook))
 	  (goto-char (point-max))
@@ -1046,7 +1111,7 @@ changed since it was last saved then do not rewrite the file."
 			    "desktop-create-buffer"
 			  "desktop-append-buffer-args")
 			" "
-			desktop-file-version)
+			(format "%d" desktop-io-file-version))
 		;; If there's a non-empty base name, we save it instead of the buffer name
 		(when (and base (not (string= base "")))
 		  (setcar (nthcdr 1 l) base))
@@ -1096,7 +1161,7 @@ This function also sets `desktop-dirname' to nil."
 ;; ----------------------------------------------------------------------------
 (defun desktop-restoring-frameset-p ()
   "True if calling `desktop-restore-frameset' will actually restore it."
-  (and desktop-restore-frames desktop-saved-frameset t))
+  (and desktop-restore-frames desktop-saved-frameset (display-graphic-p) t))
 
 (defun desktop-restore-frameset ()
   "Restore the state of a set of frames.
@@ -1172,8 +1237,8 @@ Using it may cause conflicts.  Use it anyway? " owner)))))
 		  (memq 'desktop-auto-save-set-timer window-configuration-change-hook))
 	    (desktop-auto-save-disable)
 	    ;; Evaluate desktop buffer and remember when it was modified.
-	    (load (desktop-full-file-name) t t t)
 	    (setq desktop-file-modtime (nth 5 (file-attributes (desktop-full-file-name))))
+	    (load (desktop-full-file-name) t t t)
 	    ;; If it wasn't already, mark it as in-use, to bother other
 	    ;; desktop instances.
 	    (unless (eq (emacs-pid) owner)
@@ -1341,7 +1406,7 @@ after that many seconds of idle time."
 		(or coding-system-for-read
 		    (cdr (assq 'buffer-file-coding-system
 			       desktop-buffer-locals))))
-	       (buf (find-file-noselect buffer-filename)))
+	       (buf (find-file-noselect buffer-filename :nowarn)))
 	  (condition-case nil
 	      (switch-to-buffer buf)
 	    (error (pop-to-buffer buf)))
@@ -1352,9 +1417,18 @@ after that many seconds of idle time."
       nil)))
 
 (defun desktop-load-file (function)
-  "Load the file where auto loaded FUNCTION is defined."
-  (when (fboundp function)
-    (autoload-do-load (symbol-function function) function)))
+  "Load the file where auto loaded FUNCTION is defined.
+If FUNCTION is not currently defined, guess the library that defines it
+and try to load that."
+  (if (fboundp function)
+      (autoload-do-load (symbol-function function) function)
+    ;; Guess that foobar-mode is defined in foobar.
+    ;; TODO rather than guessing or requiring an autoload, the desktop
+    ;; file should record the name of the library.
+    (let ((name (symbol-name function)))
+      (if (string-match "\\`\\(.*\\)-mode\\'" name)
+          (with-demoted-errors "Require error in desktop-load-file: %S"
+              (require (intern (match-string 1 name)) nil t))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Create a buffer, load its file, set its mode, ...;
@@ -1374,6 +1448,8 @@ after that many seconds of idle time."
      buffer-locals
      compacted-vars
      &rest _unsupported)
+
+  (setq desktop-io-file-version file-version)
 
   (let ((desktop-file-version	    file-version)
 	(desktop-buffer-file-name   buffer-filename)
@@ -1464,6 +1540,19 @@ after that many seconds of idle time."
 	      ;; An entry of the form `symbol'.
 	      (make-local-variable this)
 	      (makunbound this)))
+          ;; adjust `buffer-display-time' for the downtime. e.g.,
+          ;; * if `buffer-display-time' was 8:00
+          ;; * and emacs stopped at `desktop-file-modtime' == 11:00
+          ;; * and we are loading the desktop file at (current-time) 12:30,
+          ;; -> then we restore `buffer-display-time' as 9:30,
+          ;; for the sake of `clean-buffer-list': preserving the invariant
+          ;; "how much time the user spent in Emacs without looking at this buffer".
+          (setq buffer-display-time
+                (if buffer-display-time
+                    (time-add buffer-display-time
+                              (time-subtract (current-time)
+                                             desktop-file-modtime))
+                  (current-time)))
 	  (unless (< desktop-file-version 208) ; Don't misinterpret any old custom args
 	    (dolist (record compacted-vars)
 	      (let*
@@ -1562,23 +1651,9 @@ If there are no buffers left to create, kill the timer."
         (setq command-line-args (delete key command-line-args))
         (desktop-save-mode 0)))
     (when desktop-save-mode
-      ;; People don't expect emacs -nw, or --daemon,
-      ;; to create graphical frames (bug#17693).
-      ;; TODO perhaps there should be a separate value
-      ;; for desktop-restore-frames to control this startup behavior?
-      (let ((desktop-restore-frames (and desktop-restore-frames
-                                         initial-window-system
-                                         (not (daemonp)))))
-        (desktop-read)
-        (setq inhibit-startup-screen t)))))
-
-;; So we can restore vc-dir buffers.
-(autoload 'vc-dir-mode "vc-dir" nil t)
+      (desktop-read)
+      (setq inhibit-startup-screen t))))
 
 (provide 'desktop)
 
 ;;; desktop.el ends here
-
-;; Local Variables:
-;; coding: utf-8
-;; End:

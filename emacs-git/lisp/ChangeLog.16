@@ -5030,8 +5030,7 @@
 	* mouse.el (mouse-yank-primarY): Look for frame-type w32, not
 	system-type windows-nt.
 
-	* server.el (server-create-window-system-frame): Look for window
-	type.
+	* server.el (server-create-window-system-frame): Look for window type.
 	(server-proces-filter): Only force a window system when windows-nt
 	_and_ w32.  Explain why.
 
@@ -25224,7 +25223,7 @@ See ChangeLog.15 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2015 Free Software Foundation, Inc.
+  Copyright (C) 2011-2017 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

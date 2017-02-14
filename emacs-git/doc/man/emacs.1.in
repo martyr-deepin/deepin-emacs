@@ -123,11 +123,13 @@ Use specified
 as the terminal instead of using stdin/stdout.
 This must be the first argument specified in the command line.
 .TP
-.B \-\-daemon
+.BI \-\-daemon "\fR[=\fPname\fR]"
 Start Emacs as a daemon, enabling the Emacs server and disconnecting
-from the terminal.  You can then use the emacsclient command to
-connect to the server (see
-.BR emacsclient (1)).
+from the terminal.  You can then use the emacsclient (see
+.BR emacsclient (1))
+command to
+connect to the server (with optional
+.IR name ")."
 .TP
 .B \-\-version
 Display
@@ -651,7 +653,7 @@ For detailed credits and acknowledgments, see the GNU Emacs manual.
 Copyright
 .if t \(co
 .if n (C)
-1995, 1999-2015 Free Software Foundation, Inc.
+1995, 1999-2017 Free Software Foundation, Inc.
 .PP
 Permission is granted to make and distribute verbatim copies of this
 document provided the copyright notice and this permission notice are

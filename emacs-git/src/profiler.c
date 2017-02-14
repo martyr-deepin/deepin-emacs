@@ -1,13 +1,13 @@
 /* Profiler implementation.
 
-Copyright (C) 2012-2015 Free Software Foundation, Inc.
+Copyright (C) 2012-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -38,7 +38,7 @@ typedef struct Lisp_Hash_Table log_t;
 static struct hash_table_test hashtest_profiler;
 
 static Lisp_Object
-make_log (int heap_size, int max_stack_depth)
+make_log (EMACS_INT heap_size, EMACS_INT max_stack_depth)
 {
   /* We use a standard Elisp hash-table object, but we use it in
      a special way.  This is OK as long as the object is not exposed
@@ -48,12 +48,12 @@ make_log (int heap_size, int max_stack_depth)
 				     make_number (heap_size),
 				     make_float (DEFAULT_REHASH_SIZE),
 				     make_float (DEFAULT_REHASH_THRESHOLD),
-				     Qnil);
+				     Qnil, Qnil);
   struct Lisp_Hash_Table *h = XHASH_TABLE (log);
 
   /* What is special about our hash-tables is that the keys are pre-filled
      with the vectors we'll put in them.  */
-  int i = ASIZE (h->key_and_value) / 2;
+  ptrdiff_t i = ASIZE (h->key_and_value) >> 1;
   while (i > 0)
     set_hash_key_slot (h, --i,
 		       Fmake_vector (make_number (max_stack_depth), Qnil));
@@ -120,12 +120,11 @@ static void evict_lower_half (log_t *log)
 	  Fremhash (key, tmp);
 	}
 	eassert (EQ (log->next_free, make_number (i)));
-	{
-	  int j;
-	  eassert (VECTORP (key));
-	  for (j = 0; j < ASIZE (key); j++)
-	    ASET (key, j, Qnil);
-	}
+
+	eassert (VECTORP (key));
+	for (ptrdiff_t j = 0; j < ASIZE (key); j++)
+	  ASET (key, j, Qnil);
+
 	set_hash_key_slot (log, i, key);
       }
 }
@@ -165,9 +164,8 @@ record_backtrace (log_t *log, EMACS_INT count)
     else
       { /* BEWARE!  hash_put in general can allocate memory.
 	   But currently it only does that if log->next_free is nil.  */
-	int j;
 	eassert (!NILP (log->next_free));
-	j = hash_put (log, backtrace, make_number (count), hash);
+	ptrdiff_t j = hash_put (log, backtrace, make_number (count), hash);
 	/* Let's make sure we've put `backtrace' right where it
 	   already was to start with.  */
 	eassert (index == j);
@@ -176,8 +174,8 @@ record_backtrace (log_t *log, EMACS_INT count)
 	   some global flag so that some Elisp code can offload its
 	   data elsewhere, so as to avoid the eviction code.
 	   There are 2 ways to do that, AFAICT:
-	   - Set a flag checked in QUIT, such that QUIT can then call
-	     Fprofiler_cpu_log and stash the full log for later use.
+	   - Set a flag checked in maybe_quit, such that maybe_quit can then
+	     call Fprofiler_cpu_log and stash the full log for later use.
 	   - Set a flag check in post-gc-hook, so that Elisp code can call
 	     profiler-cpu-log.  That gives us more flexibility since that
 	     Elisp code can then do all kinds of fun stuff like write
@@ -203,7 +201,12 @@ static bool profiler_timer_ok;
 
 /* Status of sampling profiler.  */
 static enum profiler_cpu_running
-  { NOT_RUNNING, TIMER_SETTIME_RUNNING, SETITIMER_RUNNING }
+  { NOT_RUNNING,
+#ifdef HAVE_ITIMERSPEC
+    TIMER_SETTIME_RUNNING,
+#endif
+    SETITIMER_RUNNING
+  }
   profiler_cpu_running;
 
 /* Hash-table log of CPU profiler.  */
@@ -217,10 +220,16 @@ static EMACS_INT current_sampling_interval;
 
 /* Signal handler for sampling profiler.  */
 
+/* timer_getoverrun is not implemented on Cygwin, but the following
+   seems to be good enough for profiling. */
+#ifdef CYGWIN
+#define timer_getoverrun(x) 0
+#endif
+
 static void
 handle_profiler_signal (int signal)
 {
-  if (EQ (backtrace_top_function (), Qautomatic_gc))
+  if (EQ (backtrace_top_function (), QAutomatic_GC))
     /* Special case the time-count inside GC because the hash-table
        code is not prepared to be used while the GC is running.
        More specifically it uses ASIZE at many places where it does
@@ -250,7 +259,7 @@ deliver_profiler_signal (int signal)
   deliver_process_signal (signal, handle_profiler_signal);
 }
 
-static enum profiler_cpu_running
+static int
 setup_cpu_timer (Lisp_Object sampling_interval)
 {
   struct sigaction action;
@@ -263,7 +272,7 @@ setup_cpu_timer (Lisp_Object sampling_interval)
 			  ? ((EMACS_INT) TYPE_MAXIMUM (time_t) * billion
 			     + (billion - 1))
 			  : EMACS_INT_MAX)))
-    return NOT_RUNNING;
+    return -1;
 
   current_sampling_interval = XINT (sampling_interval);
   interval = make_timespec (current_sampling_interval / billion,
@@ -336,9 +345,18 @@ See also `profiler-log-size' and `profiler-max-stack-depth'.  */)
 			  profiler_max_stack_depth);
     }
 
-  profiler_cpu_running = setup_cpu_timer (sampling_interval);
-  if (! profiler_cpu_running)
-    error ("Invalid sampling interval");
+  int status = setup_cpu_timer (sampling_interval);
+  if (status == -1)
+    {
+      profiler_cpu_running = NOT_RUNNING;
+      error ("Invalid sampling interval");
+    }
+  else
+    {
+      profiler_cpu_running = status;
+      if (! profiler_cpu_running)
+	error ("Unable to start profiler timer");
+    }
 
   return Qt;
 }
@@ -405,7 +423,7 @@ Before returning, a new log is allocated for future samples.  */)
   cpu_log = (profiler_cpu_running
 	     ? make_log (profiler_log_size, profiler_max_stack_depth)
 	     : Qnil);
-  Fputhash (Fmake_vector (make_number (1), Qautomatic_gc),
+  Fputhash (Fmake_vector (make_number (1), QAutomatic_GC),
 	    make_number (cpu_gc_count),
 	    result);
   cpu_gc_count = 0;

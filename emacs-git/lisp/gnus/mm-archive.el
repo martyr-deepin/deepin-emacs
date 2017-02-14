@@ -1,6 +1,6 @@
 ;;; mm-archive.el --- Functions for parsing archive files as MIME
 
-;; Copyright (C) 2012-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2017 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; This file is part of GNU Emacs.
@@ -37,7 +37,7 @@
 (defun mm-dissect-archive (handle)
   (let ((decoder (cddr (assoc (car (mm-handle-type handle))
 			      mm-archive-decoders)))
-	(dir (mm-make-temp-file
+	(dir (make-temp-file
 	      (expand-file-name "emm." mm-tmp-directory) 'dir)))
     (set-file-modes dir #o700)
     (unwind-protect

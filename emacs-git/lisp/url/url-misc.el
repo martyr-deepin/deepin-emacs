@@ -1,6 +1,6 @@
 ;;; url-misc.el --- Misc Uniform Resource Locator retrieval code
 
-;; Copyright (C) 1996-1999, 2002, 2004-2015 Free Software Foundation,
+;; Copyright (C) 1996-1999, 2002, 2004-2017 Free Software Foundation,
 ;; Inc.
 
 ;; Keywords: comm, data, processes
@@ -24,6 +24,7 @@
 
 (require 'url-vars)
 (require 'url-parse)
+(declare-function mm-disable-multibyte "mm-util" ())
 (autoload 'Info-goto-node "info" "" t)
 (autoload 'man "man" nil t)
 

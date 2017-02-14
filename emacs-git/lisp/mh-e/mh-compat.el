@@ -1,6 +1,6 @@
 ;;; mh-compat.el --- make MH-E compatible with various versions of Emacs
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2017 Free Software Foundation, Inc.
 
 ;; Author: Bill Wohler <wohler@newt.com>
 ;; Maintainer: Bill Wohler <wohler@newt.com>
@@ -75,11 +75,24 @@ introduced in Emacs 22."
       'cancel-timer
     'delete-itimer))
 
-;; Emacs 24 renamed flet to cl-flet.
-(defalias 'mh-cl-flet
-  (if (fboundp 'cl-flet)
-      'cl-flet
-    'flet))
+;; Emacs 24 made flet obsolete and suggested either cl-flet or
+;; cl-letf. This macro is based upon gmm-flet from Gnus.
+(defmacro mh-flet (bindings &rest body)
+  "Make temporary overriding function definitions.
+This is an analogue of a dynamically scoped `let' that operates on
+the function cell of FUNCs rather than their value cell.
+
+\(fn ((FUNC ARGLIST BODY...) ...) FORM...)"
+  (if (fboundp 'cl-letf)
+      `(cl-letf ,(mapcar (lambda (binding)
+                           `((symbol-function ',(car binding))
+                             (lambda ,@(cdr binding))))
+                         bindings)
+         ,@body)
+    `(flet ,bindings ,@body)))
+(put 'mh-flet 'lisp-indent-function 1)
+(put 'mh-flet 'edebug-form-spec
+     '((&rest (sexp sexp &rest form)) &rest form))
 
 (defun mh-display-color-cells (&optional display)
   "Return the number of color cells supported by DISPLAY.
@@ -162,7 +175,7 @@ compatibility with versions of Emacs that lack the variable
 
     (let* ((load-path (image-load-path-for-library \"mh-e\" \"mh-logo.xpm\"))
            (image-load-path (cons (car load-path)
-                                  (when (boundp 'image-load-path)
+                                  (when (boundp \\='image-load-path)
                                     image-load-path))))
       (mh-tool-bar-folder-buttons-init))"
   (unless library (error "No library specified"))
@@ -264,16 +277,6 @@ DOCSTRING arguments."
   (if (featurep 'xemacs)
       `(define-obsolete-variable-alias ,obsolete-name ,current-name)
     `(define-obsolete-variable-alias ,obsolete-name ,current-name ,when ,docstring)))
-
-(defmacro mh-make-obsolete-variable (obsolete-name current-name &optional when access-type)
-  "Make the byte-compiler warn that OBSOLETE-NAME is obsolete.
-See documentation for `make-obsolete-variable' for a description
-of the arguments OBSOLETE-NAME, CURRENT-NAME, and perhaps WHEN
-and ACCESS-TYPE. This macro is used by XEmacs that lacks WHEN and
-ACCESS-TYPE arguments."
-  (if (featurep 'xemacs)
-      `(make-obsolete-variable ,obsolete-name ,current-name)
-    `(make-obsolete-variable ,obsolete-name ,current-name ,when ,access-type)))
 
 (defmacro mh-make-obsolete-variable (obsolete-name current-name &optional when access-type)
   "Make the byte-compiler warn that OBSOLETE-NAME is obsolete.

@@ -1,6 +1,6 @@
 ;;; gamegrid.el --- library for implementing grid-based games on Emacs
 
-;; Copyright (C) 1997-1998, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2017 Free Software Foundation, Inc.
 
 ;; Author: Glynn Clements <glynn@sensei.co.uk>
 ;; Version: 1.02
@@ -379,7 +379,7 @@ static unsigned char gamegrid_bits[] = {
     (dotimes (i height)
       (insert line))
     ;; Adjust the height of the default face to the height of the
-    ;; images. Unlike XEmacs, Emacs doesn't allow to make the default
+    ;; images. Unlike XEmacs, Emacs doesn't allow making the default
     ;; face buffer-local; so we do this with an overlay.
     (when (eq gamegrid-display-mode 'glyph)
       (overlay-put (make-overlay (point-min) (point-max))

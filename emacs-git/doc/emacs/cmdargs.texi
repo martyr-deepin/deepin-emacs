@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2017 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Emacs Invocation
@@ -283,6 +283,13 @@ which will invoke Emacs with @samp{--script} and supply the name of
 the script file as @var{file}.  Emacs Lisp then treats the @samp{#!}
 on this first line as a comment delimiter.
 
+@item --no-build-details
+@opindex --no-build-details
+@cindex build details
+@cindex deterministic build
+Omit details like system name and build time from the Emacs executable,
+so that builds are more deterministic.
+
 @item -q
 @opindex -q
 @itemx --no-init-file
@@ -327,17 +334,18 @@ setting @code{inhibit-x-resources} to @code{t} (@pxref{Resources}).
 
 @item -daemon
 @opindex -daemon
-@itemx --daemon
+@itemx --daemon[=@var{name}]
 @opindex --daemon
+@itemx --old-daemon[=@var{name}]
+@itemx --new-daemon[=@var{name}]
 Start Emacs as a daemon---after Emacs starts up, it starts the Emacs
-server and disconnects from the terminal without opening any frames.
+server without opening any frames.
+(Optionally, you can specify an explicit @var{name} for the server.)
 You can then use the @command{emacsclient} command to connect to Emacs
 for editing.  @xref{Emacs Server}, for information about using Emacs
-as a daemon.
-
-@item -daemon=@var{SERVER-NAME}
-Start emacs in background as a daemon, and use @var{SERVER-NAME} as
-the server name.
+as a daemon.  An ``old-style'' daemon disconnects from the terminal
+and runs in the background (@samp{--daemon} is an alias for
+@samp{--old-daemon}).
 
 @item --no-desktop
 @opindex --no-desktop
@@ -443,8 +451,8 @@ some other programs.  Emacs does not require any of these environment
 variables to be set, but it uses their values if they are set.
 
 @c This used to be @vtable, but that enters the variables alone into
-@c the Variable Index, which in some cases, like ``HOME'', might be
-@c confused with keys by that name, and other cases, like ``NAME'',
+@c the Variable Index, which in some cases, like HOME, might be
+@c confused with keys by that name, and other cases, like NAME,
 @c might be confused with general-purpose phrases.
 @table @env
 @item CDPATH
@@ -550,10 +558,11 @@ variables is not set, the category defaults to the value of the
 @env{LANG} is not set.  But if @env{LC_ALL} is specified, it overrides
 the settings of all the other locale environment variables.
 
-On MS-Windows, if @env{LANG} is not already set in the environment
-when Emacs starts, Emacs sets it based on the system-wide default
-language, which you can set in the @samp{Regional Settings} Control Panel
-on some versions of MS-Windows.
+On MS-Windows and macOS, if @env{LANG} is not already set in the
+environment, Emacs sets it based on the system-wide default.  You can
+set this in the ``Regional Settings'' Control Panel on some versions
+of MS-Windows, and in the ``Language and Region'' System Preference on
+macOS.
 
 The value of the @env{LC_CTYPE} category is
 matched against entries in @code{locale-language-names},
@@ -582,7 +591,7 @@ The name of the news server.  Used by the mh and Gnus packages.
 @item ORGANIZATION
 @vindex ORGANIZATION, environment variable
 The name of the organization to which you belong.  Used for setting the
-``Organization:'' header in your posts from the Gnus package.
+@samp{Organization:} header in your posts from the Gnus package.
 @item PATH
 @vindex PATH, environment variable
 A colon-separated list of directories containing executable files.
@@ -633,8 +642,9 @@ to put temporary files (@pxref{Backup}).  Emacs tries to use
 @env{TMP}, then @env{TEMP}, and finally @file{c:/temp}.
 @item TZ
 @vindex TZ, environment variable
-This specifies the current time zone and possibly also daylight
-saving time information.  On MS-DOS, if @env{TZ} is not set in the
+This specifies the default time zone and possibly also daylight
+saving time information.  @xref{Time Zone Rules,,, elisp, The GNU
+Emacs Lisp Reference Manual}.  On MS-DOS, if @env{TZ} is not set in the
 environment when Emacs starts, Emacs defines a default value as
 appropriate for the country code returned by DOS@.  On MS-Windows, Emacs
 does not use @env{TZ} at all.
@@ -808,7 +818,7 @@ Use @var{font} as the default font.
 @end table
 
 When passing a font name to Emacs on the command line, you may need to
-``quote'' it, by enclosing it in quotation marks, if it contains
+quote it, by enclosing it in quotation marks, if it contains
 characters that the shell treats specially (e.g., spaces).  For
 example:
 
@@ -1036,7 +1046,7 @@ tool bar when it processes the specified geometry.
   When using one of @samp{--fullscreen}, @samp{--maximized},
 @samp{--fullwidth} or @samp{--fullheight}, some window managers require
 you to set the variable @code{frame-resize-pixelwise} to a non-@code{nil}
-value to make a frame appear truly ``maximized'' or ``fullscreen''.
+value to make a frame appear truly maximized or full-screen.
 
  Some window managers have options that can make them ignore both
 program-specified and user-specified positions.  If these are set,
@@ -1115,7 +1125,7 @@ for the initial Emacs frame.
 @opindex --iconic
 @itemx --iconic
 @cindex start iconified, command-line argument
-Start Emacs in an iconified (``minimized'') state.
+Start Emacs in an iconified state.
 
 @item -nbi
 @opindex -nbi
@@ -1125,9 +1135,9 @@ Start Emacs in an iconified (``minimized'') state.
 Disable the use of the Emacs icon.
 @end table
 
-  Most window managers allow you to ``iconify'' (or ``minimize'') an
+  Most window managers allow you to iconify (or ``minimize'') an
 Emacs frame, hiding it from sight.  Some window managers replace
-iconified windows with tiny ``icons'', while others remove them
+iconified windows with tiny icons, while others remove them
 entirely from sight.  The @samp{-iconic} option tells Emacs to begin
 running in an iconified state, rather than showing a frame right away.
 The text frame doesn't appear until you deiconify (or ``un-minimize'')

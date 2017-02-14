@@ -1,6 +1,6 @@
 ;;; ob-tangle.el --- extract source code from org-mode files
 
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -31,13 +31,13 @@
   (require 'cl))
 
 (declare-function org-edit-special "org" (&optional arg))
-(declare-function org-link-escape "org" (text &optional table))
+(declare-function org-link-escape "org" (text &optional table merge))
 (declare-function org-store-link "org" (arg))
 (declare-function org-open-link-from-string "org" (s &optional arg reference-buffer))
 (declare-function org-heading-components "org" ())
-(declare-function org-back-to-heading "org" (invisible-ok))
+(declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-fill-template "org" (template alist))
-(declare-function org-babel-update-block-body "org" (new-body))
+(declare-function org-babel-update-block-body "ob-core" (new-body))
 (declare-function make-directory "files" (dir &optional parents))
 
 (defcustom org-babel-tangle-lang-exts
@@ -302,7 +302,7 @@ Insert the source-code specified by SPEC into the current source
 code file.  This function uses `comment-region' which assumes
 that the appropriate major-mode is set.  SPEC has the form:
 
-  \(start-line file link source-name params body comment)"
+  (start-line file link source-name params body comment)"
   (let* ((start-line (nth 0 spec))
 	 (file (nth 1 spec))
 	 (link (nth 2 spec))

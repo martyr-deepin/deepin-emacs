@@ -12,7 +12,7 @@
 This manual is for GNU Flymake (version @value{VERSION}, @value{UPDATED}),
 which is a universal on-the-fly syntax checker for GNU Emacs.
 
-Copyright @copyright{} 2004--2015 Free Software Foundation, Inc.
+Copyright @copyright{} 2004--2017 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -322,12 +322,6 @@ file cannot be run simultaneously.
 @item flymake-no-changes-timeout
 If any changes are made to the buffer, syntax check is automatically
 started after @code{flymake-no-changes-timeout} seconds.
-
-@item flymake-gui-warnings-enabled
-A boolean flag indicating whether Flymake will show message boxes for
-non-recoverable errors.  If @code{flymake-gui-warnings-enabled} is
-@code{nil}, these errors will only be logged to the @file{*Messages*}
-buffer.
 
 @item flymake-start-syntax-check-on-newline
 A boolean flag indicating whether to start syntax check after a
@@ -697,7 +691,8 @@ The command line (command name and the list of arguments) for launching a proces
 initialization function.  Flymake then just calls @code{start-process}
 to start an asynchronous process and configures a process filter and
 sentinel, which are used for processing the output of the syntax check
-tool.
+tool.  When exiting Emacs, running Flymake processes will be killed
+without prompting the user.
 
 @node Parsing the output
 @section Parsing the output
@@ -717,7 +712,7 @@ sort error menu items, which shows error messages first.
 Flymake is also able to interpret error message patterns missing err-text-idx
 information.  This is done by merely taking the rest of the matched line
 (@code{(substring line (match-end 0))}) as error text.  This trick allows
-to make use of a huge collection of error message line patterns from
+making use of a huge collection of error message line patterns from
 @code{compile.el}.  All these error patterns are appended to
 the end of @code{flymake-err-line-patterns}.
 

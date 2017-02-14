@@ -1,13 +1,13 @@
 /* Generic frame functions.
 
-Copyright (C) 1993-1995, 1997, 1999-2015 Free Software Foundation, Inc.
+Copyright (C) 1993-1995, 1997, 1999-2017 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,13 +20,13 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <config.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <limits.h>
 
 #include <c-ctype.h>
 
 #include "lisp.h"
-#include "character.h"
 
 #ifdef HAVE_WINDOW_SYSTEM
 #include TERM_HEADER
@@ -34,7 +34,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "buffer.h"
 /* These help us bind and responding to switch-frame events.  */
-#include "commands.h"
 #include "keyboard.h"
 #include "frame.h"
 #include "blockinput.h"
@@ -42,7 +41,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "termhooks.h"
 #include "dispextern.h"
 #include "window.h"
-#include "font.h"
 #ifdef HAVE_WINDOW_SYSTEM
 #include "fontset.h"
 #endif
@@ -109,31 +107,32 @@ decode_any_frame (register Lisp_Object frame)
 }
 
 #ifdef HAVE_WINDOW_SYSTEM
-
 bool
-window_system_available (struct frame *f)
+display_available (void)
 {
-  return f ? FRAME_WINDOW_P (f) || FRAME_MSDOS_P (f) : x_display_list != NULL;
+  return x_display_list != NULL;
 }
-
-#endif /* HAVE_WINDOW_SYSTEM */
+#endif
 
 struct frame *
 decode_window_system_frame (Lisp_Object frame)
 {
   struct frame *f = decode_live_frame (frame);
-
-  if (!window_system_available (f))
-    error ("Window system frame should be used");
+  check_window_system (f);
+#ifdef HAVE_WINDOW_SYSTEM
   return f;
+#endif
 }
 
 void
 check_window_system (struct frame *f)
 {
-  if (!window_system_available (f))
-    error (f ? "Window system frame should be used"
-	   : "Window system is not in use or not initialized");
+#ifdef HAVE_WINDOW_SYSTEM
+  if (window_system_available (f))
+    return;
+#endif
+  error (f ? "Window system frame should be used"
+	 : "Window system is not in use or not initialized");
 }
 
 /* Return the value of frame parameter PROP in frame FRAME.  */
@@ -184,16 +183,17 @@ frame_inhibit_resize (struct frame *f, bool horizontal, Lisp_Object parameter)
 {
   Lisp_Object fullscreen = get_frame_param (f, Qfullscreen);
   bool inhibit
-    = ((f->after_make_frame
-	&& (EQ (frame_inhibit_implied_resize, Qt)
-	    || (CONSP (frame_inhibit_implied_resize)
-		&& !NILP (Fmemq (parameter, frame_inhibit_implied_resize)))))
-       || (horizontal
-	   && !EQ (fullscreen, Qnil) && !EQ (fullscreen, Qfullheight))
-       || (!horizontal
-	   && !EQ (fullscreen, Qnil) && !EQ (fullscreen, Qfullwidth))
-       || FRAME_TERMCAP_P (f) || FRAME_MSDOS_P (f));
-
+    = (f->after_make_frame
+       ? (EQ (frame_inhibit_implied_resize, Qt)
+	  || (CONSP (frame_inhibit_implied_resize)
+	      && !NILP (Fmemq (parameter, frame_inhibit_implied_resize)))
+	  || (horizontal
+	      && !EQ (fullscreen, Qnil) && !EQ (fullscreen, Qfullheight))
+	  || (!horizontal
+	      && !EQ (fullscreen, Qnil) && !EQ (fullscreen, Qfullwidth))
+	  || FRAME_TERMCAP_P (f) || FRAME_MSDOS_P (f))
+       : ((horizontal && f->inhibit_horizontal_resize)
+	  || (!horizontal && f->inhibit_vertical_resize)));
   if (inhibit && !FRAME_TERMCAP_P (f) && !FRAME_MSDOS_P (f))
     frame_size_history_add
       (f, Qframe_inhibit_resize, 0, 0,
@@ -241,10 +241,10 @@ DEFUN ("framep", Fframep, Sframep, 1, 1, 0,
        doc: /* Return non-nil if OBJECT is a frame.
 Value is:
   t for a termcap frame (a character-only terminal),
- 'x' for an Emacs frame that is really an X window,
- 'w32' for an Emacs frame that is a window on MS-Windows display,
- 'ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
- 'pc' for a direct-write MS-DOS frame.
+ `x' for an Emacs frame that is really an X window,
+ `w32' for an Emacs frame that is a window on MS-Windows display,
+ `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
+ `pc' for a direct-write MS-DOS frame.
 See also `frame-live-p'.  */)
   (Lisp_Object object)
 {
@@ -286,10 +286,10 @@ DEFUN ("window-system", Fwindow_system, Swindow_system, 0, 1, 0,
        doc: /* The name of the window system that FRAME is displaying through.
 The value is a symbol:
  nil for a termcap frame (a character-only terminal),
- 'x' for an Emacs frame that is really an X window,
- 'w32' for an Emacs frame that is a window on MS-Windows display,
- 'ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
- 'pc' for a direct-write MS-DOS frame.
+ `x' for an Emacs frame that is really an X window,
+ `w32' for an Emacs frame that is a window on MS-Windows display,
+ `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
+ `pc' for a direct-write MS-DOS frame.
 
 FRAME defaults to the currently selected frame.
 
@@ -396,7 +396,7 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
   int old_windows_width = WINDOW_PIXEL_WIDTH (r);
   int old_windows_height
     = (WINDOW_PIXEL_HEIGHT (r)
-       + (FRAME_HAS_MINIBUF_P (f)
+       + ((FRAME_HAS_MINIBUF_P (f) && !FRAME_MINIBUF_ONLY_P (f))
 	  ? WINDOW_PIXEL_HEIGHT (XWINDOW (FRAME_MINIBUF_WINDOW (f)))
 	  : 0));
   int new_windows_width, new_windows_height;
@@ -425,17 +425,15 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
 
   if (inhibit >= 2 && inhibit <= 4)
     /* When INHIBIT is in [2..4] inhibit if the "old" window sizes stay
-       within the limits and either frame_inhibit_resize tells us to do
-       so or INHIBIT equals 4.  */
+       within the limits and either resizing is inhibited or INHIBIT
+       equals 4.  */
     {
-      inhibit_horizontal = ((windows_width >= min_windows_width
-			     && (inhibit == 4
-				 || frame_inhibit_resize (f, true, parameter)))
-			    ? true : false);
-      inhibit_vertical = ((windows_height >= min_windows_height
-			   && (inhibit == 4
-			       || frame_inhibit_resize (f, false, parameter)))
-			  ? true : false);
+      inhibit_horizontal = (windows_width >= min_windows_width
+                            && (inhibit == 4
+                                || frame_inhibit_resize (f, true, parameter)));
+      inhibit_vertical = (windows_height >= min_windows_height
+                          && (inhibit == 4
+                              || frame_inhibit_resize (f, false, parameter)));
     }
   else
     /* Otherwise inhibit if INHIBIT equals 5.  */
@@ -504,8 +502,8 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
       && new_lines == old_lines)
     /* No change.  Sanitize window sizes and return.  */
     {
-      sanitize_window_sizes (frame, Qt);
-      sanitize_window_sizes (frame, Qnil);
+      sanitize_window_sizes (Qt);
+      sanitize_window_sizes (Qnil);
 
       return;
     }
@@ -513,10 +511,13 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
   block_input ();
 
 #ifdef MSDOS
-  /* We only can set screen dimensions to certain values supported
-     by our video hardware.  Try to find the smallest size greater
-     or equal to the requested dimensions.  */
-  dos_set_window_size (&new_lines, &new_cols);
+  /* We only can set screen dimensions to certain values supported by
+     our video hardware.  Try to find the smallest size greater or
+     equal to the requested dimensions, while accounting for the fact
+     that the menu-bar lines are not counted in the frame height.  */
+  int dos_new_lines = new_lines + FRAME_TOP_MARGIN (f);
+  dos_set_window_size (&dos_new_lines, &new_cols);
+  new_lines = dos_new_lines - FRAME_TOP_MARGIN (f);
 #endif
 
   if (new_windows_width != old_windows_width)
@@ -538,7 +539,7 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
 #endif
     }
   else if (new_cols != old_cols)
-    call2 (Qwindow_pixel_to_total, frame, Qt);
+    call2 (Qwindow__pixel_to_total, frame, Qt);
 
   if (new_windows_height != old_windows_height
       /* When the top margin has changed we have to recalculate the top
@@ -554,7 +555,7 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
 	FrameRows (FRAME_TTY (f)) = new_lines + FRAME_TOP_MARGIN (f);
     }
   else if (new_lines != old_lines)
-    call2 (Qwindow_pixel_to_total, frame, Qnil);
+    call2 (Qwindow__pixel_to_total, frame, Qnil);
 
   frame_size_history_add
     (f, Qadjust_frame_size_3, new_text_width, new_text_height,
@@ -582,8 +583,8 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
   }
 
   /* Sanitize window sizes.  */
-  sanitize_window_sizes (frame, Qt);
-  sanitize_window_sizes (frame, Qnil);
+  sanitize_window_sizes (Qt);
+  sanitize_window_sizes (Qnil);
 
   adjust_frame_glyphs (f);
   calculate_costs (f);
@@ -595,8 +596,6 @@ adjust_frame_size (struct frame *f, int new_width, int new_height, int inhibit,
 		  || new_pixel_height != old_pixel_height);
 
   unblock_input ();
-
-  run_window_configuration_change_hook (f);
 }
 
 /* Allocate basically initialized frame.  */
@@ -611,10 +610,10 @@ struct frame *
 make_frame (bool mini_p)
 {
   Lisp_Object frame;
-  register struct frame *f;
-  register struct window *rw, *mw;
-  register Lisp_Object root_window;
-  register Lisp_Object mini_window;
+  struct frame *f;
+  struct window *rw, *mw UNINIT;
+  Lisp_Object root_window;
+  Lisp_Object mini_window;
 
   f = allocate_frame ();
   XSETFRAME (frame, f);
@@ -634,7 +633,10 @@ make_frame (bool mini_p)
   f->garbaged = true;
   f->can_x_set_window_size = false;
   f->after_make_frame = false;
-  f->tool_bar_redisplayed_once = false;
+  f->inhibit_horizontal_resize = false;
+  f->inhibit_vertical_resize = false;
+  f->tool_bar_redisplayed = false;
+  f->tool_bar_resized = false;
   f->column_width = 1;  /* !FRAME_WINDOW_P value.  */
   f->line_height = 1;  /* !FRAME_WINDOW_P value.  */
 #ifdef HAVE_WINDOW_SYSTEM
@@ -657,6 +659,7 @@ make_frame (bool mini_p)
       mw->mini = 1;
       wset_frame (mw, frame);
       fset_minibuffer_window (f, mini_window);
+      store_frame_param (f, Qminibuffer, Qt);
     }
   else
     {
@@ -735,10 +738,10 @@ make_frame (bool mini_p)
    default (the global minibuffer).  */
 
 struct frame *
-make_frame_without_minibuffer (register Lisp_Object mini_window, KBOARD *kb, Lisp_Object display)
+make_frame_without_minibuffer (Lisp_Object mini_window, KBOARD *kb,
+			       Lisp_Object display)
 {
-  register struct frame *f;
-  struct gcpro gcpro1;
+  struct frame *f;
 
   if (!NILP (mini_window))
     CHECK_LIVE_WINDOW (mini_window);
@@ -759,11 +762,9 @@ make_frame_without_minibuffer (register Lisp_Object mini_window, KBOARD *kb, Lis
           Lisp_Object frame_dummy;
 
           XSETFRAME (frame_dummy, f);
-          GCPRO1 (frame_dummy);
 	  /* If there's no minibuffer frame to use, create one.  */
 	  kset_default_minibuffer_frame
 	    (kb, call1 (intern ("make-initial-minibuffer-frame"), display));
-          UNGCPRO;
 	}
 
       mini_window
@@ -771,6 +772,7 @@ make_frame_without_minibuffer (register Lisp_Object mini_window, KBOARD *kb, Lis
     }
 
   fset_minibuffer_window (f, mini_window);
+  store_frame_param (f, Qminibuffer, mini_window);
 
   /* Make the chosen minibuffer window display the proper minibuffer,
      unless it is already showing a minibuffer.  */
@@ -808,6 +810,7 @@ make_minibuffer_frame (void)
 
   mini_window = f->root_window;
   fset_minibuffer_window (f, mini_window);
+  store_frame_param (f, Qminibuffer, Qonly);
   XWINDOW (mini_window)->mini = 1;
   wset_next (XWINDOW (mini_window), Qnil);
   wset_prev (XWINDOW (mini_window), Qnil);
@@ -869,6 +872,9 @@ make_initial_frame (void)
 
   /* The default value of menu-bar-mode is t.  */
   set_menu_bar_lines (f, make_number (1), Qnil);
+
+  /* Allocate glyph matrices.  */
+  adjust_frame_glyphs (f);
 
   if (!noninteractive)
     init_frame_faces (f);
@@ -978,7 +984,7 @@ except when you want to create a new frame on another terminal.
 In that case, the `tty' parameter specifies the device file to open,
 and the `tty-type' parameter specifies the terminal type.  Example:
 
-   (make-terminal-frame '((tty . "/dev/pts/5") (tty-type . "xterm")))
+   (make-terminal-frame \\='((tty . "/dev/pts/5") (tty-type . "xterm")))
 
 Note that changing the size of one terminal frame automatically
 affects all frames on the same terminal device.  */)
@@ -1061,6 +1067,10 @@ affects all frames on the same terminal device.  */)
 		  (t->display_info.tty->name
 		   ? build_string (t->display_info.tty->name)
 		   : Qnil));
+  /* On terminal frames the `minibuffer' frame parameter is always
+     virtually t.  Avoid that a different value in parms causes
+     complaints, see Bug#24758.  */
+  store_in_alist (&parms, Qminibuffer, Qt);
   Fmodify_frame_parameters (frame, parms);
 
   /* Make the frame face alist be frame-specific, so that each
@@ -1154,7 +1164,12 @@ do_switch_frame (Lisp_Object frame, int track, int for_deletion, Lisp_Object nor
       if (FRAMEP (xfocus))
 	{
 	  focus = FRAME_FOCUS_FRAME (XFRAME (xfocus));
-	  if (FRAMEP (focus) && XFRAME (focus) == SELECTED_FRAME ())
+	  if ((FRAMEP (focus) && XFRAME (focus) == SELECTED_FRAME ())
+	      /* Redirect frame focus also when FRAME has its minibuffer
+		 window on the selected frame (see Bug#24500).  */
+	      || (NILP (focus)
+		  && EQ (FRAME_MINIBUF_WINDOW (XFRAME (frame)),
+			 sf->selected_window)))
 	    Fredirect_frame_focus (xfocus, frame);
 	}
     }
@@ -1305,7 +1320,7 @@ candidate_frame (Lisp_Object candidate, Lisp_Object frame, Lisp_Object minibuf)
 		     FRAME_FOCUS_FRAME (c)))
 	    return candidate;
 	}
-      else if (XFASTINT (minibuf) == 0)
+      else if (INTEGERP (minibuf) && XINT (minibuf) == 0)
 	{
 	  if (FRAME_VISIBLE_P (c) || FRAME_ICONIFIED_P (c))
 	    return candidate;
@@ -1821,11 +1836,12 @@ delete_frame (Lisp_Object frame, Lisp_Object force)
 
 DEFUN ("delete-frame", Fdelete_frame, Sdelete_frame, 0, 2, "",
        doc: /* Delete FRAME, permanently eliminating it from use.
-FRAME defaults to the selected frame.
+FRAME must be a live frame and defaults to the selected one.
 
-A frame may not be deleted if its minibuffer is used by other frames.
-Normally, you may not delete a frame if all other frames are invisible,
-but if the second optional argument FORCE is non-nil, you may do so.
+A frame may not be deleted if its minibuffer serves as surrogate
+minibuffer for another frame.  Normally, you may not delete a frame if
+all other frames are invisible, but if the second optional argument
+FORCE is non-nil, you may do so.
 
 This function runs `delete-frame-functions' before actually
 deleting the frame, unless the frame is a tooltip.
@@ -1854,7 +1870,6 @@ and returns whatever that function returns.  */)
   struct frame *f;
   Lisp_Object lispy_dummy;
   Lisp_Object x, y, retval;
-  struct gcpro gcpro1;
 
   f = SELECTED_FRAME ();
   x = y = Qnil;
@@ -1880,10 +1895,9 @@ and returns whatever that function returns.  */)
     }
   XSETFRAME (lispy_dummy, f);
   retval = Fcons (lispy_dummy, Fcons (x, y));
-  GCPRO1 (retval);
   if (!NILP (Vmouse_position_function))
     retval = call1 (Vmouse_position_function, retval);
-  RETURN_UNGCPRO (retval);
+  return retval;
 }
 
 DEFUN ("mouse-pixel-position", Fmouse_pixel_position,
@@ -1900,7 +1914,6 @@ and nil for X and Y.  */)
   struct frame *f;
   Lisp_Object lispy_dummy;
   Lisp_Object x, y, retval;
-  struct gcpro gcpro1;
 
   f = SELECTED_FRAME ();
   x = y = Qnil;
@@ -1918,10 +1931,9 @@ and nil for X and Y.  */)
 
   XSETFRAME (lispy_dummy, f);
   retval = Fcons (lispy_dummy, Fcons (x, y));
-  GCPRO1 (retval);
   if (!NILP (Vmouse_position_function))
     retval = call1 (Vmouse_position_function, retval);
-  RETURN_UNGCPRO (retval);
+  return retval;
 }
 
 #ifdef HAVE_WINDOW_SYSTEM
@@ -2137,10 +2149,12 @@ If omitted, FRAME defaults to the currently selected frame.  */)
   check_minibuf_window (frame, EQ (minibuf_window, selected_window));
 
   /* I think this should be done with a hook.  */
-#ifdef HAVE_WINDOW_SYSTEM
   if (FRAME_WINDOW_P (f))
+    {
+#ifdef HAVE_WINDOW_SYSTEM
       x_iconify_frame (f);
 #endif
+    }
 
   /* Make menu bar update for the Buffers and Frames menus.  */
   windows_or_buffers_changed = 17;
@@ -2309,6 +2323,8 @@ otherwise used with utter care to avoid that running functions on
 {
   struct frame *f = decode_live_frame (frame);
   f->after_make_frame = !NILP (made);
+  f->inhibit_horizontal_resize = false;
+  f->inhibit_vertical_resize = false;
   return made;
 }
 
@@ -2401,6 +2417,46 @@ store_frame_param (struct frame *f, Lisp_Object prop, Lisp_Object val)
 {
   register Lisp_Object old_alist_elt;
 
+  if (EQ (prop, Qminibuffer))
+    {
+      if (WINDOWP (val))
+	{
+	  if (!MINI_WINDOW_P (XWINDOW (val)))
+	    error ("The `minibuffer' parameter does not specify a valid minibuffer window");
+	  else if (FRAME_MINIBUF_ONLY_P (f))
+	    {
+	      if (EQ (val, FRAME_MINIBUF_WINDOW (f)))
+		val = Qonly;
+	      else
+		error ("Can't change the minibuffer window of a minibuffer-only frame");
+	    }
+	  else if (FRAME_HAS_MINIBUF_P (f))
+	    {
+	      if (EQ (val, FRAME_MINIBUF_WINDOW (f)))
+		val = Qt;
+	      else
+		error ("Can't change the minibuffer window of a frame with its own minibuffer");
+	    }
+	  else
+	    /* Store the chosen minibuffer window.  */
+	    fset_minibuffer_window (f, val);
+	}
+      else
+	{
+	  Lisp_Object old_val = Fcdr (Fassq (Qminibuffer, f->param_alist));
+
+	  if (!NILP (old_val))
+	    {
+	      if (WINDOWP (old_val) && NILP (val))
+		/* Don't change the value for a minibuffer-less frame if
+		   only nil was specified as new value.  */
+		val = old_val;
+	      else if (!EQ (old_val, val))
+		error ("Can't change the `minibuffer' parameter of this frame");
+	    }
+	}
+    }
+
   /* The buffer-list parameters are stored in a special place and not
      in the alist.  All buffers must be live.  */
   if (EQ (prop, Qbuffer_list))
@@ -2420,28 +2476,6 @@ store_frame_param (struct frame *f, Lisp_Object prop, Lisp_Object val)
 	  list = Fcons (XCAR (val), list);
       fset_buried_buffer_list (f, Fnreverse (list));
       return;
-    }
-
-  /* If PROP is a symbol which is supposed to have frame-local values,
-     and it is set up based on this frame, switch to the global
-     binding.  That way, we can create or alter the frame-local binding
-     without messing up the symbol's status.  */
-  if (SYMBOLP (prop))
-    {
-      struct Lisp_Symbol *sym = XSYMBOL (prop);
-    start:
-      switch (sym->redirect)
-	{
-	case SYMBOL_VARALIAS: sym = indirect_variable (sym); goto start;
-	case SYMBOL_PLAINVAL: case SYMBOL_FORWARDED: break;
-	case SYMBOL_LOCALIZED:
-	  { struct Lisp_Buffer_Local_Value *blv = sym->val.blv;
-	    if (blv->frame_local && blv_found (blv) && XFRAME (blv->where) == f)
-	      swap_in_global_binding (sym);
-	    break;
-	  }
-	default: emacs_abort ();
-	}
     }
 
   /* The tty color needed to be set before the frame's parameter
@@ -2472,19 +2506,6 @@ store_frame_param (struct frame *f, Lisp_Object prop, Lisp_Object val)
       else if (EQ (prop, Qname))
 	set_term_frame_name (f, val);
     }
-
-  if (EQ (prop, Qminibuffer) && WINDOWP (val))
-    {
-      if (! MINI_WINDOW_P (XWINDOW (val)))
-	error ("Surrogate minibuffer windows must be minibuffer windows");
-
-      if ((FRAME_HAS_MINIBUF_P (f) || FRAME_MINIBUF_ONLY_P (f))
-	  && !EQ (val, f->minibuffer_window))
-	error ("Can't change the surrogate minibuffer of a frame with its own minibuffer");
-
-      /* Install the chosen minibuffer window, with proper buffer.  */
-      fset_minibuffer_window (f, val);
-    }
 }
 
 /* Return color matches UNSPEC on frame F or nil if UNSPEC
@@ -2509,13 +2530,11 @@ If FRAME is omitted or nil, return information on the currently selected frame. 
   Lisp_Object alist;
   struct frame *f = decode_any_frame (frame);
   int height, width;
-  struct gcpro gcpro1;
 
   if (!FRAME_LIVE_P (f))
     return Qnil;
 
   alist = Fcopy_alist (f->param_alist);
-  GCPRO1 (alist);
 
   if (!FRAME_WINDOW_P (f))
     {
@@ -2564,10 +2583,6 @@ If FRAME is omitted or nil, return information on the currently selected frame. 
 	   : FRAME_COLS (f));
   store_in_alist (&alist, Qwidth, make_number (width));
   store_in_alist (&alist, Qmodeline, (FRAME_WANTS_MODELINE_P (f) ? Qt : Qnil));
-  store_in_alist (&alist, Qminibuffer,
-		  (! FRAME_HAS_MINIBUF_P (f) ? Qnil
-		   : FRAME_MINIBUF_ONLY_P (f) ? Qonly
-		   : FRAME_MINIBUF_WINDOW (f)));
   store_in_alist (&alist, Qunsplittable, (FRAME_NO_SPLIT_P (f) ? Qt : Qnil));
   store_in_alist (&alist, Qbuffer_list, f->buffer_list);
   store_in_alist (&alist, Qburied_buffer_list, f->buried_buffer_list);
@@ -2585,7 +2600,6 @@ If FRAME is omitted or nil, return information on the currently selected frame. 
       store_in_alist (&alist, Qmenu_bar_lines, lines);
     }
 
-  UNGCPRO;
   return alist;
 }
 
@@ -2607,6 +2621,22 @@ If FRAME is nil, describe the currently selected frame.  */)
       /* Avoid consing in frequent cases.  */
       if (EQ (parameter, Qname))
 	value = f->name;
+#ifdef HAVE_WINDOW_SYSTEM
+      /* These are used by vertical motion commands.  */
+      else if (EQ (parameter, Qvertical_scroll_bars))
+	value = (f->vertical_scroll_bar_type == vertical_scroll_bar_none
+		 ? Qnil
+		 : (f->vertical_scroll_bar_type == vertical_scroll_bar_left
+		    ? Qleft : Qright));
+      else if (EQ (parameter, Qhorizontal_scroll_bars))
+	value = f->horizontal_scroll_bars ? Qt : Qnil;
+      else if (EQ (parameter, Qline_spacing) && f->extra_line_spacing == 0)
+	/* If this is non-zero, we can't determine whether the user specified
+	   an integer or float value without looking through 'param_alist'.  */
+	value = make_number (0);
+      else if (EQ (parameter, Qfont) && FRAME_X_P (f))
+	value = FRAME_FONT (f)->props[FONT_NAME_INDEX];
+#endif /* HAVE_WINDOW_SYSTEM */
 #ifdef HAVE_X_WINDOWS
       else if (EQ (parameter, Qdisplay) && FRAME_X_P (f))
 	value = XCAR (FRAME_DISPLAY_INFO (f)->name_list_element);
@@ -2648,25 +2678,20 @@ If FRAME is nil, describe the currently selected frame.  */)
 
 DEFUN ("modify-frame-parameters", Fmodify_frame_parameters,
        Smodify_frame_parameters, 2, 2, 0,
-       doc: /* Modify the parameters of frame FRAME according to ALIST.
+       doc: /* Modify FRAME according to new values of its parameters in ALIST.
 If FRAME is nil, it defaults to the selected frame.
 ALIST is an alist of parameters to change and their new values.
 Each element of ALIST has the form (PARM . VALUE), where PARM is a symbol.
-The meaningful PARMs depend on the kind of frame.
-Undefined PARMs are ignored, but stored in the frame's parameter list
-so that `frame-parameters' will return them.
-
-The value of frame parameter FOO can also be accessed
-as a frame-local binding for the variable FOO, if you have
-enabled such bindings for that variable with `make-variable-frame-local'.
-Note that this functionality is obsolete as of Emacs 22.2, and its
-use is not recommended.  Explicitly check for a frame-parameter instead.  */)
+Which PARMs are meaningful depends on the kind of frame.
+The meaningful parameters are acted upon, i.e. the frame is changed
+according to their new values, and are also stored in the frame's
+parameter list so that `frame-parameters' will return them.
+PARMs that are not meaningful are still stored in the frame's parameter
+list, but are otherwise ignored.  */)
   (Lisp_Object frame, Lisp_Object alist)
 {
   struct frame *f = decode_live_frame (frame);
-  register Lisp_Object prop, val;
-
-  CHECK_LIST (alist);
+  Lisp_Object prop, val;
 
   /* I think this should be done with a hook.  */
 #ifdef HAVE_WINDOW_SYSTEM
@@ -2976,25 +3001,43 @@ font height.  */)
   return Qnil;
 }
 
-DEFUN ("set-frame-position", Fset_frame_position,
-       Sset_frame_position, 3, 3, 0,
-       doc: /* Sets position of FRAME in pixels to XOFFSET by YOFFSET.
-If FRAME is nil, the selected frame is used.  XOFFSET and YOFFSET are
-actually the position of the upper left corner of the frame.  Negative
-values for XOFFSET or YOFFSET are interpreted relative to the rightmost
-or bottommost possible position (that stays within the screen).  */)
-  (Lisp_Object frame, Lisp_Object xoffset, Lisp_Object yoffset)
+DEFUN ("frame-position", Fframe_position,
+       Sframe_position, 0, 1, 0,
+       doc: /* Return top left corner of FRAME in pixels.
+FRAME must be a live frame and defaults to the selected one.  The return
+value is a cons (x, y) of the coordinates of the top left corner of
+FRAME's outer frame, in pixels relative to an origin (0, 0) of FRAME's
+display.  */)
+     (Lisp_Object frame)
 {
   register struct frame *f = decode_live_frame (frame);
 
-  CHECK_TYPE_RANGED_INTEGER (int, xoffset);
-  CHECK_TYPE_RANGED_INTEGER (int, yoffset);
+  return Fcons (make_number (f->left_pos), make_number (f->top_pos));
+}
+
+DEFUN ("set-frame-position", Fset_frame_position,
+       Sset_frame_position, 3, 3, 0,
+       doc: /* Set position of FRAME to (X, Y).
+FRAME must be a live frame and defaults to the selected one.  X and Y,
+if positive, specify the coordinate of the left and top edge of FRAME's
+outer frame in pixels relative to an origin (0, 0) of FRAME's display.
+If any of X or Y is negative, it specifies the coordinates of the right
+or bottom edge of the outer frame of FRAME relative to the right or
+bottom edge of FRAME's display.  */)
+  (Lisp_Object frame, Lisp_Object x, Lisp_Object y)
+{
+  struct frame *f = decode_live_frame (frame);
+
+  CHECK_TYPE_RANGED_INTEGER (int, x);
+  CHECK_TYPE_RANGED_INTEGER (int, y);
 
   /* I think this should be done with a hook.  */
-#ifdef HAVE_WINDOW_SYSTEM
   if (FRAME_WINDOW_P (f))
-    x_set_offset (f, XINT (xoffset), XINT (yoffset), 1);
+    {
+#ifdef HAVE_WINDOW_SYSTEM
+      x_set_offset (f, XINT (x), XINT (y), 1);
 #endif
+    }
 
   return Qt;
 }
@@ -3055,6 +3098,7 @@ static const struct frame_parm_table frame_parms[] =
   {"alpha",			SYMBOL_INDEX (Qalpha)},
   {"sticky",			SYMBOL_INDEX (Qsticky)},
   {"tool-bar-position",		SYMBOL_INDEX (Qtool_bar_position)},
+  {"inhibit-double-buffering",  SYMBOL_INDEX (Qinhibit_double_buffering)},
 };
 
 #ifdef HAVE_WINDOW_SYSTEM
@@ -3073,8 +3117,7 @@ x_set_frame_parameters (struct frame *f, Lisp_Object alist)
   /* If both of these parameters are present, it's more efficient to
      set them both at once.  So we wait until we've looked at the
      entire list before we set them.  */
-  int width IF_LINT (= 0), height IF_LINT (= 0);
-  bool width_change = false, height_change = false;
+  int width = -1, height = -1;  /* -1 denotes they were not changed. */
 
   /* Same here.  */
   Lisp_Object left, top;
@@ -3089,87 +3132,80 @@ x_set_frame_parameters (struct frame *f, Lisp_Object alist)
   /* Record in these vectors all the parms specified.  */
   Lisp_Object *parms;
   Lisp_Object *values;
-  ptrdiff_t i, p;
+  ptrdiff_t i, j, size;
   bool left_no_change = 0, top_no_change = 0;
 #ifdef HAVE_X_WINDOWS
   bool icon_left_no_change = 0, icon_top_no_change = 0;
 #endif
 
-  i = 0;
-  for (tail = alist; CONSP (tail); tail = XCDR (tail))
-    i++;
+  for (size = 0, tail = alist; CONSP (tail); tail = XCDR (tail))
+    size++;
+  CHECK_LIST_END (tail, alist);
 
   USE_SAFE_ALLOCA;
-  SAFE_ALLOCA_LISP (parms, 2 * i);
-  values = parms + i;
+  SAFE_ALLOCA_LISP (parms, 2 * size);
+  values = parms + size;
 
   /* Extract parm names and values into those vectors.  */
 
-  i = 0;
+  i = 0, j = size - 1;
   for (tail = alist; CONSP (tail); tail = XCDR (tail))
     {
-      Lisp_Object elt;
+      Lisp_Object elt = XCAR (tail), prop = Fcar (elt), val = Fcdr (elt);
 
-      elt = XCAR (tail);
-      parms[i] = Fcar (elt);
-      values[i] = Fcdr (elt);
-      i++;
-    }
-  /* TAIL and ALIST are not used again below here.  */
-  alist = tail = Qnil;
+      /* Some properties are independent of other properties, but other
+	 properties are dependent upon them.  These special properties
+	 are foreground_color, background_color (affects cursor_color)
+	 and font (affects fringe widths); they're recorded starting
+	 from the end of PARMS and VALUES to process them first by using
+	 reverse iteration.  */
 
-  /* There is no need to gcpro LEFT, TOP, ICON_LEFT, or ICON_TOP,
-     because their values appear in VALUES and strings are not valid.  */
-  top = left = Qunbound;
-  icon_left = icon_top = Qunbound;
-
-  /* Process foreground_color and background_color before anything else.
-     They are independent of other properties, but other properties (e.g.,
-     cursor_color) are dependent upon them.  */
-  /* Process default font as well, since fringe widths depends on it.  */
-  for (p = 0; p < i; p++)
-    {
-      Lisp_Object prop, val;
-
-      prop = parms[p];
-      val = values[p];
       if (EQ (prop, Qforeground_color)
 	  || EQ (prop, Qbackground_color)
 	  || EQ (prop, Qfont))
 	{
-	  register Lisp_Object param_index, old_value;
-
-	  old_value = get_frame_param (f, prop);
-	  if (NILP (Fequal (val, old_value)))
-	    {
-	      store_frame_param (f, prop, val);
-
-	      param_index = Fget (prop, Qx_frame_parameter);
-	      if (NATNUMP (param_index)
-		  && XFASTINT (param_index) < ARRAYELTS (frame_parms)
-                  && FRAME_RIF (f)->frame_parm_handlers[XINT (param_index)])
-                (*(FRAME_RIF (f)->frame_parm_handlers[XINT (param_index)])) (f, val, old_value);
-	    }
+	  parms[j] = prop;
+	  values[j] = val;
+	  j--;
+	}
+      else
+	{
+	  parms[i] = prop;
+	  values[i] = val;
+	  i++;
 	}
     }
 
-  /* Now process them in reverse of specified order.  */
-  while (i-- != 0)
+  /* TAIL and ALIST are not used again below here.  */
+  alist = tail = Qnil;
+
+  top = left = Qunbound;
+  icon_left = icon_top = Qunbound;
+
+  /* Reverse order is used to make sure that special
+     properties noticed above are processed first.  */
+  for (i = size - 1; i >= 0; i--)
     {
       Lisp_Object prop, val;
 
       prop = parms[i];
       val = values[i];
 
-      if (EQ (prop, Qwidth) && RANGED_INTEGERP (0, val, INT_MAX))
+      if (EQ (prop, Qwidth))
         {
-	  width_change = 1;
-          width = XFASTINT (val) * FRAME_COLUMN_WIDTH (f) ;
+	  if (RANGED_INTEGERP (0, val, INT_MAX))
+	    width = XFASTINT (val) * FRAME_COLUMN_WIDTH (f) ;
+	  else if (CONSP (val) && EQ (XCAR (val), Qtext_pixels)
+		   && RANGED_INTEGERP (0, XCDR (val), INT_MAX))
+	    width = XFASTINT (XCDR (val));
         }
-      else if (EQ (prop, Qheight) && RANGED_INTEGERP (0, val, INT_MAX))
+      else if (EQ (prop, Qheight))
         {
-	  height_change = 1;
-          height = XFASTINT (val) * FRAME_LINE_HEIGHT (f);
+	  if (RANGED_INTEGERP (0, val, INT_MAX))
+	    height = XFASTINT (val) * FRAME_LINE_HEIGHT (f);
+	  else if (CONSP (val) && EQ (XCAR (val), Qtext_pixels)
+		   && RANGED_INTEGERP (0, XCDR (val), INT_MAX))
+	    height = XFASTINT (XCDR (val));
         }
       else if (EQ (prop, Qtop))
 	top = val;
@@ -3184,11 +3220,6 @@ x_set_frame_parameters (struct frame *f, Lisp_Object alist)
 	  fullscreen = val;
 	  fullscreen_change = true;
 	}
-      else if (EQ (prop, Qforeground_color)
-	       || EQ (prop, Qbackground_color)
-	       || EQ (prop, Qfont))
-	/* Processed above.  */
-	continue;
       else
 	{
 	  register Lisp_Object param_index, old_value;
@@ -3256,29 +3287,15 @@ x_set_frame_parameters (struct frame *f, Lisp_Object alist)
 
     XSETFRAME (frame, f);
 
-    if ((width_change && width != FRAME_TEXT_WIDTH (f))
-	|| (height_change && height != FRAME_TEXT_HEIGHT (f))
-	|| (f->can_x_set_window_size && (f->new_height || f->new_width)))
-      {
-	/* If necessary provide default values for HEIGHT and WIDTH.  Do
-	   that here since otherwise a size change implied by an
-	   intermittent font change may get lost as in Bug#17142.  */
-	if (!width_change)
-	  width = ((f->can_x_set_window_size && f->new_width)
-		   ? (f->new_pixelwise
-		      ? f->new_width
-		      : (f->new_width * FRAME_COLUMN_WIDTH (f)))
-		   : FRAME_TEXT_WIDTH (f));
-
-	if (!height_change)
-	  height = ((f->can_x_set_window_size && f->new_height)
-		    ? (f->new_pixelwise
-		       ? f->new_height
-		       : (f->new_height * FRAME_LINE_HEIGHT (f)))
-		    : FRAME_TEXT_HEIGHT (f));
-
-	Fset_frame_size (frame, make_number (width), make_number (height), Qt);
-      }
+    if ((width != -1 && width != FRAME_TEXT_WIDTH (f))
+	|| (height != -1 && height != FRAME_TEXT_HEIGHT (f)))
+      /* We could consider checking f->after_make_frame here, but I
+	 don't have the faintest idea why the following is needed at
+	 all.  With the old setting it can get a Heisenbug when
+	 EmacsFrameResize intermittently provokes a delayed
+	 change_frame_size in the middle of adjust_frame_size.  */
+      /** 	|| (f->can_x_set_window_size && (f->new_height || f->new_width))) **/
+      adjust_frame_size (f, width, height, 1, 0, Qx_set_frame_parameters);
 
     if ((!NILP (left) || !NILP (top))
 	&& ! (left_no_change && top_no_change)
@@ -3534,7 +3551,8 @@ x_set_screen_gamma (struct frame *f, Lisp_Object new_value, Lisp_Object old_valu
 	    (f, bgcolor, Qnil);
     }
 
-  Fclear_face_cache (Qnil);
+  clear_face_cache (true);	/* FIXME: Why of all frames?  */
+  fset_redisplay (f);
 }
 
 
@@ -3606,10 +3624,12 @@ x_set_font (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 	  Lisp_Object ascii_font = fontset_ascii (fontset);
 	  Lisp_Object spec = font_spec_from_name (ascii_font);
 
-	  if (NILP (spec))
-	    signal_error ("Invalid font name", ascii_font);
-
-	  if (! font_match_p (spec, font_object))
+	  /* SPEC might be nil because ASCII_FONT's name doesn't parse
+	     according to stupid XLFD rules, which, for example,
+	     disallow font names that include a dash followed by a
+	     number.  So in those cases we simply request x_new_font
+	     below to generate a new fontset.  */
+	  if (NILP (spec) || ! font_match_p (spec, font_object))
 	    fontset = -1;
 	}
     }
@@ -3622,17 +3642,20 @@ x_set_font (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
   x_new_font (f, font_object, fontset);
   store_frame_param (f, Qfont, arg);
 #ifdef HAVE_X_WINDOWS
-  store_frame_param (f, Qfont_param, font_param);
+  store_frame_param (f, Qfont_parameter, font_param);
 #endif
   /* Recalculate toolbar height.  */
   f->n_tool_bar_rows = 0;
-  f->tool_bar_redisplayed_once = false;
 
   /* Ensure we redraw it.  */
   clear_current_matrices (f);
 
   /* Attempt to hunt down bug#16028.  */
   SET_FRAME_GARBAGED (f);
+
+  /* This is important if we are called by some Lisp as part of
+     redisplaying the frame, see redisplay_internal.  */
+  f->fonts_changed = true;
 
   recompute_basic_faces (f);
 
@@ -3714,8 +3737,8 @@ x_set_left_fringe (struct frame *f, Lisp_Object new_value, Lisp_Object old_value
 
   if (new_width != old_width)
     {
-      FRAME_LEFT_FRINGE_WIDTH (f) = new_width;
-      FRAME_FRINGE_COLS (f) /* Round up.  */
+      f->left_fringe_width = new_width;
+      f->fringe_cols /* Round up.  */
 	= (new_width + FRAME_RIGHT_FRINGE_WIDTH (f) + unit - 1) / unit;
 
       if (FRAME_X_WINDOW (f) != 0)
@@ -3738,8 +3761,8 @@ x_set_right_fringe (struct frame *f, Lisp_Object new_value, Lisp_Object old_valu
 
   if (new_width != old_width)
     {
-      FRAME_RIGHT_FRINGE_WIDTH (f) = new_width;
-      FRAME_FRINGE_COLS (f) /* Round up.  */
+      f->right_fringe_width = new_width;
+      f->fringe_cols /* Round up.  */
 	= (new_width + FRAME_LEFT_FRINGE_WIDTH (f) + unit - 1) / unit;
 
       if (FRAME_X_WINDOW (f) != 0)
@@ -3768,13 +3791,11 @@ void
 x_set_right_divider_width (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
   int old = FRAME_RIGHT_DIVIDER_WIDTH (f);
-
   CHECK_TYPE_RANGED_INTEGER (int, arg);
-  FRAME_RIGHT_DIVIDER_WIDTH (f) = XINT (arg);
-  if (FRAME_RIGHT_DIVIDER_WIDTH (f) < 0)
-    FRAME_RIGHT_DIVIDER_WIDTH (f) = 0;
-  if (FRAME_RIGHT_DIVIDER_WIDTH (f) != old)
+  int new = max (0, XINT (arg));
+  if (new != old)
     {
+      f->right_divider_width = new;
       adjust_frame_size (f, -1, -1, 4, 0, Qright_divider_width);
       adjust_frame_glyphs (f);
       SET_FRAME_GARBAGED (f);
@@ -3786,13 +3807,11 @@ void
 x_set_bottom_divider_width (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
   int old = FRAME_BOTTOM_DIVIDER_WIDTH (f);
-
   CHECK_TYPE_RANGED_INTEGER (int, arg);
-  FRAME_BOTTOM_DIVIDER_WIDTH (f) = XINT (arg);
-  if (FRAME_BOTTOM_DIVIDER_WIDTH (f) < 0)
-    FRAME_BOTTOM_DIVIDER_WIDTH (f) = 0;
-  if (FRAME_BOTTOM_DIVIDER_WIDTH (f) != old)
+  int new = max (0, XINT (arg));
+  if (new != old)
     {
+      f->bottom_divider_width = new;
       adjust_frame_size (f, -1, -1, 4, 0, Qbottom_divider_width);
       adjust_frame_glyphs (f);
       SET_FRAME_GARBAGED (f);
@@ -4396,8 +4415,8 @@ XParseGeometry (char *string,
 {
   int mask = NoValue;
   char *strind;
-  unsigned long tempWidth, tempHeight;
-  long int tempX, tempY;
+  unsigned long tempWidth UNINIT, tempHeight UNINIT;
+  long int tempX UNINIT, tempY UNINIT;
   char *nextCharacter;
 
   if (string == NULL || *string == '\0')
@@ -4541,11 +4560,11 @@ On Nextstep, this just calls `ns-parse-geometry'.  */)
 
    This function does not make the coordinates positive.  */
 
-#define DEFAULT_ROWS 35
+#define DEFAULT_ROWS 36
 #define DEFAULT_COLS 80
 
 long
-x_figure_window_size (struct frame *f, Lisp_Object parms, bool toolbar_p)
+x_figure_window_size (struct frame *f, Lisp_Object parms, bool toolbar_p, int *x_width, int *x_height)
 {
   Lisp_Object height, width, user_size, top, left, user_position;
   long window_prompting = 0;
@@ -4564,44 +4583,11 @@ x_figure_window_size (struct frame *f, Lisp_Object parms, bool toolbar_p)
   f->top_pos = 0;
   f->left_pos = 0;
 
-  /* Ensure that earlier new_width and new_height settings won't
-     override what we specify below.  */
-  f->new_width = f->new_height = 0;
-
-  height = x_get_arg (dpyinfo, parms, Qheight, 0, 0, RES_TYPE_NUMBER);
-  width = x_get_arg (dpyinfo, parms, Qwidth, 0, 0, RES_TYPE_NUMBER);
-  if (!EQ (width, Qunbound) || !EQ (height, Qunbound))
-    {
-      if (!EQ (width, Qunbound))
-	{
-	  CHECK_NUMBER (width);
-	  if (! (0 <= XINT (width) && XINT (width) <= INT_MAX))
-	    xsignal1 (Qargs_out_of_range, width);
-
-	  SET_FRAME_WIDTH (f, XINT (width) * FRAME_COLUMN_WIDTH (f));
-	}
-
-      if (!EQ (height, Qunbound))
-	{
-	  CHECK_NUMBER (height);
-	  if (! (0 <= XINT (height) && XINT (height) <= INT_MAX))
-	    xsignal1 (Qargs_out_of_range, height);
-
-	  SET_FRAME_HEIGHT (f, XINT (height) * FRAME_LINE_HEIGHT (f));
-	}
-
-      user_size = x_get_arg (dpyinfo, parms, Quser_size, 0, 0, RES_TYPE_NUMBER);
-      if (!NILP (user_size) && !EQ (user_size, Qunbound))
-	window_prompting |= USSize;
-      else
-	window_prompting |= PSize;
-    }
-
-  /* Add a tool bar height to the initial frame height so that the user
-     gets a text display area of the size he specified with -g or via
-     .Xdefaults.  Later changes of the tool bar height don't change the
-     frame size.  This is done so that users can create tall Emacs
-     frames without having to guess how tall the tool bar will get.  */
+  /* Calculate a tool bar height so that the user gets a text display
+     area of the size he specified with -g or via .Xdefaults.  Later
+     changes of the tool bar height don't change the frame size.  This
+     is done so that users can create tall Emacs frames without having
+     to guess how tall the tool bar will get.  */
   if (toolbar_p && FRAME_TOOL_BAR_LINES (f))
     {
       if (frame_default_tool_bar_height)
@@ -4625,6 +4611,65 @@ x_figure_window_size (struct frame *f, Lisp_Object parms, bool toolbar_p)
 	  FRAME_TOOL_BAR_HEIGHT (f)
 	    = DEFAULT_TOOL_BAR_IMAGE_HEIGHT + 2 * margin + 2 * relief;
 	}
+    }
+
+  /* Ensure that earlier new_width and new_height settings won't
+     override what we specify below.  */
+  f->new_width = f->new_height = 0;
+
+  height = x_get_arg (dpyinfo, parms, Qheight, 0, 0, RES_TYPE_NUMBER);
+  width = x_get_arg (dpyinfo, parms, Qwidth, 0, 0, RES_TYPE_NUMBER);
+  if (!EQ (width, Qunbound) || !EQ (height, Qunbound))
+    {
+      if (!EQ (width, Qunbound))
+	{
+	  if (CONSP (width) && EQ (XCAR (width), Qtext_pixels))
+	    {
+	      CHECK_NUMBER (XCDR (width));
+	      if ((XINT (XCDR (width)) < 0 || XINT (XCDR (width)) > INT_MAX))
+		xsignal1 (Qargs_out_of_range, XCDR (width));
+
+	      SET_FRAME_WIDTH (f, XINT (XCDR (width)));
+	      f->inhibit_horizontal_resize = true;
+	      *x_width = XINT (XCDR (width));
+	    }
+	  else
+	    {
+	      CHECK_NUMBER (width);
+	      if ((XINT (width) < 0 || XINT (width) > INT_MAX))
+		xsignal1 (Qargs_out_of_range, width);
+
+	      SET_FRAME_WIDTH (f, XINT (width) * FRAME_COLUMN_WIDTH (f));
+	    }
+	}
+
+      if (!EQ (height, Qunbound))
+	{
+	  if (CONSP (height) && EQ (XCAR (height), Qtext_pixels))
+	    {
+	      CHECK_NUMBER (XCDR (height));
+	      if ((XINT (XCDR (height)) < 0 || XINT (XCDR (height)) > INT_MAX))
+		xsignal1 (Qargs_out_of_range, XCDR (height));
+
+	      SET_FRAME_HEIGHT (f, XINT (XCDR (height)));
+	      f->inhibit_vertical_resize = true;
+	      *x_height = XINT (XCDR (height));
+	    }
+	  else
+	    {
+	      CHECK_NUMBER (height);
+	      if ((XINT (height) < 0) || (XINT (height) > INT_MAX))
+		xsignal1 (Qargs_out_of_range, height);
+
+	      SET_FRAME_HEIGHT (f, XINT (height) * FRAME_LINE_HEIGHT (f));
+	    }
+	}
+
+      user_size = x_get_arg (dpyinfo, parms, Quser_size, 0, 0, RES_TYPE_NUMBER);
+      if (!NILP (user_size) && !EQ (user_size, Qunbound))
+	window_prompting |= USSize;
+      else
+	window_prompting |= PSize;
     }
 
   top = x_get_arg (dpyinfo, parms, Qtop, 0, 0, RES_TYPE_NUMBER);
@@ -4836,7 +4881,7 @@ syms_of_frame (void)
   DEFSYM (Qframep, "framep");
   DEFSYM (Qframe_live_p, "frame-live-p");
   DEFSYM (Qframe_windows_min_size, "frame-windows-min-size");
-  DEFSYM (Qwindow_pixel_to_total, "window--pixel-to-total");
+  DEFSYM (Qwindow__pixel_to_total, "window--pixel-to-total");
   DEFSYM (Qexplicit_name, "explicit-name");
   DEFSYM (Qheight, "height");
   DEFSYM (Qicon, "icon");
@@ -4845,6 +4890,7 @@ syms_of_frame (void)
   DEFSYM (Qonly, "only");
   DEFSYM (Qnone, "none");
   DEFSYM (Qwidth, "width");
+  DEFSYM (Qtext_pixels, "text-pixels");
   DEFSYM (Qgeometry, "geometry");
   DEFSYM (Qicon_left, "icon-left");
   DEFSYM (Qicon_top, "icon-top");
@@ -4887,41 +4933,46 @@ syms_of_frame (void)
   DEFSYM (Qframes, "frames");
   DEFSYM (Qsource, "source");
 
-  DEFSYM (Qframe_position, "frame-position");
-  DEFSYM (Qframe_outer_size, "frame-outer-size");
+  DEFSYM (Qouter_edges, "outer-edges");
+  DEFSYM (Qouter_position, "outer-position");
+  DEFSYM (Qouter_size, "outer-size");
+  DEFSYM (Qnative_edges, "native-edges");
+  DEFSYM (Qinner_edges, "inner-edges");
   DEFSYM (Qexternal_border_size, "external-border-size");
-  DEFSYM (Qtitle_height, "title-height");
+  DEFSYM (Qtitle_bar_size, "title-bar-size");
   DEFSYM (Qmenu_bar_external, "menu-bar-external");
   DEFSYM (Qmenu_bar_size, "menu-bar-size");
   DEFSYM (Qtool_bar_external, "tool-bar-external");
   DEFSYM (Qtool_bar_size, "tool-bar-size");
-  DEFSYM (Qframe_inner_size, "frame-inner-size");
   /* The following are used for frame_size_history.  */
   DEFSYM (Qadjust_frame_size_1, "adjust-frame-size-1");
   DEFSYM (Qadjust_frame_size_2, "adjust-frame-size-2");
   DEFSYM (Qadjust_frame_size_3, "adjust-frame-size-3");
+  DEFSYM (Qx_set_frame_parameters, "x-set-frame-parameters");
   DEFSYM (QEmacsFrameResize, "EmacsFrameResize");
+  DEFSYM (Qset_frame_size, "set-frame-size");
   DEFSYM (Qframe_inhibit_resize, "frame-inhibit-resize");
   DEFSYM (Qx_set_fullscreen, "x-set-fullscreen");
   DEFSYM (Qx_check_fullscreen, "x-check-fullscreen");
-  DEFSYM (Qx_set_window_size_1, "x-set-window-size-1");
   DEFSYM (Qxg_frame_resized, "xg-frame-resized");
   DEFSYM (Qxg_frame_set_char_size_1, "xg-frame-set-char-size-1");
   DEFSYM (Qxg_frame_set_char_size_2, "xg-frame-set-char-size-2");
   DEFSYM (Qxg_frame_set_char_size_3, "xg-frame-set-char-size-3");
+  DEFSYM (Qx_set_window_size_1, "x-set-window-size-1");
+  DEFSYM (Qx_set_window_size_2, "x-set-window-size-2");
+  DEFSYM (Qx_set_window_size_3, "x-set-window-size-3");
   DEFSYM (Qxg_change_toolbar_position, "xg-change-toolbar-position");
   DEFSYM (Qx_net_wm_state, "x-net-wm-state");
   DEFSYM (Qx_handle_net_wm_state, "x-handle-net-wm-state");
   DEFSYM (Qtb_size_cb, "tb-size-cb");
   DEFSYM (Qupdate_frame_tool_bar, "update-frame-tool-bar");
   DEFSYM (Qfree_frame_tool_bar, "free-frame-tool-bar");
-
+  DEFSYM (Qx_set_menu_bar_lines, "x-set-menu-bar-lines");
   DEFSYM (Qchange_frame_size, "change-frame-size");
   DEFSYM (Qxg_frame_set_char_size, "xg-frame-set-char-size");
   DEFSYM (Qset_window_configuration, "set-window-configuration");
   DEFSYM (Qx_create_frame_1, "x-create-frame-1");
   DEFSYM (Qx_create_frame_2, "x-create-frame-2");
-  DEFSYM (Qtip_frame, "tip-frame");
   DEFSYM (Qterminal_frame, "terminal-frame");
 
 #ifdef HAVE_NS
@@ -4945,6 +4996,9 @@ syms_of_frame (void)
   DEFSYM (Qleft_fringe, "left-fringe");
   DEFSYM (Qline_spacing, "line-spacing");
   DEFSYM (Qmenu_bar_lines, "menu-bar-lines");
+  DEFSYM (Qupdate_frame_menubar, "update-frame-menubar");
+  DEFSYM (Qfree_frame_menubar_1, "free-frame-menubar-1");
+  DEFSYM (Qfree_frame_menubar_2, "free-frame-menubar-2");
   DEFSYM (Qmouse_color, "mouse-color");
   DEFSYM (Qname, "name");
   DEFSYM (Qright_divider_width, "right-divider-width");
@@ -4962,6 +5016,7 @@ syms_of_frame (void)
   DEFSYM (Qvertical_scroll_bars, "vertical-scroll-bars");
   DEFSYM (Qvisibility, "visibility");
   DEFSYM (Qwait_for_wm, "wait-for-wm");
+  DEFSYM (Qinhibit_double_buffering, "inhibit-double-buffering");
 
   {
     int i;
@@ -5010,7 +5065,7 @@ You can also use a floating number between 0.0 and 1.0.  */);
   DEFVAR_LISP ("default-frame-alist", Vdefault_frame_alist,
 	       doc: /* Alist of default values for frame creation.
 These may be set in your init file, like this:
-  (setq default-frame-alist '((width . 80) (height . 55) (menu-bar-lines . 1)))
+  (setq default-frame-alist \\='((width . 80) (height . 55) (menu-bar-lines . 1)))
 These override values given in window system configuration data,
  including X Windows' defaults database.
 For values specific to the first Emacs frame, see `initial-frame-alist'.
@@ -5026,7 +5081,7 @@ Setting this variable does not affect existing frames, only new ones.  */);
 	       doc: /* Default position of vertical scroll bars on this window-system.  */);
 #ifdef HAVE_WINDOW_SYSTEM
 #if defined (HAVE_NTGUI) || defined (NS_IMPL_COCOA) || (defined (USE_GTK) && defined (USE_TOOLKIT_SCROLL_BARS))
-  /* MS-Windows, Mac OS X, and GTK have scroll bars on the right by
+  /* MS-Windows, macOS, and GTK have scroll bars on the right by
      default.  */
   Vdefault_frame_scroll_bars = Qright;
 #else
@@ -5073,12 +5128,10 @@ The pointer becomes visible again when the mouse is moved.  */);
   DEFVAR_LISP ("focus-in-hook", Vfocus_in_hook,
                doc: /* Normal hook run when a frame gains input focus.  */);
   Vfocus_in_hook = Qnil;
-  DEFSYM (Qfocus_in_hook, "focus-in-hook");
 
   DEFVAR_LISP ("focus-out-hook", Vfocus_out_hook,
                doc: /* Normal hook run when a frame loses input focus.  */);
   Vfocus_out_hook = Qnil;
-  DEFSYM (Qfocus_out_hook, "focus-out-hook");
 
   DEFVAR_LISP ("delete-frame-functions", Vdelete_frame_functions,
 	       doc: /* Functions run before deleting a frame.
@@ -5151,7 +5204,7 @@ a non-nil value in your init file.  */);
 If this option is nil, setting font, menu bar, tool bar, internal
 borders, fringes or scroll bars of a specific frame may resize the frame
 in order to preserve the number of columns or lines it displays.  If
-this option is `t', no such resizing is done.  Note that the size of
+this option is t, no such resizing is done.  Note that the size of
 fullscreen and maximized frames, the height of fullheight frames and the
 width of fullwidth frames never change implicitly.
 
@@ -5167,14 +5220,14 @@ Changing any of the parameters `scroll-bar-width', `scroll-bar-height',
 window.  This means, for example, that removing vertical scroll bars on
 a frame containing several side by side windows will shrink the frame
 width by the width of one scroll bar provided this option is nil and
-keep it unchanged if this option is either `t' or a list containing
+keep it unchanged if this option is either t or a list containing
 `vertical-scroll-bars'.
 
-The default value is '(tool-bar-lines) on Lucid, Motif and Windows
+The default value is \\='(tool-bar-lines) on Lucid, Motif and Windows
 \(which means that adding/removing a tool bar does not change the frame
 height), nil on all other window systems including GTK+ (which means
 that changing any of the parameters listed above may change the size of
-the frame), and `t' otherwise (which means the frame size never changes
+the frame), and t otherwise (which means the frame size never changes
 implicitly when there's no window system support).
 
 Note that when a frame is not large enough to accommodate a change of
@@ -5206,6 +5259,21 @@ by `function'.  `more' is a list with additional information.
 The function `frame--size-history' displays the value of this variable
 in a more readable form.  */);
     frame_size_history = Qnil;
+
+  DEFVAR_BOOL ("tooltip-reuse-hidden-frame", tooltip_reuse_hidden_frame,
+	       doc: /* Non-nil means reuse hidden tooltip frames.
+When this is nil, delete a tooltip frame when hiding the associated
+tooltip.  When this is non-nil, make the tooltip frame invisible only,
+so it can be reused when the next tooltip is shown.
+
+Setting this to non-nil may drastically reduce the consing overhead
+incurred by creating new tooltip frames.  However, a value of non-nil
+means also that intermittent changes of faces or `default-frame-alist'
+are not applied when showing a tooltip in a reused frame.
+
+This variable is effective only with the X toolkit (and there only when
+Gtk+ tooltips are not used) and on Windows.  */);
+  tooltip_reuse_hidden_frame = false;
 
   staticpro (&Vframe_list);
 
@@ -5264,6 +5332,7 @@ in a more readable form.  */);
   defsubr (&Sset_frame_height);
   defsubr (&Sset_frame_width);
   defsubr (&Sset_frame_size);
+  defsubr (&Sframe_position);
   defsubr (&Sset_frame_position);
   defsubr (&Sframe_pointer_visible_p);
 

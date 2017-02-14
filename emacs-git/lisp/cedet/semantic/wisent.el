@@ -1,6 +1,6 @@
 ;;; semantic/wisent.el --- Wisent - Semantic gateway
 
-;; Copyright (C) 2001-2007, 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2007, 2009-2017 Free Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
 ;; Maintainer: David Ponce <david@dponce.com>
@@ -149,7 +149,7 @@ and will be collected in `semantic-lex' form: (SYMBOL START . END)."
 
 ;; Parser plug-ins
 ;;
-;; The following functions permit to plug the Wisent LALR parser in
+;; The following functions permit plugging the Wisent LALR parser in
 ;; Semantic toolkit.  They use the standard API provided by Semantic
 ;; to plug parsers in.
 ;;
@@ -322,9 +322,9 @@ the standard function `semantic-parse-region'."
 	       semantic--progress-reporter
 	       (progress-reporter-update
 		semantic--progress-reporter
-		(/ (* 100 (semantic-lex-token-start
-			   (car wisent-lex-istream)))
-		   (point-max))))))
+		(floor (* 100.0 (semantic-lex-token-start
+				 (car wisent-lex-istream)))
+		       (point-max))))))
     ;; Return parse tree
     (nreverse ptree)))
 

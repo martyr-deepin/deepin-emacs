@@ -1,14 +1,14 @@
 /* Updating of data structures for redisplay.
 
-Copyright (C) 1985-1988, 1993-1995, 1997-2015 Free Software Foundation,
+Copyright (C) 1985-1988, 1993-1995, 1997-2017 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,6 +21,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <config.h>
 
 #include "sysstdio.h"
+#include <stdlib.h>
 #include <unistd.h>
 
 #include "lisp.h"
@@ -28,7 +29,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 /* cm.h must come after dispextern.h on Windows.  */
 #include "dispextern.h"
 #include "cm.h"
-#include "character.h"
 #include "buffer.h"
 #include "keyboard.h"
 #include "frame.h"
@@ -36,13 +36,11 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "window.h"
 #include "commands.h"
 #include "disptab.h"
-#include "indent.h"
-#include "intervals.h"
 #include "blockinput.h"
-#include "process.h"
-
 #include "syssignal.h"
+#include "systime.h"
 #include "tparam.h"
+#include "xwidget.h"
 
 #ifdef HAVE_WINDOW_SYSTEM
 #include TERM_HEADER
@@ -51,7 +49,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <errno.h>
 
 #include <fpending.h>
-#include <timespec.h>
 
 #ifdef WINDOWSNT
 #include "w32.h"
@@ -177,7 +174,7 @@ add_window_display_history (struct window *w, const char *msg, bool paused_p)
   ++history_idx;
 
   snprintf (buf, sizeof redisplay_history[0].trace,
-	    "%"pMu": window %p (`%s')%s\n%s",
+	    "%"pMu": window %p (%s)%s\n%s",
 	    history_tick++,
 	    ptr,
 	    ((BUFFERP (w->contents)
@@ -325,7 +322,9 @@ margin_glyphs_to_reserve (struct window *w, int total_glyphs, int margin)
       int width = w->total_cols;
       double d = max (0, margin);
       d = min (width / 2 - 1, d);
-      return (int) ((double) total_glyphs / width * d);
+      /* Since MARGIN is positive, we cannot possibly have less than
+	 one glyph for the marginal area.  */
+      return max (1, (int) ((double) total_glyphs / width * d));
     }
   return 0;
 }
@@ -685,7 +684,9 @@ void
 clear_glyph_matrix_rows (struct glyph_matrix *matrix, int start, int end)
 {
   eassert (start <= end);
-  eassert (start >= 0 && start < matrix->nrows);
+  eassert (start >= 0 && (start < matrix->nrows
+			  /* matrix->nrows can be 0 for the initial frame.  */
+			  || (matrix->nrows == 0)));
   eassert (end >= 0 && end <= matrix->nrows);
 
   for (; start < end; ++start)
@@ -1336,10 +1337,8 @@ realloc_glyph_pool (struct glyph_pool *pool, struct dim matrix_dim)
 	       || matrix_dim.width != pool->ncolumns);
 
   /* Enlarge the glyph pool.  */
-  needed = matrix_dim.width;
-  if (INT_MULTIPLY_OVERFLOW (needed, matrix_dim.height))
+  if (INT_MULTIPLY_WRAPV (matrix_dim.height, matrix_dim.width, &needed))
     memory_full (SIZE_MAX);
-  needed *= matrix_dim.height;
   if (needed > pool->nglyphs)
     {
       ptrdiff_t old_nglyphs = pool->nglyphs;
@@ -1699,7 +1698,8 @@ required_matrix_height (struct window *w)
 
   if (FRAME_WINDOW_P (f))
     {
-      int ch_height = FRAME_SMALLEST_FONT_HEIGHT (f);
+      /* http://lists.gnu.org/archive/html/emacs-devel/2015-11/msg00194.html  */
+      int ch_height = max (FRAME_SMALLEST_FONT_HEIGHT (f), 1);
       int window_pixel_height = window_box_height (w) + eabs (w->vscroll);
 
       return (((window_pixel_height + ch_height - 1)
@@ -1725,7 +1725,8 @@ required_matrix_width (struct window *w)
   struct frame *f = XFRAME (w->frame);
   if (FRAME_WINDOW_P (f))
     {
-      int ch_width = FRAME_SMALLEST_CHAR_WIDTH (f);
+      /* http://lists.gnu.org/archive/html/emacs-devel/2015-11/msg00194.html  */
+      int ch_width = max (FRAME_SMALLEST_CHAR_WIDTH (f), 1);
 
       /* Compute number of glyphs needed in a glyph row.  */
       return (((WINDOW_PIXEL_WIDTH (w) + ch_width - 1)
@@ -3004,7 +3005,7 @@ redraw_frame (struct frame *f)
   clear_frame (f);
   clear_current_matrices (f);
   update_end (f);
-  windows_or_buffers_changed = 13;
+  fset_redisplay (f);
   /* Mark all windows as inaccurate, so that every window will have
      its redisplay done.  */
   mark_window_display_accurate (FRAME_ROOT_WINDOW (f), 0);
@@ -3548,6 +3549,7 @@ update_window (struct window *w, bool force_p)
   add_window_display_history (w, w->current_matrix->method, paused_p);
 #endif
 
+  xwidget_end_redisplay (w, w->current_matrix);
   clear_glyph_matrix (desired_matrix);
 
   return paused_p;
@@ -4120,6 +4122,11 @@ scrolling_window (struct window *w, bool header_line_p)
       else
 	break;
     }
+
+#ifdef HAVE_XWIDGETS
+  /* Currently this seems needed to detect xwidget movement reliably. */
+    return 0;
+#endif
 
   /* Give up if some rows in the desired matrix are not enabled.  */
   if (! MATRIX_ROW_ENABLED_P (desired_matrix, i))
@@ -5171,8 +5178,8 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
 #ifdef HAVE_WINDOW_SYSTEM
   if (it.what == IT_IMAGE)
     {
-      if ((img = IMAGE_FROM_ID (it.f, it.image_id)) != NULL
-	  && !NILP (img->spec))
+      img = IMAGE_OPT_FROM_ID (it.f, it.image_id);
+      if (img && !NILP (img->spec))
 	*object = img->spec;
     }
 #endif
@@ -5269,7 +5276,7 @@ mode_line_string (struct window *w, enum window_part part,
 	  if (glyph->type == IMAGE_GLYPH)
 	    {
 	      struct image *img;
-	      img = IMAGE_FROM_ID (WINDOW_XFRAME (w), glyph->u.img_id);
+	      img = IMAGE_OPT_FROM_ID (WINDOW_XFRAME (w), glyph->u.img_id);
 	      if (img != NULL)
 		*object = img->spec;
 	      y0 -= row->ascent - glyph->ascent;
@@ -5356,7 +5363,7 @@ marginal_area_string (struct window *w, enum window_part part,
 	  if (glyph->type == IMAGE_GLYPH)
 	    {
 	      struct image *img;
-	      img = IMAGE_FROM_ID (WINDOW_XFRAME (w), glyph->u.img_id);
+	      img = IMAGE_OPT_FROM_ID (WINDOW_XFRAME (w), glyph->u.img_id);
 	      if (img != NULL)
 		*object = img->spec;
 	      y0 -= row->ascent - glyph->ascent;
@@ -5679,8 +5686,16 @@ additional wait period, in milliseconds; this is for backwards compatibility.
   if (duration > 0)
     {
       struct timespec t = dtotimespec (duration);
-      wait_reading_process_output (min (t.tv_sec, WAIT_READING_MAX),
-				   t.tv_nsec, 0, 0, Qnil, NULL, 0);
+      struct timespec tend = timespec_add (current_timespec (), t);
+
+      /* wait_reading_process_output returns as soon as it detects
+	 output from any subprocess, so we wait in a loop until the
+	 time expires.  */
+      do {
+	wait_reading_process_output (min (t.tv_sec, WAIT_READING_MAX),
+				     t.tv_nsec, 0, 0, Qnil, NULL, 0);
+	t = timespec_sub (tend, current_timespec ());
+      } while (timespec_sign (t) > 0);
     }
 
   return Qnil;
@@ -6024,11 +6039,11 @@ init_display (void)
 #endif
 
   /* If no window system has been specified, try to use the terminal.  */
-  if (! isatty (0))
+  if (! isatty (STDIN_FILENO))
     fatal ("standard input is not a tty");
 
 #ifdef WINDOWSNT
-  terminal_type = "w32console";
+  terminal_type = (char *)"w32console";
 #else
   terminal_type = getenv ("TERM");
 #endif
@@ -6036,10 +6051,10 @@ init_display (void)
     {
 #ifdef HAVE_WINDOW_SYSTEM
       if (! inhibit_window_system)
-	fprintf (stderr, "Please set the environment variable DISPLAY or TERM (see `tset').\n");
+	fprintf (stderr, "Please set the environment variable DISPLAY or TERM (see 'tset').\n");
       else
 #endif /* HAVE_WINDOW_SYSTEM */
-	fprintf (stderr, "Please set the environment variable TERM; see `tset'.\n");
+	fprintf (stderr, "Please set the environment variable TERM; see 'tset'.\n");
       exit (1);
     }
 
@@ -6089,15 +6104,15 @@ init_display (void)
     struct frame *sf = SELECTED_FRAME ();
     int width = FRAME_TOTAL_COLS (sf);
     int height = FRAME_TOTAL_LINES (sf);
+    int area;
 
     /* If these sizes are so big they cause overflow, just ignore the
        change.  It's not clear what better we could do.  The rest of
        the code assumes that (width + 2) * height * sizeof (struct glyph)
        does not overflow and does not exceed PTRDIFF_MAX or SIZE_MAX.  */
-    if (INT_ADD_RANGE_OVERFLOW (width, 2, INT_MIN, INT_MAX)
-	|| INT_MULTIPLY_RANGE_OVERFLOW (width + 2, height, INT_MIN, INT_MAX)
-	|| (min (PTRDIFF_MAX, SIZE_MAX) / sizeof (struct glyph)
-	    < (width + 2) * height))
+    if (INT_ADD_WRAPV (width, 2, &area)
+	|| INT_MULTIPLY_WRAPV (height, area, &area)
+	|| min (PTRDIFF_MAX, SIZE_MAX) / sizeof (struct glyph) < area)
       fatal ("screen size %dx%d too big", width, height);
   }
 
@@ -6203,10 +6218,10 @@ It is up to you to set this variable if your terminal can do that.  */);
 	       doc: /* Name of the window system that Emacs uses for the first frame.
 The value is a symbol:
  nil for a termcap frame (a character-only terminal),
- 'x' for an Emacs frame that is really an X window,
- 'w32' for an Emacs frame that is a window on MS-Windows display,
- 'ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
- 'pc' for a direct-write MS-DOS frame.
+ `x' for an Emacs frame that is really an X window,
+ `w32' for an Emacs frame that is a window on MS-Windows display,
+ `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
+ `pc' for a direct-write MS-DOS frame.
 
 Use of this variable as a boolean is deprecated.  Instead,
 use `display-graphic-p' or any of the other `display-*-p'
@@ -6216,10 +6231,10 @@ predicates which report frame's specific UI-related capabilities.  */);
 		 doc: /* Name of window system through which the selected frame is displayed.
 The value is a symbol:
  nil for a termcap frame (a character-only terminal),
- 'x' for an Emacs frame that is really an X window,
- 'w32' for an Emacs frame that is a window on MS-Windows display,
- 'ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
- 'pc' for a direct-write MS-DOS frame.
+ `x' for an Emacs frame that is really an X window,
+ `w32' for an Emacs frame that is a window on MS-Windows display,
+ `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
+ `pc' for a direct-write MS-DOS frame.
 
 Use of this variable as a boolean is deprecated.  Instead,
 use `display-graphic-p' or any of the other `display-*-p'
@@ -6245,6 +6260,7 @@ Each element can be:
 
   DEFVAR_LISP ("standard-display-table", Vstandard_display_table,
 	       doc: /* Display table to use for buffers that specify none.
+It is also used for standard output and error streams.
 See `buffer-display-table' for more information.  */);
   Vstandard_display_table = Qnil;
 

@@ -1,6 +1,6 @@
 ;;; vc-bzr.el --- VC backend for the bzr revision control system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2017 Free Software Foundation, Inc.
 
 ;; Author: Dave Love <fx@gnu.org>
 ;; 	   Riccardo Murri <riccardo.murri@gmail.com>
@@ -34,7 +34,7 @@
 ;; ==========
 
 ;; When editing a symlink and *both* the symlink and its target
-;; are bzr-versioned, `vc-bzr` presently runs `bzr status` on the
+;; are bzr-versioned, `vc-bzr' presently runs `bzr status' on the
 ;; symlink, thereby not detecting whether the actual contents
 ;; (that is, the target contents) are changed.
 
@@ -49,6 +49,11 @@
   (require 'cl-lib)
   (require 'vc-dispatcher)
   (require 'vc-dir))                    ; vc-dir-at-event
+
+(declare-function vc-deduce-fileset "vc"
+                  (&optional observer allow-unregistered
+                             state-model-only-files))
+
 
 ;; Clear up the cache to force vc-call to check again and discover
 ;; new functions when we reload this file.
@@ -367,7 +372,12 @@ If PROMPT is non-nil, prompt for the Bzr command to run."
 	    args           (cddr args)))
     (require 'vc-dispatcher)
     (let ((buf (apply 'vc-bzr-async-command command args)))
-      (with-current-buffer buf (vc-run-delayed (vc-compilation-mode 'bzr)))
+      (with-current-buffer buf
+        (vc-run-delayed
+          (vc-compilation-mode 'bzr)
+          (setq-local compile-command
+                      (concat vc-bzr-program " " command " "
+                              (if args (mapconcat 'identity args " ") "")))))
       (vc-set-async-update buf))))
 
 (defun vc-bzr-pull (prompt)
@@ -517,7 +527,7 @@ in the branch repository (or whose status not be determined)."
     ;; elisp function to remerge from the .BASE/OTHER/THIS files.
     (smerge-start-session)
     (add-hook 'after-save-hook 'vc-bzr-resolve-when-done nil t)
-    (message "There are unresolved conflicts in this file")))
+    (vc-message-unresolved-conflicts buffer-file-name)))
 
 (defun vc-bzr-version-dirstate (dir)
   "Try to return as a string the bzr revision ID of directory DIR.
@@ -649,7 +659,7 @@ or a superior directory.")
                                            "" (replace-regexp-in-string
                                                "\n[ \t]?" " " str)))))
 
-(defun vc-bzr-checkin (files comment)
+(defun vc-bzr-checkin (files comment &optional _rev)
   "Check FILES in to bzr with log message COMMENT."
   (apply 'vc-bzr-command "commit" nil 0 files
          (cons "-m" (log-edit-extract-headers
@@ -705,11 +715,11 @@ or a superior directory.")
        ;; value of log-view-message-re only since Emacs-23.
        (if (eq vc-log-view-type 'short)
 	 (append `((,log-view-message-re
-		    (1 'log-view-message-face)
+		    (1 'log-view-message)
 		    (2 'change-log-name)
 		    (3 'change-log-date)
 		    (4 'change-log-list nil lax))))
-	 (append `((,log-view-message-re . 'log-view-message-face))
+	 (append `((,log-view-message-re . 'log-view-message))
 		 ;; log-view-font-lock-keywords
 		 '(("^ *\\(?:committer\\|author\\): \
 \\([^<(]+?\\)[  ]*[(<]\\([[:alnum:]_.+-]+@[[:alnum:]_.-]+\\)[>)]"

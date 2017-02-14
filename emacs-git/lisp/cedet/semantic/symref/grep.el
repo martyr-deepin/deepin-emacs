@@ -1,6 +1,6 @@
 ;;; semantic/symref/grep.el --- Symref implementation using find/grep
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2017 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -48,11 +48,16 @@ and those hits returned.")
     (html-mode "*.s?html" "*.php")
     (ruby-mode "*.r[bu]" "*.rake" "*.gemspec" "*.erb" "*.haml"
                "Rakefile" "Thorfile" "Capfile" "Guardfile" "Vagrantfile")
+    (perl-mode "*.pl" "*.PL")
+    (cperl-mode "*.pl" "*.PL")
+    (lisp-interaction-mode "*.el" "*.ede" ".emacs" "_emacs")
     )
   "List of major modes and file extension pattern.
 See find -name man page for format.")
 
 (defun semantic-symref-derive-find-filepatterns (&optional mode)
+  ;; FIXME: This should be moved to grep.el, where it could be used
+  ;; for "C-u M-x grep" as well.
   "Derive a list of file patterns for the current buffer.
 Looks first in `semantic-symref-filepattern-alist'.  If it is not
 there, it then looks in `auto-mode-alist', and attempts to derive something
@@ -64,28 +69,20 @@ Optional argument MODE specifies the `major-mode' to test."
     (when (not pat)
       ;; No hit, try auto-mode-alist.
       (dolist (X auto-mode-alist)
-	(when (eq (cdr X) mode)
-	  ;; Only take in simple patterns, so try to convert this one.
-	  (let ((Xp
-		 (cond ((string-match "\\\\\\.\\([^\\'>]+\\)\\\\'" (car X))
-			(concat "*." (match-string 1 (car X))))
-		       (t nil))))
-	    (when Xp
-	      (setq pat (cons Xp pat))))
-	  )))
+	(when (and (eq (cdr X) mode)
+                   ;; Only take in simple patterns, so try to convert this one.
+                   (string-match "\\\\\\.\\([^\\'>]+\\)\\\\'" (car X)))
+          (push (concat "*." (match-string 1 (car X))) pat))))
     ;; Convert the list into some find-flags.
-    (cond ((= (length pat) 1)
-	   (concat "-name \"" (car pat) "\""))
-	  ((consp pat)
-	   (concat "\\( "
-		   (mapconcat (lambda (s)
-				(concat "-name \"" s "\""))
-			      pat
-			      " -o ")
-		   " \\)"))
-	  (t
-	   (error "Customize `semantic-symref-filepattern-alist' for %s" major-mode))
-	  )))
+    (if (null pat)
+        (error "Customize `semantic-symref-filepattern-alist' for %S"
+               major-mode)
+      (let ((args `("-name" ,(car pat))))
+        (if (null (cdr args))
+            args
+          `("(" ,@args
+            ,@(mapcan (lambda (s) `("-o" "-name" ,s)) pat)
+            ")"))))))
 
 (defvar grepflags)
 (defvar greppattern)
@@ -125,7 +122,7 @@ GREPPATTERN is the pattern used by grep."
                greppattern
                filepattern
                rootdir)))
-    ;; For some reason, my default has no <D> in it.
+    ;; http://debbugs.gnu.org/20719
     (when (string-match "find \\(\\.\\)" cmd)
       (setq cmd (replace-match rootdir t t cmd 1)))
     ;;(message "New command: %s" cmd)
@@ -147,7 +144,8 @@ This shell should support pipe redirect syntax."
   ;; Find the root of the project, and do a find-grep...
   (let* (;; Find the file patterns to use.
 	 (rootdir (semantic-symref-calculate-rootdir))
-	 (filepattern (semantic-symref-derive-find-filepatterns))
+	 (filepatterns (semantic-symref-derive-find-filepatterns))
+         (filepattern (mapconcat #'shell-quote-argument filepatterns " "))
 	 ;; Grep based flags.
 	 (grepflags (cond ((eq (oref tool :resulttype) 'file)
                            "-l ")
@@ -191,6 +189,9 @@ This shell should support pipe redirect syntax."
     ;; Return the answer
     ans))
 
+(defconst semantic-symref-grep--line-re
+  "^\\(\\(?:[a-zA-Z]:\\)?[^:\n]+\\):\\([0-9]+\\):")
+
 (cl-defmethod semantic-symref-parse-tool-output-one-line ((tool semantic-symref-tool-grep))
   "Parse one line of grep output, and return it as a match list.
 Moves cursor to end of the match."
@@ -198,8 +199,13 @@ Moves cursor to end of the match."
 	 ;; Search for files
 	 (when (re-search-forward "^\\([^\n]+\\)$" nil t)
 	   (match-string 1)))
+        ((eq (oref tool :resulttype) 'line-and-text)
+         (when (re-search-forward semantic-symref-grep--line-re nil t)
+           (list (string-to-number (match-string 2))
+                 (match-string 1)
+                 (buffer-substring-no-properties (point) (line-end-position)))))
 	(t
-	 (when (re-search-forward  "^\\(\\(?:[a-zA-Z]:\\)?[^:\n]+\\):\\([0-9]+\\):" nil t)
+	 (when (re-search-forward semantic-symref-grep--line-re nil t)
 	   (cons (string-to-number (match-string 2))
 		 (match-string 1))
 	   ))))

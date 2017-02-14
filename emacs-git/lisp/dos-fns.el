@@ -1,6 +1,6 @@
 ;;; dos-fns.el --- MS-Dos specific functions
 
-;; Copyright (C) 1991, 1993, 1995-1996, 2001-2015 Free Software
+;; Copyright (C) 1991, 1993, 1995-1996, 2001-2017 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: Morten Welinder <terra@diku.dk>
@@ -98,7 +98,7 @@ sure to obey the 8.3 limitations."
 			    string))
 	      (aset string i ?_))
 	    ;; If we don't have a period in the first 8 chars, insert one.
-	    ;; This enables to have 3 more characters from the original
+	    ;; This enables having 3 more characters from the original
 	    ;; name in the extension.
 	    (if (> (or (string-match "\\." string) (length string))
 		   8)
@@ -201,8 +201,8 @@ that are used in Emacs Lisp sources; any other file name will be
 returned unaltered."
   (cond
    ;; See files.el:dir-locals-file.
-   ((string= file-name ".dir-locals.el")
-    "_dir-locals.el")
+   ((string= file-name ".dir-locals")
+    "_dir-locals")
    (t
     file-name)))
 
