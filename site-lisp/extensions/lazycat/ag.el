@@ -107,8 +107,8 @@ If set to nil, fall back to finding VCS root directories."
 different window, according to `ag-reuse-window'."
   (if ag-reuse-window
       ;; prevent changing the window
-      (flet ((pop-to-buffer (buffer &rest args)
-                            (switch-to-buffer buffer)))
+      (cl-flet ((pop-to-buffer (buffer &rest args)
+                               (switch-to-buffer buffer)))
         (compilation-next-error-function n reset))
     ;; just navigate to the results as normal
     (compilation-next-error-function n reset)))
@@ -297,7 +297,7 @@ roots."
             (save-excursion
               (goto-char (point-max))
               (insert "\n  ag " state)
-              (forward-char -1)         ;Back up before \n at end of STATE.
+              (forward-char -1)    ;Back up before \n at end of STATE.
               (insert " at " (substring (current-time-string) 0 19))
               (forward-char 1)
               (setq mode-line-process
