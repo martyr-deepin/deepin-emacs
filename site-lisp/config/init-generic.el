@@ -86,6 +86,7 @@
 
 
 ;; Restore emacs session.
+(setq initial-buffer-choice 'none)
 (run-with-timer 1 nil #'(lambda () (bury-buffer)))
 (emacs-session-restore)
 
