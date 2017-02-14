@@ -1,7 +1,7 @@
 ;;; ### Unset key ###
 ;;; --- 卸载按键
 (lazy-unset-key                         ;全局按键的卸载
- '("C-x C-f" "C-z" "C-q" "s-W" "s-z" "M-h" "C-x C-c" "C-\\" "C-x o"))
+ '("C-x C-f" "C-z" "C-q" "s-W" "s-z" "M-h" "C-x C-c" "C-\\"))
 ;;; ### Vi-move ###
 ;;; --- Vi式移动
 (defvar vi-move-key-alist nil
@@ -225,10 +225,10 @@
    ("C-x O" . toggle-window-split)
    )
  "window-extension")
-(lazy-set-autoload-key
- '(
-   ("C-x o" . ace-window))
- "ace-window")
+;; (lazy-set-autoload-key
+;;  '(
+;;    ("C-x o" . ace-window))
+;;  "ace-window")
 ;;; ### Tabbar ###
 ;;; --- 多标签浏览
 (lazy-set-key
