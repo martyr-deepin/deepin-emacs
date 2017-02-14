@@ -127,6 +127,7 @@
   (add-hook hook '(lambda () (c-mode-style-setup))))
 
 (dolist (elt-cons '(
+                    ("\\.cpp$" . c++-mode)
                     ("\\.h$" . c++-mode)
                     ))
   (add-to-alist 'auto-mode-alist elt-cons))
