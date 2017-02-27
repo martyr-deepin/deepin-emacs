@@ -307,7 +307,7 @@
         (")" . paredit-close-parenthesis)      ;智能 )
         ("[" . paredit-open-bracket)           ;智能 [
         ("]" . paredit-close-bracket)          ;智能 ]
-        ("{" . paredit-open-curly)             ;智能 {
+        ("{" . paredit-open-curly-smart)       ;智能 {
         ("}" . paredit-close-curly)            ;智能 }
         ("C-s-," . paredit-open-angled)        ;智能 <
         ("C-s-." . paredit-close-angled)       ;智能 >

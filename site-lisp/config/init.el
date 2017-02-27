@@ -6,6 +6,7 @@
   (require 'lazy-set-key)
   (require 'one-key)
   (require 'paredit)
+  (require 'paredit-extension)
   (require 'tabbar)
   (require 'basic-toolkit)
   (require 'redo)
