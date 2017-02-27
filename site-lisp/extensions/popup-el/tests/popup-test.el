@@ -1,11 +1,14 @@
 (require 'ert)
 
 (require 'popup)
-;; for "every" function
-(require 'cl)
 
 (when (< (frame-width) (length "long long long long line"))
   (set-frame-size (selected-frame) 80 35))
+
+(defun popup-test-helper-posn-col-row (dummy)
+  "This function is workaround. Because `posn-col-row' and `posn-at-point'
+can not work well in batch mode."
+  (cons (current-column) (line-number-at-pos (point))))
 
 (defmacro popup-test-with-common-setup (&rest body)
   (declare (indent 0) (debug t))
@@ -14,8 +17,11 @@
        (switch-to-buffer (current-buffer))
        (delete-other-windows)
        (erase-buffer)
-       ,@body
-       )))
+       (if noninteractive
+           (cl-letf (((symbol-function 'posn-col-row)
+                      #'popup-test-helper-posn-col-row))
+             ,@body)
+         ,@body))))
 
 (defun popup-test-helper-line-move-visual (arg)
   "This function is workaround. Because `line-move-visual' can not work well in
@@ -34,7 +40,7 @@ batch mode."
       (let ((strings (split-string str "\n")))
         (when (search-forward (car strings) nil t)
           (goto-char (match-beginning 0))
-          (every
+          (cl-every
            'identity
            (mapcar
             (lambda (elem)
@@ -43,9 +49,9 @@ batch mode."
             (cdr strings))))))))
 
 (defun popup-test-helper-buffer-contents ()
-  (loop with start = (point-min)
+  (cl-loop with start = (point-min)
         with contents
-        for overlay in (sort* (overlays-in (point-min) (point-max))
+        for overlay in (cl-sort (overlays-in (point-min) (point-max))
                               '< :key 'overlay-start)
         for overlay-start = (overlay-start overlay)
         for overlay-end = (overlay-end overlay)
@@ -561,7 +567,7 @@ Baz"))
 (ert-deftest popup-test-scroll-down ()
   (popup-test-with-common-setup
     (setq popup
-          (popup-cascade-menu (loop for x to 100 collect (format "Foo%d" x))
+          (popup-cascade-menu (cl-loop for x to 100 collect (format "Foo%d" x))
                               :nowait t :height 10 :margin t :scroll-bar t))
     (should (popup-test-helper-rectangle-match "\
 Foo0
@@ -583,7 +589,7 @@ Foo2"))
 (ert-deftest popup-test-scroll-up ()
   (popup-test-with-common-setup
     (setq popup
-          (popup-cascade-menu (loop for x to 100 collect (format "Foo%d" x))
+          (popup-cascade-menu (cl-loop for x to 100 collect (format "Foo%d" x))
                               :nowait t :height 10 :margin t :scroll-bar t))
     (should (popup-test-helper-rectangle-match "\
 Foo0
@@ -620,6 +626,27 @@ Qux" :nowait t)
    ;; Qux"))
    ))
 
+(ert-deftest popup-test-initial-index ()
+  (popup-test-with-common-setup
+    (setq popup (popup-menu* '("Foo" "Bar" "Baz") :initial-index 0 :nowait t))
+    (should (popup-test-helper-popup-selected-item "Foo")))
+
+  (popup-test-with-common-setup
+    (setq popup (popup-menu* '("Foo" "Bar" "Baz") :initial-index 2 :nowait t))
+    (should (popup-test-helper-popup-selected-item "Baz")))
+
+  (popup-test-with-common-setup
+    (setq popup (popup-menu* '("Foo" "Bar" "Baz") :initial-index 2 :height 1 :scroll-bar t :nowait t))
+    (should (popup-test-helper-popup-selected-item "Baz")))
+
+  (popup-test-with-common-setup
+    (setq popup (popup-menu* '("Foo" "Bar" "Baz") :initial-index -1 :nowait t))
+    (should (popup-test-helper-popup-selected-item "Foo")))
+
+  (popup-test-with-common-setup
+    (setq popup (popup-menu* '("Foo" "Bar" "Baz") :initial-index 100 :nowait t))
+    (should (popup-test-helper-popup-selected-item "Baz"))))
+
 (defun popup-test-helper-input (key)
   (push key unread-command-events))
 
@@ -629,7 +656,7 @@ Qux" :nowait t)
 foo
 bar
 baz")
-    (popup-isearch-update popup "a")
+    (popup-isearch-update popup 'popup-isearch-filter-list "a")
     (should (popup-test-helper-rectangle-match "\
 bar
 baz"))

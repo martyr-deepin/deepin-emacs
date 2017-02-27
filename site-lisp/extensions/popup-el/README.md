@@ -1,7 +1,7 @@
 popup.el
 ========
 
-[![Build Status](https://secure.travis-ci.org/auto-complete/popup-el.png)](http://travis-ci.org/auto-complete/popup-el)
+[![Build Status](https://secure.travis-ci.org/auto-complete/popup-el.svg)](http://travis-ci.org/auto-complete/popup-el) [![melpa badge][melpa-badge]][melpa-link] [![melpa stable badge][melpa-stable-badge]][melpa-stable-link]
 
 Overview
 --------
@@ -15,29 +15,24 @@ Screenshots
 
 **Tooltip**
 
-![](http://cx4a.org/software/popup/popup1.png)
+![](https://raw.githubusercontent.com/auto-complete/popup-el/master/etc/images/popup1.png)
 
 **Popup Menu**
 
-![](http://cx4a.org/software/popup/popup2.png)
+![](https://raw.githubusercontent.com/auto-complete/popup-el/master/etc/images/popup2.png)
 
 **Popup Cascade Menu**
 
-![](http://cx4a.org/software/popup/popup3.png)
+![](https://raw.githubusercontent.com/auto-complete/popup-el/master/etc/images/popup3.png)
 
 Installation
 ------------
 
-Install `popup.el` into your `load-path` directory. If you have
-`install-elisp` or `auto-install`, you also be able to install
-`popup.el` like:
+You can install `popup.el` from [MELPA](https://melpa.org/) with package.el.
+popwin is tested under GNU Emacs 24 or later.
 
-    ;; install-elisp
-    (install-elisp "https://github.com/m2ym/popup-el/raw/master/popup.el")
-    ;; auto-install
-    (auto-install-from-url "https://github.com/m2ym/popup-el/raw/master/popup.el")
-
-popwin is tested under GNU Emacs 22 or later.
+Alternatively, users of Debian 9 or later or Ubuntu 16.04 or later may
+simply `apt-get install elpa-popup`.
 
 Popup Items
 -----------
@@ -117,13 +112,17 @@ All of these fields can be accessed by `popup-<field>` function.
 
 ### Function: `popup-create`
 
-    popup-create point width height &key min-height around face
+    popup-create point width height &key min-height max-width around face
     selection-face scroll-bar margin-left margin-right symbol parent
     parent-offset => popup
 
 Create a popup instance at `POINT` with `WIDTH` and `HEIGHT`.
 
 `MIN-HEIGHT` is the minimal height of the popup. The default value is 0.
+
+`MAX-WIDTH` is the maximum width of the popup. The default value is
+nil (no limit). If a floating point, the value refers to the ratio of
+the window. If an integer, limit is in characters.
 
 If `AROUND` is non-nil, the popup will be displayed around the point
 but not at the point.
@@ -244,18 +243,20 @@ something about what cursor points to.
 
 ### Function: `popup-tip`
 
-    popup-tip string &key point around width height min-height
+    popup-tip string &key point around width height min-height max-width
     truncate margin margin-left margin-right scroll-bar parent
-    parent-offset nowait prompt
+    parent-offset nowait nostrip prompt
 
 Show a tooltip with message `STRING` at `POINT`. This function is
 synchronized unless `NOWAIT` specified. Almost all arguments are same as
-`popup-create` except for `TRUNCATE`, `NOWAIT`, and `PROMPT`.
+`popup-create` except for `TRUNCATE`, `NOWAIT`, `NOSTRIP` and `PROMPT`.
 
 If `TRUNCATE` is non-nil, the tooltip can be truncated.
 
 If `NOWAIT` is non-nil, this function immediately returns the tooltip
 instance without entering event loop.
+
+If `NOSTRIP` is non-nil, `STRING` properties are not stripped.
 
 `PROMPT` is a prompt string used when reading events during the event
 loop.
@@ -275,13 +276,14 @@ select an item of a list.
 
     popup-menu* list &key point around width height margin margin-left
     margin-right scroll-bar symbol parent parent-offset keymap
-    fallback help-delay nowait prompt isearch isearch-cursor-color
-    isearch-keymap isearch-callback => selected-value
+    fallback help-delay nowait prompt isearch isearch-filter isearch-cursor-color
+    isearch-keymap isearch-callback initial-index => selected-value
 
 Show a popup menu of `LIST` at `POINT`. This function returns the value
 of the selected item. Almost all arguments are same as `popup-create`
 except for `KEYMAP`, `FALLBACK`, `HELP-DELAY`, `PROMPT`, `ISEARCH`,
-`ISEARCH-CURSOR-COLOR`, `ISEARCH-KEYMAP`, and `ISEARCH-CALLBACK`.
+`ISEARCH-FILTER`, `ISEARCH-CURSOR-COLOR`, `ISEARCH-KEYMAP`
+and `ISEARCH-CALLBACK`.
 
 If `KEYMAP` is provided, it is a keymap which is used when processing
 events during event loop.
@@ -301,6 +303,9 @@ instance without entering event loop.
 If `ISEARCH` is non-nil, do isearch as soon as displaying the popup
 menu.
 
+`ISEARCH-FILTER` is a filtering function taking two arguments:
+search pattern and list of items. Returns a list of matching items.
+
 `ISEARCH-CURSOR-COLOR` is a cursor color during isearch. The default
 value is `popup-isearch-cursor-color'.
 
@@ -310,6 +315,9 @@ during event loop. The default value is `popup-isearch-keymap`.
 `ISEARCH-CALLBACK` is a function taking one argument.  `popup-menu`
 calls `ISEARCH-CALLBACK`, if specified, after isearch finished or
 isearch canceled. The arguments is whole filtered list of items.
+
+If `INITIAL-INDEX` is non-nil, this is an initial index value for
+`popup-select`. Only positive integer is valid.
 
 Here is an example:
 
@@ -329,6 +337,20 @@ Here is an example:
 
     (popup-cascade-menu '(("Top1" "Sub1" "Sub2") "Top2"))
 
+
+### Customize Variables
+
+#### `popup-isearch-regexp-builder-function`
+
+Function used to construct a regexp from a pattern. You may for instance
+provide a function that replaces spaces by '.+' if you like helm or ivy style
+of completion. Default value is `#'regexp-quote`.
+
 ----
 
-Copyright (C) 2011  Tomohiro Matsuyama <<tomo@cx4a.org>>
+Copyright (C) 2011-2015  Tomohiro Matsuyama <<m2ym.pub@gmail.com>>
+
+[melpa-link]: https://melpa.org/#/popup
+[melpa-stable-link]: https://stable.melpa.org/#/popup
+[melpa-badge]: https://melpa.org/packages/popup-badge.svg
+[melpa-stable-badge]: https://stable.melpa.org/packages/popup-badge.svg

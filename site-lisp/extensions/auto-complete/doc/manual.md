@@ -1,4 +1,4 @@
-% Auto-Complete - User Manual
+# Auto-Complete - User Manual
 
 # Introduction
 
@@ -16,100 +16,34 @@ extend. Please contact me if you have any questions.
 Auto Complete Mode is licensed under the terms of GPLv3. And this
 document is licensed under the term of GFDL.
 
-# Downloads
-
-You can download the latest auto-complete from
-[the official site](http://auto-complete.org/).
-
 # Installation
 
 ## Requirements
 
 * 800MHz or higher CPU
 * 256MB or higher RAM
-* GNU Emacs 22 or later
+* GNU Emacs 24 or later
 
-## Automatic Installation
+## Installation
 
-It is easy to install by using an installation script called
-`etc/install.el` that is located in the package directory.
+You can install `auto-complete.el` from [MELPA](https://melpa.org/#/) or [MELPA Stable](https://stable.melpa.org/#/) with package.el.
+Add following configurations for initializing package.el.
 
-Type `M-x load-file RET` in a running or newly-launched Emacs. Note
-that if you want to upgrade `auto-complete-mode`, you have to install
-in **a newly launched Emacs with the `-q` option**. Then input a file
-name to load which is a path string with adding `/etc/install.el` to
-the package directory. For example, if the package directory is
-`~/tmp/auto-complete-1.2`, the file name will be
-`~/tmp/auto-complete-1.2/etc/install.el`.
+```emacs-lisp
+(require 'package)
 
-Then input a directory where Auto Complete will be installed. You need
-to add a directory to `load-path` later if `load-path` doesn't include
-the directory. The directory is to be `~/.emacs.d` by default.
+;; If you want to use latest version
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))
 
-Finally type `RET` to start installation. After installation, you may
-see the following buffer and follow instructions to edit `.emacs`.
+;; If you want to use last tagged version
+(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/"))
+(package-initialize)
+```
 
-You can also install from terminal like:
+Then You can install auto-complete by
 
-    $ make install
-    $ # or with directory specified
-    $ make install DIR=$HOME/.emacs.d/
-
-If you don't have GNU Make, run emacs like:
-
-    $ emacs -batch -l etc/install.el
-
-**Example message after installation (\*Installation Result* Buffer)**
-
-    Successfully installed!
-    
-    Add the following code to your .emacs:
-    
-    (add-to-list 'load-path "~/.emacs.d")    ; This may not be appeared if you have already added.
-    (require 'auto-complete-config)
-    (add-to-list 'ac-dictionary-directories "~/.emacs.d/ac-dict")
-    (ac-config-default)
-
-## Manual Installation
-
-It is also possible to install manually if you follow a directory
-configuration. First, byte-compile all `.el` files in the package
-directory. You may use `Makefile` in UNIX OS.
-
-    $ make byte-compile
-
-If you can't use `Makefile`, open the directory from Emacs by `C-x d`
-and type `* . el RET B RET` to do byte-compile.
-
-Then copy all `.el` files and `.elc` files to a directory which is
-added to `load-path`. You may do such the following command if the
-directory is `~/.emacs.d`
-
-    $ cp *.el *.elc ~/.emacs.d
-
-And then install dictionary files. They are optional to run Auto
-Complete Mode, but you should install if you don't have any
-reason. Dictionary files are located in called `dict` directory, it is
-needed that they are installed to a directory which is
-`auto-complete.el` has been installed. If you installed
-`auto-complete.el` to a directory called `~/.emacs.d`, you also have
-to install dictionary files to `~/.emacs.d`. Please be careful not to
-overwrite existed files. It may be a rare case, but the installation
-script above avoids overwrite by renaming `dict` directory to
-`ac-dict` directory.
-
-    $ cp -r dict ~/.emacs.d
-
-Finally add the following code to `.emacs`:
-
-    (add-to-list 'ac-dictionary-directories "~/.emacs.d/dict")
-    (require 'auto-complete-config)
-    (ac-config-default)
-
-If you haven't added the directory to `load-path`, you need to add the
-following code too.
-
-    (add-to-list 'load-path "~/.emacs.d")
+- `M-x package-list-packages` and select auto-complete
+- `M-x package-refresh-contents` and `M-x package-install auto-complete`
 
 ## After-Installation Check
 
@@ -118,11 +52,6 @@ newly-launched Emacs. Installation has been successful if you see a
 completion menu. If you have an error or no completion is started, it
 could be a failure. Please contact me in such case with confirmation
 following:
-
-  * Using correct `load-path`?
-
-    A directory which `auto-complete.el` is installed to is in
-    `load-path`.
 
   * Characters `AC` in mode-line?
 
@@ -151,7 +80,7 @@ Inputting characters is basic. Completions will never be shown without
 any character. So when completion will be started, what character
 causes completion to be started? It is a good question but it is
 difficult to answer here. In simple words, completion will be started
-when a character is inserted. See [`ac-trigger-commands`][] for more
+when a character is inserted. See [`ac-trigger-commands`](#ac-trigger-commands) for more
 details.
 
 ![Inputting Characters](ac.png)
@@ -211,7 +140,7 @@ is not bad idea to remember how to select candidates.
 Selecting candidates is not a complex operation. You can select
 candidates forward or backward by cursor key or `M-p` and
 `M-n`. According to settings, a behavior of completion by TAB will be
-changed as a behavior of completion by RET. See [`ac-dwim`]() for more
+changed as a behavior of completion by RET. See [`ac-dwim`](#ac-dwim) for more
 details.
 
 There are other ways to select candidates. `M-1` to select candidate
@@ -224,8 +153,8 @@ There are other ways to select candidates. `M-1` to select candidate
 displaying. Quick help will appear at the side of completion menu, so
 you can easily see that, but there is a problem if there is no space
 to display the help. Quick help will be shown automatically. To use
-quick help, you need to set [`ac-use-quick-help`][] to `t`. Delay time
-to show quick help is given by [`ac-quick-help-delay`][].
+quick help, you need to set [`ac-use-quick-help`](#ac-use-quick-help) to `t`. Delay time
+to show quick help is given by [`ac-quick-help-delay`](#ac-quick-help-delay).
 
 On the other side, buffer help will not be shown without any
 instructions from users. Buffer help literally displays help in a
@@ -243,7 +172,7 @@ temporarily. After completion is finished, these operations will be
 disabled.
 
 | Key           | Command       | Description               |
-|---------------+---------------+---------------------------|
+|---------------|---------------|---------------------------|
 | `TAB`, `C-i`  | `ac-expand`   | Completion by TAB         |
 | `RET`, `C-m`  | `ac-complete` | Completion by RET         |
 | `down`, `M-n` | `ac-next`     | Select next candidate     |
@@ -265,7 +194,9 @@ which is used with key binding in general. The following code changes
 a default completion command to more advanced feature that
 `auto-complete-mode` provides.
 
-    (define-key ac-mode-map (kbd "M-TAB") 'auto-complete)
+```emacs-lisp
+(define-key ac-mode-map (kbd "M-TAB") 'auto-complete)
+```
 
 So, as of `auto-complete` command, it is a little different from an
 original automatic completion.
@@ -277,14 +208,14 @@ original automatic completion.
   * Case that no candidates remains
 
     Attempt to complete with fuzzy matching. See
-    [Completion by Fuzzy Matching][] for more details.
+    [Completion by Fuzzy Matching](#completion-by-fuzzy-matching) for more details.
 
   * Otherwise
 
     Otherwise start completion with/without expanding a whole common
     part and showing completion menu. See also
-    [`ac-show-menu-immediately-on-auto-complete`][] and
-    [`ac-expand-on-auto-complete`][].
+    [`ac-show-menu-immediately-on-auto-complete`](#ac-show-menu-immediately-on-auto-complete) and
+    [`ac-expand-on-auto-complete`](#ac-expand-on-auto-complete).
 
 ## Completion by Fuzzy Matching
 
@@ -305,13 +236,12 @@ regarding "messaeg" as "message". It is not a bad idea to bind
 
 ## Filtering Completion Candidates
 
-You can start filtering by `C-s`. The cursor color will change to
-blue. Then input characters to filter. It is possible to do completion
-by TAB or select candidates, which changes the cursor color to
-original so that telling filtering completion candidates has done. The
-filtering string will be restored when `C-s` again. To delete the
-filter string, press `DEL` or `C-h`. Other general operations is not
-allowed there.
+You can start filtering by `C-s`(You need to set `ac-use-menu-map` to `t`).
+The cursor color will change to blue. Then input characters to filter.
+It is possible to do completion by TAB or select candidates, which changes
+the cursor color to original so that telling filtering completion candidates
+has done. The filtering string will be restored when `C-s` again. To delete the
+filter string, press `DEL` or `C-h`. Other general operations is not allowed there.
 
 ![Filtering](ac-isearch.png)
 
@@ -326,16 +256,20 @@ that handles such the problem. Using trigger key, you can use an
 arbitrary key temporarily if necessary. The following code uses `TAB`
 as trigger key.
 
-    (ac-set-trigger-key "TAB")
+```emacs-lisp
+(ac-set-trigger-key "TAB")
+```
 
 Trigger key will be enabled after inserting characters. Otherwise it
 is dealt as an usual command (TAB will be indent). Generally, trigger
 key is used with `ac-auto-start` being `nil`.
 
-    (setq ac-auto-start nil)
+```emacs-lisp
+(setq ac-auto-start nil)
+```
 
-As of `ac-auto-start`, see [Not to complete automatically][] or
-[`ac-auto-start`][] for more details.
+As of `ac-auto-start`, see [Not to complete automatically](#not-to-complete-automatically) or
+[`ac-auto-start`](#ac-auto-start) for more details.
 
 ## Candidate Suggestion
 
@@ -372,7 +306,7 @@ top after `find-` as it seems to learn from users' operations.
 Dictionary is a simple list of string. There is three types of
 dictionary: user defined dictionary, major mode dictionary, and
 extension dictionary. You need to add `ac-source-dictionary` to
-`ac-sources` (default). See [Source][] for more details.
+`ac-sources` (default). See [Source](#source) for more details.
 
 ### User Defined Dictionary#
 
@@ -382,21 +316,27 @@ User defined dictionary is composed of a list of string specified
 with newline. User defined dictionary is shared with all buffers. Here
 is example adding your mail address to dictionary.
 
-    (add-to-list 'ac-user-dictionary "foobar@example.com")
+```emacs-lisp
+(add-to-list 'ac-user-dictionary "foobar@example.com")
+```
 
 Setting will be applied immediately. Try to input "foo" in a
 buffer. You may see `foobar@example.com` as a completion
 candidate. This setting will be cleared if Emacs will quit. You need
 to write the following code to keep setting in next Emacs launching.
 
-    (setq ac-user-dictionary '("foobar@example.com" "hogehoge@example.com"))
+```emacs-lisp
+(setq ac-user-dictionary '("foobar@example.com" "hogehoge@example.com"))
+```
 
 There is more easy way to add word to dictionary. Files specified by
 `ac-user-dictionary-files` will be treated as dictionary files. By
 default, `~/.dict` will be a dictionary file, so edit `~/.dict` like:
 
-    foobar@example.com
-    hogehoge@example.com
+```
+foobar@example.com
+hogehoge@example.com
+```
 
 As we said, words are separated with newline. They are not applied
 immediately, because `auto-complete-mode` uses cache not to load every
@@ -412,9 +352,11 @@ adding to `ac-user-dictionary-files`.
 You can use other dictionaries for every major-modes and extensions. A
 dictionary will loaded from a directory specified with
 `ac-dictionary-directories`. `ac-dictionary-directories` may be the
-following setting if you followed [Installation][] instructions.
+following setting if you followed [Installation](#installation) instructions.
 
-    (add-to-list 'ac-dictionary-directories "~/.emacs.d/ac-dict")
+```emacs-lisp
+(add-to-list 'ac-dictionary-directories "~/.emacs.d/ac-dict")
+```
 
 A dictionary named `c++-mode` for specific major-mode and a dictionary
 named `txt` for specific extension will be stored in the
@@ -439,7 +381,7 @@ changes.
 * How to show
 
 Anybody who knows a little Emacs Lisp can define a source easily. See
-[Extend][] for how to define a source. Here we will explain how to use
+[Extend](#extend) for how to define a source. Here we will explain how to use
 built-in sources.
 
 Usually a source name starts with `ac-source-`. So you can list
@@ -449,22 +391,24 @@ sources.
 
 ## Using Source
 
-If you wrote `(ac-config-default)` in your `.emacs`, it is rare to
+If you wrote `(ac-config-default)` in your `.emacs.d/init.el`, it is rare to
 change a source setting because it is already optimized to use. Here
 is a short explanation about source however. Sources will be used by
 setting `ac-sources` to a list of sources. You can see the setting by
 evaluating `ac-sources` in \*scratch\* buffer:
 
-    ;; Formatted
-    (ac-source-filename
-     ac-source-functions
-     ac-source-yasnippet
-     ac-source-variables
-     ac-source-symbols
-     ac-source-features
-     ac-source-abbrev
-     ac-source-words-in-same-mode-buffers
-     ac-source-dictionary)
+```emacs-lisp
+;; Formatted
+(ac-source-filename
+ ac-source-functions
+ ac-source-yasnippet
+ ac-source-variables
+ ac-source-symbols
+ ac-source-features
+ ac-source-abbrev
+ ac-source-words-in-same-mode-buffers
+ ac-source-dictionary)
+```
 
 As you see, `ac-sources` in \*scratch\* buffer has six sources. We
 explain each source for detail, you can guess meanings of sources. It
@@ -477,27 +421,33 @@ many. So try to change `ac-sources` to reduce functionality. It is
 easy to change. Just evaluate the following code in the \*scratch\*
 buffer or with `M-:`:
 
-    (setq ac-sources '(ac-source-symbols ac-source-words-in-same-mode-buffers))
+```emacs-lisp
+(setq ac-sources '(ac-source-symbols ac-source-words-in-same-mode-buffers))
+```
 
 This example changes `ac-source` setting and enable only symbol
 completion and word completion among same major modes. Then, how can
 we enable this setting in next Emacs launching? We can change settings
 by adding a hook which is called when \*scratch\* buffer is created.
 
-    (defun my-ac-emacs-lisp-mode ()
-      (setq ac-sources '(ac-source-symbols ac-source-words-in-same-mode-buffers)))
-    
-    (add-hook 'emacs-lisp-mode-hook 'my-ac-emacs-lisp-mode)
+```emacs-lisp
+(defun my-ac-emacs-lisp-mode ()
+  (setq ac-sources '(ac-source-symbols ac-source-words-in-same-mode-buffers)))
 
-If the code `(ac-config-default)` is written in `.emacs`, the code
+(add-hook 'emacs-lisp-mode-hook 'my-ac-emacs-lisp-mode)
+```
+
+If the code `(ac-config-default)` is written in `.emacs.d/init.el`, the code
 above may not work correctly. This is because `(ac-config-default)`
 will overwrite the setting. In such case, you can redefine a function
 which is used in `(ac-config-default)`. The function name is
 `ac-emacs-lisp-mode-setup` in `emacs-lisp-mode`. See
 `auto-complete-config.el` for more details.
 
-    (defun ac-emacs-lisp-mode-setup ()
-      (setq ac-sources '(ac-source-symbols ac-source-words-in-same-mode-buffers)))
+```emacs-lisp
+(defun ac-emacs-lisp-mode-setup ()
+  (setq ac-sources '(ac-source-symbols ac-source-words-in-same-mode-buffers)))
+```
 
 So, now you know how to change sources in a specific major
 mode. Summary is:
@@ -510,7 +460,9 @@ By the way, how can we change a setting for all buffers? We use
 case. Then the default value of `ac-sources` will be changed to the
 value you specified.
 
-    (setq-default ac-sources '(ac-source-words-in-all-buffer))
+```emacs-lisp
+(setq-default ac-sources '(ac-source-words-in-all-buffer))
+```
 
 There are other ways to do that. `(ac-config-default)` changes the
 default value of `ac-sources` by registering a hook for
@@ -518,13 +470,15 @@ default value of `ac-sources` by registering a hook for
 that adds `ac-source-filename` to the first of `ac-sources` by
 default. So all `auto-complete-mode` enabled buffer will have
 `ac-source-filename` at the first of `ac-sources`. A reason why adding
-to the first is relating to [Omni Completion][]. Anyway you don't care
+to the first is relating to [Omni Completion](#omni-completion). Anyway you don't care
 about it here. So if you want to change `ac-sources` of all buffer,
 you can redefine `ac-common-setup` function to do that.
 
-    ;; Add ac-source-dictionary to ac-sources of all buffer
-    (defun ac-common-setup ()
-      (setq ac-sources (append ac-sources '(ac-source-dictionary))))
+```emacs-lisp
+;; Add ac-source-dictionary to ac-sources of all buffer
+(defun ac-common-setup ()
+  (setq ac-sources (append ac-sources '(ac-source-dictionary))))
+```
 
 ## Builtin Sources
 
@@ -542,7 +496,7 @@ A source for CSS property.
 
 ### `ac-source-dictionary`
 
-A source for dictionary. See [Completion by Dictionary][] about
+A source for dictionary. See [Completion by Dictionary](#completion-by-dictionary) about
 dictionary.
 
 ### `ac-source-eclim`
@@ -609,7 +563,7 @@ A source for completing Emacs Lisp symbols.
 ### `ac-source-words-in-all-buffer`
 
 A source for completing words in all buffer. Unlikely
-[`ac-source-words-in-same-mode-buffers`][], it doesn't regard
+[`ac-source-words-in-same-mode-buffers`](#ac-source-words-in-same-mode-buffers), it doesn't regard
 major-mode.
 
 ### `ac-source-words-in-buffer`
@@ -637,17 +591,23 @@ If you are being annoyed with displaying completion menu, you can
 disable automatic starting completion by setting `ac-auto-start` to
 `nil`.
 
-    (setq ac-auto-start nil)
+```emacs-lisp
+(setq ac-auto-start nil)
+```
 
 You need to bind some key to `auto-complete` command (because you need
 to complete anyway). For example, bind to `ac-mode-map`, which is a
 key map for `auto-complete-mode` enabled buffer:
 
-    (define-key ac-mode-map (kbd "M-TAB") 'auto-complete)
+```emacs-lisp
+(define-key ac-mode-map (kbd "M-TAB") 'auto-complete)
+```
 
 Or bind to global key map.
 
-    (global-set-key "\M-/" 'auto-complete)
+```emacs-lisp
+(global-set-key "\M-/" 'auto-complete)
+```
 
 In addition, if you allow to start completion automatically but also
 want to be silent as much as possible, you can do it by setting
@@ -655,7 +615,9 @@ want to be silent as much as possible, you can do it by setting
 to start completion automatically when you has inserted 4 or more
 characters, just set `ac-auto-start` to 4:
 
-    (setq ac-auto-start 4)
+```emacs-lisp
+(setq ac-auto-start 4)
+```
 
 Setting `ac-auto-start` to large number will result in good for
 performance. Lesser `ac-auto-start`, more high cost to produce
@@ -663,25 +625,29 @@ completion candidates, because there will be so many candidates
 necessarily. If you feel `auto-complete-mode` is stalling, change
 `ac-auto-start` to a larger number or `nil`.
 
-See [`ac-auto-start`][] for more details.
+See [`ac-auto-start`](#ac-auto-start) for more details.
 
-And consider to use [Trigger Key][].
+And consider to use [Trigger Key](#trigger-key).
 
 ## Not to show completion menu automatically
 
 There is another approach to solve the annoying problem is that not to
 show completion menu automatically. Not to show completion menu
-automatically, set [`ac-auto-show-menu`][] to `nil`.
+automatically, set [`ac-auto-show-menu`](#ac-auto-show-menu) to `nil`.
 
-    (setq ac-auto-show-menu nil)
+```emacs-lisp
+(setq ac-auto-show-menu nil)
+```
 
 When you select or filter candidates, completion menu will be shown.
 
 In other way, you can delay showing completion menu by setting
 `ac-auto-show-menu` to seconds in real number.
 
-    ;; Show 0.8 second later
-    (setq ac-auto-show-menu 0.8)
+```emacs-lisp
+;; Show 0.8 second later
+(setq ac-auto-show-menu 0.8)
+```
 
 This interface has both good points of completely automatic completion
 and completely non-automatic completion. This may be default in the
@@ -693,7 +659,9 @@ You can stop completion by pressing `C-g`. However you won't press
 `C-g` while defining a macro. In such case, it is a good idea to bind
 some key to `ac-completing-map`.
 
-    (define-key ac-completing-map "\M-/" 'ac-stop)
+```emacs-lisp
+(define-key ac-completing-map "\M-/" 'ac-stop)
+```
 
 Now you can stop completion by pressing `M-/`.
 
@@ -703,61 +671,75 @@ As we described above, there is many behaviors in TAB. You need to use
 TAB and RET properly, but there is a simple interface that bind RET to
 original and TAB to finish completion:
 
-    (define-key ac-completing-map "\t" 'ac-complete)
-    (define-key ac-completing-map "\r" nil)
+```emacs-lisp
+(define-key ac-completing-map "\t" 'ac-complete)
+(define-key ac-completing-map "\r" nil)
+```
 
 ## Select candidates with C-n/C-p only when completion menu is displayed
 
 By evaluating the following code, you can select candidates with
 C-n/C-p, but it might be annoying sometimes.
 
-    ;; Bad config
-    (define-key ac-completing-map "\C-n" 'ac-next)
-    (define-key ac-completing-map "\C-p" 'ac-previous)
+```emacs-lisp
+;; Bad config
+(define-key ac-completing-map "\C-n" 'ac-next)
+(define-key ac-completing-map "\C-p" 'ac-previous)
+```
 
 In this case, it is better that selecting candidates is enabled only
 when completion menu is displayed so that the key input will not be
 taken as much as possible. `ac-menu-map` is a keymap for completion on
 completion menu which is enabled when `ac-use-menu-map` is `t`.
 
-    (setq ac-use-menu-map t)
-    ;; Default settings
-    (define-key ac-menu-map "\C-n" 'ac-next)
-    (define-key ac-menu-map "\C-p" 'ac-previous)
+```emacs-lisp
+(setq ac-use-menu-map t)
+;; Default settings
+(define-key ac-menu-map "\C-n" 'ac-next)
+(define-key ac-menu-map "\C-p" 'ac-previous)
+```
 
-See [`ac-use-menu-map`][] and [`ac-menu-map`][] for more details.
+See [`ac-use-menu-map`](#ac-use-menu-map) and [`ac-menu-map`](#ac-menu-map) for more details.
 
 ## Not to use quick help
 
 A tooltip help that is shown when completing is called quick help. You
 can disable it if you don't want to use it:
 
-    (setq ac-use-quick-help nil)
+```emacs-lisp
+(setq ac-use-quick-help nil)
+```
 
 ## Change a height of completion menu
 
 Set `ac-menu-height` to number of lines.
 
-    ;; 20 lines
-    (setq ac-menu-height 20)
+```emacs-lisp
+;; 20 lines
+(setq ac-menu-height 20)
+```
 
 ## Enable `auto-complete-mode` automatically for specific modes
 
 `auto-complete-mode` won't be enabled automatically for modes that are
 not in `ac-modes`. So you need to set if necessary:
 
-    (add-to-list 'ac-modes 'brandnew-mode)
+```emacs-lisp
+(add-to-list 'ac-modes 'brandnew-mode)
+```
 
 ## Ignore case
 
 There is three ways to distinguish upper case and lower case.
 
-    ;; Just ignore case
-    (setq ac-ignore-case t)
-    ;; Ignore case if completion target string doesn't include upper characters
-    (setq ac-ignore-case 'smart)
-    ;; Distinguish case
-    (setq ac-ignore-case nil)
+```emacs-lisp
+;; Just ignore case
+(setq ac-ignore-case t)
+;; Ignore case if completion target string doesn't include upper characters
+(setq ac-ignore-case 'smart)
+;; Distinguish case
+(setq ac-ignore-case nil)
+```
 
 Default is `smart`.
 
@@ -767,10 +749,12 @@ Set `ac-stop-words` to words that stops completion automatically. In
 ruby, some people want to stop completion automatically after
 inserting "end":
 
-    (add-hook 'ruby-mode-hook
-              (lambda ()
-                (make-local-variable 'ac-stop-words)
-                (add-to-list 'ac-stop-words "end")))
+```
+(add-hook 'ruby-mode-hook
+          (lambda ()
+            (make-local-variable 'ac-stop-words)
+            (add-to-list 'ac-stop-words "end")))
+```
 
 Note that `ac-stop-words` is not a buffer local variable, so you need
 to make it buffer local with `make-local-variable` if it is buffer
@@ -790,17 +774,21 @@ To change face background color, use `set-face-background`. To change
 face foreground color, use `set-face-foreground`. To set underline,
 use `set-face-underline`.
 
-    ;; Examples
-    (set-face-background 'ac-candidate-face "lightgray")
-    (set-face-underline 'ac-candidate-face "darkgray")
-    (set-face-background 'ac-selection-face "steelblue")
+```emacs-lisp
+;; Examples
+(set-face-background 'ac-candidate-face "lightgray")
+(set-face-underline 'ac-candidate-face "darkgray")
+(set-face-background 'ac-selection-face "steelblue")
+```
 
 ## Change default sources
 
-Read [Source][] first if you don't familiar with sources. To change
+Read [Source](#source) first if you don't familiar with sources. To change
 default of sources, use `setq-default`:
 
-    (setq-default ac-sources '(ac-source-words-in-all-buffer))
+```emacs-lisp
+(setq-default ac-sources '(ac-source-words-in-all-buffer))
+```
 
 ## Change sources for specific major modes
 
@@ -808,7 +796,9 @@ For example, you may want to use specific sources for C++ buffers. To
 do that, register a hook by `add-hook` and change `ac-sources`
 properly:
 
-    (add-hook 'c++-mode (lambda () (add-to-list 'ac-sources 'ac-source-semantic)))
+```emacs-lisp
+(add-hook 'c++-mode (lambda () (add-to-list 'ac-sources 'ac-source-semantic)))
+```
 
 ## Completion with specific source
 
@@ -818,25 +808,29 @@ if you want to complete C/C++ member name, do `M-x
 ac-complete-semantic` at point. Usually, you may bind them to some key
 like:
 
-    ;; Complete member name by C-c . for C++ mode.
-    (add-hook 'c++-mode-hook
-              (lambda ()
-                (local-set-key (kbd "C-c .") 'ac-complete-semantic)))
-    ;; Complete file name by C-c /
-    (global-set-key (kbd "C-c /") 'ac-complete-filename)
+```emacs-lisp
+;; Complete member name by C-c . for C++ mode.
+(add-hook 'c++-mode-hook
+          (lambda ()
+            (local-set-key (kbd "C-c .") 'ac-complete-semantic)))
+;; Complete file name by C-c /
+(global-set-key (kbd "C-c /") 'ac-complete-filename)
+```
 
 Generally, such commands will be automatically available when sources
 are defined. Assume that a source named `ac-source-foobar` is being
 defined for example, a command called `ac-complete-foobar` will be
-also defined automatically. See also [Builtin Sources][] for available
+also defined automatically. See also [Builtin Sources](#builtin-sources) for available
 commands.
 
 If you want to use multiple sources for a command, you need to define
 a command for it like:
 
-    (defun semantic-and-gtags-complete ()
-      (interactive)
-      (auto-complete '(ac-source-semantic ac-source-gtags)))
+```emacs-lisp
+(defun semantic-and-gtags-complete ()
+  (interactive)
+  (auto-complete '(ac-source-semantic ac-source-gtags)))
+```
 
 `auto-complete` function can take an alternative of `ac-sources`.
 
@@ -858,8 +852,10 @@ function documentation, for example.
 
 You may bind keys to these command like:
 
-    (define-key ac-mode-map (kbd "C-c h") 'ac-last-quick-help)
-    (define-key ac-mode-map (kbd "C-c H") 'ac-last-help)
+```emacs-lisp
+(define-key ac-mode-map (kbd "C-c h") 'ac-last-quick-help)
+(define-key ac-mode-map (kbd "C-c H") 'ac-last-help)
+```
 
 ## Show help beautifully
 
@@ -879,7 +875,7 @@ See [ENSIME](https://github.com/aemoncannon/ensime) page.
 
 # Configuration
 
-Any configuration item will be set in `.emacs` or with `M-x
+Any configuration item will be set in `.emacs.d/init.el` or with `M-x
 customize-group RET auto-complete RET`.
 
 ## `ac-delay`
@@ -915,17 +911,17 @@ Whether or not to stop Flymake on completion.
 
 ## `ac-use-fuzzy`
 
-Whether or not to use [fuzzy matching](#Completion_by_Fuzzy_Matching).
+Whether or not to use [fuzzy matching](#completion-by-fuzzy-matching).
 
 ## `ac-fuzzy-cursor-color`
 
 Change cursor color to specified color when
-[Completion by Fuzzy Matching][] is started. `nil` means never
+[Completion by Fuzzy Matching](#completion-by-fuzzy-matching) is started. `nil` means never
 changed. Available colors can be seen with `M-x list-colors-display`.
 
 ## `ac-use-comphist`
 
-Whether or not to use [Candidate Suggestion][]. `nil` means never
+Whether or not to use [Candidate Suggestion](#candidate-suggestion). `nil` means never
 using it and get performance better maybe.
 
 ## `ac-comphist-threshold`
@@ -935,7 +931,7 @@ whole scores.
 
 ## `ac-comphist-file`
 
-Specify a file stores data of [Candidate Suggestion][].
+Specify a file stores data of [Candidate Suggestion](#candidate-suggestion).
 
 ## `ac-use-quick-help`
 
@@ -987,12 +983,12 @@ automatically. `self-insert-command` is one of default.
 
 ## `ac-trigger-commands-on-completing`
 
-Same as [`ac-trigger-commands`][] expect this will be used on
+Same as [`ac-trigger-commands`](#ac-trigger-commands) expect this will be used on
 completing.
 
 ## `ac-trigger-key`
 
-Specify a [Trigger Key][].
+Specify a [Trigger Key](#trigger-key).
 
 ## `ac-auto-start`
 
@@ -1059,21 +1055,21 @@ general.
 ## `ac-user-dictionary`
 
 Specify a dictionary as a list of string for
-[Completion by Dictionary][].
+[Completion by Dictionary](#completion-by-dictionary).
 
 ## `ac-user-dictionary-files`
 
 Specify a dictionary files as a list of string for
-[Completion by Dictionary][].
+[Completion by Dictionary](#completion-by-dictionary).
 
 ## `ac-dictionary-directories`
 
 Specify a dictionary directories as a list of string for
-[Completion by Dictionary][].
+[Completion by Dictionary](#completion-by-dictionary).
 
 ## `ac-sources`
 
-Specify sources as a list of [Source][]. This is a buffer local
+Specify sources as a list of [Source](#source). This is a buffer local
 variable.
 
 ## `ac-completing-map`
@@ -1083,7 +1079,7 @@ Keymap for completion.
 ## `ac-menu-map`
 
 Keymap for completion on completion menu. See also
-[`ac-use-menu-map`][].
+[`ac-use-menu-map`](#ac-use-menu-map).
 
 ## `ac-mode-map`
 
@@ -1092,33 +1088,39 @@ Keymap for `auto-complete-mode` enabled buffers.
 # Extend
 
 A meaning to extend `auto-complete-mode` is just defining a
-[Source][]. This section describe how to define a source.
+[Source](#source). This section describe how to define a source.
 
 ## Prototype
 
 Source basically takes a form of the following:
 
-    (defvar ac-source-mysource1
-      '((prop . value)
-        ...))
+```emacs-lisp
+(defvar ac-source-mysource1
+  '((prop . value)
+     ...))
+```
 
 As you see, source is just an associate list. You can define a source
 by combining pairs of defined property and its value.
 
 ## Example
 
-The most important property for source is [`candidates`][]
+The most important property for source is [`candidates`](#candidates)
 property. This property describes how to generate completion
 candidates by giving a function, an expression, or a variable. A
 result of evaluation should be a list of strings. Here is an example
 to generate candidates "Foo", "Bar", and "Baz":
 
-    (defvar ac-source-mysource1
-      '((candidates . (list "Foo" "Bar" "Baz"))))
+```emacs-lisp
+(defvar ac-source-mysource1
+  '((candidates . (list "Foo" "Bar" "Baz"))))
+```
 
 Then add this source to `ac-sources` and use:
 
-    (setq ac-sources '(ac-source-mysource1))
+```emacs-lisp
+(setq ac-sources '(ac-source-mysource1))
+```
 
 It is successful if you have "Bar" and "Baz" by inserting "B". The
 example above has an expression `(list ...)` in `candidates`
@@ -1127,11 +1129,13 @@ you should not use an expression unless it is too simple, because it
 has a bad affection on performance. You should use a function instead
 maybe:
 
-    (defun mysource1-candidates ()
-      '("Foo" "Bar" "Baz"))
-    
-    (defvar ac-source-mysource1
-      '((candidates . mysource1-candidates)))
+```emacs-lisp
+(defun mysource1-candidates ()
+  '("Foo" "Bar" "Baz"))
+
+(defvar ac-source-mysource1
+  '((candidates . mysource1-candidates)))
+```
 
 The function specified in `candidates` property will be called without
 any arguments on every time candidates updated. There is another way:
@@ -1144,14 +1148,16 @@ You may want to initialize a source at first time to complete. Use
 specify a function without any parameters or an expression. Here is an
 example:
 
-    (defvar mysource2-cache nil)
-    
-    (defun mysource2-init ()
-      (setq mysource2-cache '("Huge" "Processing" "Is" "Done" "Here")))
-    
-    (defvar ac-source-mysource2
-      '((init . mysource2-init)
-        (candidates . mysource2-cache)))
+```emacs-lisp
+(defvar mysource2-cache nil)
+
+(defun mysource2-init ()
+  (setq mysource2-cache '("Huge" "Processing" "Is" "Done" "Here")))
+
+(defvar ac-source-mysource2
+  '((init . mysource2-init)
+    (candidates . mysource2-cache)))
+```
 
 In this example, `mysource2-init` function does huge processing, and
 stores the result into `mysource2-cache` variable. Then specifying the
@@ -1172,12 +1178,14 @@ next time.
 
 Rewrite the example in previous section by using `cache` property.
 
-    (defun mysource2-candidates ()
-      '("Huge" "Processing" "Is" "Done" "Here"))
-    
-    (defvar ac-source-mysource2
-      '((candidates . mysource2-candidates)
-        (cache)))
+```emacs-lisp
+(defun mysource2-candidates ()
+  '("Huge" "Processing" "Is" "Done" "Here"))
+
+(defvar ac-source-mysource2
+  '((candidates . mysource2-candidates)
+    (cache)))
+```
 
 There is no performance problem because this source has `cache`
 property even if `candidates` property will do huge processing.
@@ -1193,16 +1201,18 @@ functionality.
 Use `ac-clear-variable-after-save` to clear cache every time a buffer
 saved. Here is an example:
 
-    (defvar mysource3-cache nil)
-    
-    (ac-clear-variable-after-save 'mysource3-cache)
-    
-    (defun mysource3-candidates ()
-      (or mysource3-cache
-          (setq mysource3-cache (list (format "Time %s" (current-time-string))))))
-    
-    (defvar ac-source-mysource3
-      '((candidates . mysource3-candidates)))
+```emacs-lisp
+(defvar mysource3-cache nil)
+
+(ac-clear-variable-after-save 'mysource3-cache)
+
+(defun mysource3-candidates ()
+  (or mysource3-cache
+      (setq mysource3-cache (list (format "Time %s" (current-time-string))))))
+
+(defvar ac-source-mysource3
+  '((candidates . mysource3-candidates)))
+```
 
 Add this source to `ac-sources` and complete with "Time". You may see
 a time when completion has been started. After that, you also see the
@@ -1220,7 +1230,7 @@ functionality.
 
 ## Action
 
-[Completion by RET][] will evaluate a function or an expression
+[Completion by RET](#completion-by-ret) will evaluate a function or an expression
 specified in `action` property. A builtin sources `ac-source-abbrev`
 and `ac-source-yasnippet` use this property.
 
@@ -1238,12 +1248,14 @@ Consider a source that completes mail addresses only after "To:
 ". First of all, define a mail address completion source as same as
 above.
 
-    (defvar ac-source-to-mailaddr
-      '((candidates . (list "foo1@example.com"
-                            "foo2@example.com"
-                            "foo3@example.com"))))
-    
-    (setq ac-sources '(ac-source-to-mailaddr))
+```emacs-lisp
+(defvar ac-source-to-mailaddr
+  '((candidates . (list "foo1@example.com"
+                        "foo2@example.com"
+                        "foo3@example.com"))))
+
+(setq ac-sources '(ac-source-to-mailaddr))
+```
 
 Then enable completions only after "To: " by using `prefix`
 property. `prefix` property must be one of:
@@ -1257,18 +1269,22 @@ of group 1 or group 0 as a beginning point of completion target string
 by doing `re-search-backward`[^1] with the regexp. If you want to do
 more complicated, use a function or an expression instead. The
 beginning point that is evaluated here will be stored into
-[`ac-point`][]. In above example, regexp is enough.
+[`ac-point`](#ac-point). In above example, regexp is enough.
 
-    ^To: \(.*\)
+```
+^To: \(.*\)
+```
 
 A reason why capturing group 1 is skipping "To: ". By adding this into
 the source definition, the source looks like:
 
-    (defvar ac-source-to-mailaddr
-      '((candidates . (list "foo1@example.com"
-                            "foo2@example.com"
-                            "foo3@example.com"))
-        (prefix . "^To: \\(.*\\)")))
+```emacs-lisp
+(defvar ac-source-to-mailaddr
+  '((candidates . (list "foo1@example.com"
+                        "foo2@example.com"
+                        "foo3@example.com"))
+    (prefix . "^To: \\(.*\\)")))
+```
 
 Add this source to `ac-sources` and then type "To: ". You will be able
 to complete mail addresses.
@@ -1280,17 +1296,21 @@ to complete mail addresses.
 You may use an utility macro called `ac-define-source` which defines a
 source and a command.
 
-    (ac-define-source mysource3
-      '((candidates . (list "Foo" "Bar" "Baz"))))
+```emacs-lisp
+(ac-define-source mysource3
+  '((candidates . (list "Foo" "Bar" "Baz"))))
+```
 
 This expression will be expanded like:
 
-    (defvar ac-source-mysource3
-      '((candidates . (list "Foo" "Bar" "Baz"))))
-    
-    (defun ac-complete-mysource3 ()
-      (interactive)
-      (auto-complete '(ac-source-mysource3)))
+```emacs-lisp
+(defvar ac-source-mysource3
+  '((candidates . (list "Foo" "Bar" "Baz"))))
+
+(defun ac-complete-mysource3 ()
+  (interactive)
+  (auto-complete '(ac-source-mysource3)))
+```
 
 A source will be defined as usual and in addition a command that
 completes with the source will be defined. Calling `auto-complete`
@@ -1300,7 +1320,7 @@ compatibility, it is difficult to answer which you should use `defvar`
 and `ac-define-source`. Builtin sources are defined with
 `ac-define-sources`, so you can use them alone by binding some key to
 these commands such like `ac-complete-filename`. See also
-[Completion with specific source][].
+[Completion with specific source](#completion-with-specific-sourc).
 
 ### Source Properties
 
@@ -1312,13 +1332,13 @@ completion is started.
 #### `candidates`
 
 Specify a function, an expression, or a variable to calculate
-candidates. Candidates should be a list of string. If [`cache`][]
+candidates. Candidates should be a list of string. If [`cache`](#cache-1)
 property is enabled, this property will be ignored twice or later.
 
 ### `prefix`
 
 Specify a regexp, a function, or an expression to find a point of
-completion target string for [Omni Completion][]. This
+completion target string for [Omni Completion](#omni-completion). This
 source will be ignored when `nil` returned. If a regexp is specified,
 a start point of group 1 or group 2 will be used as a value.
 
@@ -1326,12 +1346,12 @@ a start point of group 1 or group 2 will be used as a value.
 
 Specify a required number of characters of completion target
 string. If nothing is specified, `auto-complete-mode` uses
-[`ac-auto-start`][] instead.
+[`ac-auto-start`](#ac-auto-start) instead.
 
 ### `action`
 
 Specify a function or an expression that is executed on
-[Completion by RET][].
+[Completion by RET](#completion-by-ret).
 
 ### `limit`
 
@@ -1359,7 +1379,7 @@ summarizing the candidate in short string.
 
 ### `cache`
 
-Use [Cache][].
+Use [Cache](#cache).
 
 ### `require`
 
@@ -1369,12 +1389,12 @@ string. `nil` means nothing ignored.
 
 ### `candidate-face`
 
-Specify a face of candidate. It overrides [`ac-candidate-face`][]
+Specify a face of candidate. It overrides [`ac-candidate-face`](#ac-candidate-face)
 partially.
 
 ### `selection-face`
 
-Specify a face of selection. It overrides [`ac-selection-face`][]
+Specify a face of selection. It overrides [`ac-selection-face`](#ac-selection-face)
 partially.
 
 ### `depends`
@@ -1411,7 +1431,7 @@ A string of completion target.
 ### `ac-limit`
 
 A limit of candidates. Its value may be one of
-[`ac-candidate-limit`][] and [`limit`][] property.
+[`ac-candidate-limit`](#ac-candidate-limit) and [`limit`](#limit) property.
 
 ### `ac-candidates`
 
@@ -1430,7 +1450,7 @@ performance.
 
 For a larger number, it reduces a cost of generating completion
 candidates. Or you can remove the cost by setting `nil` and you can
-use when you truly need. See [Not to complete automatically][] for
+use when you truly need. See [Not to complete automatically](#not-to-complete-automatically) for
 more details.
 
 ### `ac-delay` {#trouble-ac-delay}
@@ -1443,8 +1463,8 @@ For a larger number, it reduces a displaying cost of completion menu.
 
 ### `ac-use-comphist` {#trouble-ac-use-comphist}
 
-Setting [`ac-use-comphist`][] to `nil` to disable
-[Candidate Suggestion][], it reduces a cost of suggestion.
+Setting [`ac-use-comphist`](#ac-use-comphist) to `nil` to disable
+[Candidate Suggestion](#candidate-suggestion), it reduces a cost of suggestion.
 
 ### `ac-candidate-limit` {#trouble-ac-candidate-limit}
 
@@ -1463,7 +1483,9 @@ expense of accuracy. However, it probably causes a menu to be
 disrupted. Not to use the optimized function, evaluate the following
 code:
 
-    (setq popup-use-optimized-column-computation nil)
+```emacs-lisp
+(setq popup-use-optimized-column-computation nil)
+```
 
 ### Font Case
 
@@ -1478,27 +1500,33 @@ disrupted when displaying the menu including Japanese in NTEmacs. In
 such case, it is worth to try to evaluate the following code to fix
 it:
 
-    (set-face-font 'ac-candidate-face "MS Gothic 11")
-    (set-face-font 'ac-selection-face "MS Gothic 11")
+```emacs-lisp
+(set-face-font 'ac-candidate-face "MS Gothic 11")
+(set-face-font 'ac-selection-face "MS Gothic 11")
+```
 
 # Known Bugs
 
-## Auto completion will not be started in a buffer `flyspell-mode` enabled ### {#flyspell-mode-bug}
+## Auto completion will not be started in a buffer `flyspell-mode` enabled {#flyspell-mode-bug}
 
 A way of delaying processes of `flyspell-mode` disables auto
 completion. You can avoid this problem by `M-x
 ac-flyspell-workaround`. You can write the following code into your
-`~/.emacs`.
+`~/.emacs.d/init.el`.
 
-    (ac-flyspell-workaround)
+```emacs-lisp
+(ac-flyspell-workaround)
+```
 
-## `linum-mode` tries to display the line numbers even for the comletion menu ### {#linum-mode-bug}
+## `linum-mode` tries to display the line numbers even for the comletion menu {#linum-mode-bug}
 
 linum-mode tries to add the line numbers even for the comletion
 menu. To stop that annoying behavior, do `M-x ac-linum-workaround` or
-add the following code into your `~/.emacs`.
+add the following code into your `~/.emacs.d/init.el`.
 
-    (ac-linum-workaround)
+```emacs-lisp
+(ac-linum-workaround)
+```
 
 # Reporting Bugs
 
