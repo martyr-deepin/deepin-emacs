@@ -54,6 +54,7 @@
 ;; NOTE: just minibuffer-tray.el can't work, you need install below depends first:
 ;;       * PyQt5:       http://www.riverbankcomputing.co.uk/software/pyqt/intro
 ;;       * Python-Xlib: https://pypi.python.org/pypi/python-xlib
+;;       * python-dbus
 ;;
 ;; Detail description please look: http://www.emacswiki.org/emacs/MiniBufferTray
 ;;
