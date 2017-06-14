@@ -74,9 +74,9 @@
  "init-moccur")
 (lazy-set-autoload-key
  '(
-   ("s-x g" . moccur-grep-find-pwd)     ;递归搜索当前目录下的文件
+   ("s-x g" . moccur-at-pointer)        ;递归搜索当前目录下的文件
    )
- "dired-extension")
+ "moccur-at-pointer")
 (lazy-set-autoload-key
  '(
    ("C-z l" . linum-mode)               ;行号模式切换
