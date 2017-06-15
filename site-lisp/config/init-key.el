@@ -75,6 +75,7 @@
 (lazy-set-autoload-key
  '(
    ("s-x g" . moccur-at-pointer)        ;递归搜索当前目录下的文件
+   ("s-x h" . moccur-grep-find-pwd)     ;手动递归搜索当前目录下的文件
    )
  "moccur-at-pointer")
 (lazy-set-autoload-key
