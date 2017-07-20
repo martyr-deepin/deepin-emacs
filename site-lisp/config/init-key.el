@@ -50,6 +50,7 @@
    ("M-s-u" . ediff-buffers)                ;ediff
    ("C-s-q" . quoted-insert)                ;读取系一个输入字符并插入
    ("M-h" . set-mark-command)               ;Instead C-Space for Chinese input method
+   ("M-z" . upcase-char)                    ;Upcase char handly with capitalize-word
    ))
 (lazy-set-autoload-key
  '(
