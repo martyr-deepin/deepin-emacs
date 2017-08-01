@@ -1,0 +1,13 @@
+#ifndef ${1:headername}
+#define $1
+
+class ${2:classname} : public ${3:parentclass}
+{
+    Q_OBJECT
+
+public:
+    $2($3 *parent=0);
+	~$2(); $0
+};	
+
+#endif

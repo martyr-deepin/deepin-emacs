@@ -1,0 +1,10 @@
+#include "${1:headerfile}.h"
+
+${2:classname}::$2(${3:parentclass} *parent) : $3(parent)
+{
+    $0
+}
+
+$2::~$2()
+{
+}
