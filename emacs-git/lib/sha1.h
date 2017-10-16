@@ -14,7 +14,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
 
 #ifndef SHA1_H
 # define SHA1_H 1
@@ -46,8 +46,8 @@ struct sha1_ctx
   uint32_t E;
 
   uint32_t total[2];
-  uint32_t buflen;
-  uint32_t buffer[32];
+  uint32_t buflen;     /* ≥ 0, ≤ 128 */
+  uint32_t buffer[32]; /* 128 bytes; the first buflen bytes are in use */
 };
 
 /* Initialize structure containing state of computation. */

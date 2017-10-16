@@ -16,13 +16,12 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
 #include <unistd.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <setjmp.h>
 
 #include <X11/StringDefs.h>
@@ -504,14 +503,14 @@ make_menu_in_widget (widget_instance* instance,
 
   /* WIDGET should be a RowColumn.  */
   if (!XmIsRowColumn (widget))
-    abort ();
+    emacs_abort ();
 
   /* Determine whether WIDGET is a menu bar.  */
   type = -1;
   XtSetArg (al[0], XmNrowColumnType, &type);
   XtGetValues (widget, al, 1);
   if (type != XmMENU_BAR && type != XmMENU_PULLDOWN && type != XmMENU_POPUP)
-    abort ();
+    emacs_abort ();
   menubar_p = type == XmMENU_BAR;
 
   /* Add a callback to popups and pulldowns that is called when
@@ -528,7 +527,7 @@ make_menu_in_widget (widget_instance* instance,
   /* Check that those are all we have
      (the caller should have deleted the rest).  */
   if (old_num_children != keep_first_children)
-    abort ();
+    emacs_abort ();
 
   /* Create the rest.  */
   for (child_index = keep_first_children; cur; child_index++, cur = cur->next)
@@ -677,7 +676,7 @@ update_one_menu_entry (widget_instance* instance,
 	    if (strcmp (XtName (widget_list[i]), XtName (widget)) == 0)
 	      break;
 	  if (i == old_num_children)
-	    abort ();
+	    emacs_abort ();
 	  if (XmIsCascadeButton (widget_list[i]))
 	    {
 	      menu = XmCreatePulldownMenu (parent, XtName(widget), NULL, 0);
@@ -1829,7 +1828,7 @@ do_call (Widget widget,
       break;
 
     default:
-      abort ();
+      emacs_abort ();
     }
 }
 

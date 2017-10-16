@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -288,14 +288,6 @@ If true return the decimal value of digit CHAR in RADIX."
   (let ((n (aref cl-digit-char-table char)))
     (and n (< n (or radix 10)) n)))
 
-(defun cl--random-time ()
-  (let* ((time (copy-sequence (current-time-string))) (i (length time)) (v 0))
-    (while (>= (cl-decf i) 0) (setq v (+ (* v 3) (aref time i))))
-    v))
-
-(defvar cl--random-state
-  (vector 'cl--random-state-tag -1 30 (cl--random-time)))
-
 (defconst cl-most-positive-float nil
   "The largest value that a Lisp float can hold.
 If your system supports infinities, this is the largest finite value.
@@ -347,7 +339,7 @@ Call `cl-float-limits' to set this.")
 
 (cl--defalias 'cl-copy-seq 'copy-sequence)
 
-(declare-function cl--mapcar-many "cl-extra" (cl-func cl-seqs))
+(declare-function cl--mapcar-many "cl-extra" (cl-func cl-seqs &optional acc))
 
 (defun cl-mapcar (cl-func cl-x &rest cl-rest)
   "Apply FUNCTION to each element of SEQ, and make a list of the results.
@@ -358,7 +350,7 @@ SEQ, this is like `mapcar'.  With several, it is like the Common Lisp
 \n(fn FUNCTION SEQ...)"
   (if cl-rest
       (if (or (cdr cl-rest) (nlistp cl-x) (nlistp (car cl-rest)))
-	  (cl--mapcar-many cl-func (cons cl-x cl-rest))
+	  (cl--mapcar-many cl-func (cons cl-x cl-rest) 'accumulate)
 	(let ((cl-res nil) (cl-y (car cl-rest)))
 	  (while (and cl-x cl-y)
 	    (push (funcall cl-func (pop cl-x) (pop cl-y)) cl-res))
@@ -637,6 +629,42 @@ If ALIST is non-nil, the new pairs are prepended to it."
   ;; When bootstrapping, cl-loaddefs hasn't been built yet!
   (require 'cl-macs)
   (require 'cl-seq))
+
+(defun cl--old-struct-type-of (orig-fun object)
+  (or (and (vectorp object) (> (length object) 0)
+           (let ((tag (aref object 0)))
+             (when (and (symbolp tag)
+                        (string-prefix-p "cl-struct-" (symbol-name tag)))
+               (unless (eq (symbol-function tag)
+                           :quick-object-witness-check)
+                 ;; Old-style old-style struct:
+                 ;; Convert to new-style old-style struct!
+                 (let* ((type (intern (substring (symbol-name tag)
+                                                 (length "cl-struct-"))))
+                        (class (cl--struct-get-class type)))
+                   ;; If the `cl-defstruct' was recompiled after the code
+                   ;; which constructed `object', `cl--struct-get-class' may
+                   ;; not have called `cl-struct-define' and setup the tag
+                   ;; symbol for us.
+                   (unless (eq (symbol-function tag)
+                               :quick-object-witness-check)
+                     (set tag class)
+                     (fset tag :quick-object-witness-check))))
+               (cl--class-name (symbol-value tag)))))
+      (funcall orig-fun object)))
+
+;;;###autoload
+(define-minor-mode cl-old-struct-compat-mode
+  "Enable backward compatibility with old-style structs.
+This can be needed when using code byte-compiled using the old
+macro-expansion of `cl-defstruct' that used vectors objects instead
+of record objects."
+  :global t
+  (cond
+   (cl-old-struct-compat-mode
+    (advice-add 'type-of :around #'cl--old-struct-type-of))
+   (t
+    (advice-remove 'type-of #'cl--old-struct-type-of))))
 
 ;; Local variables:
 ;; byte-compile-dynamic: t

@@ -16,7 +16,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+# along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 
 # Note that this file is edited by msdos/sed1v2.inp for MSDOS.  That
@@ -48,7 +48,6 @@ lispsource = $(top_srcdir)/lisp
 lib = ../lib
 libsrc = ../lib-src
 etc = ../etc
-leimdir = ${lispsource}/leim
 oldXMenudir = ../oldXMenu
 lwlibdir = ../lwlib
 
@@ -235,6 +234,8 @@ LIBXML2_CFLAGS = @LIBXML2_CFLAGS@
 
 GETADDRINFO_A_LIBS = @GETADDRINFO_A_LIBS@
 
+LIBLCMS2 = @LIBLCMS2@
+
 LIBZ = @LIBZ@
 
 ## system-specific libs for dynamic modules, else empty
@@ -279,7 +280,7 @@ GNU_OBJC_CFLAGS=$(patsubst -specs=%-hardened-cc1,,@GNU_OBJC_CFLAGS@)
 ## w32xfns.o w32select.o image.o w32uniscribe.o if HAVE_W32, else
 ## empty.
 W32_OBJ=@W32_OBJ@
-## -lkernel32 -luser32 -lgdi32 -lole32 -lcomdlg32 lusp10 -lcomctl32
+## -lkernel32 -luser32 -lusp10 -lgdi32 -lole32 -lcomdlg32 -lcomctl32
 ## --lwinspool if HAVE_W32, else empty.
 W32_LIBS=@W32_LIBS@
 
@@ -347,17 +348,6 @@ am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 =
 
-DEPDIR=deps
-AUTO_DEPEND = @AUTO_DEPEND@
-
-ifeq ($(AUTO_DEPEND),yes)
-DEPFLAGS = -MMD -MF ${DEPDIR}/$*.d -MP
-MKDEPDIR = ${MKDIR_P} ${DEPDIR}
-else
-DEPFLAGS =
-MKDEPDIR = :
-endif
-
 # Flags that might be in WARN_CFLAGS but are not valid for Objective C.
 NON_OBJC_CFLAGS = -Wignored-attributes -Wignored-qualifiers -Wopenmp-simd
 
@@ -383,10 +373,8 @@ ALL_OBJC_CFLAGS = $(EMACS_CFLAGS) \
 
 .SUFFIXES: .m
 .c.o:
-	@$(MKDEPDIR)
 	$(AM_V_CC)$(CC) -c $(CPPFLAGS) $(ALL_CFLAGS) $(PROFILING_CFLAGS) $<
 .m.o:
-	@$(MKDEPDIR)
 	$(AM_V_CC)$(CC) -c $(CPPFLAGS) $(ALL_OBJC_CFLAGS) $(PROFILING_CFLAGS) $<
 
 ## lastfile must follow all files whose initialized data areas should
@@ -403,7 +391,7 @@ base_obj = dispnew.o frame.o scroll.o xdisp.o menu.o $(XMENU_OBJ) window.o \
 	syntax.o $(UNEXEC_OBJ) bytecode.o \
 	process.o gnutls.o callproc.o \
 	region-cache.o sound.o atimer.o \
-	doprnt.o intervals.o textprop.o composite.o xml.o $(NOTIFY_OBJ) \
+	doprnt.o intervals.o textprop.o composite.o xml.o lcms.o $(NOTIFY_OBJ) \
 	$(XWIDGETS_OBJ) \
 	profiler.o decompress.o \
 	thread.o systhread.o \
@@ -447,6 +435,16 @@ otherobj= $(TERMCAP_OBJ) $(PRE_ALLOC_OBJ) $(GMALLOC_OBJ) $(RALLOC_OBJ) \
 ## (On MinGW, firstfile.o should be before vm-limit.o.)
 FIRSTFILE_OBJ=@FIRSTFILE_OBJ@
 ALLOBJS = $(FIRSTFILE_OBJ) $(VMLIMIT_OBJ) $(obj) $(otherobj)
+
+AUTO_DEPEND = @AUTO_DEPEND@
+DEPDIR = deps
+ifeq ($(AUTO_DEPEND),yes)
+  DEPFLAGS = -MMD -MF $(DEPDIR)/$*.d -MP
+  -include $(ALLOBJS:%.o=$(DEPDIR)/%.d)
+else
+  DEPFLAGS =
+  include $(srcdir)/deps.mk
+endif
 
 all: emacs$(EXEEXT) $(OTHER_FILES)
 .PHONY: all
@@ -494,11 +492,8 @@ LIBES = $(LIBS) $(W32_LIBS) $(LIBS_GNUSTEP) $(LIBX_BASE) $(LIBIMAGE) \
    $(LIBXML2_LIBS) $(LIBGPM) $(LIBS_SYSTEM) $(CAIRO_LIBS) \
    $(LIBS_TERMCAP) $(GETLOADAVG_LIBS) $(SETTINGS_LIBS) $(LIBSELINUX_LIBS) \
    $(FREETYPE_LIBS) $(FONTCONFIG_LIBS) $(LIBOTF_LIBS) $(M17N_FLT_LIBS) \
-   $(LIBGNUTLS_LIBS) $(LIB_PTHREAD) $(GETADDRINFO_A_LIBS) \
+   $(LIBGNUTLS_LIBS) $(LIB_PTHREAD) $(GETADDRINFO_A_LIBS) $(LIBLCMS2) \
    $(NOTIFY_LIBS) $(LIB_MATH) $(LIBZ) $(LIBMODULES) $(LIBSYSTEMD_LIBS)
-
-$(leimdir)/leim-list.el: bootstrap-emacs$(EXEEXT)
-	$(MAKE) -C ../leim leim-list.el EMACS="$(bootstrap_exe)"
 
 ## FORCE it so that admin/unidata can decide whether these files
 ## are up-to-date.  Although since charprop depends on bootstrap-emacs,
@@ -510,12 +505,8 @@ $(srcdir)/macuvs.h $(lispsource)/international/charprop.el: \
 
 ## We require charprop.el to exist before ucs-normalize.el is
 ## byte-compiled, because ucs-normalize.el needs to load 2 uni-*.el files.
-$(lispsource)/international/ucs-normalize.elc: | \
-  $(lispsource)/international/charprop.el
-
-## ns-win.el loads ucs-normalize, so it also needs the above-mentioned
-## 2 uni-*.el files to exist.
-$(lispsource)/term/ns-win.elc: | \
+## And ns-win requires ucs-normalize.
+$(lispsource)/international/ucs-normalize.elc $(lispsource)/term/ns-win.elc: | \
   $(lispsource)/international/charprop.el
 
 lispintdir = ${lispsource}/international
@@ -538,7 +529,7 @@ ${lispintdir}/characters.elc: ${charscript:.el=.elc}
 ## since not all pieces are used on all platforms.  But DOC depends
 ## on all of $lisp, and emacs depends on DOC, so it is ok to use $lisp here.
 emacs$(EXEEXT): temacs$(EXEEXT) \
-                lisp.mk $(etc)/DOC $(lisp) $(leimdir)/leim-list.el \
+                lisp.mk $(etc)/DOC $(lisp) \
                 $(lispsource)/international/charprop.el ${charsets}
 ifeq ($(CANNOT_DUMP),yes)
 	ln -f temacs$(EXEEXT) $@
@@ -624,16 +615,11 @@ $(oldXMenudir)/libXMenu11.a: FORCE
 FORCE:
 .PHONY: FORCE
 
-ACLOCAL_INPUTS = $(top_srcdir)/configure.ac $(top_srcdir)/m4/*.m4
-AUTOCONF_INPUTS = $(top_srcdir)/configure.ac $(top_srcdir)/aclocal.m4
-$(top_srcdir)/aclocal.m4: $(ACLOCAL_INPUTS)
-$(top_srcdir)/configure config.in: $(AUTOCONF_INPUTS)
 .PRECIOUS: ../config.status Makefile
-../config.status: $(top_srcdir)/configure $(top_srcdir)/lisp/version.el
+../config.status: $(top_srcdir)/configure.ac $(top_srcdir)/m4/*.m4
+	$(MAKE) -C .. $(notdir $@)
 Makefile: ../config.status $(srcdir)/Makefile.in
-$(top_srcdir)/aclocal.m4 $(top_srcdir)/configure config.in ../config.status \
-  Makefile:
-	$(MAKE) -C .. am--refresh
+	$(MAKE) -C .. src/$@
 
 doc.o: buildobj.h
 
@@ -655,14 +641,13 @@ mostlyclean:
 	rm -f globals.h gl-stamp
 	rm -f *.res *.tmp
 clean: mostlyclean
-	rm -f emacs-*.*.*$(EXEEXT) emacs$(EXEEXT)
-	-rm -rf $(DEPDIR)
+	rm -f emacs-*.*.*[0-9]$(EXEEXT) emacs$(EXEEXT) $(DEPDIR)/*
 
 ## bootstrap-clean is used to clean up just before a bootstrap.
 ## It should remove all files generated during a compilation/bootstrap,
 ## but not things like config.status or TAGS.
 bootstrap-clean: clean
-	rm -f epaths.h config.h config.stamp stamp-h1
+	rm -f emacs-module.h epaths.h config.h config.stamp
 	if test -f ./.gdbinit; then \
 	  mv ./.gdbinit ./.gdbinit.save; \
 	  if test -f "$(srcdir)/.gdbinit"; then rm -f ./.gdbinit.save; \
@@ -671,11 +656,12 @@ bootstrap-clean: clean
 
 distclean: bootstrap-clean
 	rm -f Makefile lisp.mk
+	rm -fr $(DEPDIR)
 
 maintainer-clean: distclean
 	rm -f TAGS
 versionclean:
-	-rm -f emacs$(EXEEXT) emacs-*.*.*$(EXEEXT) ../etc/DOC*
+	-rm -f emacs$(EXEEXT) emacs-*.*.*[0-9]$(EXEEXT) ../etc/DOC*
 extraclean: distclean
 	-rm -f *~ \#*
 
@@ -760,15 +746,3 @@ else
 endif
 	@: Compile some files earlier to speed up further compilation.
 	$(MAKE) -C ../lisp compile-first EMACS="$(bootstrap_exe)"
-
-
-generate-ldefs-boot: bootstrap-emacs$(EXEEXT)
-	$(RUN_TEMACS) --batch $(BUILD_DETAILS) --load loadup bootstrap
-
-ifeq ($(AUTO_DEPEND),yes)
--include $(ALLOBJS:%.o=${DEPDIR}/%.d)
-else
-include $(srcdir)/deps.mk
-endif
-
-### Makefile.in ends here

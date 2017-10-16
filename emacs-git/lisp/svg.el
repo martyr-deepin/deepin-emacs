@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -27,7 +27,7 @@
 (require 'cl-lib)
 (require 'xml)
 (require 'dom)
-(require 'subr-x)
+(eval-when-compile (require 'subr-x))
 
 (defun svg-create (width height &rest args)
   "Create a new, empty SVG image with dimensions WIDTHxHEIGHT.
@@ -107,8 +107,8 @@ X/Y denote the center of the ellipse."
    svg
    (dom-node 'line
 	     `((x1 . ,x1)
-	       (x2 . ,y1)
-	       (y1 . ,x2)
+	       (x2 . ,x2)
+	       (y1 . ,y1)
 	       (y2 . ,y2)
 	       ,@(svg--arguments svg args)))))
 
@@ -222,13 +222,15 @@ otherwise.  IMAGE-TYPE should be a MIME image type, like
    def)
   svg)
 
-(defun svg-image (svg)
-  "Return an image object from SVG."
-  (create-image
+(defun svg-image (svg &rest props)
+  "Return an image object from SVG.
+PROPS is passed on to `create-image' as its PROPS list."
+  (apply
+   #'create-image
    (with-temp-buffer
      (svg-print svg)
      (buffer-string))
-   'svg t))
+   'svg t props))
 
 (defun svg-insert-image (svg)
   "Insert SVG as an image at point.
@@ -262,10 +264,10 @@ If the SVG is later changed, the image will also be updated."
 
 (defun svg-remove (svg id)
   "Remove the element identified by ID from SVG."
-  (when-let ((node (car (dom-by-id
-                         svg
-                         (concat "\\`" (regexp-quote id)
-                                 "\\'")))))
+  (when-let* ((node (car (dom-by-id
+                          svg
+                          (concat "\\`" (regexp-quote id)
+                                  "\\'")))))
     (dom-remove-node svg node)))
 
 (provide 'svg)

@@ -22,7 +22,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -34,7 +34,7 @@
 
 (require 'dom)
 (require 'seq)
-(require 'subr-x)
+(eval-when-compile (require 'subr-x))
 (eval-when-compile
   (require 'skeleton)
   (require 'cl-lib))
@@ -341,20 +341,44 @@ Any terminating `>' or `/' is not matched.")
 (defvar sgml-font-lock-keywords sgml-font-lock-keywords-1
   "Rules for highlighting SGML code.  See also `sgml-tag-face-alist'.")
 
-(defconst sgml-syntax-propertize-function
-  (syntax-propertize-rules
-   ;; Use the `b' style of comments to avoid interference with the -- ... --
-   ;; comments recognized when `sgml-specials' includes ?-.
-  ;; FIXME: beware of <!--> blabla <!--> !!
-   ("\\(<\\)!--" (1 "< b"))
-    ("--[ \t\n]*\\(>\\)" (1 "> b"))
-    ;; Double quotes outside of tags should not introduce strings.
-    ;; Be careful to call `syntax-ppss' on a position before the one we're
-    ;; going to change, so as not to need to flush the data we just computed.
-    ("\"" (0 (if (prog1 (zerop (car (syntax-ppss (match-beginning 0))))
-                   (goto-char (match-end 0)))
-           (string-to-syntax ".")))))
-  "Syntactic keywords for `sgml-mode'.")
+(eval-and-compile
+  (defconst sgml-syntax-propertize-rules
+    (syntax-propertize-precompile-rules
+     ;; Use the `b' style of comments to avoid interference with the -- ... --
+     ;; comments recognized when `sgml-specials' includes ?-.
+     ;; FIXME: beware of <!--> blabla <!--> !!
+     ("\\(<\\)!--" (1 "< b"))
+     ("--[ \t\n]*\\(>\\)" (1 "> b"))
+     ("\\(<\\)[?!]" (1 (prog1 "|>"
+                         (sgml-syntax-propertize-inside end))))
+     ;; Double quotes outside of tags should not introduce strings.
+     ;; Be careful to call `syntax-ppss' on a position before the one we're
+     ;; going to change, so as not to need to flush the data we just computed.
+     ("\"" (0 (if (prog1 (zerop (car (syntax-ppss (match-beginning 0))))
+                    (goto-char (match-end 0)))
+                  (string-to-syntax ".")))))))
+
+(defun sgml-syntax-propertize (start end)
+  "Syntactic keywords for `sgml-mode'."
+  (goto-char start)
+  (sgml-syntax-propertize-inside end)
+  (funcall
+   (syntax-propertize-rules sgml-syntax-propertize-rules)
+   start end))
+
+(defun sgml-syntax-propertize-inside (end)
+  (let ((ppss (syntax-ppss)))
+    (cond
+     ((eq (nth 3 ppss) t)
+      (let ((endre (save-excursion
+                     (goto-char (nth 8 ppss))
+                     (cond
+                      ((looking-at-p "<!\\[CDATA\\[") "]]>")
+                      ((looking-at-p "<\\?")  (if sgml-xml-mode "\\?>" ">"))
+                      (t ">")))))
+        (when (re-search-forward endre end 'move)
+          (put-text-property (1- (point)) (point)
+                             'syntax-table (string-to-syntax "|<"))))))))
 
 ;; internal
 (defvar sgml-face-tag-alist ()
@@ -547,7 +571,7 @@ Do \\[describe-key] on the following bindings to discover what they do.
 			      sgml-font-lock-keywords-1
 			      sgml-font-lock-keywords-2)
 			     nil t))
-  (setq-local syntax-propertize-function sgml-syntax-propertize-function)
+  (setq-local syntax-propertize-function #'sgml-syntax-propertize)
   (setq-local facemenu-add-face-function 'sgml-mode-facemenu-add-face-function)
   (setq-local sgml-xml-mode (sgml-xml-guess))
   (unless sgml-xml-mode
@@ -1284,13 +1308,24 @@ really isn't a tag after all."
       (let ((pps (parse-partial-sexp start end 2)))
 	(and (= (nth 0 pps) 0))))))
 
+(defun sgml--find-<>-backward (limit)
+  "Search backward for a '<' or '>' character.
+The character must have open or close syntax.
+Returns t if found, nil otherwise."
+  (catch 'found
+    (while (re-search-backward "[<>]" limit 'move)
+      ;; If this character has "open" or "close" syntax, then we've
+      ;; found the one we want.
+      (when (memq (syntax-class (syntax-after (point))) '(4 5))
+        (throw 'found t)))))
+
 (defun sgml-parse-tag-backward (&optional limit)
   "Parse an SGML tag backward, and return information about the tag.
 Assume that parsing starts from within a textual context.
 Leave point at the beginning of the tag."
   (catch 'found
     (let (tag-type tag-start tag-end name)
-      (or (re-search-backward "[<>]" limit 'move)
+      (or (sgml--find-<>-backward limit)
 	  (error "No tag found"))
       (when (eq (char-after) ?<)
 	;; Oops!! Looks like we were not in a textual context after all!.
@@ -2207,8 +2242,8 @@ The result is cached in `html--buffer-classes-cache'."
              (classes
               (seq-mapcat
                (lambda (el)
-                 (when-let (class-list
-                            (cdr (assq 'class (dom-attributes el))))
+                 (when-let* ((class-list
+                              (cdr (assq 'class (dom-attributes el)))))
                    (split-string class-list)))
                (dom-by-class dom ""))))
         (setq-local html--buffer-classes-cache (cons tick classes))
@@ -2225,8 +2260,8 @@ The result is cached in `html--buffer-ids-cache'."
              (ids
               (seq-mapcat
                (lambda (el)
-                 (when-let (id-list
-                            (cdr (assq 'id (dom-attributes el))))
+                 (when-let* ((id-list
+                              (cdr (assq 'id (dom-attributes el)))))
                    (split-string id-list)))
                (dom-by-id dom ""))))
         (setq-local html--buffer-ids-cache (cons tick ids))

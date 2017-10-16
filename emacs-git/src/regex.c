@@ -15,7 +15,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* TODO:
    - structure the opcode space into opcode+flag.
@@ -306,9 +306,7 @@ enum syntaxcode { Swhitespace = 0, Sword = 1, Ssymbol = 2 };
 /* In Emacs, these are only used for single-byte characters.  */
 # define ISDIGIT(c) ((c) >= '0' && (c) <= '9')
 # define ISCNTRL(c) ((c) < ' ')
-# define ISXDIGIT(c) (((c) >= '0' && (c) <= '9')		\
-		     || ((c) >= 'a' && (c) <= 'f')	\
-		     || ((c) >= 'A' && (c) <= 'F'))
+# define ISXDIGIT(c) (0 <= char_hexdigit (c))
 
 /* The rest must handle multibyte characters.  */
 
@@ -1421,7 +1419,7 @@ do {									\
     {									\
       /* It's a counter.  */						\
       /* Here, we discard `const', making re_match non-reentrant.  */	\
-      unsigned char *ptr = (unsigned char*) POP_FAILURE_POINTER ();	\
+      unsigned char *ptr = (unsigned char *) POP_FAILURE_POINTER ();	\
       pfreg = POP_FAILURE_INT ();					\
       STORE_NUMBER (ptr, pfreg);					\
       DEBUG_PRINT ("     Pop counter %p = %ld\n", ptr, pfreg);		\
@@ -1944,7 +1942,7 @@ struct range_table_work_area
    returned.  If name is not a valid character class name zero, or RECC_ERROR,
    is returned.
 
-   Otherwise, if *strp doesn’t begin with "[:name:]", -1 is returned.
+   Otherwise, if *strp doesn't begin with "[:name:]", -1 is returned.
 
    The function can be used on ASCII and multibyte (UTF-8-encoded) strings.
  */
@@ -1956,8 +1954,8 @@ re_wctype_parse (const unsigned char **strp, unsigned limit)
   if (limit < 4 || beg[0] != '[' || beg[1] != ':')
     return -1;
 
-  beg += 2;  /* skip opening ‘[:’ */
-  limit -= 3;  /* opening ‘[:’ and half of closing ‘:]’; --limit handles rest */
+  beg += 2;  /* skip opening "[:" */
+  limit -= 3;  /* opening "[:" and half of closing ":]"; --limit handles rest */
   for (it = beg; it[0] != ':' || it[1] != ']'; ++it)
     if (!--limit)
       return -1;
@@ -1987,7 +1985,7 @@ re_wctype_parse (const unsigned char **strp, unsigned limit)
            2 [:cntrl:]
            1 [:ff:]
 
-     If you update this list, consider also updating chain of or’ed conditions
+     If you update this list, consider also updating chain of or'ed conditions
      in execute_charset function.
    */
 
@@ -2636,8 +2634,9 @@ regex_compile (const_re_char *pattern, size_t size,
 	  if ((syntax & RE_BK_PLUS_QM)
 	      || (syntax & RE_LIMITED_OPS))
 	    goto normal_char;
-	handle_plus:
+	  FALLTHROUGH;
 	case '*':
+	handle_plus:
 	  /* If there is no previous pattern...  */
 	  if (!laststart)
 	    {
@@ -3086,6 +3085,7 @@ regex_compile (const_re_char *pattern, size_t size,
 				   with non-0. */
 				if (regnum == 0)
 				  FREE_STACK_RETURN (REG_BADPAT);
+				FALLTHROUGH;
 			      case '1': case '2': case '3': case '4':
 			      case '5': case '6': case '7': case '8': case '9':
 				regnum = 10*regnum + (c - '0'); break;
@@ -3905,8 +3905,7 @@ analyze_first (const_re_char *p, const_re_char *pend, char *fastmap,
 		 j < (1 << BYTEWIDTH); j++)
 	      fastmap[j] = 1;
 	  }
-
-	  /* Fallthrough */
+	  FALLTHROUGH;
 	case charset:
 	  if (!fastmap) break;
 	  not = (re_opcode_t) *(p - 1) == charset_not;
@@ -4220,8 +4219,8 @@ re_search_2 (struct re_pattern_buffer *bufp, const char *str1, size_t size1,
 	     struct re_registers *regs, ssize_t stop)
 {
   regoff_t val;
-  re_char *string1 = (re_char*) str1;
-  re_char *string2 = (re_char*) str2;
+  re_char *string1 = (re_char *) str1;
+  re_char *string2 = (re_char *) str2;
   register char *fastmap = bufp->fastmap;
   register RE_TRANSLATE_TYPE translate = bufp->translate;
   size_t total_size = size1 + size2;
@@ -4887,7 +4886,7 @@ regoff_t
 re_match (struct re_pattern_buffer *bufp, const char *string,
 	  size_t size, ssize_t pos, struct re_registers *regs)
 {
-  regoff_t result = re_match_2_internal (bufp, NULL, 0, (re_char*) string,
+  regoff_t result = re_match_2_internal (bufp, NULL, 0, (re_char *) string,
 					 size, pos, regs, size);
   return result;
 }
@@ -4921,8 +4920,8 @@ re_match_2 (struct re_pattern_buffer *bufp, const char *string1,
   SETUP_SYNTAX_TABLE_FOR_OBJECT (re_match_object, charpos, 1);
 #endif
 
-  result = re_match_2_internal (bufp, (re_char*) string1, size1,
-				(re_char*) string2, size2,
+  result = re_match_2_internal (bufp, (re_char *) string1, size1,
+				(re_char *) string2, size2,
 				pos, regs, stop);
   return result;
 }
@@ -5785,8 +5784,8 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	  {
 	    re_char *p1 = p; /* Next operation.  */
 	    /* Here, we discard `const', making re_match non-reentrant.  */
-	    unsigned char *p2 = (unsigned char*) p + mcnt; /* Jump dest.  */
-	    unsigned char *p3 = (unsigned char*) p - 3; /* opcode location.  */
+	    unsigned char *p2 = (unsigned char *) p + mcnt; /* Jump dest.  */
+	    unsigned char *p3 = (unsigned char *) p - 3; /* opcode location.  */
 
 	    p -= 3;		/* Reset so that we will re-execute the
 				   instruction once it's been changed. */
@@ -5837,7 +5836,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	  if (mcnt != 0)
 	    {
 	      /* Here, we discard `const', making re_match non-reentrant.  */
-	      unsigned char *p2 = (unsigned char*) p + 2; /* counter loc.  */
+	      unsigned char *p2 = (unsigned char *) p + 2; /* counter loc.  */
 	      mcnt--;
 	      p += 4;
 	      PUSH_NUMBER (p2, mcnt);
@@ -5856,7 +5855,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	  if (mcnt != 0)
 	    {
 	       /* Here, we discard `const', making re_match non-reentrant.  */
-	      unsigned char *p2 = (unsigned char*) p + 2; /* counter loc.  */
+	      unsigned char *p2 = (unsigned char *) p + 2; /* counter loc.  */
 	      mcnt--;
 	      PUSH_NUMBER (p2, mcnt);
 	      goto unconditional_jump;
@@ -5873,7 +5872,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 
 	    EXTRACT_NUMBER_AND_INCR (mcnt, p);
 	    /* Here, we discard `const', making re_match non-reentrant.  */
-	    p2 = (unsigned char*) p + mcnt;
+	    p2 = (unsigned char *) p + mcnt;
 	    /* Signedness doesn't matter since we only copy MCNT's bits.  */
 	    EXTRACT_NUMBER_AND_INCR (mcnt, p);
 	    DEBUG_PRINT ("  Setting %p to %d.\n", p2, mcnt);
@@ -6182,8 +6181,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	    case on_failure_jump_nastyloop:
 	      assert ((re_opcode_t)pat[-2] == no_op);
 	      PUSH_FAILURE_POINT (pat - 2, str);
-	      /* Fallthrough */
-
+	      FALLTHROUGH;
 	    case on_failure_jump_loop:
 	    case on_failure_jump:
 	    case succeed_n:
@@ -6283,7 +6281,7 @@ re_compile_pattern (const char *pattern, size_t length,
      setting no_sub.  */
   bufp->no_sub = 0;
 
-  ret = regex_compile ((re_char*) pattern, length,
+  ret = regex_compile ((re_char *) pattern, length,
 #ifdef emacs
 		       posix_backtracking,
 		       whitespace_regexp,
@@ -6446,7 +6444,7 @@ regcomp (regex_t *_Restrict_ preg, const char *_Restrict_ pattern,
 
   /* POSIX says a null character in the pattern terminates it, so we
      can use strlen here in compiling the pattern.  */
-  ret = regex_compile ((re_char*) pattern, strlen (pattern), syntax, preg);
+  ret = regex_compile ((re_char *) pattern, strlen (pattern), syntax, preg);
 
   /* POSIX doesn't distinguish between an unmatched open-group and an
      unmatched close-group: both are REG_EPAREN.  */

@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -58,7 +58,7 @@
 
   ;; Check that the `color' property doesn't cause infinite recursion
   ;; because it refers to the value class of the same name.
-  (should (= (length (css--property-values "color")) 147)))
+  (should (= (length (css--property-values "color")) 152)))
 
 (ert-deftest css-test-property-value-cache ()
   "Test that `css--property-value-cache' is in use."
@@ -79,6 +79,27 @@
   (should
    (equal (seq-sort #'string-lessp (css--value-class-lookup 'position))
           '("bottom" "calc()" "center" "left" "right" "top"))))
+
+(ert-deftest css-test-current-defun-name ()
+  (with-temp-buffer
+    (insert "body { top: 0; }")
+    (goto-char 7)
+    (should (equal (css-current-defun-name) "body"))
+    (goto-char 18)
+    (should (equal (css-current-defun-name) "body"))))
+
+(ert-deftest css-test-current-defun-name-nested ()
+  (with-temp-buffer
+    (insert "body > .main a { top: 0; }")
+    (goto-char 20)
+    (should (equal (css-current-defun-name) "body > .main a"))))
+
+(ert-deftest css-test-current-defun-name-complex ()
+  (with-temp-buffer
+    (insert "input[type=submit]:hover { color: red; }")
+    (goto-char 30)
+    (should (equal (css-current-defun-name)
+                   "input[type=submit]:hover"))))
 
 ;;; Completion
 
@@ -159,7 +180,12 @@
     (insert "body { f")
     (let ((completions (css-mode-tests--completions)))
       (should (member "filter" completions))
-      (should-not (member "position" completions)))))
+      (should-not (member "position" completions))))
+  ;; Bug#27392
+  (with-temp-buffer
+    (css-mode)
+    (insert "html { grid")
+    (should (> (length (css-mode-tests--completions)) 0))))
 
 (ert-deftest css-test-foreign-completions ()
   (let ((other-buffer-1 (generate-new-buffer "1"))
@@ -233,6 +259,50 @@
       (insert (nth 0 item))
       (save-excursion (insert (nth 1 item)))
       (should (equal (nth 2 item) (css--mdn-find-symbol))))))
+
+(ert-deftest css-test-rgb-parser ()
+  (with-temp-buffer
+    (css-mode)
+    (dolist (input '("255, 0, 127"
+                     "255, /* comment */ 0, 127"
+                     "255 0 127"
+                     "255, 0, 127, 0.75"
+                     "255 0 127 / 0.75"
+                     "100%, 0%, 50%"
+                     "100%, 0%, 50%, 0.115"
+                     "100% 0% 50%"
+                     "100% 0% 50% / 0.115"))
+      (erase-buffer)
+      (save-excursion
+        (insert input ")"))
+      (should (equal (css--rgb-color) "#ff007f")))))
+
+(ert-deftest css-test-hsl-parser ()
+  (with-temp-buffer
+    (css-mode)
+    (dolist (input '("0, 100%, 50%"
+                     "0 100% 50%"
+                     "0 /* two */ /* comments */100% 50%"
+                     "0, 100%, 50%, 0.75"
+                     "0 100% 50% / 0.75"
+                     "0deg 100% 50%"
+                     "360deg 100% 50%"
+                     "0rad, 100%, 50%, 0.115"
+                     "0grad, 100%, 50%, 0.115"
+                     "1turn 100% 50% / 0.115"))
+      (erase-buffer)
+      (save-excursion
+        (insert input ")"))
+      (should (equal (css--hsl-color) "#ff0000")))))
+
+(ert-deftest css-test-named-color ()
+  (dolist (text '("@mixin black" "@include black"))
+    (with-temp-buffer
+      (insert text)
+      (should-not (css--named-color (save-excursion
+                                      (backward-word)
+                                      (point))
+                                    "black")))))
 
 (provide 'css-mode-tests)
 ;;; css-mode-tests.el ends here

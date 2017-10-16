@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #ifndef SYSTHREAD_H
 #define SYSTHREAD_H
@@ -92,7 +92,6 @@ typedef void *(thread_creation_function) (void *);
 extern void sys_mutex_init (sys_mutex_t *);
 extern void sys_mutex_lock (sys_mutex_t *);
 extern void sys_mutex_unlock (sys_mutex_t *);
-extern void sys_mutex_destroy (sys_mutex_t *);
 
 extern void sys_cond_init (sys_cond_t *);
 extern void sys_cond_wait (sys_cond_t *, sys_mutex_t *);
@@ -101,7 +100,6 @@ extern void sys_cond_broadcast (sys_cond_t *);
 extern void sys_cond_destroy (sys_cond_t *);
 
 extern sys_thread_t sys_thread_self (void);
-extern int sys_thread_equal (sys_thread_t, sys_thread_t);
 
 extern int sys_thread_create (sys_thread_t *, const char *,
 			      thread_creation_function *,

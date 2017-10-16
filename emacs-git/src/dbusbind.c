@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
@@ -526,7 +526,7 @@ xd_extract_signed (Lisp_Object x, intmax_t lo, intmax_t hi)
   else
     {
       double d = XFLOAT_DATA (x);
-      if (lo <= d && d <= hi)
+      if (lo <= d && d < 1.0 + hi)
 	{
 	  intmax_t n = d;
 	  if (n == d)
@@ -554,7 +554,7 @@ xd_extract_unsigned (Lisp_Object x, uintmax_t hi)
   else
     {
       double d = XFLOAT_DATA (x);
-      if (0 <= d && d <= hi)
+      if (0 <= d && d < 1.0 + hi)
 	{
 	  uintmax_t n = d;
 	  if (n == d)
@@ -941,7 +941,7 @@ xd_get_connection_references (DBusConnection *connection)
 }
 
 /* Convert a Lisp D-Bus object to a pointer.  */
-static DBusConnection*
+static DBusConnection *
 xd_lisp_dbus_to_dbus (Lisp_Object bus)
 {
   return (DBusConnection *) XSAVE_POINTER (bus, 0);
@@ -955,7 +955,7 @@ xd_get_connection_address (Lisp_Object bus)
   DBusConnection *connection;
   Lisp_Object val;
 
-  val = CDR_SAFE (Fassoc (bus, xd_registered_buses));
+  val = CDR_SAFE (Fassoc (bus, xd_registered_buses, Qnil));
   if (NILP (val))
     XD_SIGNAL2 (build_string ("No connection to bus"), bus);
   else
@@ -1057,7 +1057,7 @@ xd_close_bus (Lisp_Object bus)
   Lisp_Object busobj;
 
   /* Check whether we are connected.  */
-  val = Fassoc (bus, xd_registered_buses);
+  val = Fassoc (bus, xd_registered_buses, Qnil);
   if (NILP (val))
     return;
 
@@ -1127,7 +1127,7 @@ this connection to those buses.  */)
   xd_close_bus (bus);
 
   /* Check, whether we are still connected.  */
-  val = Fassoc (bus, xd_registered_buses);
+  val = Fassoc (bus, xd_registered_buses, Qnil);
   if (!NILP (val))
     {
       connection = xd_get_connection_address (bus);

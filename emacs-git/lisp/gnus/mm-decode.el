@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -1363,7 +1363,7 @@ PROMPT overrides the default one used to ask user for a file name."
 		       (mm-handle-disposition handle) 'filename)
 		      (mail-content-type-get
 		       (mm-handle-type handle) 'name)))
-	file)
+	file directory)
     (when filename
       (setq filename (gnus-map-function mm-file-name-rewrite-functions
 					(file-name-nondirectory filename))))
@@ -1372,16 +1372,20 @@ PROMPT overrides the default one used to ask user for a file name."
 	  (setq file
 		(read-file-name
 		 (or prompt
-		     (format "Save MIME part to (default %s): "
-			     (or filename "")))
-		 (or mm-default-directory default-directory)
-		 (expand-file-name (or filename "")
-				   (or mm-default-directory default-directory))))
+		     (format "Save MIME part to%s: "
+			     (if filename
+				 (format " (default %s)" filename)
+			       "")))
+		 (or directory mm-default-directory default-directory)
+		 (expand-file-name
+		  (or filename "")
+		  (or directory mm-default-directory default-directory))))
 	  (cond ((or (not file) (equal file ""))
 		 (message "Please enter a file name")
 		 t)
 		((and (file-directory-p file)
 		      (not filename))
+		 (setq directory file)
 		 (message "Please enter a non-directory file name")
 		 t)
 		(t nil)))
@@ -1413,11 +1417,10 @@ Return t if meta tag is added or replaced."
       (let ((case-fold-search t))
 	(goto-char (point-min))
 	(if (re-search-forward "\
-<meta\\s-+http-equiv=[\"']?content-type[\"']?\\s-+content=[\"']\
-text/\\(\\sw+\\)\\(?:;\\s-*charset=\\([^\"'>]+\\)\\)?[^>]*>" nil t)
+<meta\\s-+http-equiv=[\"']?content-type[\"']?\\s-+content=[\"']?\
+text/html\\(?:;\\s-*charset=\\([^\t\n\r \"'>]+\\)\\)?[^>]*>" nil t)
 	    (if (and (not force-charset)
-		     (match-beginning 2)
-		     (string-match "\\`html\\'" (match-string 1)))
+		     (match-beginning 1))
 		;; Don't modify existing meta tag.
 		nil
 	      ;; Replace it with the one specifying charset.
@@ -1556,6 +1559,8 @@ be determined."
 	    "xbm")
 	   ((equal type "x-portable-bitmap")
 	    "pbm")
+	   ((equal type "svg+xml")
+	    "svg")
 	   (t type)))
     (or (mm-handle-cache handle)
 	(mm-with-unibyte-buffer
@@ -1793,40 +1798,43 @@ If RECURSIVE, search recursively."
 				      (buffer-string))))))
 	(shr-inhibit-images mm-html-inhibit-images)
 	(shr-blocked-images mm-html-blocked-images)
-	charset coding char)
-    (unless handle
-      (setq handle (mm-dissect-buffer t)))
-    (and (setq charset
-	       (or (mail-content-type-get (mm-handle-type handle) 'charset)
-		   mail-parse-charset))
-	 (setq coding (mm-charset-to-coding-system charset nil t))
-	 (eq coding 'ascii)
-	 (setq coding nil))
+	charset coding char document)
+    (mm-with-part (or handle (setq handle (mm-dissect-buffer t)))
+      (setq case-fold-search t)
+      (or (setq charset
+		(mail-content-type-get (mm-handle-type handle) 'charset))
+	  (progn
+	    (goto-char (point-min))
+	    (and (re-search-forward "\
+<meta\\s-+http-equiv=[\"']?content-type[\"']?\\s-+content=[\"']?\
+text/html;\\s-*charset=\\([^\t\n\r \"'>]+\\)[^>]*>" nil t)
+		 (setq coding (mm-charset-to-coding-system (match-string 1)
+							   nil t))))
+	  (setq charset mail-parse-charset))
+      (when (and (or coding
+		     (setq coding (mm-charset-to-coding-system charset nil t)))
+		 (not (eq coding 'ascii)))
+	(insert (prog1
+		    (decode-coding-string (buffer-string) coding)
+		  (erase-buffer)
+		  (set-buffer-multibyte t))))
+      (goto-char (point-min))
+      (while (re-search-forward
+	      "&#\\(?:x\\([89][0-9a-f]\\)\\|\\(1[2-5][0-9]\\)\\);" nil t)
+	(when (setq char
+		    (cdr (assq (if (match-beginning 1)
+				   (string-to-number (match-string 1) 16)
+				 (string-to-number (match-string 2)))
+			       mm-extra-numeric-entities)))
+	  (replace-match (char-to-string char))))
+      ;; Remove "soft hyphens".
+      (goto-char (point-min))
+      (while (search-forward "­" nil t)
+	(replace-match "" t t))
+      (setq document (libxml-parse-html-region (point-min) (point-max))))
     (save-restriction
       (narrow-to-region (point) (point))
-      (shr-insert-document
-       (mm-with-part handle
-	 (insert (prog1
-		     (if coding
-			 (decode-coding-string (buffer-string) coding)
-		       (buffer-string))
-		   (erase-buffer)
-		   (mm-enable-multibyte)))
-	 (goto-char (point-min))
-	 (setq case-fold-search t)
-	 (while (re-search-forward
-		 "&#\\(?:x\\([89][0-9a-f]\\)\\|\\(1[2-5][0-9]\\)\\);" nil t)
-	   (when (setq char
-		       (cdr (assq (if (match-beginning 1)
-				      (string-to-number (match-string 1) 16)
-				    (string-to-number (match-string 2)))
-				  mm-extra-numeric-entities)))
-	     (replace-match (char-to-string char))))
-	 ;; Remove "soft hyphens".
-	 (goto-char (point-min))
-	 (while (search-forward "­" nil t)
-	   (replace-match "" t t))
-	 (libxml-parse-html-region (point-min) (point-max))))
+      (shr-insert-document document)
       (unless (bobp)
 	(insert "\n"))
       (mm-convert-shr-links)

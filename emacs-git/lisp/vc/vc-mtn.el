@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -250,7 +250,7 @@ If LIMIT is non-nil, show no more than this many entries."
   (set (make-local-variable 'log-view-font-lock-keywords)
        (append log-view-font-lock-keywords
                '(("^[ |]+Author: \\(.*\\)" (1 'change-log-email))
-                 ("^[ |]+Date: \\(.*\\)" (1 'change-log-date-face))))))
+                 ("^[ |]+Date: \\(.*\\)" (1 'change-log-date))))))
 
 ;; (defun vc-mtn-show-log-entry (revision)
 ;;   )

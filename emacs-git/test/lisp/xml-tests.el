@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -147,6 +147,21 @@ Parser is called with and without 'symbol-qnames argument.")
   (with-temp-buffer
     (insert (car xml-parse-test--default-namespace-qnames))
     (should (equal (cdr xml-parse-test--default-namespace-qnames)
+                   (xml-parse-region nil nil nil nil 'symbol-qnames)))))
+
+;; Test bug #26533 (proper expansion in prefixed attributes with 'symbol-qnames)
+(defvar xml-parse-test--namespace-attribute-qnames
+  (cons "<something xmlns:a=\"myns:\"><whatever a:b='c'></whatever></something>"
+        '((something
+           ((("http://www.w3.org/2000/xmlns/" . "a")
+             . "myns:"))
+           (whatever
+            ((myns:b . "c")))))))
+
+(ert-deftest xml-parse-namespace-attribute-qnames ()
+  (with-temp-buffer
+    (insert (car xml-parse-test--namespace-attribute-qnames))
+    (should (equal (cdr xml-parse-test--namespace-attribute-qnames)
                    (xml-parse-region nil nil nil nil 'symbol-qnames)))))
 
 ;; Local Variables:

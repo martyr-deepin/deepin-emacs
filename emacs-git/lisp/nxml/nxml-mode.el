@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -518,7 +518,7 @@ Many aspects this mode can be customized using
 	(nxml-with-invisible-motion
 	  (nxml-scan-prolog)))))
   (setq-local syntax-ppss-table sgml-tag-syntax-table)
-  (setq-local syntax-propertize-function sgml-syntax-propertize-function)
+  (setq-local syntax-propertize-function #'sgml-syntax-propertize)
   (add-hook 'change-major-mode-hook #'nxml-cleanup nil t)
 
   ;; Emacs 23 handles the encoding attribute on the xml declaration

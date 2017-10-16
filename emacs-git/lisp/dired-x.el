@@ -22,7 +22,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -57,7 +57,7 @@
 
 (defcustom dired-bind-vm nil
   "Non-nil means \"V\" runs `dired-vm', otherwise \"V\" runs `dired-rmail'.
-RMAIL files in the old Babyl format (used before before Emacs 23.1)
+RMAIL files in the old Babyl format (used before Emacs 23.1)
 contain \"-*- rmail -*-\" at the top, so `dired-find-file'
 will run `rmail' on these files.  New RMAIL files use the standard
 mbox format, and so cannot be distinguished in this way."
@@ -243,6 +243,12 @@ to nil: a pipe using `zcat' or `gunzip -c' will be used."
   :type 'boolean
   :group 'dired-x)
 
+(defcustom dired-clean-confirm-killing-deleted-buffers t
+  "If nil, don't ask whether to kill buffers visiting deleted files."
+  :version "26.1"
+  :type 'boolean
+  :group 'dired-x)
+
 ;;; KEY BINDINGS.
 
 (define-key dired-mode-map "\C-x\M-o" 'dired-omit-mode)
@@ -332,21 +338,19 @@ See also the functions:
 
 ;;; EXTENSION MARKING FUNCTIONS.
 
-;; Mark files with some extension.
-(defun dired-mark-extension (extension &optional marker-char)
-  "Mark all files with a certain EXTENSION for use in later commands.
-A `.' is *not* automatically prepended to the string entered.
-EXTENSION may also be a list of extensions instead of a single one.
-Optional MARKER-CHAR is marker to use.
-Interactively, ask for EXTENSION.
-Prefixed with one C-u, unmark files instead.
-Prefixed with two C-u's, prompt for MARKER-CHAR and mark files with it."
-  (interactive
-   (let ((suffix
-          (read-string (format "%s extension: "
+(defun dired--mark-suffix-interactive-spec ()
+  (let* ((default
+           (let ((file (dired-get-filename nil t)))
+             (when file
+               (file-name-extension file))))
+         (suffix
+          (read-string (format "%s extension%s: "
                                (if (equal current-prefix-arg '(4))
                                    "UNmarking"
-                                 "Marking"))))
+                                 "Marking")
+                               (if default
+                                   (format " (default %s)" default)
+                                 "")) nil nil default))
          (marker
           (pcase current-prefix-arg
             ('(4) ?\s)
@@ -358,13 +362,49 @@ Prefixed with two C-u's, prompt for MARKER-CHAR and mark files with it."
                             nil nil dflt)))
                (aref input 0)))
             (_ dired-marker-char))))
-     (list suffix marker)))
-  (or (listp extension)
-      (setq extension (list extension)))
+    (list suffix marker)))
+
+;; Mark files with some extension.
+(defun dired-mark-extension (extension &optional marker-char)
+  "Mark all files with a certain EXTENSION for use in later commands.
+A `.' is automatically prepended to EXTENSION when not present.
+EXTENSION may also be a list of extensions instead of a single one.
+Optional MARKER-CHAR is marker to use.
+Interactively, ask for EXTENSION.
+Prefixed with one C-u, unmark files instead.
+Prefixed with two C-u's, prompt for MARKER-CHAR and mark files with it."
+  (interactive (dired--mark-suffix-interactive-spec))
+  (unless (listp extension)
+    (setq extension (list extension)))
   (dired-mark-files-regexp
    (concat ".";; don't match names with nothing but an extension
            "\\("
-           (mapconcat 'regexp-quote extension "\\|")
+           (mapconcat
+            (lambda (x)
+              (regexp-quote
+               (if (string-prefix-p "." x) x (concat "." x))))
+            extension "\\|")
+           "\\)$")
+   marker-char))
+
+;; Mark files ending with some suffix.
+(defun dired-mark-suffix (suffix &optional marker-char)
+  "Mark all files with a certain SUFFIX for use in later commands.
+A `.' is *not* automatically prepended to the string entered;  see
+also `dired-mark-extension', which is similar but automatically
+prepends `.' when not present.
+SUFFIX may also be a list of suffixes instead of a single one.
+Optional MARKER-CHAR is marker to use.
+Interactively, ask for SUFFIX.
+Prefixed with one C-u, unmark files instead.
+Prefixed with two C-u's, prompt for MARKER-CHAR and mark files with it."
+  (interactive (dired--mark-suffix-interactive-spec))
+  (unless (listp suffix)
+    (setq suffix (list suffix)))
+  (dired-mark-files-regexp
+   (concat ".";; don't match names with nothing but an extension
+           "\\("
+           (mapconcat 'regexp-quote suffix "\\|")
            "\\)$")
    marker-char))
 
@@ -512,7 +552,9 @@ Should never be used as marker by the user or other packages.")
   (interactive)
   (let ((dired-omit-mode nil)) (revert-buffer)) ;; Show omitted files
   (dired-mark-unmarked-files (dired-omit-regexp) nil nil dired-omit-localp
-                             (dired-omit-case-fold-p dired-directory)))
+                             (dired-omit-case-fold-p (if (stringp dired-directory)
+                                                         dired-directory
+                                                       (car dired-directory)))))
 
 (defcustom dired-omit-extensions
   (append completion-ignored-extensions
@@ -557,7 +599,9 @@ This functions works by temporarily binding `dired-marker-char' to
             (let ((dired-marker-char dired-omit-marker-char))
               (when dired-omit-verbose (message "Omitting..."))
               (if (dired-mark-unmarked-files omit-re nil nil dired-omit-localp
-                                             (dired-omit-case-fold-p dired-directory))
+                                             (dired-omit-case-fold-p (if (stringp dired-directory)
+                                                                         dired-directory
+                                                                       (car dired-directory))))
                   (progn
                     (setq count (dired-do-kill-lines
 				 nil
@@ -600,7 +644,7 @@ Optional fifth argument CASE-FOLD-P specifies the value of
     (dired-mark-if
      (and
       ;; not already marked
-      (looking-at-p " ")
+      (= (following-char) ?\s)
       ;; uninteresting
       (let ((fn (dired-get-filename localp t))
             ;; Match patterns case-insensitively on case-insensitive
@@ -1496,7 +1540,7 @@ refer at all to the underlying file system.  Contrast this with
           (setq mode (buffer-substring (point) (+ mode-len (point))))
           (forward-char mode-len)
           ;; Skip any extended attributes marker ("." or "+").
-          (or (looking-at " ")
+          (or (= (following-char) ?\s)
               (forward-char 1))
           (setq nlink (read (current-buffer)))
           ;; Karsten Wenger <kw@cis.uni-muenchen.de> fixed uid.
@@ -1591,10 +1635,11 @@ Binding direction based on `dired-x-hands-off-my-keys'."
   (if (called-interactively-p 'interactive)
       (setq dired-x-hands-off-my-keys
             (not (y-or-n-p "Bind dired-x-find-file over find-file? "))))
-  (define-key (current-global-map) [remap find-file]
-    (if (not dired-x-hands-off-my-keys) 'dired-x-find-file))
-  (define-key (current-global-map) [remap find-file-other-window]
-    (if (not dired-x-hands-off-my-keys) 'dired-x-find-file-other-window)))
+  (unless dired-x-hands-off-my-keys
+    (define-key (current-global-map) [remap find-file]
+      'dired-x-find-file)
+    (define-key (current-global-map) [remap find-file-other-window]
+      'dired-x-find-file-other-window)))
 
 ;; Now call it so binding is correct.  This could go in the :initialize
 ;; slot, but then dired-x-bind-find-file has to be defined before the

@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -968,12 +968,13 @@ Uses `gnus-registry-marks' to find what shortcuts to install."
   "Show the marks for an article by the :char property."
   (let* ((id (mail-header-message-id headers))
          (marks (when id (gnus-registry-get-id-key id 'mark))))
-    (mapconcat (lambda (mark)
-                 (plist-get
-                  (cdr-safe
-                   (assoc mark gnus-registry-marks))
-                  :char))
-               marks "")))
+    (concat (delq nil
+		  (mapcar
+		   (lambda (m)
+		     (plist-get
+		      (cdr-safe (assoc m gnus-registry-marks))
+		      :char))
+		   marks)))))
 
 ;; use like this:
 ;; (defalias 'gnus-user-format-function-M 'gnus-registry-article-marks-to-names)

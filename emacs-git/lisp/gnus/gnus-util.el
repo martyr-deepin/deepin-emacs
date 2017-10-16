@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -83,11 +83,6 @@ string containing the replacements.
 This is a compatibility function for different Emacsen."
   (declare (obsolete replace-regexp-in-string "26.1"))
   (replace-regexp-in-string regexp newtext string nil literal))
-
-(defun gnus-boundp (variable)
-  "Return non-nil if VARIABLE is bound and non-nil."
-  (and (boundp variable)
-       (symbol-value variable)))
 
 (defmacro gnus-eval-in-buffer-window (buffer &rest forms)
   "Pop to BUFFER, evaluate FORMS, and then return to the original window."
@@ -599,9 +594,6 @@ If N, return the Nth ancestor instead."
 	 (read-file-name "Copy file to: " default-directory)))
   (unless to
     (setq to (read-file-name "Copy file to: " default-directory)))
-  (when (file-directory-p to)
-    (setq to (concat (file-name-as-directory to)
-		     (file-name-nondirectory file))))
   (copy-file file to))
 
 (defvar gnus-work-buffer " *gnus work*")
@@ -1618,7 +1610,7 @@ sequence, this is like `mapcar'.  With several, it is like the Common Lisp
      ((not (memq 'emacs lst))
       nil)
      ((string-match "^\\(\\([.0-9]+\\)*\\)\\.[0-9]+$" emacs-version)
-      (concat "Emacs/" (match-string 1 emacs-version)
+      (concat "Emacs/" emacs-version
 	      (if system-v
 		  (concat " (" system-v ")")
 		"")))

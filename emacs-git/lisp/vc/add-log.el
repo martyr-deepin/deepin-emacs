@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -240,7 +240,7 @@ a case simply use the directory containing the changed file."
     ;; addition, using any kind of fixed setting like this doesn't
     ;; work if a user customizes add-log-time-format.
     ("^[0-9-]+ +\\|^ \\{11,\\}\\|^\t \\{3,\\}\\|^\\(Sun\\|Mon\\|Tue\\|Wed\\|Thu\\|Fri\\|Sat\\) [A-z][a-z][a-z] [0-9:+ ]+"
-     (0 'change-log-date-face)
+     (0 'change-log-date)
      ;; Name and e-mail; some people put e-mail in parens, not angles.
      ("\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]" nil nil
       (1 'change-log-name)
@@ -1077,14 +1077,16 @@ A sequence of buffers is formed by ChangeLog files with decreasing
 numeric file name suffixes in the directory of the initial ChangeLog
 file were isearch was started."
   (let* ((name (change-log-name))
-	 (files (cons name (sort (file-expand-wildcards
-				  (concat name "[-.][0-9]*"))
-				 (lambda (a b)
-                                   ;; The file's extension may not have a valid
-                                   ;; version form (e.g. VC backup revisions).
-                                   (ignore-errors
-                                     (version< (substring b (length name))
-                                               (substring a (length name))))))))
+	 (files (append
+                 (and (file-exists-p name) (list name))
+                 (sort (file-expand-wildcards
+                        (concat name "[-.][0-9]*"))
+                       (lambda (a b)
+                         ;; The file's extension may not have a valid
+                         ;; version form (e.g. VC backup revisions).
+                         (ignore-errors
+                           (version< (substring b (length name))
+                                     (substring a (length name))))))))
 	 (files (if isearch-forward files (reverse files)))
 	 (file (if wrap
 		   (car files)

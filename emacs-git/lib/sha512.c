@@ -14,7 +14,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* Written by David Madore, considerably copypasting from
    Scott G. Miller's sha1.c
@@ -374,7 +374,8 @@ sha512_process_bytes (const void *buffer, size_t len, struct sha512_ctx *ctx)
           sha512_process_block (ctx->buffer, ctx->buflen & ~127, ctx);
 
           ctx->buflen &= 127;
-          /* The regions in the following copy operation cannot overlap.  */
+          /* The regions in the following copy operation cannot overlap,
+             because ctx->buflen < 128 ≤ (left_over + add) & ~127.  */
           memcpy (ctx->buffer,
                   &((char *) ctx->buffer)[(left_over + add) & ~127],
                   ctx->buflen);
@@ -416,6 +417,8 @@ sha512_process_bytes (const void *buffer, size_t len, struct sha512_ctx *ctx)
         {
           sha512_process_block (ctx->buffer, 128, ctx);
           left_over -= 128;
+          /* The regions in the following copy operation cannot overlap,
+             because left_over ≤ 128.  */
           memcpy (ctx->buffer, &ctx->buffer[16], left_over);
         }
       ctx->buflen = left_over;

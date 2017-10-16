@@ -17,7 +17,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 #include <stdio.h>
@@ -1546,7 +1546,8 @@ ftfont_get_metrics (MFLTFont *font, MFLTGlyphString *gstring,
 	  {
 	    FT_Glyph_Metrics *m;
 
-	    if (FT_Load_Glyph (ft_face, g->g.code, FT_LOAD_DEFAULT) != 0)
+	    if (FT_Load_Glyph (ft_face, g->g.code, FT_LOAD_DEFAULT) != 0
+		&& FT_Load_Glyph (ft_face, g->g.code, FT_LOAD_NO_HINTING) != 0)
 	      emacs_abort ();
 	    m = &ft_face->glyph->metrics;
 	    if (flt_font_ft->matrix)

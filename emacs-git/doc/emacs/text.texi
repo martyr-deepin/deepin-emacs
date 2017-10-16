@@ -296,7 +296,7 @@ mark by one paragraph.
 
   The definition of a paragraph depends on the major mode.  In
 Fundamental mode, as well as Text mode and related modes, a paragraph
-is separated each neighboring paragraph another by one or more
+is separated from neighboring paragraphs by one or more
 @dfn{blank lines}---lines that are either empty, or consist solely of
 space, tab and/or formfeed characters.  In programming language modes,
 paragraphs are usually defined in a similar way, so that you can use
@@ -442,6 +442,13 @@ non-@code{nil}, and in programming-language strings if
 @code{electric-quote-string} is non-@code{nil}.  The default is
 @code{nil} for @code{electric-quote-string} and @code{t} for the other
 variables.
+
+@vindex electric-quote-replace-double
+  You can also set the option @code{electric-quote-replace-double} to
+a non-@code{nil} value.  Then, typing @t{"} insert an appropriate
+curved double quote depending on context: @t{“} at the beginning of
+the buffer or after a line break, whitespace, opening parenthesis, or
+quote character, and @t{”} otherwise.
 
   Electric Quote mode is disabled by default.  To toggle it, type
 @kbd{M-x electric-quote-mode}.  To toggle it in a single buffer, use
@@ -1429,7 +1436,7 @@ org-agenda}.  This command prompts for what you want to see: a list of
 things to do this week, a list of TODO items with specific keywords,
 etc.
 @ifnottex
-@xref{Agenda Views,,,org, The Org Manual}, for details.
+@xref{Agenda views,,,org, The Org Manual}, for details.
 @end ifnottex
 
 @node Org Authoring
@@ -1725,9 +1732,9 @@ C-p} (@code{tex-print}) to print a hardcopy of the output file.
 @vindex tex-directory
   By default, @kbd{C-c C-b} runs @TeX{} in the current directory.  The
 output of @TeX{} also goes in this directory.  To run @TeX{} in a
-different directory, change the variable @code{tex-directory} to the
-desired directory name.  If your environment variable @env{TEXINPUTS}
-contains relative directory names, or if your files contains
+different directory, change the variable @code{tex-directory} to
+the desired directory.  If your environment variable @env{TEXINPUTS}
+contains relative names, or if your files contains
 @samp{\input} commands with relative file names, then
 @code{tex-directory} @emph{must} be @code{"."} or you will get the
 wrong results.  Otherwise, it is safe to specify some other directory,
@@ -1899,8 +1906,14 @@ between Latin-1 encoded files and @TeX{}-encoded equivalents.
 @findex html-mode
 
   The major modes for SGML and HTML provide indentation support and
-commands for operating on tags.  HTML mode is a slightly customized
-variant of SGML mode.
+commands for operating on tags.
+
+  HTML consists of two modes---one, a basic mode called
+@code{html-mode} is a slightly customized variant of SGML mode.  The
+other, which is used by default for HTML files, is called
+@code{mhtml-mode}, and attempts to properly handle Javascript enclosed
+in a @code{<script>} element and CSS embedded in a @code{<style>}
+element.
 
 @table @kbd
 @item C-c C-n
@@ -2391,6 +2404,23 @@ within the text).  The @samp{Remove Special} menu item removes all of
 these special properties from the text in the region.
 
   The @code{invisible} and @code{intangible} properties are not saved.
+
+@vindex enriched-allow-eval-in-display-props
+@cindex security, when displaying enriched text
+  Enriched mode also supports saving and restoring @code{display}
+properties (@pxref{Display Property,,,elisp, the Emacs Lisp Reference
+Manual}), which affect how text is displayed on the screen, and also
+allow displaying images and strings that come from sources other than
+buffer text.  The @code{display} properties also support execution of
+arbitrary Lisp forms as part of processing the property for display,
+thus providing a means to dynamically tailor the display to some
+conditions that can only be known at display time.  Since execution of
+arbitrary Lisp opens Emacs to potential attacks, especially when the
+source of enriched text is outside of Emacs or even outside of your
+system (e.g., if it was received in an email message), such execution
+is by default disabled in Enriched mode.  You can enable it by
+customizing the variable @code{enriched-allow-eval-in-display-props}
+to a non-@code{nil} value.
 
 @node Text Based Tables
 @section Editing Text-based Tables

@@ -3,7 +3,7 @@
 ;; Copyright (C) 1991, 1993, 1995-1996, 2001-2017 Free Software
 ;; Foundation, Inc.
 
-;; Maintainer: Morten Welinder <terra@diku.dk>
+;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
 ;; Package: emacs
 
@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 

@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -175,8 +175,8 @@ Emacs Lisp manual for more information and examples."
       ;; (when (gethash (car cases) pcase--memoize-2)
       ;;   (message "pcase-memoize failed because of eq test on %S"
       ;;            (car cases)))
-      (when data
-        (message "pcase-memoize: equal first branch, yet different"))
+      ;; (when data
+      ;;   (message "pcase-memoize: equal first branch, yet different"))
       (let ((expansion (pcase--expand exp cases)))
         (puthash (car cases) `(,exp ,cases ,@expansion) pcase--memoize)
         ;; (puthash (car cases) `(,exp ,cases ,@expansion) pcase--memoize-1)
@@ -213,7 +213,7 @@ Emacs Lisp manual for more information and examples."
 (defmacro pcase-exhaustive (exp &rest cases)
   "The exhaustive version of `pcase' (which see)."
   (declare (indent 1) (debug pcase))
-  (let* ((x (make-symbol "x"))
+  (let* ((x (gensym "x"))
          (pcase--dontwarn-upats (cons x pcase--dontwarn-upats)))
     (pcase--expand
      ;; FIXME: Could we add the FILE:LINE data in the error message?
@@ -226,7 +226,7 @@ I.e. accepts the usual &optional and &rest keywords, but every
 formal argument can be any pattern accepted by `pcase' (a mere
 variable name being but a special case of it)."
   (declare (doc-string 2) (indent defun)
-           (debug ((&rest pcase-PAT) body)))
+           (debug (&define (&rest pcase-PAT) lambda-doc def-body)))
   (let* ((bindings ())
          (parsed-body (macroexp-parse-body body))
          (args (mapcar (lambda (pat)
@@ -304,7 +304,7 @@ any kind of error."
   (declare (indent 1) (debug ((pcase-PAT form) body)))
   (if (pcase--trivial-upat-p (car spec))
       `(dolist ,spec ,@body)
-    (let ((tmpvar (make-symbol "x")))
+    (let ((tmpvar (gensym "x")))
       `(dolist (,tmpvar ,@(cdr spec))
          (pcase-let* ((,(car spec) ,tmpvar))
            ,@body)))))
@@ -418,8 +418,8 @@ to this macro."
     (when decl (setq body (remove decl body)))
     `(progn
        (defun ,fsym ,args ,@body)
-       (put ',fsym 'edebug-form-spec ',(cadr (assq 'debug decl)))
-       (put ',name 'pcase-macroexpander #',fsym))))
+       (define-symbol-prop ',fsym 'edebug-form-spec ',(cadr (assq 'debug decl)))
+       (define-symbol-prop ',name 'pcase-macroexpander #',fsym))))
 
 (defun pcase--match (val upat)
   "Build a MATCH structure, hoisting all `or's and `and's outside."
@@ -437,8 +437,10 @@ to this macro."
   ;; Don't use let*, otherwise macroexp-let* may merge it with some surrounding
   ;; let* which might prevent the setcar/setcdr in pcase--expand's fancy
   ;; codegen from later metamorphosing this let into a funcall.
-  `(let ,(mapcar (lambda (b) (list (car b) (cdr b))) vars)
-     ,@code))
+  (if vars
+      `(let ,(mapcar (lambda (b) (list (car b) (cdr b))) vars)
+         ,@code)
+    `(progn ,@code)))
 
 (defun pcase--small-branch-p (code)
   (and (= 1 (length code))
@@ -501,24 +503,30 @@ MATCH is the pattern that needs to be matched, of the form:
     (symbolp . vectorp)
     (symbolp . stringp)
     (symbolp . byte-code-function-p)
+    (symbolp . recordp)
     (integerp . consp)
     (integerp . arrayp)
     (integerp . vectorp)
     (integerp . stringp)
     (integerp . byte-code-function-p)
+    (integerp . recordp)
     (numberp . consp)
     (numberp . arrayp)
     (numberp . vectorp)
     (numberp . stringp)
     (numberp . byte-code-function-p)
+    (numberp . recordp)
     (consp . arrayp)
     (consp . atom)
     (consp . vectorp)
     (consp . stringp)
     (consp . byte-code-function-p)
+    (consp . recordp)
     (arrayp . byte-code-function-p)
     (vectorp . byte-code-function-p)
+    (vectorp . recordp)
     (stringp . vectorp)
+    (stringp . recordp)
     (stringp . byte-code-function-p)))
 
 (defun pcase--mutually-exclusive-p (pred1 pred2)
@@ -707,7 +715,7 @@ MATCH is the pattern that needs to be matched, of the form:
            (call (progn
                    (when (memq arg vs)
                      ;; `arg' is shadowed by `env'.
-                     (let ((newsym (make-symbol "x")))
+                     (let ((newsym (gensym "x")))
                        (push (list newsym arg) env)
                        (setq arg newsym)))
                    (if (functionp fun)
@@ -834,7 +842,7 @@ Otherwise, it defers to REST which is a list of branches of the form
         ;; A upat of the form (app FUN PAT)
         (pcase--mark-used sym)
         (let* ((fun (nth 1 upat))
-               (nsym (make-symbol "x"))
+               (nsym (gensym "x"))
                (body
                 ;; We don't change `matches' to reuse the newly computed value,
                 ;; because we assume there shouldn't be such redundancy in there.
@@ -921,7 +929,6 @@ QPAT can take the following forms:
           (app cdr ,(list '\` (cdr qpat)))))
    ((or (stringp qpat) (integerp qpat) (symbolp qpat)) `',qpat)
    (t (error "Unknown QPAT: %S" qpat))))
-
 
 (provide 'pcase)
 ;;; pcase.el ends here

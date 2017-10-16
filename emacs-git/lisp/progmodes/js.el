@@ -22,7 +22,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary
 
@@ -53,6 +53,7 @@
 (require 'moz nil t)
 (require 'json nil t)
 (require 'sgml-mode)
+(require 'prog-mode)
 
 (eval-when-compile
   (require 'cl-lib)
@@ -277,7 +278,7 @@ Match group 1 is the name of the macro.")
 
 (defconst js--keyword-re
   (js--regexp-opt-symbol
-   '("abstract" "break" "case" "catch" "class" "const"
+   '("abstract" "async" "await" "break" "case" "catch" "class" "const"
      "continue" "debugger" "default" "delete" "do" "else"
      "enum" "export" "extends" "final" "finally" "for"
      "function" "goto" "if" "implements" "import" "in"
@@ -471,6 +472,11 @@ The value must not be negative."
 (defcustom js-flat-functions nil
   "Treat nested functions as top-level functions in `js-mode'.
 This applies to function movement, marking, and so on."
+  :type 'boolean
+  :group 'js)
+
+(defcustom js-indent-align-list-continuation t
+  "Align continuation of non-empty ([{ lines in `js-mode'."
   :type 'boolean
   :group 'js)
 
@@ -1687,6 +1693,16 @@ This performs fontification according to `js--class-styles'."
                                    js--font-lock-keywords-3)
   "Font lock keywords for `js-mode'.  See `font-lock-keywords'.")
 
+(defun js-font-lock-syntactic-face-function (state)
+  "Return syntactic face given STATE."
+  (if (nth 3 state)
+      font-lock-string-face
+    (if (save-excursion
+          (goto-char (nth 8 state))
+          (looking-at "/\\*\\*"))
+        font-lock-doc-face
+      font-lock-comment-face)))
+
 (defconst js--syntax-propertize-regexp-regexp
   (rx
    ;; Start of regexp.
@@ -1703,7 +1719,7 @@ This performs fontification according to `js--class-styles'."
               (not (any ?\] ?\\))
               (and "\\" not-newline)))
          "]")))
-   (group "/"))
+   (group (zero-or-one "/")))
   "Regular expression matching a JavaScript regexp literal.")
 
 (defun js-syntax-propertize-regexp (end)
@@ -1711,12 +1727,13 @@ This performs fontification according to `js--class-styles'."
     (when (eq (nth 3 ppss) ?/)
       ;; A /.../ regexp.
       (goto-char (nth 8 ppss))
-      (when (and (looking-at js--syntax-propertize-regexp-regexp)
-                 ;; Don't touch text after END.
-                 (<= (match-end 1) end))
-        (put-text-property (match-beginning 1) (match-end 1)
+      (when (looking-at js--syntax-propertize-regexp-regexp)
+        ;; Don't touch text after END.
+        (when (> end (match-end 1))
+          (setq end (match-end 1)))
+        (put-text-property (match-beginning 1) end
                            'syntax-table (string-to-syntax "\"/"))
-        (goto-char (match-end 0))))))
+        (goto-char end)))))
 
 (defun js-syntax-propertize (start end)
   ;; JavaScript allows immediate regular expression objects, written /.../.
@@ -1776,6 +1793,8 @@ This performs fontification according to `js--class-styles'."
     (and (looking-at js--indent-operator-re)
          (or (not (eq (char-after) ?:))
              (save-excursion
+               (js--backward-syntactic-ws)
+               (when (= (char-before) ?\)) (backward-list))
                (and (js--re-search-backward "[?:{]\\|\\_<case\\_>" nil t)
                     (eq (char-after) ??))))
          (not (and
@@ -1986,11 +2005,16 @@ In particular, return the buffer position of the first `for' kwd."
         (js--forward-syntactic-ws)
         (if (looking-at "[[{]")
             (let (forward-sexp-function) ; Use Lisp version.
-              (forward-sexp)             ; Skip destructuring form.
-              (js--forward-syntactic-ws)
-              (if (and (/= (char-after) ?,) ; Regular array.
-                       (looking-at "for"))
-                  (match-beginning 0)))
+              (condition-case nil
+                  (progn
+                    (forward-sexp)       ; Skip destructuring form.
+                    (js--forward-syntactic-ws)
+                    (if (and (/= (char-after) ?,) ; Regular array.
+                             (looking-at "for"))
+                        (match-beginning 0)))
+                (scan-error
+                 ;; Nothing to do here.
+                 nil)))
           ;; To skip arbitrary expressions we need the parser,
           ;; so we'll just guess at it.
           (if (and (> end (point)) ; Not empty literal.
@@ -2073,7 +2097,8 @@ indentation is aligned to that column."
                  (switch-keyword-p (looking-at "default\\_>\\|case\\_>[^:]"))
                  (continued-expr-p (js--continued-expression-p)))
              (goto-char (nth 1 parse-status)) ; go to the opening char
-             (if (looking-at "[({[]\\s-*\\(/[/*]\\|$\\)")
+             (if (or (not js-indent-align-list-continuation)
+                     (looking-at "[({[]\\s-*\\(/[/*]\\|$\\)"))
                  (progn ; nothing following the opening paren/bracket
                    (skip-syntax-backward " ")
                    (when (eq (char-before) ?\)) (backward-list))
@@ -2109,7 +2134,7 @@ indentation is aligned to that column."
 
           ((js--continued-expression-p)
            (+ js-indent-level js-expr-indent-offset))
-          (t 0))))
+          (t (prog-first-column)))))
 
 ;;; JSX Indentation
 
@@ -2354,6 +2379,10 @@ i.e., customize JSX element indentation with `sgml-basic-offset',
   (let ((js--filling-paragraph t)
         (fill-paragraph-function #'c-fill-paragraph))
     (c-fill-paragraph justify)))
+
+(defun js-do-auto-fill ()
+  (let ((js--filling-paragraph t))
+    (c-do-auto-fill)))
 
 ;;; Type database and Imenu
 
@@ -3823,7 +3852,10 @@ If one hasn't been set, or if it's stale, prompt for a new one."
   (setq-local beginning-of-defun-function #'js-beginning-of-defun)
   (setq-local end-of-defun-function #'js-end-of-defun)
   (setq-local open-paren-in-column-0-is-defun-start nil)
-  (setq-local font-lock-defaults (list js--font-lock-keywords))
+  (setq-local font-lock-defaults
+              (list js--font-lock-keywords nil nil nil nil
+                    '(font-lock-syntactic-face-function
+                      . js-font-lock-syntactic-face-function)))
   (setq-local syntax-propertize-function #'js-syntax-propertize)
   (setq-local prettify-symbols-alist js--prettify-symbols-alist)
 
@@ -3835,6 +3867,7 @@ If one hasn't been set, or if it's stale, prompt for a new one."
   (setq-local comment-start "// ")
   (setq-local comment-end "")
   (setq-local fill-paragraph-function #'js-c-fill-paragraph)
+  (setq-local normal-auto-fill-function #'js-do-auto-fill)
 
   ;; Parse cache
   (add-hook 'before-change-functions #'js--flush-caches t t)

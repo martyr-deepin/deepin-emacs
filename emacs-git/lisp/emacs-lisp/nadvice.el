@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -72,6 +72,13 @@ Each element has the form (WHERE BYTECODE STACK) where:
     (setq f (advice--cdr f)))
   f)
 
+(defun advice--where (f)
+  (let ((bytecode (aref f 1))
+        (where nil))
+    (dolist (elem advice--where-alist)
+      (if (eq bytecode (cadr elem)) (setq where (car elem))))
+    where))
+
 (defun advice--make-docstring (function)
   "Build the raw docstring for FUNCTION, presumably advised."
   (let* ((flist (indirect-function function))
@@ -79,16 +86,13 @@ Each element has the form (WHERE BYTECODE STACK) where:
          (docstring nil))
     (if (eq 'macro (car-safe flist)) (setq flist (cdr flist)))
     (while (advice--p flist)
-      (let ((bytecode (aref flist 1))
-            (doc (aref flist 4))
-            (where nil))
+      (let ((doc (aref flist 4))
+            (where (advice--where flist)))
         ;; Hack attack!  For advices installed before calling
         ;; Snarf-documentation, the integer offset into the DOC file will not
         ;; be installed in the "core unadvised function" but in the advice
         ;; object instead!  So here we try to undo the damage.
         (if (integerp doc) (setq docfun flist))
-        (dolist (elem advice--where-alist)
-          (if (eq bytecode (cadr elem)) (setq where (car elem))))
         (setq docstring
               (concat
                docstring
@@ -381,6 +385,18 @@ of the piece of advice."
 
 (defun advice--defalias-fset (fsetfun symbol newdef)
   (unless fsetfun (setq fsetfun #'fset))
+  ;; `newdef' shouldn't include advice wrappers, since that's what *we* manage!
+  ;; So if `newdef' includes advice wrappers, it's usually because someone
+  ;; naively took (symbol-function F) and then passed that back to `defalias':
+  ;; let's strip them away.
+  (cond
+   ((advice--p newdef) (setq newdef (advice--cd*r newdef)))
+   ((and (eq 'macro (car-safe newdef))
+         (advice--p (cdr newdef)))
+    (setq newdef `(macro . ,(advice--cd*r (cdr newdef))))))
+  ;; The saved-rewrite is specific to the current value, so since we are about
+  ;; to overwrite that current value with new value, the old saved-rewrite is
+  ;; not relevant any more.
   (when (get symbol 'advice--saved-rewrite)
     (put symbol 'advice--saved-rewrite nil))
   (setq newdef (advice--normalize symbol newdef))
@@ -502,6 +518,10 @@ of the piece of advice."
             (setq frame2 (backtrace-frame i #'called-interactively-p))
             ;; (message "Advice Frame %d = %S" i frame2)
             (setq i (1+ i)))))
+    ;; FIXME: Adjust this for the new :filter advices, since they use `funcall'
+    ;; rather than `apply'.
+    ;; FIXME: Somehow this doesn't work on (advice-add :before
+    ;; 'call-interactively #'ignore), see bug#3984.
     (when (and (eq (nth 1 frame2) 'apply)
                (progn
                  (funcall get-next-frame)

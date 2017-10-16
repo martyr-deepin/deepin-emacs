@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -117,6 +117,7 @@
           (process-environment (cons (format "HOME=%s" package-test-user-dir)
                                      process-environment))
           (package-user-dir package-test-user-dir)
+          (package-gnupghome-dir (expand-file-name "gnupg" package-user-dir))
           (package-archives `(("gnu" . ,(or ,location package-test-data-dir))))
           (default-directory package-test-file-dir)
           abbreviated-home-dir
@@ -376,22 +377,19 @@ Must called from within a `tar-mode' buffer."
                    "package-server" "package-server-buffer"
                    (executable-find "python2")
                    "package-test-server.py"))
-         port)
+         (addr nil))
     (unwind-protect
         (progn
           (with-current-buffer "package-server-buffer"
             (should
              (with-timeout (10 nil)
-               (while (not port)
+               (while (not addr)
                  (accept-process-output nil 1)
                  (goto-char (point-min))
-                 (if (re-search-forward "Serving HTTP on .* port \\([0-9]+\\) "
-                                        nil t)
-                     (setq port (match-string 1))))
-               port)))
-          (with-package-test (:basedir
-                              package-test-data-dir
-                              :location (format "http://0.0.0.0:%s/" port))
+                 (when (re-search-forward "Server started, \\(.*\\)\n" nil t)
+                   (setq addr (match-string 1))))
+               addr)))
+          (with-package-test (:basedir package-test-data-dir :location addr)
             (list-packages)
             (should package--downloads-in-progress)
             (should mode-line-process)

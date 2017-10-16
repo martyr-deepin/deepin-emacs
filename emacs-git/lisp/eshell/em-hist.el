@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -55,6 +55,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl-lib))
+(eval-when-compile (require 'subr-x)) ; `string-blank-p'
 
 (require 'ring)
 (require 'esh-opt)
@@ -208,7 +209,7 @@ element, regardless of any text on the command line.  In that case,
 (defun eshell-input-filter-default (input)
   "Do not add blank input to input history.
 Returns non-nil if INPUT is blank."
-  (not (string-match "\\`\\s-*\\'" input)))
+  (not (string-blank-p input)))
 
 (defun eshell-input-filter-initial-space (input)
   "Do not add input beginning with empty space to history.

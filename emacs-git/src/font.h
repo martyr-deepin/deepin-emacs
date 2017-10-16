@@ -17,7 +17,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #ifndef EMACS_FONT_H
 #define EMACS_FONT_H
@@ -424,7 +424,7 @@ FONTP (Lisp_Object x)
 INLINE bool
 FONT_SPEC_P (Lisp_Object x)
 {
-  return FONTP (x) && (ASIZE (x) & PSEUDOVECTOR_SIZE_MASK) == FONT_SPEC_MAX;
+  return FONTP (x) && PVSIZE (x) == FONT_SPEC_MAX;
 }
 
 /* Like FONT_SPEC_P, but can be used in the garbage collector.  */
@@ -438,7 +438,7 @@ GC_FONT_SPEC_P (Lisp_Object x)
 INLINE bool
 FONT_ENTITY_P (Lisp_Object x)
 {
-  return FONTP (x) && (ASIZE (x) & PSEUDOVECTOR_SIZE_MASK) == FONT_ENTITY_MAX;
+  return FONTP (x) && PVSIZE (x) == FONT_ENTITY_MAX;
 }
 
 /* Like FONT_ENTITY_P, but can be used in the garbage collector.  */
@@ -452,7 +452,7 @@ GC_FONT_ENTITY_P (Lisp_Object x)
 INLINE bool
 FONT_OBJECT_P (Lisp_Object x)
 {
-  return FONTP (x) && (ASIZE (x) & PSEUDOVECTOR_SIZE_MASK) == FONT_OBJECT_MAX;
+  return FONTP (x) && PVSIZE (x) == FONT_OBJECT_MAX;
 }
 
 /* Like FONT_OBJECT_P, but can be used in the garbage collector.  */

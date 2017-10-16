@@ -14,11 +14,15 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 #include <setjmp.h>
 #include "lisp.h"
+
+#ifdef HAVE_NS
+#include "nsterm.h"
+#endif
 
 #ifndef THREADS_ENABLED
 
@@ -35,11 +39,6 @@ sys_mutex_lock (sys_mutex_t *m)
 
 void
 sys_mutex_unlock (sys_mutex_t *m)
-{
-}
-
-void
-sys_mutex_destroy (sys_mutex_t *m)
 {
 }
 
@@ -73,12 +72,6 @@ sys_thread_t
 sys_thread_self (void)
 {
   return 0;
-}
-
-int
-sys_thread_equal (sys_thread_t x, sys_thread_t y)
-{
-  return x == y;
 }
 
 int
@@ -120,12 +113,6 @@ sys_mutex_unlock (sys_mutex_t *mutex)
 }
 
 void
-sys_mutex_destroy (sys_mutex_t *mutex)
-{
-  pthread_mutex_destroy (mutex);
-}
-
-void
 sys_cond_init (sys_cond_t *cond)
 {
   pthread_cond_init (cond, NULL);
@@ -147,6 +134,13 @@ void
 sys_cond_broadcast (sys_cond_t *cond)
 {
   pthread_cond_broadcast (cond);
+#ifdef HAVE_NS
+  /* Send an app defined event to break out of the NS run loop.
+     It seems that if ns_select is running the NS run loop, this
+     broadcast has no effect until the loop is done, breaking a couple
+     of tests in thread-tests.el. */
+  ns_run_loop_break ();
+#endif
 }
 
 void
@@ -159,12 +153,6 @@ sys_thread_t
 sys_thread_self (void)
 {
   return pthread_self ();
-}
-
-int
-sys_thread_equal (sys_thread_t one, sys_thread_t two)
-{
-  return pthread_equal (one, two);
 }
 
 int
@@ -227,17 +215,6 @@ void
 sys_mutex_unlock (sys_mutex_t *mutex)
 {
   LeaveCriticalSection ((LPCRITICAL_SECTION)mutex);
-}
-
-void
-sys_mutex_destroy (sys_mutex_t *mutex)
-{
-  /* FIXME: According to MSDN, deleting a critical session that is
-     owned by a thread leaves the other threads waiting for the
-     critical session in an undefined state.  Posix docs seem to say
-     the same about pthread_mutex_destroy.  Do we need to protect
-     against such calamities?  */
-  DeleteCriticalSection ((LPCRITICAL_SECTION)mutex);
 }
 
 void
@@ -344,12 +321,6 @@ sys_thread_t
 sys_thread_self (void)
 {
   return (sys_thread_t) GetCurrentThreadId ();
-}
-
-int
-sys_thread_equal (sys_thread_t one, sys_thread_t two)
-{
-  return one == two;
 }
 
 static thread_creation_function *thread_start_address;

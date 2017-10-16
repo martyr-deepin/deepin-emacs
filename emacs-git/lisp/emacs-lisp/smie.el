@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -122,6 +122,8 @@
 ;;   the indent rules don't do what the user wants).  Not sure what to do.
 
 (eval-when-compile (require 'cl-lib))
+
+(require 'prog-mode)
 
 (defgroup smie nil
   "Simple Minded Indentation Engine."
@@ -1455,7 +1457,7 @@ in order to figure out the indentation of some other (further down) point."
   ;; Start the file at column 0.
   (save-excursion
     (forward-comment (- (point)))
-    (if (bobp) 0)))
+    (if (bobp) (prog-first-column))))
 
 (defun smie-indent-close ()
   ;; Align close paren with opening paren.
@@ -1954,7 +1956,7 @@ E.g. provided via a file-local call to `smie-config-local'.")
 (defvar smie-config--modefuns nil)
 
 (defun smie-config--setter (var value)
-  (setq-default var value)
+  (set-default var value)
   (let ((old-modefuns smie-config--modefuns))
     (setq smie-config--modefuns nil)
     (pcase-dolist (`(,mode . ,rules) value)
@@ -1980,7 +1982,7 @@ value with which to replace it."
   ;; FIXME improve value-type.
   :type '(choice (const nil)
                  (alist :key-type symbol))
-  :initialize 'custom-initialize-default
+  :initialize 'custom-initialize-set
   :set #'smie-config--setter)
 
 (defun smie-config-local (rules)

@@ -18,7 +18,7 @@
 # GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License
-# along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+# along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 # Commentary:
 
@@ -105,8 +105,6 @@ define ybuffer-list
   while $alist != $qnil
     set $this  = ((struct Lisp_Cons *) $ptr)->car
     set $alist = ((struct Lisp_Cons *) $ptr)->u.cdr
-    ygetptr $alist
-    set $alist = $ptr
 
     # Vbuffer_alist elts are pairs of the form (name . buffer)
     ygetptr $this
@@ -136,6 +134,8 @@ define ybuffer-list
     end
 
     set $i++
+    ygetptr $alist
+    set $alist = $ptr
   end
 end
 document ybuffer-list

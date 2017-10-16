@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -89,7 +89,7 @@ to them."
 			    keep-date &optional msg cont nowait))
 
 (defun url-file-build-filename (url)
-  (if (not (vectorp url))
+  (if (not (url-p url))
       (setq url (url-generic-parse-url url)))
   (let* ((user (url-user url))
 	 (pass (url-password url))

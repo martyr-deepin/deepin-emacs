@@ -16,7 +16,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #ifndef EMACS_BUFFER_H
 #define EMACS_BUFFER_H
@@ -412,6 +412,15 @@ extern void enlarge_buffer_text (struct buffer *, ptrdiff_t);
    ? BUF_FETCH_MULTIBYTE_CHAR ((buf), (pos))    \
    : BUF_FETCH_BYTE ((buf), (pos)))
 
+/* Return character at byte position POS in buffer BUF.  If BUF is
+   unibyte and the character is not ASCII, make the returning
+   character multibyte.  */
+
+#define BUF_FETCH_CHAR_AS_MULTIBYTE(buf, pos)           \
+  (! NILP (BVAR ((buf), enable_multibyte_characters))   \
+   ? BUF_FETCH_MULTIBYTE_CHAR ((buf), (pos))            \
+   : UNIBYTE_TO_CHAR (BUF_FETCH_BYTE ((buf), (pos))))
+
 /* Return the byte at byte position N in buffer BUF.   */
 
 #define BUF_FETCH_BYTE(buf, n) \
@@ -601,6 +610,12 @@ struct buffer
      paragraphs of the buffer.  Nil means determine paragraph
      direction dynamically for each paragraph.  */
   Lisp_Object bidi_paragraph_direction_;
+
+  /* If non-nil, a regular expression for bidi paragraph separator.  */
+  Lisp_Object bidi_paragraph_separate_re_;
+
+  /* If non-nil, a regular expression for bidi paragraph start.  */
+  Lisp_Object bidi_paragraph_start_re_;
 
   /* Non-nil means do selective display;
      see doc string in syms_of_buffer (buffer.c) for details.  */
@@ -1365,27 +1380,28 @@ downcase (int c)
   return NATNUMP (down) ? XFASTINT (down) : c;
 }
 
-/* True if C is upper case.  */
-INLINE bool uppercasep (int c) { return downcase (c) != c; }
-
-/* Upcase a character C known to be not upper case.  */
+/* Upcase a character C, or make no change if that cannot be done. */
 INLINE int
-upcase1 (int c)
+upcase (int c)
 {
   Lisp_Object upcase_table = BVAR (current_buffer, upcase_table);
   Lisp_Object up = CHAR_TABLE_REF (upcase_table, c);
   return NATNUMP (up) ? XFASTINT (up) : c;
 }
 
+/* True if C is upper case.  */
+INLINE bool
+uppercasep (int c)
+{
+  return downcase (c) != c;
+}
+
 /* True if C is lower case.  */
 INLINE bool
 lowercasep (int c)
 {
-  return !uppercasep (c) && upcase1 (c) != c;
+  return !uppercasep (c) && upcase (c) != c;
 }
-
-/* Upcase a character C, or make no change if that cannot be done.  */
-INLINE int upcase (int c) { return uppercasep (c) ? c : upcase1 (c); }
 
 INLINE_HEADER_END
 

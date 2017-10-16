@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -105,10 +105,10 @@ Summary:
   (declare (doc-string 3) (obsolete cl-defmethod "25.1")
            (debug
             (&define                    ; this means we are defining something
-             [&or name ("setf" :name setf name)]
+             [&or name ("setf" name :name setf)]
              ;; ^^ This is the methods symbol
              [ &optional symbolp ]                ; this is key :before etc
-             list                                 ; arguments
+             cl-generic-method-args               ; arguments
              [ &optional stringp ]                ; documentation string
              def-body                             ; part to be debugged
              )))
@@ -145,7 +145,7 @@ Summary:
   ;; interleaved list comes before the class's non-interleaved list.
   51 #'cl--generic-struct-tag
   (lambda (tag &rest _)
-    (and (symbolp tag) (boundp tag) (setq tag (symbol-value tag))
+    (and (symbolp tag) (setq tag (cl--find-class tag))
          (eieio--class-p tag)
          (let ((superclasses (eieio--class-precedence-list tag))
                (specializers ()))
@@ -165,7 +165,8 @@ Summary:
   (if (memq method '(no-next-method no-applicable-method))
       (symbol-function method)
     (let ((generic (cl-generic-ensure-function method)))
-      (symbol-function (cl--generic-name generic)))))
+      (or (symbol-function (cl--generic-name generic))
+          (cl--generic-make-function generic)))))
 
 ;;;###autoload
 (defun eieio--defmethod (method kind argclass code)

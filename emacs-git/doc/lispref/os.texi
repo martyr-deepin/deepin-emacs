@@ -222,7 +222,7 @@ If it is @code{t}, it selects the @file{*scratch*} buffer.
 @c called from two places.  If displaying a startup screen, they are
 @c called in command-line-1 before the startup screen is shown.
 @c inhibit-startup-hooks is then set and window-setup-hook set to nil.
-@c If not displaying a startup screen, they are are called in
+@c If not displaying a startup screen, they are called in
 @c normal-top-level.
 @c FIXME?  So it seems they can be called before or after the
 @c daemon/session restore step?
@@ -337,10 +337,10 @@ Do not display a splash screen.
 Run without an interactive terminal.  @xref{Batch Mode}.
 
 @item --daemon
-@itemx --old-daemon
-@itemx --new-daemon
+@itemx --bg-daemon
+@itemx --fg-daemon
 Do not initialize any display; just start a server.
-(An ``old-style'' daemon automatically runs in the background.)
+(A ``background'' daemon automatically runs in the background.)
 
 @item --no-init-file
 @itemx -q
@@ -941,8 +941,6 @@ If this variable is non-@code{nil}, it is used instead of
 @code{system-name} for purposes of generating email addresses.  For
 example, it is used when constructing the default value of
 @code{user-mail-address}.  @xref{User Identification}.
-@c FIXME sounds like should probably give this a :set-after and some
-@c custom-initialize-delay voodoo.
 @end defopt
 
 @deffn Command getenv var &optional frame
@@ -1039,7 +1037,7 @@ value is @code{":"} for Unix and GNU systems, and @code{";"} for MS systems.
 @defun parse-colon-path path
 This function takes a search path string such as the value of
 the @env{PATH} environment variable, and splits it at the separators,
-returning a list of directory names.  @code{nil} in this list means
+returning a list of directories.  @code{nil} in this list means
 the current directory.  Although the function's name says
 ``colon'', it actually uses the value of @code{path-separator}.
 
@@ -1133,11 +1131,7 @@ not load any customization files or user profile.
 @end defvar
 
 @defopt user-mail-address
-This holds the nominal email address of the user who is using Emacs.
-Emacs normally sets this variable to a default value after reading your
-init files, but not if you have already set it.  So you can set the
-variable to some other value in your init file if you do not
-want to use the default value.
+This holds the email address of the user who is using Emacs.
 @end defopt
 
 @defun user-login-name &optional uid
@@ -1891,8 +1885,8 @@ one of these functions; the arrival of the specified time will not
 cause anything special to happen.
 @end defun
 
-@findex timer-list
-The @code{timer-list} command lists all the currently active timers.
+@findex list-timers
+The @code{list-timers} command lists all the currently active timers.
 There's only one command available in the buffer displayed: @kbd{c}
 (@code{timer-list-cancel}) that will cancel the timer on the line
 under point.
@@ -2713,7 +2707,10 @@ This does not depend on one of the libraries linked to Emacs.
 
 Since all these libraries emit different events on notified file
 changes, there is the Emacs library @code{filenotify} which provides a
-unique interface.
+unified interface.  Lisp programs that want to receive file
+notifications should always use this library in preference to the
+native ones.
+
 
 @defun file-notify-add-watch file flags callback
 Add a watch for filesystem events pertaining to @var{file}.  This

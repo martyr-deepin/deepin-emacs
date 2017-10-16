@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 
@@ -83,9 +83,9 @@ Note that the buffer name starts with a space."
 (defconst epg-gpg-minimum-version "1.4.3")
 
 (defconst epg-config--program-alist
-  '((OpenPGP
+  `((OpenPGP
      epg-gpg-program
-     ("gpg2" . "2.1.6") ("gpg" . "1.4.3"))
+     ("gpg2" . "2.1.6") ("gpg" . ,epg-gpg-minimum-version))
     (CMS
      epg-gpgsm-program
      ("gpgsm" . "2.0.4")))
@@ -129,7 +129,8 @@ version requirement is met."
         (or (and (not no-cache) (alist-get protocol epg--configurations))
             ;; If the executable value is already set with M-x
             ;; customize, use it without checking.
-            (if (and symbol (get symbol 'saved-value))
+            (if (and symbol (or (get symbol 'saved-value)
+                                (get symbol 'customized-value)))
                 (let ((configuration
                        (funcall constructor (symbol-value symbol))))
                   (push (cons protocol configuration) epg--configurations)
@@ -209,34 +210,16 @@ version requirement is met."
   (declare (obsolete epg-find-configuration "25.1"))
   (epg-config--make-gpg-configuration epg-gpg-program))
 
-(defun epg-config--parse-version (string)
-  (let ((index 0)
-	version)
-    (while (eq index (string-match "\\([0-9]+\\)\\.?" string index))
-      (setq version (cons (string-to-number (match-string 1 string))
-			  version)
-	    index (match-end 0)))
-    (nreverse version)))
-
-(defun epg-config--compare-version (v1 v2)
-  (while (and v1 v2 (= (car v1) (car v2)))
-    (setq v1 (cdr v1) v2 (cdr v2)))
-  (- (or (car v1) 0) (or (car v2) 0)))
-
 ;;;###autoload
 (defun epg-check-configuration (config &optional minimum-version)
   "Verify that a sufficient version of GnuPG is installed."
-  (let ((entry (assq 'version config))
-	version)
-    (unless (and entry
-		 (stringp (cdr entry)))
-      (error "Undetermined version: %S" entry))
-    (setq version (epg-config--parse-version (cdr entry))
-	  minimum-version (epg-config--parse-version
-			   (or minimum-version
-			       epg-gpg-minimum-version)))
-    (unless (>= (epg-config--compare-version version minimum-version) 0)
-      (error "Unsupported version: %s" (cdr entry)))))
+  (let ((version (alist-get 'version config)))
+    (unless (stringp version)
+      (error "Undetermined version: %S" version))
+    (unless (version<= (or minimum-version
+                           epg-gpg-minimum-version)
+                       version)
+      (error "Unsupported version: %s" version))))
 
 ;;;###autoload
 (defun epg-expand-group (config group)

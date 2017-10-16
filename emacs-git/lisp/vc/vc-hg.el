@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -76,7 +76,7 @@
 ;; - annotate-extract-revision-at-line ()      OK
 ;; TAG SYSTEM
 ;; - create-tag (dir name branchp)             OK
-;; - retrieve-tag (dir name update)            OK FIXME UPDATE BUFFERS
+;; - retrieve-tag (dir name update)            OK
 ;; MISCELLANEOUS
 ;; - make-version-backups-p (file)             ??
 ;; - previous-revision (file rev)              OK
@@ -102,9 +102,10 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'cl-lib)
   (require 'vc)
   (require 'vc-dir))
+
+(require 'cl-lib)
 
 (declare-function vc-compilation-mode "vc-dispatcher" (backend))
 
@@ -562,7 +563,6 @@ Optional arg REVISION is a revision to annotate from."
   "Retrieve the version tagged by NAME of all registered files at or below DIR."
   (let ((default-directory dir))
     (vc-hg-command nil 0 nil "update" name)
-    ;; FIXME: update buffers if `update' is true
     ;; TODO: update *vc-change-log* buffer so can see @ if --graph
     ))
 
@@ -687,7 +687,8 @@ PREFIX is the directory name of the directory against which these
 patterns are rooted.  We understand only a subset of PCRE syntax;
 if we don't understand a construct, we signal
 `vc-hg-unsupported-syntax'."
-  (cl-assert (string-match "^/\\(.*/\\)?$" prefix))
+  (cl-assert (and (file-name-absolute-p prefix)
+                  (directory-name-p prefix)))
   (let ((parts nil)
         (i 0)
         (anchored nil)
@@ -827,7 +828,7 @@ if we don't understand a construct, we signal
      prefix)))
 
 (defun vc-hg--slurp-hgignore-1 (hgignore prefix)
-  (let ((default-syntax 'vc-hg--hgignore-add-glob))
+  (let ((default-syntax 'vc-hg--hgignore-add-pcre))
     (with-temp-buffer
       (let ((attr (file-attributes hgignore)))
         (when attr (insert-file-contents hgignore))
@@ -875,7 +876,8 @@ if we don't understand a construct, we signal
 (defun vc-hg--slurp-hgignore (repo)
   "Read hg ignore patterns from REPO.
 REPO must be the directory name of an hg repository."
-  (cl-assert (string-match "^/\\(.*/\\)?$" repo))
+  (cl-assert (and (file-name-absolute-p repo)
+                  (directory-name-p repo)))
   (let* ((hgignore (concat repo ".hgignore"))
          (vc-hg--hgignore-patterns nil)
          (vc-hg--hgignore-filenames nil))
@@ -930,7 +932,8 @@ FILENAME must be the file's true absolute name."
      (concat repo repo-relative-filename))))
 
 (defun vc-hg--read-repo-requirements (repo)
-  (cl-assert (string-match "^/\\(.*/\\)?$" repo))
+  (cl-assert (and (file-name-absolute-p repo)
+                  (directory-name-p repo)))
   (let* ((requires-filename (concat repo ".hg/requires")))
     (and (file-exists-p requires-filename)
          (with-temp-buffer
@@ -988,8 +991,7 @@ hg binary."
          repo
          dirstate
          dirstate-attr
-         repo-relative-filename
-         ascii-fname)
+         repo-relative-filename)
     (if (or
          ;; Explicit user disable
          (not vc-hg-parse-hg-data-structures)
@@ -1002,7 +1004,8 @@ hg binary."
          ;; dirstate must exist
          (not (progn
                 (setf repo (expand-file-name repo))
-                (cl-assert (string-match "^/\\(.*/\\)?$" repo))
+                (cl-assert (and (file-name-absolute-p repo)
+                                (directory-name-p repo)))
                 (setf dirstate (concat repo ".hg/dirstate"))
                 (setf dirstate-attr (file-attributes dirstate))))
          ;; Repository must be in an understood format
@@ -1014,18 +1017,12 @@ hg binary."
          (progn
            (setf repo-relative-filename
                  (file-relative-name truename repo))
-           (setf ascii-fname
-                 (string-as-unibyte
-                  (let (last-coding-system-used)
-                    (encode-coding-string
-                     repo-relative-filename
-                     'us-ascii t))))
            ;; We only try dealing with ASCII filenames
-           (not (equal ascii-fname repo-relative-filename))))
+           (string-match-p "[^[:ascii:]]" repo-relative-filename)))
         'unsupported
       (let* ((dirstate-entry
               (vc-hg--cached-dirstate-search
-               dirstate dirstate-attr ascii-fname))
+               dirstate dirstate-attr repo-relative-filename))
              (state (car dirstate-entry))
              (stat (file-attributes
                     (concat repo repo-relative-filename))))
@@ -1309,6 +1306,8 @@ REV is the revision to check out into WORKFILE."
 
 (autoload 'vc-do-async-command "vc-dispatcher")
 (autoload 'log-view-get-marked "log-view")
+(defvar compilation-directory)
+(defvar compilation-arguments)  ; defined in compile.el
 
 (defun vc-hg--pushpull (command prompt &optional obsolete)
   "Run COMMAND (a string; either push or pull) on the current Hg branch.
@@ -1351,7 +1350,15 @@ commands, which only operated on marked files."
             (vc-compilation-mode 'hg)
             (setq-local compile-command
                         (concat hg-program " " command " "
-                                (if args (mapconcat 'identity args " ") "")))))
+                                (if args (mapconcat 'identity args " ") "")))
+            (setq-local compilation-directory root)
+            ;; Either set `compilation-buffer-name-function' locally to nil
+            ;; or use `compilation-arguments' to set `name-function'.
+            ;; See `compilation-buffer-name'.
+            (setq-local compilation-arguments
+                        (list compile-command nil
+                              (lambda (_name-of-mode) buffer)
+                              nil))))
 	(vc-set-async-update buffer)))))
 
 (defun vc-hg-pull (prompt)

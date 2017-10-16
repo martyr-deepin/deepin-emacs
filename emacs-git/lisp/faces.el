@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -102,11 +102,18 @@ a font height that isn't optimal."
     ;; Monospace Serif is an Emacs invention, intended to work around
     ;; portability problems when using Courier.  It should work well
     ;; when combined with Monospaced and with other standard fonts.
+    ;; One of its uses is for 'tex-verbatim' and 'Info-quoted' faces,
+    ;; so the result must be different from the default face's font,
+    ;; and must be monospaced.  For 'tex-verbatim', it is desirable
+    ;; that the font really is a Serif font, so as to look like
+    ;; TeX's 'verbatim'.
     ("Monospace Serif"
 
      ;; This looks good on GNU/Linux.
      "Courier 10 Pitch"
-     ;; This looks good on MS-Windows and OS X.
+     ;; This looks good on MS-Windows and OS X.  Note that this is
+     ;; actually a sans-serif font, but it's here for lack of a better
+     ;; alternative.
      "Consolas"
      ;; This looks good on macOS.  "Courier" looks good too, but is
      ;; jagged on GNU/Linux and so is listed later as "courier".
@@ -1447,7 +1454,7 @@ If FRAME is omitted or nil, use the selected frame."
 	(setq face (list face)))
     (with-help-window (help-buffer)
       (with-current-buffer standard-output
-	(dolist (f face)
+	(dolist (f face (buffer-string))
 	  (if (stringp f) (setq f (intern f)))
 	  ;; We may get called for anonymous faces (i.e., faces
 	  ;; expressed using prop-value plists).  Those can't be
@@ -1594,6 +1601,7 @@ If FRAME is nil, the current FRAME is used."
 (defun face-spec-choose (spec &optional frame no-match-retval)
   "Return the proper attributes for FRAME, out of SPEC.
 
+Value is a plist of face attributes in the form of attribute-value pairs.
 If no match is found or SPEC is nil, return nil, unless NO-MATCH-RETVAL
 is given, in which case return its value instead."
   (unless frame
@@ -1666,7 +1674,7 @@ is given, in which case return its value instead."
            face--attributes-unspecified)))
 
 (defun face-spec-set (face spec &optional spec-type)
-  "Set the face spec SPEC for FACE.
+  "Set the FACE's spec SPEC, define FACE, and recalculate its attributes.
 See `defface' for the format of SPEC.
 
 The appearance of each face is controlled by its specs (set via
@@ -1677,10 +1685,11 @@ This function also defines FACE as a valid face name if it is not
 already one, and (re)calculates its attributes on existing
 frames.
 
-The argument SPEC-TYPE determines which spec to set:
-  nil or `face-override-spec' means the override spec (which is
-    usually what you want if calling this function outside of
-    Custom code);
+The optional argument SPEC-TYPE determines which spec to set:
+  nil, omitted or `face-override-spec' means the override spec,
+    which overrides all the other types of spec mentioned below
+    (this is usually what you want if calling this function
+    outside of Custom code);
   `customized-face' or `saved-face' means the customized spec or
     the saved custom spec;
   `face-defface-spec' means the default spec
@@ -1688,7 +1697,7 @@ The argument SPEC-TYPE determines which spec to set:
   `reset' means to ignore SPEC, but clear the `customized-face'
     and `face-override-spec' specs;
 Any other value means not to set any spec, but to run the
-function for its other effects."
+function for defining FACE and recalculating its attributes."
   (if (get face 'face-alias)
       (setq face (get face 'face-alias)))
   ;; Save SPEC to the relevant symbol property.
@@ -1734,32 +1743,34 @@ The following sources are applied in this order:
   ;; `theme-face' records.
   (let ((theme-faces (get face 'theme-face))
 	(no-match-found 0)
-	spec theme-face-applied)
+	face-attrs theme-face-applied)
     (if theme-faces
 	(dolist (elt (reverse theme-faces))
-	  (setq spec (face-spec-choose (cadr elt) frame no-match-found))
-	  (unless (eq spec no-match-found)
-	    (face-spec-set-2 face frame spec)
+	  (setq face-attrs (face-spec-choose (cadr elt) frame no-match-found))
+	  (unless (eq face-attrs no-match-found)
+	    (face-spec-set-2 face frame face-attrs)
 	    (setq theme-face-applied t))))
     ;; If there was a spec applicable to FRAME, that overrides the
     ;; defface spec entirely (rather than inheriting from it).  If
     ;; there was no spec applicable to FRAME, apply the defface spec
     ;; as well as any applicable X resources.
     (unless theme-face-applied
-      (setq spec (face-spec-choose (face-default-spec face) frame))
-      (face-spec-set-2 face frame spec)
+      (setq face-attrs (face-spec-choose (face-default-spec face) frame))
+      (face-spec-set-2 face frame face-attrs)
       (make-face-x-resource-internal face frame))
-    (setq spec (face-spec-choose (get face 'face-override-spec) frame))
-    (face-spec-set-2 face frame spec)))
+    (setq face-attrs (face-spec-choose (get face 'face-override-spec) frame))
+    (face-spec-set-2 face frame face-attrs)))
 
-(defun face-spec-set-2 (face frame spec)
-  "Set the face attributes of FACE on FRAME according to SPEC."
+(defun face-spec-set-2 (face frame face-attrs)
+  "Set the face attributes of FACE on FRAME according to FACE-ATTRS.
+FACE-ATTRS is a plist of face attributes in the form of attribute-value
+pairs."
   (let (attrs)
-    (while spec
-      (when (assq (car spec) face-x-resources)
-	(push (car spec) attrs)
-	(push (cadr spec) attrs))
-      (setq spec (cddr spec)))
+    (while face-attrs
+      (when (assq (car face-attrs) face-x-resources)
+	(push (car face-attrs) attrs)
+	(push (cadr face-attrs) attrs))
+      (setq face-attrs (cddr face-attrs)))
     (apply 'set-face-attribute face frame (nreverse attrs))))
 
 (defun face-attr-match-p (face attrs &optional frame)
@@ -2349,10 +2360,13 @@ If you set `term-file-prefix' to nil, this function does nothing."
 
 (defface variable-pitch
   '((((type w32))
-     ;; This is a kludgy workaround for an issue discussed in
-     ;; http://lists.gnu.org/archive/html/emacs-devel/2016-04/msg00746.html.
-     :font "-outline-Arial-normal-normal-normal-sans-*-*-*-*-p-*-iso8859-1")
-    (t :family "Sans Serif"))
+     ;; This is a workaround for an issue discussed in
+     ;; https://lists.gnu.org/archive/html/emacs-devel/2016-04/msg00746.html.
+     ;; We need (a) the splash screen not to pick up bold-italics variant of
+     ;; the font, and (b) still be able to request bold/italic/larger size
+     ;; variants in the likes of EWW.
+     :family "Arial" :foundry "outline")
+  (t :family "Sans Serif"))
   "The basic variable-pitch face."
   :group 'basic-faces)
 
@@ -2457,6 +2471,35 @@ If you set `term-file-prefix' to nil, this function does nothing."
   "Basic face for highlighting trailing whitespace."
   :version "21.1"
   :group 'basic-faces)
+
+;; Definition stolen from linum.el.
+(defface line-number
+  '((t :inherit (shadow default)))
+  "Face for displaying line numbers.
+This face is used when `display-line-numbers' is non-nil.
+
+If you customize the font of this face, make sure it is a
+monospaced font, otherwise line numbers will not line up,
+and text lines might move horizontally as you move through
+the buffer."
+  :version "26.1"
+  :group 'basic-faces
+  :group 'display-line-numbers)
+
+(defface line-number-current-line
+  '((t :inherit line-number))
+  "Face for displaying the current line number.
+This face is used when `display-line-numbers' is non-nil.
+
+If you customize the font of this face, make sure it is a
+monospaced font, otherwise line numbers will not line up,
+and text lines might move horizontally as you move through
+the buffer.  Similarly, making this face's font different
+from that of the `line-number' face could produce such
+unwanted effects."
+  :version "26.1"
+  :group 'basic-faces
+  :group 'display-line-numbers)
 
 (defface escape-glyph
   '((((background dark)) :foreground "cyan")
@@ -2587,6 +2630,11 @@ Use the face `mode-line-highlight' for features that can be selected."
   :version "21.1"
   :group 'basic-faces)
 
+(defface header-line-highlight '((t :inherit highlight))
+  "Basic header line face for highlighting."
+  :version "26.1"
+  :group 'basic-faces)
+
 (defface vertical-border
   '((((type tty)) :inherit mode-line-inactive))
   "Face used for vertical window dividers on ttys."
@@ -2624,6 +2672,13 @@ not want to accentuate the last pixel line/column, set this to
 the same as `window-divider' face."
   :version "24.4"
   :group 'window-divider
+  :group 'basic-faces)
+
+(defface internal-border
+    '((t nil))
+  "Basic face for the internal border."
+  :version "26.1"
+  :group 'frames
   :group 'basic-faces)
 
 (defface minibuffer-prompt
@@ -2800,6 +2855,13 @@ It is used for characters of no fonts too."
      :inherit underline))
   "Face used for a matching paren."
   :group 'paren-showing-faces)
+
+(defface show-paren-match-expression
+  '((t :inherit show-paren-match))
+  "Face used for a matching paren when highlighting the whole expression.
+This face is used by `show-paren-mode'."
+  :group 'paren-showing-faces
+  :version "26.1")
 
 (defface show-paren-mismatch
   '((((class color)) (:foreground "white" :background "purple"))

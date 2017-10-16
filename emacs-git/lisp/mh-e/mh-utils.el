@@ -21,7 +21,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -349,10 +349,8 @@ the cursor is not pointing to a message."
            (string-to-number (buffer-substring (match-beginning 1)
                                                (match-end 1))))
           (error-if-no-message
-           (error "Cursor not pointing to message"))
+           (user-error "Cursor not pointing to message"))
           (t nil))))
-
-(add-to-list 'debug-ignored-errors "^Cursor not pointing to message$")
 
 
 

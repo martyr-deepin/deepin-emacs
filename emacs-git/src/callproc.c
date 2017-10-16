@@ -16,7 +16,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 
 #include <config.h>
@@ -52,6 +52,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "syswait.h"
 #include "blockinput.h"
 #include "frame.h"
+#include "systty.h"
+#include "keyboard.h"
 
 #ifdef MSDOS
 #include "msdos.h"
@@ -118,7 +120,7 @@ encode_current_directory (void)
   if (NILP (dir))
     dir = build_string ("~");
 
-  dir = expand_and_dir_to_file (dir, Qnil);
+  dir = expand_and_dir_to_file (dir);
 
   if (NILP (Ffile_accessible_directory_p (dir)))
     report_file_error ("Setting current directory",
@@ -200,10 +202,11 @@ call_process_cleanup (Lisp_Object buffer)
       message1 ("Waiting for process to die...(type C-g again to kill it instantly)");
 
       /* This will quit on C-g.  */
-      wait_for_termination (synch_process_pid, 0, 1);
-
+      bool wait_ok = wait_for_termination (synch_process_pid, NULL, true);
       synch_process_pid = 0;
-      message1 ("Waiting for process to die...done");
+      message1 (wait_ok
+		? "Waiting for process to die...done"
+		: "Waiting for process to die...internal error");
     }
 #endif	/* !MSDOS */
 }
@@ -239,6 +242,10 @@ If DESTINATION is 0, `call-process' returns immediately with value nil.
 Otherwise it waits for PROGRAM to terminate
 and returns a numeric exit status or a signal description string.
 If you quit, the process is killed with SIGINT, or SIGKILL if you quit again.
+
+The process runs in `default-directory' if that is local (as
+determined by `unhandled-file-name-directory'), or "~" otherwise.  If
+you want to run a process in a remote directory use `process-file'.
 
 usage: (call-process PROGRAM &optional INFILE DESTINATION DISPLAY &rest ARGS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
@@ -624,9 +631,28 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 
   if (pid == 0)
     {
+#ifdef DARWIN_OS
+      /* Work around a macOS bug, where SIGCHLD is apparently
+	 delivered to a vforked child instead of to its parent.  See:
+	 https://lists.gnu.org/archive/html/emacs-devel/2017-05/msg00342.html
+      */
+      signal (SIGCHLD, SIG_DFL);
+#endif
+
       unblock_child_signal (&oldset);
 
+#ifdef DARWIN_OS
+      /* Darwin doesn't let us run setsid after a vfork, so use
+         TIOCNOTTY when necessary. */
+      int j = emacs_open (DEV_TTY, O_RDWR, 0);
+      if (j >= 0)
+        {
+          ioctl (j, TIOCNOTTY, 0);
+          emacs_close (j);
+        }
+#else
       setsid ();
+#endif
 
       /* Emacs ignores SIGPIPE, but the child should not.  */
       signal (SIGPIPE, SIG_DFL);
@@ -849,9 +875,10 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 	       make_number (total_read));
     }
 
+  bool wait_ok = true;
 #ifndef MSDOS
   /* Wait for it to terminate, unless it already has.  */
-  wait_for_termination (pid, &status, fd0 < 0);
+  wait_ok = wait_for_termination (pid, &status, fd0 < 0);
 #endif
 
   /* Don't kill any children that the subprocess may have left behind
@@ -860,6 +887,9 @@ call_process (ptrdiff_t nargs, Lisp_Object *args, int filefd,
 
   SAFE_FREE ();
   unbind_to (count, Qnil);
+
+  if (!wait_ok)
+    return build_unibyte_string ("internal error");
 
   if (WIFSIGNALED (status))
     {
@@ -1381,7 +1411,7 @@ getenv_internal (const char *var, ptrdiff_t varlen, char **value,
      without recording them in Vprocess_environment.  */
 #ifdef WINDOWSNT
   {
-    char* tmpval = getenv (var);
+    char *tmpval = getenv (var);
     if (tmpval)
       {
         *value = tmpval;
@@ -1584,13 +1614,14 @@ init_callproc (void)
   sh = getenv ("SHELL");
   Vshell_file_name = build_string (sh ? sh : "/bin/sh");
 
-#ifdef DOS_NT
-  Vshared_game_score_directory = Qnil;
-#else
-  Vshared_game_score_directory = build_unibyte_string (PATH_GAME);
-  if (NILP (Ffile_accessible_directory_p (Vshared_game_score_directory)))
-    Vshared_game_score_directory = Qnil;
-#endif
+  Lisp_Object gamedir = Qnil;
+  if (PATH_GAME)
+    {
+      Lisp_Object path_game = build_unibyte_string (PATH_GAME);
+      if (file_accessible_directory_p (path_game))
+	gamedir = path_game;
+    }
+  Vshared_game_score_directory = gamedir;
 }
 
 void
@@ -1661,11 +1692,6 @@ includes this.  */);
   DEFVAR_LISP ("shared-game-score-directory", Vshared_game_score_directory,
 	       doc: /* Directory of score files for games which come with GNU Emacs.
 If this variable is nil, then Emacs is unable to use a shared directory.  */);
-#ifdef DOS_NT
-  Vshared_game_score_directory = Qnil;
-#else
-  Vshared_game_score_directory = build_string (PATH_GAME);
-#endif
 
   DEFVAR_LISP ("initial-environment", Vinitial_environment,
 	       doc: /* List of environment variables inherited from the parent process.

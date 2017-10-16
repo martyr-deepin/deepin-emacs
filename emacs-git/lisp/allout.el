@@ -22,7 +22,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -357,7 +357,7 @@ Examples:
         grandchildren, but completely collapse the final top-level topic.
  (-1 () : 1 0)
 	Close the first topic so only the immediate subtopics are shown,
-        leave the subsequent topics exposed as they are until the second
+        leave the subsequent topics exposed as they are until the
 	second to last topic, which is exposed at least one level, and
         completely close the last topic.
  (-2 : -1 *)
@@ -6503,7 +6503,7 @@ not its value."
   (let ((inhibit-field-text-motion t))
     (beginning-of-line))
   (allout-goto-prefix-doublechecked)
-  (push-mark (point))
+  (push-mark)
   (allout-end-of-current-subtree)
   (exchange-point-and-mark))
 ;;;_  : UI:

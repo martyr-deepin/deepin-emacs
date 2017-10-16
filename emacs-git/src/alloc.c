@@ -16,7 +16,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
@@ -75,14 +75,20 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 static bool valgrind_p;
 #endif
 
-/* GC_CHECK_MARKED_OBJECTS means do sanity checks on allocated objects.  */
+/* GC_CHECK_MARKED_OBJECTS means do sanity checks on allocated objects.
+   We turn that on by default when ENABLE_CHECKING is defined;
+   define GC_CHECK_MARKED_OBJECTS to zero to disable.  */
+
+#if defined ENABLE_CHECKING && !defined GC_CHECK_MARKED_OBJECTS
+# define GC_CHECK_MARKED_OBJECTS 1
+#endif
 
 /* GC_MALLOC_CHECK defined means perform validity checks of malloc'd
    memory.  Can do this only if using gmalloc.c and if not checking
    marked objects.  */
 
 #if (defined SYSTEM_MALLOC || defined DOUG_LEA_MALLOC \
-     || defined HYBRID_MALLOC || defined GC_CHECK_MARKED_OBJECTS)
+     || defined HYBRID_MALLOC || GC_CHECK_MARKED_OBJECTS)
 #undef GC_MALLOC_CHECK
 #endif
 
@@ -1547,7 +1553,7 @@ make_interval (void)
 /* Mark Lisp objects in interval I.  */
 
 static void
-mark_interval (register INTERVAL i, Lisp_Object dummy)
+mark_interval (INTERVAL i, void *dummy)
 {
   /* Intervals should never be shared.  So, if extra internal checking is
      enabled, GC aborts if it seems to have visited an interval twice.  */
@@ -1561,7 +1567,7 @@ mark_interval (register INTERVAL i, Lisp_Object dummy)
 #define MARK_INTERVAL_TREE(i)					\
   do {								\
     if (i && !i->gcmarkbit)					\
-      traverse_intervals_noorder (i, mark_interval, Qnil);	\
+      traverse_intervals_noorder (i, mark_interval, NULL);	\
   } while (0)
 
 /***********************************************************************
@@ -2955,25 +2961,23 @@ verify (VECTOR_BLOCK_SIZE <= (1 << PSEUDOVECTOR_SIZE_BITS));
 
 /* Common shortcut to advance vector pointer over a block data.  */
 
-#define ADVANCE(v, nbytes) ((struct Lisp_Vector *) ((char *) (v) + (nbytes)))
+static struct Lisp_Vector *
+ADVANCE (struct Lisp_Vector *v, ptrdiff_t nbytes)
+{
+  void *vv = v;
+  char *cv = vv;
+  void *p = cv + nbytes;
+  return p;
+}
 
 /* Common shortcut to calculate NBYTES-vector index in VECTOR_FREE_LISTS.  */
 
-#define VINDEX(nbytes) (((nbytes) - VBLOCK_BYTES_MIN) / roundup_size)
-
-/* Common shortcut to setup vector on a free list.  */
-
-#define SETUP_ON_FREE_LIST(v, nbytes, tmp)		\
-  do {							\
-    (tmp) = ((nbytes - header_size) / word_size);	\
-    XSETPVECTYPESIZE (v, PVEC_FREE, 0, (tmp));		\
-    eassert ((nbytes) % roundup_size == 0);		\
-    (tmp) = VINDEX (nbytes);				\
-    eassert ((tmp) < VECTOR_MAX_FREE_LIST_INDEX);	\
-    set_next_vector (v, vector_free_lists[tmp]);	\
-    vector_free_lists[tmp] = (v);			\
-    total_free_vector_slots += (nbytes) / word_size;	\
-  } while (0)
+static ptrdiff_t
+VINDEX (ptrdiff_t nbytes)
+{
+  eassume (VBLOCK_BYTES_MIN <= nbytes);
+  return (nbytes - VBLOCK_BYTES_MIN) / roundup_size;
+}
 
 /* This internal type is used to maintain the list of large vectors
    which are allocated at their own, e.g. outside of vector blocks.
@@ -3034,6 +3038,22 @@ static EMACS_INT total_vectors;
 /* Total size of live and free vectors, in Lisp_Object units.  */
 
 static EMACS_INT total_vector_slots, total_free_vector_slots;
+
+/* Common shortcut to setup vector on a free list.  */
+
+static void
+setup_on_free_list (struct Lisp_Vector *v, ptrdiff_t nbytes)
+{
+  eassume (header_size <= nbytes);
+  ptrdiff_t nwords = (nbytes - header_size) / word_size;
+  XSETPVECTYPESIZE (v, PVEC_FREE, 0, nwords);
+  eassert (nbytes % roundup_size == 0);
+  ptrdiff_t vindex = VINDEX (nbytes);
+  eassert (vindex < VECTOR_MAX_FREE_LIST_INDEX);
+  set_next_vector (v, vector_free_lists[vindex]);
+  vector_free_lists[vindex] = v;
+  total_free_vector_slots += nbytes / word_size;
+}
 
 /* Get a new vector block.  */
 
@@ -3099,7 +3119,7 @@ allocate_vector_from_block (size_t nbytes)
 	   which should be set on an appropriate free list.  */
 	restbytes = index * roundup_size + VBLOCK_BYTES_MIN - nbytes;
 	eassert (restbytes % roundup_size == 0);
-	SETUP_ON_FREE_LIST (ADVANCE (vector, nbytes), restbytes, index);
+	setup_on_free_list (ADVANCE (vector, nbytes), restbytes);
 	return vector;
       }
 
@@ -3115,7 +3135,7 @@ allocate_vector_from_block (size_t nbytes)
   if (restbytes >= VBLOCK_BYTES_MIN)
     {
       eassert (restbytes % roundup_size == 0);
-      SETUP_ON_FREE_LIST (ADVANCE (vector, nbytes), restbytes, index);
+      setup_on_free_list (ADVANCE (vector, nbytes), restbytes);
     }
   return vector;
 }
@@ -3247,10 +3267,7 @@ sweep_vectors (void)
 		   space was coalesced into the only free vector.  */
 		free_this_block = 1;
 	      else
-		{
-		  size_t tmp;
-		  SETUP_ON_FREE_LIST (vector, total_bytes, tmp);
-		}
+		setup_on_free_list (vector, total_bytes);
 	    }
 	}
 
@@ -3276,13 +3293,7 @@ sweep_vectors (void)
 	  VECTOR_UNMARK (vector);
 	  total_vectors++;
 	  if (vector->header.size & PSEUDOVECTOR_FLAG)
-	    {
-	      /* All non-bool pseudovectors are small enough to be allocated
-		 from vector blocks.  This code should be redesigned if some
-		 pseudovector type grows beyond VBLOCK_BYTES_MAX.  */
-	      eassert (PSEUDOVECTOR_TYPEP (&vector->header, PVEC_BOOL_VECTOR));
-              total_vector_slots += vector_nbytes (vector) / word_size;
-	    }
+            total_vector_slots += vector_nbytes (vector) / word_size;
 	  else
 	    total_vector_slots
 	      += header_size / word_size + vector->header.size;
@@ -3377,7 +3388,7 @@ allocate_pseudovector (int memlen, int lisplen,
   eassert (0 <= tag && tag <= PVEC_FONT);
   eassert (0 <= lisplen && lisplen <= zerolen && zerolen <= memlen);
   eassert (memlen - lisplen <= (1 << PSEUDOVECTOR_REST_BITS) - 1);
-  eassert (lisplen <= (1 << PSEUDOVECTOR_SIZE_BITS) - 1);
+  eassert (lisplen <= PSEUDOVECTOR_SIZE_MASK);
 
   /* Only the first LISPLEN slots will be traced normally by the GC.  */
   memclear (v->contents, zerolen * word_size);
@@ -3397,6 +3408,54 @@ allocate_buffer (void)
   /* Note that the rest fields of B are not initialized.  */
   return b;
 }
+
+
+/* Allocate a record with COUNT slots.  COUNT must be positive, and
+   includes the type slot.  */
+
+static struct Lisp_Vector *
+allocate_record (EMACS_INT count)
+{
+  if (count > PSEUDOVECTOR_SIZE_MASK)
+    error ("Attempt to allocate a record of %"pI"d slots; max is %d",
+	   count, PSEUDOVECTOR_SIZE_MASK);
+  struct Lisp_Vector *p = allocate_vectorlike (count);
+  p->header.size = count;
+  XSETPVECTYPE (p, PVEC_RECORD);
+  return p;
+}
+
+
+DEFUN ("make-record", Fmake_record, Smake_record, 3, 3, 0,
+       doc: /* Create a new record.
+TYPE is its type as returned by `type-of'; it should be either a
+symbol or a type descriptor.  SLOTS is the number of non-type slots,
+each initialized to INIT.  */)
+  (Lisp_Object type, Lisp_Object slots, Lisp_Object init)
+{
+  CHECK_NATNUM (slots);
+  EMACS_INT size = XFASTINT (slots) + 1;
+  struct Lisp_Vector *p = allocate_record (size);
+  p->contents[0] = type;
+  for (ptrdiff_t i = 1; i < size; i++)
+    p->contents[i] = init;
+  return make_lisp_ptr (p, Lisp_Vectorlike);
+}
+
+
+DEFUN ("record", Frecord, Srecord, 1, MANY, 0,
+       doc: /* Create a new record.
+TYPE is its type as returned by `type-of'; it should be either a
+symbol or a type descriptor.  SLOTS is used to initialize the record
+slots with shallow copies of the arguments.
+usage: (record TYPE &rest SLOTS) */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  struct Lisp_Vector *p = allocate_record (nargs);
+  memcpy (p->contents, args, nargs * sizeof *args);
+  return make_lisp_ptr (p, Lisp_Vectorlike);
+}
+
 
 DEFUN ("make-vector", Fmake_vector, Smake_vector, 2, 2, 0,
        doc: /* Return a newly created vector of length LENGTH, with each element being INIT.
@@ -3894,7 +3953,6 @@ make_user_ptr (void (*finalizer) (void *), void *p)
   uptr->p = p;
   return obj;
 }
-
 #endif
 
 static void
@@ -4124,7 +4182,7 @@ refill_memory_reserve (void)
    block to the red-black tree with calls to mem_insert, and function
    lisp_free removes it with mem_delete.  Functions live_string_p etc
    call mem_find to lookup information about a given pointer in the
-   tree, and use that to determine if the pointer points to a Lisp
+   tree, and use that to determine if the pointer points into a Lisp
    object or not.  */
 
 /* Initialize this part of alloc.c.  */
@@ -4502,82 +4560,113 @@ mem_delete_fixup (struct mem_node *x)
 }
 
 
-/* Value is non-zero if P is a pointer to a live Lisp string on
-   the heap.  M is a pointer to the mem_block for P.  */
+/* If P is a pointer into a live Lisp string object on the heap,
+   return the object.  Otherwise, return nil.  M is a pointer to the
+   mem_block for P.
 
-static bool
-live_string_p (struct mem_node *m, void *p)
+   This and other *_holding functions look for a pointer anywhere into
+   the object, not merely for a pointer to the start of the object,
+   because some compilers sometimes optimize away the latter.  See
+   Bug#28213.  */
+
+static Lisp_Object
+live_string_holding (struct mem_node *m, void *p)
 {
   if (m->type == MEM_TYPE_STRING)
     {
       struct string_block *b = m->start;
-      ptrdiff_t offset = (char *) p - (char *) &b->strings[0];
+      char *cp = p;
+      ptrdiff_t offset = cp - (char *) &b->strings[0];
 
-      /* P must point to the start of a Lisp_String structure, and it
+      /* P must point into a Lisp_String structure, and it
 	 must not be on the free-list.  */
-      return (offset >= 0
-	      && offset % sizeof b->strings[0] == 0
-	      && offset < (STRING_BLOCK_SIZE * sizeof b->strings[0])
-	      && ((struct Lisp_String *) p)->data != NULL);
+      if (0 <= offset && offset < STRING_BLOCK_SIZE * sizeof b->strings[0])
+	{
+	  struct Lisp_String *s = p = cp -= offset % sizeof b->strings[0];
+	  if (s->data)
+	    return make_lisp_ptr (s, Lisp_String);
+	}
     }
-  else
-    return 0;
+  return Qnil;
 }
 
-
-/* Value is non-zero if P is a pointer to a live Lisp cons on
-   the heap.  M is a pointer to the mem_block for P.  */
-
 static bool
-live_cons_p (struct mem_node *m, void *p)
+live_string_p (struct mem_node *m, void *p)
+{
+  return !NILP (live_string_holding (m, p));
+}
+
+/* If P is a pointer into a live Lisp cons object on the heap, return
+   the object.  Otherwise, return nil.  M is a pointer to the
+   mem_block for P.  */
+
+static Lisp_Object
+live_cons_holding (struct mem_node *m, void *p)
 {
   if (m->type == MEM_TYPE_CONS)
     {
       struct cons_block *b = m->start;
-      ptrdiff_t offset = (char *) p - (char *) &b->conses[0];
+      char *cp = p;
+      ptrdiff_t offset = cp - (char *) &b->conses[0];
 
-      /* P must point to the start of a Lisp_Cons, not be
+      /* P must point into a Lisp_Cons, not be
 	 one of the unused cells in the current cons block,
 	 and not be on the free-list.  */
-      return (offset >= 0
-	      && offset % sizeof b->conses[0] == 0
-	      && offset < (CONS_BLOCK_SIZE * sizeof b->conses[0])
-	      && (b != cons_block
-		  || offset / sizeof b->conses[0] < cons_block_index)
-	      && !EQ (((struct Lisp_Cons *) p)->car, Vdead));
+      if (0 <= offset && offset < CONS_BLOCK_SIZE * sizeof b->conses[0]
+	  && (b != cons_block
+	      || offset / sizeof b->conses[0] < cons_block_index))
+	{
+	  struct Lisp_Cons *s = p = cp -= offset % sizeof b->conses[0];
+	  if (!EQ (s->car, Vdead))
+	    return make_lisp_ptr (s, Lisp_Cons);
+	}
     }
-  else
-    return 0;
+  return Qnil;
+}
+
+static bool
+live_cons_p (struct mem_node *m, void *p)
+{
+  return !NILP (live_cons_holding (m, p));
 }
 
 
-/* Value is non-zero if P is a pointer to a live Lisp symbol on
-   the heap.  M is a pointer to the mem_block for P.  */
+/* If P is a pointer into a live Lisp symbol object on the heap,
+   return the object.  Otherwise, return nil.  M is a pointer to the
+   mem_block for P.  */
 
-static bool
-live_symbol_p (struct mem_node *m, void *p)
+static Lisp_Object
+live_symbol_holding (struct mem_node *m, void *p)
 {
   if (m->type == MEM_TYPE_SYMBOL)
     {
       struct symbol_block *b = m->start;
-      ptrdiff_t offset = (char *) p - (char *) &b->symbols[0];
+      char *cp = p;
+      ptrdiff_t offset = cp - (char *) &b->symbols[0];
 
-      /* P must point to the start of a Lisp_Symbol, not be
+      /* P must point into the Lisp_Symbol, not be
 	 one of the unused cells in the current symbol block,
 	 and not be on the free-list.  */
-      return (offset >= 0
-	      && offset % sizeof b->symbols[0] == 0
-	      && offset < (SYMBOL_BLOCK_SIZE * sizeof b->symbols[0])
-	      && (b != symbol_block
-		  || offset / sizeof b->symbols[0] < symbol_block_index)
-	      && !EQ (((struct Lisp_Symbol *)p)->function, Vdead));
+      if (0 <= offset && offset < SYMBOL_BLOCK_SIZE * sizeof b->symbols[0]
+	  && (b != symbol_block
+	      || offset / sizeof b->symbols[0] < symbol_block_index))
+	{
+	  struct Lisp_Symbol *s = p = cp -= offset % sizeof b->symbols[0];
+	  if (!EQ (s->function, Vdead))
+	    return make_lisp_symbol (s);
+	}
     }
-  else
-    return 0;
+  return Qnil;
+}
+
+static bool
+live_symbol_p (struct mem_node *m, void *p)
+{
+  return !NILP (live_symbol_holding (m, p));
 }
 
 
-/* Value is non-zero if P is a pointer to a live Lisp float on
+/* Return true if P is a pointer to a live Lisp float on
    the heap.  M is a pointer to the mem_block for P.  */
 
 static bool
@@ -4586,7 +4675,8 @@ live_float_p (struct mem_node *m, void *p)
   if (m->type == MEM_TYPE_FLOAT)
     {
       struct float_block *b = m->start;
-      ptrdiff_t offset = (char *) p - (char *) &b->floats[0];
+      char *cp = p;
+      ptrdiff_t offset = cp - (char *) &b->floats[0];
 
       /* P must point to the start of a Lisp_Float and not be
 	 one of the unused cells in the current float block.  */
@@ -4601,38 +4691,48 @@ live_float_p (struct mem_node *m, void *p)
 }
 
 
-/* Value is non-zero if P is a pointer to a live Lisp Misc on
-   the heap.  M is a pointer to the mem_block for P.  */
+/* If P is a pointer to a live Lisp Misc on the heap, return the object.
+   Otherwise, return nil.  M is a pointer to the mem_block for P.  */
 
-static bool
-live_misc_p (struct mem_node *m, void *p)
+static Lisp_Object
+live_misc_holding (struct mem_node *m, void *p)
 {
   if (m->type == MEM_TYPE_MISC)
     {
       struct marker_block *b = m->start;
-      ptrdiff_t offset = (char *) p - (char *) &b->markers[0];
+      char *cp = p;
+      ptrdiff_t offset = cp - (char *) &b->markers[0];
 
-      /* P must point to the start of a Lisp_Misc, not be
+      /* P must point into a Lisp_Misc, not be
 	 one of the unused cells in the current misc block,
 	 and not be on the free-list.  */
-      return (offset >= 0
-	      && offset % sizeof b->markers[0] == 0
-	      && offset < (MARKER_BLOCK_SIZE * sizeof b->markers[0])
-	      && (b != marker_block
-		  || offset / sizeof b->markers[0] < marker_block_index)
-	      && ((union Lisp_Misc *) p)->u_any.type != Lisp_Misc_Free);
+      if (0 <= offset && offset < MARKER_BLOCK_SIZE * sizeof b->markers[0]
+	  && (b != marker_block
+	      || offset / sizeof b->markers[0] < marker_block_index))
+	{
+	  union Lisp_Misc *s = p = cp -= offset % sizeof b->markers[0];
+	  if (s->u_any.type != Lisp_Misc_Free)
+	    return make_lisp_ptr (s, Lisp_Misc);
+	}
     }
-  else
-    return 0;
+  return Qnil;
 }
 
+static bool
+live_misc_p (struct mem_node *m, void *p)
+{
+  return !NILP (live_misc_holding (m, p));
+}
 
-/* Value is non-zero if P is a pointer to a live vector-like object.
+/* If P is a pointer to a live vector-like object, return the object.
+   Otherwise, return nil.
    M is a pointer to the mem_block for P.  */
 
-static bool
-live_vector_p (struct mem_node *m, void *p)
+static Lisp_Object
+live_vector_holding (struct mem_node *m, void *p)
 {
+  struct Lisp_Vector *vp = p;
+
   if (m->type == MEM_TYPE_VECTOR_BLOCK)
     {
       /* This memory node corresponds to a vector block.  */
@@ -4644,33 +4744,59 @@ live_vector_p (struct mem_node *m, void *p)
 	 vector which is not on a free list.  FIXME: check whether
 	 some allocation patterns (probably a lot of short vectors)
 	 may cause a substantial overhead of this loop.  */
-      while (VECTOR_IN_BLOCK (vector, block)
-	     && vector <= (struct Lisp_Vector *) p)
+      while (VECTOR_IN_BLOCK (vector, block) && vector <= vp)
 	{
-	  if (!PSEUDOVECTOR_TYPEP (&vector->header, PVEC_FREE) && vector == p)
-	    return 1;
-	  else
-	    vector = ADVANCE (vector, vector_nbytes (vector));
+	  struct Lisp_Vector *next = ADVANCE (vector, vector_nbytes (vector));
+	  if (vp < next && !PSEUDOVECTOR_TYPEP (&vector->header, PVEC_FREE))
+	    return make_lisp_ptr (vector, Lisp_Vectorlike);
+	  vector = next;
 	}
     }
-  else if (m->type == MEM_TYPE_VECTORLIKE && p == large_vector_vec (m->start))
-    /* This memory node corresponds to a large vector.  */
-    return 1;
-  return 0;
+  else if (m->type == MEM_TYPE_VECTORLIKE)
+    {
+      /* This memory node corresponds to a large vector.  */
+      struct Lisp_Vector *vector = large_vector_vec (m->start);
+      struct Lisp_Vector *next = ADVANCE (vector, vector_nbytes (vector));
+      if (vector <= vp && vp < next)
+	return make_lisp_ptr (vector, Lisp_Vectorlike);
+    }
+  return Qnil;
 }
 
+static bool
+live_vector_p (struct mem_node *m, void *p)
+{
+  return !NILP (live_vector_holding (m, p));
+}
 
-/* Value is non-zero if P is a pointer to a live buffer.  M is a
-   pointer to the mem_block for P.  */
+/* If P is a pointer into a live buffer, return the buffer.
+   Otherwise, return nil.  M is a pointer to the mem_block for P.  */
+
+static Lisp_Object
+live_buffer_holding (struct mem_node *m, void *p)
+{
+  /* P must point into the block, and the buffer
+     must not have been killed.  */
+  if (m->type == MEM_TYPE_BUFFER)
+    {
+      struct buffer *b = m->start;
+      char *cb = m->start;
+      char *cp = p;
+      ptrdiff_t offset = cp - cb;
+      if (0 <= offset && offset < sizeof *b && !NILP (b->name_))
+	{
+	  Lisp_Object obj;
+	  XSETBUFFER (obj, b);
+	  return obj;
+	}
+    }
+  return Qnil;
+}
 
 static bool
 live_buffer_p (struct mem_node *m, void *p)
 {
-  /* P must point to the start of the block, and the buffer
-     must not have been killed.  */
-  return (m->type == MEM_TYPE_BUFFER
-	  && p == m->start
-	  && !NILP (((struct buffer *) p)->name_));
+  return !NILP (live_buffer_holding (m, p));
 }
 
 /* Mark OBJ if we can prove it's a Lisp_Object.  */
@@ -4696,34 +4822,28 @@ mark_maybe_object (Lisp_Object obj)
       switch (XTYPE (obj))
 	{
 	case Lisp_String:
-	  mark_p = (live_string_p (m, po)
-		    && !STRING_MARKED_P ((struct Lisp_String *) po));
+	  mark_p = EQ (obj, live_string_holding (m, po));
 	  break;
 
 	case Lisp_Cons:
-	  mark_p = (live_cons_p (m, po) && !CONS_MARKED_P (XCONS (obj)));
+	  mark_p = EQ (obj, live_cons_holding (m, po));
 	  break;
 
 	case Lisp_Symbol:
-	  mark_p = (live_symbol_p (m, po) && !XSYMBOL (obj)->gcmarkbit);
+	  mark_p = EQ (obj, live_symbol_holding (m, po));
 	  break;
 
 	case Lisp_Float:
-	  mark_p = (live_float_p (m, po) && !FLOAT_MARKED_P (XFLOAT (obj)));
+	  mark_p = live_float_p (m, po);
 	  break;
 
 	case Lisp_Vectorlike:
-	  /* Note: can't check BUFFERP before we know it's a
-	     buffer because checking that dereferences the pointer
-	     PO which might point anywhere.  */
-	  if (live_vector_p (m, po))
-	    mark_p = !SUBRP (obj) && !VECTOR_MARKED_P (XVECTOR (obj));
-	  else if (live_buffer_p (m, po))
-	    mark_p = BUFFERP (obj) && !VECTOR_MARKED_P (XBUFFER (obj));
+	  mark_p = (EQ (obj, live_vector_holding (m, po))
+		    || EQ (obj, live_buffer_holding (m, po)));
 	  break;
 
 	case Lisp_Misc:
-	  mark_p = (live_misc_p (m, po) && !XMISCANY (obj)->gcmarkbit);
+	  mark_p = EQ (obj, live_misc_holding (m, po));
 	  break;
 
 	default:
@@ -4787,45 +4907,33 @@ mark_maybe_pointer (void *p)
 	  break;
 
 	case MEM_TYPE_BUFFER:
-	  if (live_buffer_p (m, p) && !VECTOR_MARKED_P ((struct buffer *)p))
-	    XSETVECTOR (obj, p);
+	  obj = live_buffer_holding (m, p);
 	  break;
 
 	case MEM_TYPE_CONS:
-	  if (live_cons_p (m, p) && !CONS_MARKED_P ((struct Lisp_Cons *) p))
-	    XSETCONS (obj, p);
+	  obj = live_cons_holding (m, p);
 	  break;
 
 	case MEM_TYPE_STRING:
-	  if (live_string_p (m, p)
-	      && !STRING_MARKED_P ((struct Lisp_String *) p))
-	    XSETSTRING (obj, p);
+	  obj = live_string_holding (m, p);
 	  break;
 
 	case MEM_TYPE_MISC:
-	  if (live_misc_p (m, p) && !((struct Lisp_Free *) p)->gcmarkbit)
-	    XSETMISC (obj, p);
+	  obj = live_misc_holding (m, p);
 	  break;
 
 	case MEM_TYPE_SYMBOL:
-	  if (live_symbol_p (m, p) && !((struct Lisp_Symbol *) p)->gcmarkbit)
-	    XSETSYMBOL (obj, p);
+	  obj = live_symbol_holding (m, p);
 	  break;
 
 	case MEM_TYPE_FLOAT:
-	  if (live_float_p (m, p) && !FLOAT_MARKED_P (p))
-	    XSETFLOAT (obj, p);
+	  if (live_float_p (m, p))
+	    obj = make_lisp_ptr (p, Lisp_Float);
 	  break;
 
 	case MEM_TYPE_VECTORLIKE:
 	case MEM_TYPE_VECTOR_BLOCK:
-	  if (live_vector_p (m, p))
-	    {
-	      Lisp_Object tem;
-	      XSETVECTOR (tem, p);
-	      if (!SUBRP (tem) && !VECTOR_MARKED_P (XVECTOR (tem)))
-		obj = tem;
-	    }
+	  obj = live_vector_holding (m, p);
 	  break;
 
 	default:
@@ -5014,22 +5122,31 @@ typedef union
 # endif
 #endif
 
+/* Yield an address close enough to the top of the stack that the
+   garbage collector need not scan above it.  Callers should be
+   declared NO_INLINE.  */
+#ifdef HAVE___BUILTIN_FRAME_ADDRESS
+# define NEAR_STACK_TOP(addr) ((void) (addr), __builtin_frame_address (0))
+#else
+# define NEAR_STACK_TOP(addr) (addr)
+#endif
+
 /* Set *P to the address of the top of the stack.  This must be a
    macro, not a function, so that it is executed in the caller’s
    environment.  It is not inside a do-while so that its storage
-   survives the macro.  */
+   survives the macro.  Callers should be declared NO_INLINE.  */
 #ifdef HAVE___BUILTIN_UNWIND_INIT
 # define SET_STACK_TOP_ADDRESS(p)	\
    stacktop_sentry sentry;		\
    __builtin_unwind_init ();		\
-   *(p) = &sentry
+   *(p) = NEAR_STACK_TOP (&sentry)
 #else
 # define SET_STACK_TOP_ADDRESS(p)		\
    stacktop_sentry sentry;			\
    __builtin_unwind_init ();			\
    test_setjmp ();				\
    sys_setjmp (sentry.j);			\
-   *(p) = &sentry + (stack_bottom < &sentry.c)
+   *(p) = NEAR_STACK_TOP (&sentry + (stack_bottom < &sentry.c))
 #endif
 
 /* Mark live Lisp objects on the C stack.
@@ -5101,7 +5218,7 @@ mark_stack (char *bottom, char *end)
    It is invalid to run any Lisp code or to allocate any GC memory
    from FUNC.  */
 
-void
+NO_INLINE void
 flush_stack_call_func (void (*func) (void *arg), void *arg)
 {
   void *end;
@@ -5443,7 +5560,7 @@ static struct Lisp_Hash_Table *
 purecopy_hash_table (struct Lisp_Hash_Table *table)
 {
   eassert (NILP (table->weak));
-  eassert (!NILP (table->pure));
+  eassert (table->pure);
 
   struct Lisp_Hash_Table *pure = pure_alloc (sizeof *pure, Lisp_Vectorlike);
   struct hash_table_test pure_test = table->test;
@@ -5453,18 +5570,18 @@ purecopy_hash_table (struct Lisp_Hash_Table *table)
   pure_test.user_hash_function = purecopy (table->test.user_hash_function);
   pure_test.user_cmp_function = purecopy (table->test.user_cmp_function);
 
-  pure->test = pure_test;
   pure->header = table->header;
   pure->weak = purecopy (Qnil);
-  pure->rehash_size = purecopy (table->rehash_size);
-  pure->rehash_threshold = purecopy (table->rehash_threshold);
   pure->hash = purecopy (table->hash);
   pure->next = purecopy (table->next);
-  pure->next_free = purecopy (table->next_free);
   pure->index = purecopy (table->index);
   pure->count = table->count;
+  pure->next_free = table->next_free;
+  pure->pure = table->pure;
+  pure->rehash_threshold = table->rehash_threshold;
+  pure->rehash_size = table->rehash_size;
   pure->key_and_value = purecopy (table->key_and_value);
-  pure->pure = purecopy (table->pure);
+  pure->test = pure_test;
 
   return pure;
 }
@@ -5524,7 +5641,7 @@ purecopy (Lisp_Object obj)
       /* Do not purify hash tables which haven't been defined with
          :purecopy as non-nil or are weak - they aren't guaranteed to
          not change.  */
-      if (!NILP (table->weak) || NILP (table->pure))
+      if (!NILP (table->weak) || !table->pure)
         {
           /* Instead, add the hash table to the list of pinned objects,
              so that it will be marked during GC.  */
@@ -5538,7 +5655,7 @@ purecopy (Lisp_Object obj)
       struct Lisp_Hash_Table *h = purecopy_hash_table (table);
       XSET_HASH_TABLE (obj, h);
     }
-  else if (COMPILEDP (obj) || VECTORP (obj))
+  else if (COMPILEDP (obj) || VECTORP (obj) || RECORDP (obj))
     {
       struct Lisp_Vector *objp = XVECTOR (obj);
       ptrdiff_t nbytes = vector_nbytes (objp);
@@ -5785,7 +5902,7 @@ mark_pinned_symbols (void)
    where mark_stack finds values that look like live Lisp objects on
    portions of stack that couldn't possibly contain such live objects.
    For more details of this, see the discussion at
-   http://lists.gnu.org/archive/html/emacs-devel/2014-05/msg00270.html.  */
+   https://lists.gnu.org/archive/html/emacs-devel/2014-05/msg00270.html.  */
 static Lisp_Object
 garbage_collect_1 (void *end)
 {
@@ -5893,6 +6010,10 @@ garbage_collect_1 (void *end)
 
 #ifdef HAVE_WINDOW_SYSTEM
   mark_fringe_data ();
+#endif
+
+#ifdef HAVE_MODULES
+  mark_modules ();
 #endif
 
   /* Everything is now marked, except for the data in font caches,
@@ -6046,7 +6167,8 @@ where each entry has the form (NAME SIZE USED FREE), where:
   to return them to the OS).
 However, if there was overflow in pure space, `garbage-collect'
 returns nil, because real GC can't be done.
-See Info node `(elisp)Garbage Collection'.  */)
+See Info node `(elisp)Garbage Collection'.  */
+       attributes: noinline)
   (void)
 {
   void *end;
@@ -6301,7 +6423,7 @@ mark_object (Lisp_Object arg)
 {
   register Lisp_Object obj;
   void *po;
-#ifdef GC_CHECK_MARKED_OBJECTS
+#if GC_CHECK_MARKED_OBJECTS
   struct mem_node *m;
 #endif
   ptrdiff_t cdr_count = 0;
@@ -6320,7 +6442,7 @@ mark_object (Lisp_Object arg)
   /* Perform some sanity checks on the objects marked here.  Abort if
      we encounter an object we know is bogus.  This increases GC time
      by ~80%.  */
-#ifdef GC_CHECK_MARKED_OBJECTS
+#if GC_CHECK_MARKED_OBJECTS
 
   /* Check that the object pointed to by PO is known to be a Lisp
      structure allocated from the heap.  */
@@ -6385,22 +6507,18 @@ mark_object (Lisp_Object arg)
     case Lisp_Vectorlike:
       {
 	register struct Lisp_Vector *ptr = XVECTOR (obj);
-	register ptrdiff_t pvectype;
 
 	if (VECTOR_MARKED_P (ptr))
 	  break;
 
-#ifdef GC_CHECK_MARKED_OBJECTS
+#if GC_CHECK_MARKED_OBJECTS
 	m = mem_find (po);
 	if (m == MEM_NIL && !SUBRP (obj) && !main_thread_p (po))
 	  emacs_abort ();
 #endif /* GC_CHECK_MARKED_OBJECTS */
 
-	if (ptr->header.size & PSEUDOVECTOR_FLAG)
-	  pvectype = ((ptr->header.size & PVEC_TYPE_MASK)
-		      >> PSEUDOVECTOR_AREA_BITS);
-	else
-	  pvectype = PVEC_NORMAL_VECTOR;
+        enum pvec_type pvectype
+          = PSEUDOVECTOR_TYPE (ptr);
 
 	if (pvectype != PVEC_SUBR
 	    && pvectype != PVEC_BUFFER
@@ -6410,7 +6528,7 @@ mark_object (Lisp_Object arg)
 	switch (pvectype)
 	  {
 	  case PVEC_BUFFER:
-#ifdef GC_CHECK_MARKED_OBJECTS
+#if GC_CHECK_MARKED_OBJECTS
 	    {
 	      struct buffer *b;
 	      FOR_EACH_BUFFER (b)
@@ -6896,7 +7014,7 @@ sweep_symbols (void)
   symbol_free_list = NULL;
 
   for (int i = 0; i < ARRAYELTS (lispsym); i++)
-    lispsym[i].gcmarkbit = 0;
+    lispsym[i].s.gcmarkbit = 0;
 
   for (sblk = symbol_block; sblk; sblk = *sprev)
     {
@@ -7117,7 +7235,7 @@ We divide the value by 1024 to make sure it fits in a Lisp integer.  */)
 {
   Lisp_Object end;
 
-#if defined HAVE_NS || !HAVE_SBRK
+#if defined HAVE_NS || defined __APPLE__ || !HAVE_SBRK
   /* Avoid warning.  sbrk has no relation to memory allocated anyway.  */
   XSETINT (end, 0);
 #else
@@ -7237,9 +7355,9 @@ find_suspicious_object_in_range (void *begin, void *end)
 }
 
 static void
-note_suspicious_free (void* ptr)
+note_suspicious_free (void *ptr)
 {
-  struct suspicious_free_record* rec;
+  struct suspicious_free_record *rec;
 
   rec = &suspicious_free_history[suspicious_free_history_index++];
   if (suspicious_free_history_index ==
@@ -7254,7 +7372,7 @@ note_suspicious_free (void* ptr)
 }
 
 static void
-detect_suspicious_free (void* ptr)
+detect_suspicious_free (void *ptr)
 {
   int i;
 
@@ -7471,10 +7589,12 @@ The time is in seconds as a floating point value.  */);
   defsubr (&Scons);
   defsubr (&Slist);
   defsubr (&Svector);
+  defsubr (&Srecord);
   defsubr (&Sbool_vector);
   defsubr (&Smake_byte_code);
   defsubr (&Smake_list);
   defsubr (&Smake_vector);
+  defsubr (&Smake_record);
   defsubr (&Smake_string);
   defsubr (&Smake_bool_vector);
   defsubr (&Smake_symbol);

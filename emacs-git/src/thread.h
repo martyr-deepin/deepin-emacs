@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #ifndef THREAD_H
 #define THREAD_H
@@ -62,8 +62,14 @@ struct thread_state
   char *m_stack_bottom;
 #define stack_bottom (current_thread->m_stack_bottom)
 
-  /* An address near the top of the stack.  */
-  char *stack_top;
+  /* The address of an object near the C stack top, used to determine
+     which words need to be scanned by the garbage collector.  This is
+     also used to detect heuristically whether segmentation violation
+     address indicates stack overflow, as opposed to some internal
+     error in Emacs.  If the C function F calls G which calls H which
+     calls ... F, then at least one of the functions in the chain
+     should set this to the address of a local variable.  */
+  void *stack_top;
 
   struct catchtag *m_catchlist;
 #define catchlist (current_thread->m_catchlist)
@@ -151,6 +157,13 @@ struct thread_state
   /* True while doing kbd input.  */
   bool m_waiting_for_input;
 #define waiting_for_input (current_thread->m_waiting_for_input)
+
+  /* For longjmp to where kbd input is being done.  This is per-thread
+     so that if more than one thread calls read_char, they don't
+     clobber each other's getcjmp, which will cause
+     quit_throw_to_read_char crash due to using a wrong stack.  */
+  sys_jmp_buf m_getcjmp;
+#define getcjmp (current_thread->m_getcjmp)
 
   /* The OS identifier for this thread.  */
   sys_thread_t thread_id;

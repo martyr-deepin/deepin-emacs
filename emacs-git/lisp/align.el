@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -1322,8 +1322,7 @@ aligner would have dealt with are."
 	     (modes (assq 'modes rule)))
 	;; unless the `run-if' form tells us not to, look for the
 	;; rule..
-	(unless (or (and modes (not (memq major-mode
-					  (eval (cdr modes)))))
+	(unless (or (and modes (not (apply #'derived-mode-p (eval (cdr modes)))))
 		    (and run-if (not (funcall (cdr run-if)))))
 	  (let* ((case-fold-search case-fold-search)
 		 (case-fold (assq 'case-fold rule))

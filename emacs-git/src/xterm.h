@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #ifndef XTERM_H
 #define XTERM_H
@@ -48,12 +48,6 @@ typedef Widget xt_or_gtk_widget;
 #ifdef USE_GTK
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
-
-/* Some definitions to reduce conditionals.  */
-typedef GtkWidget *xt_or_gtk_widget;
-#undef XSync
-#define XSync(d, b) do { gdk_window_process_all_updates (); \
-                         XSync (d, b);  } while (false)
 #endif /* USE_GTK */
 
 /* True iff GTK's version is at least I.J.K.  */
@@ -68,6 +62,19 @@ typedef GtkWidget *xt_or_gtk_widget;
 #  define GTK_CHECK_VERSION(i, j, k) false
 # endif
 #endif
+
+#ifdef USE_GTK
+/* Some definitions to reduce conditionals.  */
+typedef GtkWidget *xt_or_gtk_widget;
+#undef XSync
+/* gdk_window_process_all_updates is deprecated in GDK 3.22.  */
+#if GTK_CHECK_VERSION (3, 22, 0)
+#define XSync(d, b) do { XSync ((d), (b)); } while (false)
+#else
+#define XSync(d, b) do { gdk_window_process_all_updates (); \
+                         XSync (d, b);  } while (false)
+#endif
+#endif /* USE_GTK */
 
 /* The GtkTooltip API came in 2.12, but gtk-enable-tooltips in 2.14. */
 #if GTK_CHECK_VERSION (2, 14, 0)
@@ -447,9 +454,9 @@ struct x_display_info
   /* Atoms dealing with EWMH (i.e. _NET_...) */
   Atom Xatom_net_wm_state, Xatom_net_wm_state_fullscreen,
     Xatom_net_wm_state_maximized_horz, Xatom_net_wm_state_maximized_vert,
-    Xatom_net_wm_state_sticky, Xatom_net_wm_state_hidden,
-    Xatom_net_frame_extents,
-    Xatom_net_current_desktop, Xatom_net_workarea;
+    Xatom_net_wm_state_sticky, Xatom_net_wm_state_above, Xatom_net_wm_state_below,
+    Xatom_net_wm_state_hidden, Xatom_net_wm_state_skip_taskbar,
+    Xatom_net_frame_extents, Xatom_net_current_desktop, Xatom_net_workarea;
 
   /* XSettings atoms and windows.  */
   Atom Xatom_xsettings_sel, Xatom_xsettings_prop, Xatom_xsettings_mgr;
@@ -637,6 +644,14 @@ struct x_output
   Cursor horizontal_drag_cursor;
   Cursor vertical_drag_cursor;
   Cursor current_cursor;
+  Cursor left_edge_cursor;
+  Cursor top_left_corner_cursor;
+  Cursor top_edge_cursor;
+  Cursor top_right_corner_cursor;
+  Cursor right_edge_cursor;
+  Cursor bottom_right_corner_cursor;
+  Cursor bottom_edge_cursor;
+  Cursor bottom_left_corner_cursor;
 
   /* Window whose cursor is hourglass_cursor.  This window is temporarily
      mapped to display an hourglass cursor.  */
@@ -1168,6 +1183,8 @@ x_mutable_colormap (Visual *visual)
 }
 
 extern void x_set_sticky (struct frame *, Lisp_Object, Lisp_Object);
+extern void x_set_skip_taskbar (struct frame *, Lisp_Object, Lisp_Object);
+extern void x_set_z_group (struct frame *, Lisp_Object, Lisp_Object);
 extern bool x_wm_supports (struct frame *, Atom);
 extern void x_wait_for_event (struct frame *, int);
 extern void x_clear_under_internal_border (struct frame *f);

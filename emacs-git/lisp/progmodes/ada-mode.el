@@ -21,7 +21,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;; This mode is a major mode for editing Ada code.  This is a major
@@ -1664,7 +1664,7 @@ ARG is the prefix the user entered with \\[universal-argument]."
 				   ada-mode-map
 				   (char-to-string key)
 				   'ada-adjust-case-interactive)))
-	  '( ?` ?_ ?# ?% ?& ?* ?( ?) ?- ?= ?+
+	  '( ?` ?_ ?# ?% ?& ?* ?\( ?\) ?- ?= ?+
 		?| ?\; ?: ?' ?\" ?< ?, ?. ?> ?/ ?\n 32 ?\r )))
 
 (defun ada-loose-case-word (&optional _arg)

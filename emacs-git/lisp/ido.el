@@ -1,4 +1,4 @@
-;;; ido.el --- interactively do things with buffers and files
+;;; ido.el --- interactively do things with buffers and files -*- lexical-binding: t -*-
 
 ;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 
 ;;; Commentary:
@@ -443,7 +443,7 @@ Possible values:
 `other-window'	  Show new file in another window (same frame)
 `display'	  Display file in another window without selecting to it
 `other-frame'	  Show new file in another frame
-`maybe-frame'	  If a file is visible in another frame, prompt to ask if you
+`maybe-frame'	  If a file is visible in another frame, prompt to ask if
 		  you want to see the file in the same window of the current
   		  frame or in the other frame
 `raise-frame'     If a file is visible in another frame, raise that
@@ -497,7 +497,7 @@ as first char even if `ido-enable-prefix' is nil."
   :type 'boolean
   :group 'ido)
 
-;; See http://debbugs.gnu.org/2042 for more info.
+;; See https://debbugs.gnu.org/2042 for more info.
 (defcustom ido-buffer-disable-smart-matches t
   "Non-nil means not to re-order matches for buffer switching.
 By default, Ido arranges matches in the following order:
@@ -1582,19 +1582,11 @@ positive, and disable it otherwise.  If called from Lisp,
 enable the mode if ARG is omitted or nil."
   :global t
   :group 'ido
-  (when (get 'ido-everywhere 'file)
-    (setq read-file-name-function (car (get 'ido-everywhere 'file)))
-    (put 'ido-everywhere 'file nil))
-  (when (get 'ido-everywhere 'buffer)
-    (setq read-buffer-function (car (get 'ido-everywhere 'buffer)))
-    (put 'ido-everywhere 'buffer nil))
+  (remove-function read-file-name-function #'ido-read-file-name)
+  (remove-function read-buffer-function #'ido-read-buffer)
   (when ido-everywhere
-    (when (memq ido-mode '(both file))
-      (put 'ido-everywhere 'file (cons read-file-name-function nil))
-      (setq read-file-name-function #'ido-read-file-name))
-    (when (memq ido-mode '(both buffer))
-      (put 'ido-everywhere 'buffer (cons read-buffer-function nil))
-      (setq read-buffer-function #'ido-read-buffer))))
+    (add-function :override read-file-name-function #'ido-read-file-name)
+    (add-function :override read-buffer-function #'ido-read-buffer)))
 
 (defvar ido-minor-mode-map-entry nil)
 
@@ -1640,10 +1632,14 @@ This function also adds a hook to the minibuffer."
           'ido-find-file-other-window)
 	(define-key map [remap find-file-read-only-other-window]
           'ido-find-file-read-only-other-window)
+        (define-key map [remap find-alternate-file-other-window]
+          #'ido-find-alternate-file-other-window)
+        (define-key map [remap dired-other-window] #'ido-dired-other-window)
 	(define-key map [remap find-file-other-frame]
           'ido-find-file-other-frame)
 	(define-key map [remap find-file-read-only-other-frame]
-          'ido-find-file-read-only-other-frame))
+          'ido-find-file-read-only-other-frame)
+        (define-key map [remap dired-other-frame] #'ido-dired-other-frame))
 
       (when (memq ido-mode '(buffer both))
 	(define-key map [remap switch-to-buffer] 'ido-switch-buffer)
@@ -1653,7 +1649,9 @@ This function also adds a hook to the minibuffer."
           'ido-switch-buffer-other-frame)
 	(define-key map [remap insert-buffer] 'ido-insert-buffer)
 	(define-key map [remap kill-buffer] 'ido-kill-buffer)
-	(define-key map [remap display-buffer] 'ido-display-buffer))
+	(define-key map [remap display-buffer] 'ido-display-buffer)
+        (define-key map [remap display-buffer-other-frame]
+          #'ido-display-buffer-other-frame))
 
       (if ido-minor-mode-map-entry
 	  (setcdr ido-minor-mode-map-entry map)
@@ -1882,7 +1880,6 @@ If INITIAL is non-nil, it specifies the initial input string."
        ido-selected
        ido-final-text
        (done nil)
-       (non-essential t) ;; prevent eager Tramp connection
        (icomplete-mode nil) ;; prevent icomplete starting up
        ;; Exported dynamic variables:
        ido-cur-list
@@ -2444,7 +2441,14 @@ If cursor is not at the end of the user input, move to end of input."
 	(ido-record-work-directory)
 	(find-alternate-file filename))
 
-       ((memq method '(dired list-directory))
+       ((eq method 'alt-file-other-window)
+        (ido-record-work-file filename)
+        (setq default-directory ido-current-directory)
+        (ido-record-work-directory)
+        (find-alternate-file-other-window filename))
+
+       ((memq method '(dired dired-other-window dired-other-frame
+                             list-directory))
 	(if (equal filename ".")
 	    (setq filename ""))
 	(let* ((dirname (ido-final-slash
@@ -3556,7 +3560,6 @@ it is put to the start of the list."
     ;; Strip method:user@host: part of tramp completions.
     ;; Tramp completions do not include leading slash.
     (let* ((len (1- (length dir)))
-	   (non-essential t)
 	   (compl
 	    (or ;; We do not want to be disturbed by "File does not
                 ;; exist" errors.
@@ -3675,7 +3678,7 @@ in this list."
 		    ido-temp-list)))))
     (ido-to-end  ;; move . files to end
      (delq nil (mapcar
-		(lambda (x) (if (string-equal (substring x 0 1) ".") x))
+		(lambda (x) (if (string-match "\\`\\." x) x))
 		ido-temp-list)))
     (if (and default (member default ido-temp-list))
 	(if (or ido-rotate-temp ido-rotate-file-list-default)
@@ -3799,9 +3802,10 @@ frame, rather than all frames, regardless of value of `ido-all-frames'."
          (lambda (item)
            (let ((name (ido-name item)))
 	     (if (and (or non-prefix-dot
-			  (if (= (aref ido-text 0) ?.)
-			      (= (aref name 0) ?.)
-			    (/= (aref name 0) ?.)))
+                          (and (> (length name) 0)
+                               (if (= (aref ido-text 0) ?.)
+                                   (= (aref name 0) ?.)
+                                 (/= (aref name 0) ?.))))
 		      (string-match re name))
 		 (cond
 		  ((and (eq ido-cur-item 'buffer)
@@ -4110,6 +4114,9 @@ Record command in `command-history' if optional RECORD is non-nil."
       (switch-to-buffer-other-frame buffer)
       (select-frame-set-input-focus (selected-frame)))
 
+     ((eq method 'display-other-frame)
+      (display-buffer-other-frame buffer))
+
      ((and (memq method '(raise-frame maybe-frame))
 	   window-system
 	   (setq win (ido-buffer-window-other-frame buffer))
@@ -4193,6 +4200,15 @@ The buffer name is selected interactively by typing a substring.
 For details of keybindings, see `ido-switch-buffer'."
   (interactive)
   (ido-buffer-internal 'display 'display-buffer nil nil nil 'ignore))
+
+;;;###autoload
+(defun ido-display-buffer-other-frame ()
+  "Display a buffer preferably in another frame.
+The buffer name is selected interactively by typing a substring.
+For details of keybindings, see `ido-switch-buffer'."
+  (interactive)
+  (ido-buffer-internal 'display-other-frame #'display-buffer-other-frame
+                       nil nil nil #'ignore))
 
 ;;;###autoload
 (defun ido-kill-buffer ()
@@ -4293,6 +4309,14 @@ For details of keybindings, see `ido-find-file'."
   (ido-file-internal 'alt-file 'find-alternate-file nil "Find alternate file: "))
 
 ;;;###autoload
+(defun ido-find-alternate-file-other-window ()
+  "Find file as a replacement for the file in the next window.
+The file name is selected interactively by typing a substring.
+For details of keybindings, see `ido-find-file'."
+  (interactive)
+  (ido-file-internal 'alt-file-other-window #'find-alternate-file-other-window))
+
+;;;###autoload
 (defun ido-find-file-read-only ()
   "Edit file read-only with name obtained via minibuffer.
 The file name is selected interactively by typing a substring.
@@ -4365,6 +4389,28 @@ For details of keybindings, see `ido-find-file'."
   (let ((ido-report-no-match nil)
 	(ido-auto-merge-work-directories-length -1))
     (ido-file-internal 'dired 'dired nil "Dired: " 'dir)))
+
+;;;###autoload
+(defun ido-dired-other-window ()
+  "\"Edit\" a directory.  Like `ido-dired' but selects in another window.
+The directory is selected interactively by typing a substring.
+For details of keybindings, see `ido-find-file'."
+  (interactive)
+  (let ((ido-report-no-match nil)
+	(ido-auto-merge-work-directories-length -1))
+    (ido-file-internal 'dired-other-window #'dired-other-window nil
+                       "Dired: " 'dir)))
+
+;;;###autoload
+(defun ido-dired-other-frame ()
+  "\"Edit\" a directory.  Like `ido-dired' but makes a new frame.
+The directory is selected interactively by typing a substring.
+For details of keybindings, see `ido-find-file'."
+  (interactive)
+  (let ((ido-report-no-match nil)
+	(ido-auto-merge-work-directories-length -1))
+    (ido-file-internal 'dired-other-frame #'dired-other-frame nil
+                       "Dired: " 'dir)))
 
 (defun ido-list-directory ()
   "Call `list-directory' the Ido way.
@@ -4655,7 +4701,7 @@ Modified from `icomplete-completions'."
     (if (and ido-use-faces comps)
 	(let* ((fn (ido-name (car comps)))
 	       (ln (length fn)))
-	  (setq first (format "%s" fn))
+	  (setq first (copy-sequence fn))
 	  (put-text-property 0 ln 'face
 			     (if (= (length comps) 1)
                                  (if ido-incomplete-regexp
@@ -4789,7 +4835,7 @@ Modified from `icomplete-completions'."
 (put 'dired 'ido 'dir)
 (put 'dired-other-window 'ido 'dir)
 (put 'dired-other-frame 'ido 'dir)
-;; See http://debbugs.gnu.org/11954 for reasons.
+;; See https://debbugs.gnu.org/11954 for reasons.
 (put 'dired-do-copy 'ido 'ignore)
 (put 'dired-do-rename 'ido 'ignore)
 

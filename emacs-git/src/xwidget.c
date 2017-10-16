@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
@@ -389,7 +389,10 @@ webkit_javascript_finished_cb (GObject      *webview,
     /* Register an xwidget event here, which then runs the callback.
        This ensures that the callback runs in sync with the Emacs
        event loop.  */
-    store_xwidget_js_callback_event (xw, (Lisp_Object)lisp_callback,
+    /* FIXME: This might lead to disaster if LISP_CALLBACK’s object
+       was garbage collected before now.  See the FIXME in
+       Fxwidget_webkit_execute_script.  */
+    store_xwidget_js_callback_event (xw, XIL ((intptr_t) lisp_callback),
                                      lisp_value);
 }
 
@@ -714,8 +717,15 @@ argument procedure FUN.*/)
   if (!NILP (fun) && !FUNCTIONP (fun))
     wrong_type_argument (Qinvalid_function, fun);
 
-  void *callback = (FUNCTIONP (fun)) ?
-    &webkit_javascript_finished_cb : NULL;
+  GAsyncReadyCallback callback
+    = FUNCTIONP (fun) ? webkit_javascript_finished_cb : NULL;
+
+  /* FIXME: The following hack assumes USE_LSB_TAG.  */
+  verify (USE_LSB_TAG);
+  /* FIXME: This hack might lead to disaster if FUN is garbage
+     collected before store_xwidget_js_callback_event makes it visible
+     to Lisp again.  See the FIXME in webkit_javascript_finished_cb.  */
+  gpointer callback_arg = (gpointer) (intptr_t) XLI (fun);
 
   /* JavaScript execution happens asynchronously.  If an elisp
      callback function is provided we pass it to the C callback
@@ -723,8 +733,7 @@ argument procedure FUN.*/)
   webkit_web_view_run_javascript (WEBKIT_WEB_VIEW (xw->widget_osr),
                                   SSDATA (script),
                                   NULL, /* cancelable */
-                                  callback,
-                                  (gpointer) fun);
+                                  callback, callback_arg);
   return Qnil;
 }
 

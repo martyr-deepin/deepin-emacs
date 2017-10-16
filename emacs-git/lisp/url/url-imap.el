@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -50,7 +50,7 @@
 			  (nnimap-authenticator ,authenticator)))))
 
 (defun url-imap (url)
-  (unless (vectorp url)
+  (unless (url-p url)
     (signal 'wrong-type-error (list "Need a pre-parsed URL." url)))
   (with-current-buffer (generate-new-buffer " *url-imap*")
     (mm-disable-multibyte)

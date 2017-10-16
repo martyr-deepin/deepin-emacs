@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 
 #include <config.h>
@@ -101,14 +101,20 @@ acquire_global_lock (struct thread_state *self)
   post_acquire_global_lock (self);
 }
 
-/* This is called from keyboard.c when it detects that SIGINT
-   interrupted thread_select before the current thread could acquire
-   the lock.  We must acquire the lock to prevent a thread from
-   running without holding the global lock, and to avoid repeated
-   calls to sys_mutex_unlock, which invokes undefined behavior.  */
+/* This is called from keyboard.c when it detects that SIGINT was
+   delivered to the main thread and interrupted thread_select before
+   the main thread could acquire the lock.  We must acquire the lock
+   to prevent a thread from running without holding the global lock,
+   and to avoid repeated calls to sys_mutex_unlock, which invokes
+   undefined behavior.  */
 void
 maybe_reacquire_global_lock (void)
 {
+  /* SIGINT handler is always run on the main thread, see
+     deliver_process_signal, so reflect that in our thread-tracking
+     variables.  */
+  current_thread = &main_thread;
+
   if (current_thread->not_holding_lock)
     {
       struct thread_state *self = current_thread;
@@ -595,14 +601,15 @@ thread_select (select_func *func, int max_fds, fd_set *rfds,
 static void
 mark_one_thread (struct thread_state *thread)
 {
-  struct handler *handler;
-  Lisp_Object tem;
+  /* Get the stack top now, in case mark_specpdl changes it.  */
+  void *stack_top = thread->stack_top;
 
   mark_specpdl (thread->m_specpdl, thread->m_specpdl_ptr);
 
-  mark_stack (thread->m_stack_bottom, thread->stack_top);
+  mark_stack (thread->m_stack_bottom, stack_top);
 
-  for (handler = thread->m_handlerlist; handler; handler = handler->next)
+  for (struct handler *handler = thread->m_handlerlist;
+       handler; handler = handler->next)
     {
       mark_object (handler->tag_or_ch);
       mark_object (handler->val);
@@ -610,6 +617,7 @@ mark_one_thread (struct thread_state *thread)
 
   if (thread->m_current_buffer)
     {
+      Lisp_Object tem;
       XSETBUFFER (tem, thread->m_current_buffer);
       mark_object (tem);
     }
@@ -664,7 +672,7 @@ DEFUN ("thread-yield", Fthread_yield, Sthread_yield, 0, 0, 0,
 static Lisp_Object
 invoke_thread_function (void)
 {
-  int count = SPECPDL_INDEX ();
+  ptrdiff_t count = SPECPDL_INDEX ();
 
   Ffuncall (1, &current_thread->function);
   return unbind_to (count, Qnil);

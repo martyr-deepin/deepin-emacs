@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -249,9 +249,7 @@ See also `imap-log'."
   :group 'imap
   :type 'string)
 
-(defcustom imap-read-timeout (if (string-match
-				  "windows-nt\\|os/2\\|cygwin"
-				  (symbol-name system-type))
+(defcustom imap-read-timeout (if (memq system-type '(windows-nt cygwin))
 				 1.0
 			       0.1)
   "How long to wait between checking for the end of output.

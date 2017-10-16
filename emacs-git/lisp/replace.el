@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -149,14 +149,17 @@ See `replace-regexp' and `query-replace-regexp-eval'.")
   (mapconcat 'isearch-text-char-description string ""))
 
 (defun query-replace--split-string (string)
-  "Split string STRING at a character with property `separator'"
+  "Split string STRING at a substring with property `separator'."
   (let* ((length (length string))
          (split-pos (text-property-any 0 length 'separator t string)))
     (if (not split-pos)
         (substring-no-properties string)
-      (cl-assert (not (text-property-any (1+ split-pos) length 'separator t string)))
       (cons (substring-no-properties string 0 split-pos)
-            (substring-no-properties string (1+ split-pos) length)))))
+            (substring-no-properties
+             string (or (text-property-not-all
+                         (1+ split-pos) length 'separator t string)
+                        length)
+             length)))))
 
 (defun query-replace-read-from (prompt regexp-flag)
   "Query and return the `from' argument of a query-replace operation.
@@ -165,17 +168,19 @@ wants to replace FROM with TO."
   (if query-replace-interactive
       (car (if regexp-flag regexp-search-ring search-ring))
     (let* ((history-add-new-input nil)
-	   (separator
+	   (separator-string
 	    (when query-replace-from-to-separator
-	      (propertize "\0"
-			  'display
-                          (propertize
-                           (if (char-displayable-p
-                                (string-to-char (replace-regexp-in-string
-                                                 " " "" query-replace-from-to-separator)))
-                               query-replace-from-to-separator
-                             " -> ")
-                           'face 'minibuffer-prompt)
+	      ;; Check if the first non-whitespace char is displayable
+	      (if (char-displayable-p
+		   (string-to-char (replace-regexp-in-string
+				    " " "" query-replace-from-to-separator)))
+		  query-replace-from-to-separator
+		" -> ")))
+	   (separator
+	    (when separator-string
+	      (propertize separator-string
+			  'display separator-string
+			  'face 'minibuffer-prompt
 			  'separator t)))
 	   (minibuffer-history
 	    (append
@@ -203,7 +208,8 @@ wants to replace FROM with TO."
               (minibuffer-with-setup-hook
                   (lambda ()
                     (setq-local text-property-default-nonsticky
-                                (cons '(separator . t) text-property-default-nonsticky)))
+                                (append '((separator . t) (face . t))
+                                        text-property-default-nonsticky)))
                 (if regexp-flag
                     (read-regexp prompt nil 'minibuffer-history)
                   (read-from-minibuffer
@@ -399,8 +405,8 @@ replace backward.
 
 Fourth and fifth arg START and END specify the region to operate on.
 
-In TO-STRING, `\\&' or `\\0' stands for whatever matched the whole of
-REGEXP, and `\\=\\N' (where N is a digit) stands for whatever matched
+In TO-STRING, `\\&' stands for whatever matched the whole of REGEXP,
+and `\\=\\N' (where N is a digit) stands for whatever matched
 the Nth `\\(...\\)' (1-based) in REGEXP.  The `\\(...\\)' groups are
 counted from 1.
 `\\?' lets you edit the replacement text in the minibuffer
@@ -458,8 +464,8 @@ reference `replace-count' to get the number of replacements already made.
 If the result of TO-EXPR is not a string, it is converted to one using
 `prin1-to-string' with the NOESCAPE argument (which see).
 
-For convenience, when entering TO-EXPR interactively, you can use `\\&' or
-`\\0' to stand for whatever matched the whole of REGEXP, and `\\N' (where
+For convenience, when entering TO-EXPR interactively, you can use `\\&'
+to stand for whatever matched the whole of REGEXP, and `\\N' (where
 N is a digit) to stand for whatever matched the Nth `\\(...\\)' (1-based)
 in REGEXP.
 
@@ -646,9 +652,9 @@ replace backward.
 
 Fourth and fifth arg START and END specify the region to operate on.
 
-In TO-STRING, `\\&' or `\\0' stands for whatever matched the whole of
-REGEXP, and `\\=\\N' (where N is a digit) stands for
-whatever matched the Nth `\\(...\\)' (1-based) in REGEXP.
+In TO-STRING, `\\&' stands for whatever matched the whole of REGEXP,
+and `\\=\\N' (where N is a digit) stands for whatever matched
+the Nth `\\(...\\)' (1-based) in REGEXP.
 `\\?' lets you edit the replacement text in the minibuffer
 at the given position for each replacement.
 
@@ -657,7 +663,8 @@ followed by a Lisp expression used as part of the replacement
 text.  Inside of that expression, `\\&' is a string denoting the
 whole match, `\\N' a partial match, `\\#&' and `\\#N' the respective
 numeric values from `string-to-number', and `\\#' itself for
-`replace-count', the number of replacements occurred so far.
+`replace-count', the number of replacements occurred so far, starting
+from zero.
 
 If your Lisp expression is an identifier and the next letter in
 the replacement string would be interpreted as part of it, you
@@ -842,7 +849,6 @@ called interactively by passing a non-nil INTERACTIVE argument.
 This function starts looking for the next match from the end of
 the previous match.  Hence, it ignores matches that overlap
 a previously found match."
-
   (interactive
    (progn
      (barf-if-buffer-read-only)
@@ -917,7 +923,6 @@ a non-nil INTERACTIVE argument.
 If a match is split across lines, all the lines it lies in are deleted.
 They are deleted _before_ looking for the next match.  Hence, a match
 starting on the same line at which another match ended is ignored."
-
   (interactive
    (progn
      (barf-if-buffer-read-only)
@@ -965,7 +970,6 @@ end of (the accessible portion of) the buffer.
 This function starts looking for the next match from the end of
 the previous match.  Hence, it ignores matches that overlap
 a previously found match."
-
   (interactive
    (keep-lines-read-args "How many matches for regexp"))
   (save-excursion
@@ -1390,6 +1394,11 @@ invoke `occur'."
 (defun occur (regexp &optional nlines region)
   "Show all lines in the current buffer containing a match for REGEXP.
 If a match spreads across multiple lines, all those lines are shown.
+
+Each match is extended to include complete lines.  Only non-overlapping
+matches are considered.  (Note that extending matches to complete
+lines could cause some of the matches to overlap; if so, they will not
+be shown as separate matches.)
 
 Each line is displayed with NLINES lines before and after, or -NLINES
 before if NLINES is negative.
@@ -2212,6 +2221,26 @@ It is called with three arguments, as if it were
   ;; Close overlays opened by `isearch-range-invisible' in `perform-replace'.
   (isearch-clean-overlays))
 
+;; A macro because we push STACK, i.e. a local var in `perform-replace'.
+(defmacro replace--push-stack (replaced search-str next-replace stack)
+  (declare (indent 0) (debug (form form form gv-place)))
+  `(push (list (point) ,replaced
+;;;  If the replacement has already happened, all we need is the
+;;;  current match start and end.  We could get this with a trivial
+;;;  match like
+;;;  (save-excursion (goto-char (match-beginning 0))
+;;;		     (search-forward (match-string 0))
+;;;                  (match-data t))
+;;;  if we really wanted to avoid manually constructing match data.
+;;;  Adding current-buffer is necessary so that match-data calls can
+;;;  return markers which are appropriate for editing.
+	       (if ,replaced
+		   (list
+		    (match-beginning 0) (match-end 0) (current-buffer))
+	         (match-data t))
+	       ,search-str ,next-replace)
+         ,stack))
+
 (defun perform-replace (from-string replacements
 		        query-flag regexp-flag delimited-flag
 			&optional repeat-count map start end backward region-noncontiguous-p)
@@ -2255,6 +2284,8 @@ It must return a string."
          (next-replacement-replaced nil) ; replacement string
                                          ; (substituted regexp)
          (last-was-undo)
+         (last-was-act-and-show)
+         (update-stack t)
          (replace-count 0)
          (skip-read-only-count 0)
          (skip-filtered-count 0)
@@ -2538,7 +2569,7 @@ It must return a string."
                                  next-replacement)
                              (while (and (< stack-idx stack-len)
                                          stack
-                                         (null replaced))
+                                         (or (null replaced) last-was-act-and-show))
                                (let* ((elt (nth stack-idx stack)))
                                  (setq
                                   stack-idx (1+ stack-idx)
@@ -2548,10 +2579,11 @@ It must return a string."
                                   search-string (nth (if replaced 4 3) elt)
                                   next-replacement (nth (if replaced 3 4) elt)
                                   search-string-replaced search-string
-                                  next-replacement-replaced next-replacement)
+                                  next-replacement-replaced next-replacement
+                                  last-was-act-and-show nil)
 
                                  (when (and (= stack-idx stack-len)
-                                            (null replaced)
+                                            (and (null replaced) (not last-was-act-and-show))
                                             (zerop num-replacements))
                                           (message "Nothing to undo")
                                           (ding 'no-terminate)
@@ -2591,7 +2623,7 @@ It must return a string."
                                           "replacements"))
                                (ding 'no-terminate)
                                (sit-for 1)))
-			   (setq replaced nil last-was-undo t)))
+			   (setq replaced nil last-was-undo t last-was-act-and-show nil)))
 			((eq def 'act)
 			 (or replaced
 			     (setq noedit
@@ -2599,7 +2631,7 @@ It must return a string."
 				    next-replacement nocasify literal
 				    noedit real-match-data backward)
 				   replace-count (1+ replace-count)))
-			 (setq done t replaced t))
+			 (setq done t replaced t update-stack (not last-was-act-and-show)))
 			((eq def 'act-and-exit)
 			 (or replaced
 			     (setq noedit
@@ -2610,7 +2642,7 @@ It must return a string."
 			 (setq keep-going nil)
 			 (setq done t replaced t))
 			((eq def 'act-and-show)
-			 (if (not replaced)
+			 (unless replaced
 			     (setq noedit
 				   (replace-match-maybe-edit
 				    next-replacement nocasify literal
@@ -2618,7 +2650,11 @@ It must return a string."
 				   replace-count (1+ replace-count)
 				   real-match-data (replace-match-data
 						    t real-match-data)
-				   replaced t)))
+				   replaced t last-was-act-and-show t)
+                             (replace--push-stack
+                              replaced
+                              search-string-replaced
+                              next-replacement-replaced stack)))
 			((or (eq def 'automatic) (eq def 'automatic-all))
 			 (or replaced
 			     (setq noedit
@@ -2629,7 +2665,7 @@ It must return a string."
 			 (setq done t query-flag nil replaced t)
 			 (if (eq def 'automatic-all) (setq multi-buffer t)))
 			((eq def 'skip)
-			 (setq done t))
+			 (setq done t update-stack (not last-was-act-and-show)))
 			((eq def 'recenter)
 			 ;; `this-command' has the value `query-replace',
 			 ;; so we need to bind it to `recenter-top-bottom'
@@ -2699,27 +2735,14 @@ It must return a string."
 		;; Record previous position for ^ when we move on.
 		;; Change markers to numbers in the match data
 		;; since lots of markers slow down editing.
-		(push (list (point) replaced
-;;;  If the replacement has already happened, all we need is the
-;;;  current match start and end.  We could get this with a trivial
-;;;  match like
-;;;  (save-excursion (goto-char (match-beginning 0))
-;;;		     (search-forward (match-string 0))
-;;;                  (match-data t))
-;;;  if we really wanted to avoid manually constructing match data.
-;;;  Adding current-buffer is necessary so that match-data calls can
-;;;  return markers which are appropriate for editing.
-			    (if replaced
-				(list
-				 (match-beginning 0)
-				 (match-end 0)
-				 (current-buffer))
-			      (match-data t))
-				search-string-replaced
-				next-replacement-replaced)
-		      stack)
+                (when update-stack
+                  (replace--push-stack
+                   replaced
+                   search-string-replaced
+                   next-replacement-replaced stack))
                 (setq next-replacement-replaced nil
-                      search-string-replaced    nil))))))
+                      search-string-replaced    nil
+                      last-was-act-and-show     nil))))))
       (replace-dehighlight))
     (or unread-command-events
 	(message "Replaced %d occurrence%s%s"

@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* Written by Gerd Moellmann <gerd@gnu.org>.  Tested with Luigi's
    driver on FreeBSD 2.2.7 with a SoundBlaster 16.  */
@@ -293,6 +293,7 @@ static int do_play_sound (const char *, unsigned long);
 
 /* BEGIN: Common functions */
 
+#ifndef WINDOWSNT
 /* Like perror, but signals an error.  */
 
 static _Noreturn void
@@ -315,8 +316,6 @@ sound_perror (const char *msg)
     error ("%s", msg);
 }
 
-
-#ifndef WINDOWSNT
 /* Display a warning message.  */
 
 static void
@@ -387,14 +386,14 @@ parse_sound (Lisp_Object sound, Lisp_Object *attrs)
     {
       if (INTEGERP (attrs[SOUND_VOLUME]))
 	{
-	  if (XINT (attrs[SOUND_VOLUME]) < 0
-	      || XINT (attrs[SOUND_VOLUME]) > 100)
+	  EMACS_INT volume = XINT (attrs[SOUND_VOLUME]);
+	  if (! (0 <= volume && volume <= 100))
 	    return 0;
 	}
       else if (FLOATP (attrs[SOUND_VOLUME]))
 	{
-	  if (XFLOAT_DATA (attrs[SOUND_VOLUME]) < 0
-	      || XFLOAT_DATA (attrs[SOUND_VOLUME]) > 1)
+	  double volume = XFLOAT_DATA (attrs[SOUND_VOLUME]);
+	  if (! (0 <= volume && volume <= 1))
 	    return 0;
 	}
       else

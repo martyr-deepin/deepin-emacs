@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -1159,7 +1159,7 @@ Show the buffer in another window, but don't select it."
     (unless (eq symbol basevar)
       (message "`%s' is an alias for `%s'" symbol basevar))))
 
-(defvar customize-changed-options-previous-release "24.5"
+(defvar customize-changed-options-previous-release "25.3"
   "Version for `customize-changed-options' to refer back to by default.")
 
 ;; Packages will update this variable, so make it available.
@@ -1334,7 +1334,7 @@ suggest to customize that face, if it's customizable."
       (if (get face 'face-alias)
 	  (setq face (get face 'face-alias)))
       (unless (facep face)
-	(error "Invalid face %S" face))
+	(user-error "Invalid face %S" face))
       (funcall display-fun
 	       (list (list face 'custom-face))
 	       (format "*Customize Face: %s*"
@@ -2518,7 +2518,10 @@ try matching its doc string against `custom-guess-doc-alist'."
 		  (copy-sequence type)
 		(list type))))
     (when options
-      (widget-put tmp :options options))
+      ;; This used to use widget-put, but with strict plists that
+      ;; fails when type is an even-length list, eg (repeat character).
+      ;; Passing our result through widget-convert makes it a valid widget.
+      (setcdr tmp (append (list :options options) (cdr tmp))))
     tmp))
 
 (defun custom-variable-value-create (widget)
@@ -2796,7 +2799,7 @@ If STATE is nil, the value is computed by `custom-variable-state'."
     ;; init-file-user rather than user-init-file.  This is in case
     ;; cus-edit is loaded by something in site-start.el, because
     ;; user-init-file is not set at that stage.
-    ;; http://lists.gnu.org/archive/html/emacs-devel/2007-10/msg00310.html
+    ;; https://lists.gnu.org/archive/html/emacs-devel/2007-10/msg00310.html
     ,@(when (or custom-file init-file-user)
 	'(("Save for Future Sessions" custom-variable-save
 	   (lambda (widget)
@@ -3246,10 +3249,6 @@ Only match the specified window systems.")
 					   :sibling-args (:help-echo "\
 The X11 Window System.")
 					   x)
-				    (const :format "PM "
-					   :sibling-args (:help-echo "\
-OS/2 Presentation Manager.")
-					   pm)
 				    (const :format "W32 "
 					   :sibling-args (:help-echo "\
 MS Windows.")
@@ -4849,8 +4848,6 @@ if that value is non-nil."
 (put 'Custom-mode 'mode-class 'special)
 
 (define-obsolete-function-alias 'custom-mode 'Custom-mode "23.1")
-
-(add-to-list 'debug-ignored-errors "^Invalid face:? ")
 
 ;;; The End.
 

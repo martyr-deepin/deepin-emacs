@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -235,7 +235,7 @@ This method is obsolete."
            (let ((f (intern (format "%s-child-p" name))))
              `((defalias ',f ',testsym2)
                (make-obsolete
-                ',f ,(format "use (cl-typep ... '%s) instead" name)
+                ',f ,(format "use (cl-typep ... \\='%s) instead" name)
                 "25.1"))))
 
        ;; When using typep, (typep OBJ 'myclass) returns t for objects which
@@ -246,7 +246,7 @@ This method is obsolete."
        ;; test, so we can let typep have the CLOS documented behavior
        ;; while keeping our above predicate clean.
 
-       (put ',name 'cl-deftype-satisfies #',testsym2)
+       (define-symbol-prop ',name 'cl-deftype-satisfies #',testsym2)
 
        (eieio-defclass-internal ',name ',superclasses ',slots ',options-and-doc)
 
@@ -337,14 +337,12 @@ variable name of the same name as the slot."
 ;; hard-coded in random .elc files.
 (defun eieio-pcase-slot-index-table (obj)
   "Return some data structure from which can be extracted the slot offset."
-  (eieio--class-index-table
-   (symbol-value (eieio--object-class-tag obj))))
+  (eieio--class-index-table (eieio--object-class obj)))
 
 (defun eieio-pcase-slot-index-from-index-table (index-table slot)
   "Find the index to pass to `aref' to access SLOT."
   (let ((index (gethash slot index-table)))
-    (if index (+ (eval-when-compile
-                   (length (cl-struct-slot-info 'eieio--object)))
+    (if index (+ (eval-when-compile eieio--object-num-slots)
                  index))))
 
 (pcase-defmacro eieio (&rest fields)
@@ -825,6 +823,7 @@ first and modify the returned object.")
 It is sometimes useful to put a summary of the object into the
 default #<notation> string when using EIEIO browsing tools.
 Implement this method to customize the summary."
+  (declare (obsolete cl-print-object "26.1"))
   (format "%S" this))
 
 (cl-defmethod object-print ((this eieio-default-superclass) &rest strings)
@@ -840,6 +839,12 @@ Implement this function and specify STRINGS in a call to
 When passing in extra strings from child classes, always remember
 to prepend a space."
   (eieio-object-name this (apply #'concat strings)))
+
+
+(cl-defmethod cl-print-object ((object eieio-default-superclass) stream)
+  "Default printer for EIEIO objects."
+  ;; Fallback to the old `object-print'.
+  (princ (object-print object) stream))
 
 (defvar eieio-print-depth 0
   "When printing, keep track of the current indentation depth.")
@@ -944,27 +949,6 @@ of `eq'."
 ;; FIXME: This is not actually needed any more since we can click on the
 ;; hyperlink from the constructor's docstring to see the type definition.
 (add-hook 'help-fns-describe-function-functions 'eieio-help-constructor)
-
-;;; Interfacing with edebug
-;;
-(defun eieio-edebug-prin1-to-string (print-function object &optional noescape)
-  "Display EIEIO OBJECT in fancy format.
-
-Used as advice around `edebug-prin1-to-string', held in the
-variable PRINT-FUNCTION.  Optional argument NOESCAPE is passed to
-`prin1-to-string' when appropriate."
-  (cond ((eieio--class-p object) (eieio--class-print-name object))
-	((eieio-object-p object) (object-print object))
-	((and (listp object) (or (eieio--class-p (car object))
-				 (eieio-object-p (car object))))
-	 (concat "(" (mapconcat
-                      (lambda (x) (eieio-edebug-prin1-to-string print-function x))
-                      object " ")
-                 ")"))
-	(t (funcall print-function object noescape))))
-
-(advice-add 'edebug-prin1-to-string
-            :around #'eieio-edebug-prin1-to-string)
 
 (provide 'eieio)
 

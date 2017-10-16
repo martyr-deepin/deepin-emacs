@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -285,7 +285,7 @@ indentation by specifying a large negative ARG."
   "Indent current line to COLUMN.
 This function removes or adds spaces and tabs at beginning of line
 only if necessary.  It leaves point at end of indentation."
-  (backward-to-indentation 0)
+  (back-to-indentation)
   (let ((cur-col (current-column)))
     (cond ((< cur-col column)
 	   (if (>= (- column (* (/ cur-col tab-width) tab-width)) tab-width)

@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 #include <stdio.h>
@@ -1449,6 +1449,19 @@ init_fringe_bitmap (int which, struct fringe_bitmap *fb, int once_p)
 #endif /* not USE_CAIRO */
 #endif /* HAVE_X_WINDOWS */
 
+#ifdef HAVE_NTGUI
+      unsigned short *bits = fb->bits;
+      int j;
+      for (j = 0; j < fb->height; j++)
+	{
+	  unsigned short b = *bits;
+	  b <<= (16 - fb->width);
+	  /* Windows is little-endian, so the next line is always
+	     needed.  */
+	  b = ((b >> 8) | (b << 8));
+	  *bits++ = b;
+	}
+#endif
     }
 
   if (!once_p)

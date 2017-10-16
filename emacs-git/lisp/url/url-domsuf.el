@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -89,7 +89,7 @@
 
 ;; Tests:
 
-;; TODO convert to a proper test/automated test.
+;; TODO convert to a proper test.
 ;; (url-domsuf-cookie-allowed-p "com") => nil
 ;; (url-domsuf-cookie-allowed-p "foo.bar.bd") => t
 ;; (url-domsuf-cookie-allowed-p "bar.bd") => nil

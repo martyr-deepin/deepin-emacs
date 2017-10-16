@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #ifndef EMACS_TERMCHAR_H
 #define EMACS_TERMCHAR_H
@@ -148,10 +148,6 @@ struct tty_display_info
   int TN_no_color_video;
 
   int TN_max_colors;            /* "Co" -- number of colors.  */
-
-  /* "pa" -- max. number of color pairs on screen.  Not handled yet.
-     Could be a problem if not equal to TN_max_colors * TN_max_colors.  */
-  int TN_max_pairs;
 
   /* "op" -- SVr4 set default pair to its original value.  */
   const char *TS_orig_pair;

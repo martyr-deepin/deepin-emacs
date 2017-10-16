@@ -21,7 +21,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -185,7 +185,7 @@
 (require 'bytecomp)
 (eval-when-compile (require 'cl-lib))
 (require 'macroexp)
-(require 'subr-x)
+(eval-when-compile (require 'subr-x))
 
 (defun byte-compile-log-lap-1 (format &rest args)
   ;; Newer byte codes for stack-ref make the slot 0 non-nil again.
@@ -1247,7 +1247,7 @@
 	 hash-table-p
 	 identity ignore integerp integer-or-marker-p interactive-p
 	 invocation-directory invocation-name
-	 keymapp
+	 keymapp keywordp
 	 line-beginning-position line-end-position list listp
 	 make-marker mark mark-marker markerp max-char
 	 memory-limit minibuffer-window
@@ -1281,7 +1281,10 @@
 ;; errors to compile time.
 
 (let ((pure-fns
-       '(concat symbol-name regexp-opt regexp-quote string-to-syntax)))
+       '(concat symbol-name regexp-opt regexp-quote string-to-syntax
+         string-to-char
+         ash lsh logb lognot logior logxor
+         ceiling floor)))
   (while pure-fns
     (put (car pure-fns) 'pure t)
     (setq pure-fns (cdr pure-fns)))
@@ -1421,7 +1424,7 @@
                         when (and (listp el) ;; make sure we're at the correct op
                                   (eq (nth 1 el) 'byte-constant)
                                   (eq (nth 2 el) orig-table))
-                        ;; jump tables are never resused, so we do this exactly
+                        ;; Jump tables are never reused, so do this exactly
                         ;; once.
                         do (setf (nth 2 el) last-constant) and return nil))))
       ;; lap = ( [ (pc . (op . arg)) ]* )
@@ -1752,12 +1755,22 @@ If FOR-EFFECT is non-nil, the return value is assumed to be of no importance."
 		 (setcdr tmp2 lap1)
 		 (setq tmp3 (cdr (memq tmp2 tmp3))))
 	       (setq lap (delq lap0 lap)
-		     keep-going t))
+		     keep-going t)
+               ;; replace references to tag in jump tables, if any
+               (dolist (table byte-compile-jump-tables)
+                 (catch 'break
+                   (maphash #'(lambda (value tag)
+                                (when (equal tag lap0)
+                                  ;; each tag occurs only once in the jump table
+                                  (puthash value lap1 table)
+                                  (throw 'break nil)))
+                            table))))
 	      ;;
 	      ;; unused-TAG: --> <deleted>
 	      ;;
 	      ((and (eq 'TAG (car lap0))
 		    (not (rassq lap0 lap))
+                    ;; make sure this tag isn't used in a jump-table
                     (cl-loop for table in byte-compile-jump-tables
                              when (member lap0 (hash-table-values table))
                              return nil finally return t))

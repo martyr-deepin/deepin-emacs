@@ -21,7 +21,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -356,13 +356,14 @@ This variable is buffer-local."
    (regexp-opt
     '("Enter" "enter" "Enter same" "enter same" "Enter the" "enter the"
       "Old" "old" "New" "new" "'s" "login"
-      "Kerberos" "CVS" "UNIX" " SMB" "LDAP" "PEM"
+      "Kerberos" "CVS" "UNIX" " SMB" "LDAP" "PEM" "SUDO"
       "[sudo]" "Repeat" "Bad" "Retype")
     t)
    " +\\)"
    "\\(?:" (regexp-opt password-word-equivalents) "\\|Response\\)"
    "\\(?:\\(?:, try\\)? *again\\| (empty for no passphrase)\\| (again)\\)?"
-   "\\(?: for .+\\)?[:：៖]\\s *\\'")
+   ;; "[[:alpha:]]" used to be "for", which fails to match non-English.
+   "\\(?: [[:alpha:]]+ .+\\)?[:：៖]\\s *\\'")
   "Regexp matching prompts for passwords in the inferior process.
 This is used by `comint-watch-for-password-prompt'."
   :version "26.1"
@@ -387,8 +388,7 @@ See also `completion-at-point'.
 
 This is a good thing to set in mode hooks.")
 
-(defvar comint-input-filter
-  (function (lambda (str) (not (string-match "\\`\\s *\\'" str))))
+(defvar comint-input-filter #'comint-nonblank-p
   "Predicate for filtering additions to input history.
 Takes one argument, the input.  If non-nil, the input may be saved on the input
 history list.  Default is to save anything that isn't all whitespace.")
@@ -678,7 +678,7 @@ Entry to this mode runs the hooks on `comint-mode-hook'."
   ;; comint-scroll-show-maximum-output is nil, and no-one can remember
   ;; what the original problem was.  If there are problems with point
   ;; not going to the end, consider re-enabling this.
-  ;; http://lists.gnu.org/archive/html/emacs-devel/2007-08/msg00827.html
+  ;; https://lists.gnu.org/archive/html/emacs-devel/2007-08/msg00827.html
   ;;
   ;; This makes it really work to keep point at the bottom.
   ;; (make-local-variable 'scroll-conservatively)
@@ -856,6 +856,10 @@ series of processes in the same Comint buffer.  The hook
     (if changed
 	(set-process-coding-system proc decoding encoding))
     proc))
+
+(defun comint-nonblank-p (str)
+  "Return non-nil if STR contains non-whitespace syntax."
+  (not (string-match "\\`\\s *\\'" str)))
 
 (defun comint-insert-input (event)
   "In a Comint buffer, set the current input to the previous input at point.

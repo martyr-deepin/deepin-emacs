@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -278,7 +278,7 @@ Otherwise, look for `movemail' in the directories in
 	  ;; rmail-insert-inbox-text before r1.439 fell back to using
 	  ;; (expand-file-name "movemail" exec-directory) and just
 	  ;; assuming it would work.
-	  ;; http://lists.gnu.org/archive/html/bug-gnu-emacs/2008-02/msg00087.html
+	  ;; https://lists.gnu.org/archive/html/bug-gnu-emacs/2008-02/msg00087.html
 	  (let ((progname (expand-file-name
 			   (concat "movemail"
 				   (if (memq system-type '(ms-dos windows-nt))
@@ -363,6 +363,9 @@ explicitly.")
 	  "\\|^importance:\\|^envelope-to:\\|^delivery-date\\|^openpgp:"
 	  "\\|^mbox-line:\\|^cancel-lock:"
 	  "\\|^DomainKey-Signature:\\|^dkim-signature:"
+	  "\\|^ARC-.*:"
+	  "\\|^Received-SPF:"
+	  "\\|^Authentication-Results:"
 	  "\\|^resent-face:\\|^resent-x.*:\\|^resent-organization:\\|^resent-openpgp:"
 	  "\\|^x-.*:"))
   "Regexp to match header fields that Rmail should normally hide.
@@ -531,7 +534,7 @@ still the current message in the Rmail buffer.")
 ;; It's not clear what it should do now, since there is nothing that
 ;; records when a message is shown for the first time (unseen is not
 ;; necessarily the same thing).
-;; See http://lists.gnu.org/archive/html/emacs-devel/2009-03/msg00013.html
+;; See https://lists.gnu.org/archive/html/emacs-devel/2009-03/msg00013.html
 (defcustom rmail-message-filter nil
   "If non-nil, a filter function for new messages in RMAIL.
 Called with region narrowed to the message, including headers,
@@ -1884,14 +1887,19 @@ not be a new one).  It returns non-nil if it got any new messages."
 	(setq result (> new-messages 0))
 	result))))
 
+(defun rmail-remote-proto-p (proto)
+  "Return non-nil if string PROTO refers to a remote mailbox protocol."
+  (string-match-p "^\\(imap\\|pop\\)s?$" proto))
+
 (defun rmail-parse-url (file)
-  "Parse the supplied URL. Return (list MAILBOX-NAME REMOTE PASSWORD GOT-PASSWORD)
-WHERE MAILBOX-NAME is the name of the mailbox suitable as argument to the
-actual version of `movemail', REMOTE is non-nil if MAILBOX-NAME refers to
-a remote mailbox, PASSWORD is the password if it should be
-supplied as a separate argument to `movemail' or nil otherwise, GOT-PASSWORD
-is non-nil if the user has supplied the password interactively.
-"
+  "Parse a mailbox URL string FILE.
+Return (MAILBOX-NAME PROTO PASSWORD GOT-PASSWORD), where MAILBOX-NAME is
+the name of the mailbox suitable as argument to the actual version of
+`movemail', PROTO is the movemail protocol (use `rmail-remote-proto-p'
+to see if it refers to a remote mailbox), PASSWORD is the password if it
+should be supplied as a separate argument to `movemail' or nil otherwise,
+and GOT-PASSWORD is non-nil if the user has supplied the password
+interactively."
   (cond
    ((string-match "^\\([^:]+\\)://\\(\\([^:@]+\\)\\(:\\([^@]+\\)\\)?@\\)?.*" file)
       (let (got-password supplied-password
@@ -1901,24 +1909,26 @@ is non-nil if the user has supplied the password interactively.
 	    (host  (substring file (or (match-end 2)
 				       (+ 3 (match-end 1))))))
 
-	(if (not pass)
-	    (when rmail-remote-password-required
-	      (setq got-password (not (rmail-have-password)))
-	      (setq supplied-password (rmail-get-remote-password
-				       (string-equal proto "imap"))))
-	  ;; The password is embedded.  Strip it out since movemail
-	  ;; does not really like it, in spite of the movemail spec.
-	  (setq file (concat proto "://" user "@" host)))
+	(if (rmail-remote-proto-p proto)
+	    (if (not pass)
+		(when rmail-remote-password-required
+		  (setq got-password (not (rmail-have-password)))
+		  (setq supplied-password (rmail-get-remote-password
+					   (string-match "^imaps?" proto))))
+	      ;; FIXME
+	      ;; The password is embedded.  Strip it out since movemail
+	      ;; does not really like it, in spite of the movemail spec.
+	      (setq file (concat proto "://" user "@" host))))
 
 	(if (rmail-movemail-variant-p 'emacs)
 	    (if (string-equal proto "pop")
 		(list (concat "po:" user ":" host)
-		      t
+		      proto
 		      (or pass supplied-password)
 		      got-password)
 	      (error "Emacs movemail does not support %s protocol" proto))
 	  (list file
-		(or (string-equal proto "pop") (string-equal proto "imap"))
+		proto
 		(or supplied-password pass)
 		got-password))))
 
@@ -1981,18 +1991,18 @@ Value is the size of the newly read mail after conversion."
     size))
 
 (defun rmail-insert-inbox-text (files renamep)
-  (let (file tofile delete-files popmail got-password password)
+  (let (file tofile delete-files proto got-password password)
     (while files
       ;; Handle remote mailbox names specially; don't expand as filenames
       ;; in case the userid contains a directory separator.
       (setq file (car files))
       (let ((url-data (rmail-parse-url file)))
 	(setq file (nth 0 url-data))
-	(setq popmail (nth 1 url-data))
+	(setq proto (nth 1 url-data))
 	(setq password (nth 2 url-data))
 	(setq got-password (nth 3 url-data)))
 
-      (if popmail
+      (if proto
 	  (setq renamep t)
 	(setq file (file-truename
 		    (substitute-in-file-name (expand-file-name file)))))
@@ -2013,14 +2023,17 @@ Value is the size of the newly read mail after conversion."
 		     (expand-file-name buffer-file-name))))
       ;; Always use movemail to rename the file,
       ;; since there can be mailboxes in various directories.
-      (when (not popmail)
+      (when (not proto)
 	;; On some systems, /usr/spool/mail/foo is a directory
 	;; and the actual inbox is /usr/spool/mail/foo/foo.
 	(if (file-directory-p file)
 	    (setq file (expand-file-name (user-login-name)
 					 file))))
-      (cond (popmail
-	     (message "Getting mail from the remote server ..."))
+      (cond (proto
+	     (message "Getting mail from %s..."
+		      (if (rmail-remote-proto-p proto)
+			  "the remote server"
+			proto)))
 	    ((and (file-exists-p tofile)
 		  (/= 0 (nth 7 (file-attributes tofile))))
 	     (message "Getting mail from %s..." tofile))
@@ -2031,7 +2044,7 @@ Value is the size of the newly read mail after conversion."
       ;; rename or copy the file FILE to TOFILE if and as appropriate.
       (cond ((not renamep)
 	     (setq tofile file))
-	    ((or (file-exists-p tofile) (and (not popmail)
+	    ((or (file-exists-p tofile) (and (not proto)
 					     (not (file-exists-p file))))
 	     nil)
 	    (t
@@ -2066,9 +2079,10 @@ Value is the size of the newly read mail after conversion."
 		   ;; If we just read the password, most likely it is
 		   ;; wrong.  Otherwise, see if there is a specific
 		   ;; reason to think that the problem is a wrong passwd.
-		   (if (or got-password
-			   (re-search-forward rmail-remote-password-error
-					      nil t))
+		   (if (and (rmail-remote-proto-p proto)
+			    (or got-password
+				(re-search-forward rmail-remote-password-error
+						   nil t)))
 		       (rmail-set-remote-password nil))
 
 		   ;; If using Mailutils, remove initial error code
@@ -2665,11 +2679,7 @@ Ask the user whether to add that list name to `mail-mailing-lists'."
 			      (concat "^\\("
 				      (regexp-quote (user-login-name))
 				      "\\($\\|@\\)\\|"
-				      (regexp-quote
-				       (or user-mail-address
-					   (concat (user-login-name) "@"
-						   (or mail-host-address
-						       (system-name)))))
+				      (regexp-quote user-mail-address)
 				      "\\>\\)"))
 			  addr))
 			(y-or-n-p
@@ -2818,8 +2828,6 @@ The current mail message becomes the message displayed."
 		 (re-search-forward "mime-version: 1.0" nil t))
 	    (let ((rmail-buffer mbox-buf)
 		  (rmail-view-buffer view-buf))
-	      (setq showing-message t)
-	      (message "Showing message %d..." msg)
 	      (set (make-local-variable 'rmail-mime-decoded) t)
 	      (funcall rmail-show-mime-function))
 	  (setq body-start (search-forward "\n\n" nil t))
@@ -4590,7 +4598,8 @@ Argument MIME is non-nil if this is a mime message."
          (current-buffer))))
 
     (list armor-start (- (point-max) after-end) mime
-          armor-end-regexp)))
+          armor-end-regexp
+          (buffer-substring armor-start (- (point-max) after-end)))))
 
 (declare-function rmail-mime-entity-truncated "rmailmm" (entity))
 
@@ -4633,8 +4642,7 @@ Argument MIME is non-nil if this is a mime message."
 	(when (y-or-n-p "Replace the original message? ")
 	  (setq decrypts (nreverse decrypts))
 	  (let ((beg (rmail-msgbeg rmail-current-message))
-		(end (rmail-msgend rmail-current-message))
-		(from-buffer (current-buffer)))
+		(end (rmail-msgend rmail-current-message)))
 	    (with-current-buffer rmail-view-buffer
 	      (narrow-to-region beg end)
 	      (goto-char (point-min))
@@ -4652,7 +4660,7 @@ Argument MIME is non-nil if this is a mime message."
 		      ;; Found as expected -- now replace it with the decrypt.
 		      (when armor-end
 			(delete-region armor-start armor-end)
-			(insert-buffer-substring from-buffer (nth 0 d) (nth 1 d)))
+                        (insert (nth 4 d)))
 
 		      ;; Change the mime type (if this is in a mime part)
 		      ;; so this part will display by default

@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 
@@ -628,7 +628,7 @@ If SECRET is non-nil, list secret keys instead of public keys."
 		       (`import-keys "Error while importing keys with \"%s\":")
 		       (`export-keys "Error while exporting keys with \"%s\":")
 		       (_ "Error while executing \"%s\":\n\n"))
-		     epg-gpg-program)
+		     (epg-context-program context))
 		    "\n\n"
 		    (epg-context-error-output context)))
 	  (epa-info-mode)

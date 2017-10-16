@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -146,14 +146,19 @@ Used to gray out relevant toolbar icons.")
     ([refresh]	"Refresh" . gud-refresh)
     ([run]	menu-item "Run" gud-run
                   :enable (not gud-running)
-		  :visible (memq gud-minor-mode '(gdbmi gdb dbx jdb)))
+		  :visible (or (memq gud-minor-mode '(gdb dbx jdb))
+			       (and (eq gud-minor-mode 'gdbmi)
+				    (or (not (gdb-show-run-p))
+					(bound-and-true-p
+					 gdb-active-process)))))
     ([go]	menu-item (if (bound-and-true-p gdb-active-process)
 			      "Continue" "Run") gud-go
 		  :visible (and (eq gud-minor-mode 'gdbmi)
                                 (gdb-show-run-p)))
     ([stop]	menu-item "Stop" gud-stop-subjob
 		  :visible (or (not (memq gud-minor-mode '(gdbmi pdb)))
-			       (gdb-show-stop-p)))
+			       (and (eq gud-minor-mode 'gdbmi)
+                                    (gdb-show-stop-p))))
     ([until]	menu-item "Continue to selection" gud-until
                   :enable (not gud-running)
 		  :visible (and (memq gud-minor-mode '(gdbmi gdb perldb))
@@ -3114,10 +3119,10 @@ Link exprs of the form:
       (setq span-start (char-after (- span-start 1)))
       (setq span-end (char-after span-end))
       (cond
-       ((= span-start ?)) t)
-      ((= span-start ?]) t)
-     ((= span-end ?() t)
-      ((= span-end ?[) t)
+       ((= span-start ?\)) t)
+      ((= span-start ?\]) t)
+     ((= span-end ?\() t)
+      ((= span-end ?\[) t)
        (t nil)))
      (t nil))))
 

@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -263,7 +263,7 @@ It scans low-level sorted spools even when not required."
   :type 'function)
 
 (defcustom nnmail-crosspost-link-function
-  (if (string-match "windows-nt" (symbol-name system-type))
+  (if (eq 'windows-nt system-type)
       'copy-file
     'add-name-to-file)
   "Function called to create a copy of a file.

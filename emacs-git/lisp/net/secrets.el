@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -737,7 +737,7 @@ If there is no such item, or the item doesn't own this attribute, return nil."
     (set-keymap-parent map (make-composed-keymap special-mode-map widget-keymap))
     (define-key map "n" 'next-line)
     (define-key map "p" 'previous-line)
-    (define-key map "z" 'kill-this-buffer)
+    (define-key map "z" 'kill-current-buffer)
     map)
   "Keymap used in `secrets-mode' buffers.")
 

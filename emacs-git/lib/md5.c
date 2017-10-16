@@ -15,7 +15,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
 
 /* Written by Ulrich Drepper <drepper@gnu.ai.mit.edu>, 1995.  */
 
@@ -246,7 +246,8 @@ md5_process_bytes (const void *buffer, size_t len, struct md5_ctx *ctx)
           md5_process_block (ctx->buffer, ctx->buflen & ~63, ctx);
 
           ctx->buflen &= 63;
-          /* The regions in the following copy operation cannot overlap.  */
+          /* The regions in the following copy operation cannot overlap,
+             because ctx->buflen < 64 ≤ (left_over + add) & ~63.  */
           memcpy (ctx->buffer,
                   &((char *) ctx->buffer)[(left_over + add) & ~63],
                   ctx->buflen);
@@ -288,6 +289,8 @@ md5_process_bytes (const void *buffer, size_t len, struct md5_ctx *ctx)
         {
           md5_process_block (ctx->buffer, 64, ctx);
           left_over -= 64;
+          /* The regions in the following copy operation cannot overlap,
+             because left_over ≤ 64.  */
           memcpy (ctx->buffer, &ctx->buffer[16], left_over);
         }
       ctx->buflen = left_over;

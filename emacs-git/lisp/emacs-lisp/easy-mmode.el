@@ -21,7 +21,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -543,6 +543,7 @@ Valid keywords and arguments are:
   "Define a constant M whose value is the result of `easy-mmode-define-keymap'.
 The M, BS, and ARGS arguments are as per that function.  DOC is
 the constant's documentation."
+  (declare (indent 1))
   `(defconst ,m
      (easy-mmode-define-keymap ,bs nil (if (boundp ',m) ,m) ,(cons 'list args))
      ,doc))
@@ -569,6 +570,7 @@ the constant's documentation."
 (defmacro easy-mmode-defsyntax (st css doc &rest args)
   "Define variable ST as a syntax-table.
 CSS contains a list of syntax specifications of the form (CHAR . SYNTAX)."
+  (declare (indent 1))
   `(progn
      (autoload 'easy-mmode-define-syntax "easy-mmode")
      (defconst ,st (easy-mmode-define-syntax ,css ,(cons 'list args)) ,doc)))

@@ -14,7 +14,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #if ! defined TIMESPEC_H
 # define TIMESPEC_H
@@ -27,6 +27,10 @@
 _GL_INLINE_HEADER_BEGIN
 #ifndef _GL_TIMESPEC_INLINE
 # define _GL_TIMESPEC_INLINE _GL_INLINE
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /* Resolution of timespec timestamps (in units per second), and log
@@ -106,6 +110,10 @@ timespectod (struct timespec a)
 
 void gettime (struct timespec *);
 int settime (struct timespec const *);
+
+#ifdef __cplusplus
+}
+#endif
 
 _GL_INLINE_HEADER_END
 

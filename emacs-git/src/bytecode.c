@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
@@ -452,14 +452,6 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
 	 the table clearer.  */
 #define LABEL(OP) [OP] = &&insn_ ## OP
 
-#if GNUC_PREREQ (4, 6, 0)
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Woverride-init"
-#elif defined __clang__
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Winitializer-overrides"
-#endif
-
       /* This is the dispatch table for the threaded interpreter.  */
       static const void *const targets[256] =
 	{
@@ -470,10 +462,6 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
 	  BYTE_CODES
 #undef DEFINE
 	};
-
-#if GNUC_PREREQ (4, 6, 0) || defined __clang__
-# pragma GCC diagnostic pop
-#endif
 
 #endif
 
@@ -992,18 +980,14 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
 	CASE (Beqlsign):
 	  {
 	    Lisp_Object v2 = POP, v1 = TOP;
-	    CHECK_NUMBER_OR_FLOAT_COERCE_MARKER (v1);
-	    CHECK_NUMBER_OR_FLOAT_COERCE_MARKER (v2);
-	    bool equal;
 	    if (FLOATP (v1) || FLOATP (v2))
-	      {
-		double f1 = FLOATP (v1) ? XFLOAT_DATA (v1) : XINT (v1);
-		double f2 = FLOATP (v2) ? XFLOAT_DATA (v2) : XINT (v2);
-		equal = f1 == f2;
-	      }
+	      TOP = arithcompare (v1, v2, ARITH_EQUAL);
 	    else
-	      equal = XINT (v1) == XINT (v2);
-	    TOP = equal ? Qt : Qnil;
+	      {
+		CHECK_NUMBER_OR_FLOAT_COERCE_MARKER (v1);
+		CHECK_NUMBER_OR_FLOAT_COERCE_MARKER (v2);
+		TOP = EQ (v1, v2) ? Qt : Qnil;
+	      }
 	    NEXT;
 	  }
 
@@ -1415,13 +1399,15 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
 
         CASE (Bswitch):
           {
-            /*TODO: Perhaps introduce another byte-code for switch when the
-              number of cases is less, which uses a simple vector for linear
-              search as the jump table.  */
+            /* TODO: Perhaps introduce another byte-code for switch when the
+	       number of cases is less, which uses a simple vector for linear
+	       search as the jump table.  */
             Lisp_Object jmp_table = POP;
+	    if (BYTE_CODE_SAFE && !HASH_TABLE_P (jmp_table))
+	      emacs_abort ();
             Lisp_Object v1 = POP;
             ptrdiff_t i;
-            struct Lisp_Hash_Table *h = XHASH_TABLE(jmp_table);
+            struct Lisp_Hash_Table *h = XHASH_TABLE (jmp_table);
 
             /* h->count is a faster approximation for HASH_TABLE_SIZE (h)
                here. */
@@ -1429,9 +1415,9 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
               { /* Do a linear search if there are not many cases
                    FIXME: 5 is arbitrarily chosen.  */
                 Lisp_Object hash_code = h->test.cmpfn
-                  ? make_number(h->test.hashfn (&h->test, v1)) : Qnil;
+                  ? make_number (h->test.hashfn (&h->test, v1)) : Qnil;
 
-                for (i = h->count; 0 <= --i;)
+                for (i = h->count; 0 <= --i; )
                   if (EQ (v1, HASH_KEY (h, i))
                       || (h->test.cmpfn
                           && EQ (hash_code, HASH_HASH (h, i))
@@ -1440,13 +1426,16 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
 
               }
             else
-              i = hash_lookup(h, v1, NULL);
+              i = hash_lookup (h, v1, NULL);
 
-          if (i >= 0)
-            {
-              op = XINT (HASH_VALUE (h, i));
-              goto op_branch;
-            }
+	    if (i >= 0)
+	      {
+		Lisp_Object val = HASH_VALUE (h, i);
+		if (BYTE_CODE_SAFE && !INTEGERP (val))
+		  emacs_abort ();
+		op = XINT (val);
+		goto op_branch;
+	      }
           }
           NEXT;
 

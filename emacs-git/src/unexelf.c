@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /*
 In other words, you are welcome to use, share and improve this program.
@@ -576,7 +576,17 @@ unexec (const char *new_name, const char *old_name)
     }
 
   /* This loop seeks out relocation sections for the data section, so
-     that it can undo relocations performed by the runtime loader.  */
+     that it can undo relocations performed by the runtime loader.
+
+     The following approach does not work on x86 platforms that use
+     the GNU Gold linker, which can generate .rel.dyn relocation
+     sections containing R_386_32 entries that the following code does
+     not grok.  Emacs works around this problem by avoiding C
+     constructs that generate such entries, which is horrible hack.
+
+     FIXME: Presumably more problems like this will crop up as linkers
+     get fancier.  We really need to stop assuming that Emacs can grok
+     arbitrary linker output.  See Bug#27248.  */
   for (n = new_file_h->e_shnum; 0 < --n; )
     {
       ElfW (Shdr) *rel_shdr = &NEW_SECTION_H (n);

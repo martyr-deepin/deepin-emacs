@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -1243,12 +1243,15 @@ Optional arg GATEWAY-METHOD specifies the gateway to be used,
 overriding the value of `url-gateway-method'.
 
 The return value of this function is the retrieval buffer."
-  (cl-check-type url vector "Need a pre-parsed URL.")
+  (cl-check-type url url "Need a pre-parsed URL.")
   (let* (;; (host (url-host (or url-using-proxy url)))
 	 ;; (port (url-port (or url-using-proxy url)))
 	 (nsm-noninteractive (or url-request-noninteractive
 				 (and (boundp 'url-http-noninteractive)
 				      url-http-noninteractive)))
+         ;; The following binding is needed in url-open-stream, which
+         ;; is called from url-http-find-free-connection.
+         (url-current-object url)
          (connection (url-http-find-free-connection (url-host url)
                                                     (url-port url)
                                                     gateway-method))

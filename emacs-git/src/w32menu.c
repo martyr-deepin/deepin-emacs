@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
@@ -267,7 +267,7 @@ set_frame_menubar (struct frame *f, bool first_time, bool deep_p)
   HMENU menubar_widget = f->output_data.w32->menubar_widget;
   Lisp_Object items;
   widget_value *wv, *first_wv, *prev_wv = 0;
-  int i, last_i;
+  int i, last_i = 0;
   int *submenu_start, *submenu_end;
   int *submenu_top_level_items, *submenu_n_panes;
 

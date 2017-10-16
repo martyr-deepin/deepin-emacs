@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -720,9 +720,10 @@ then ABBREV is looked up in that table only."
           (setq start abbrev-start-location)
           (setq abbrev-start-location nil)
           ;; Remove the hyphen inserted by `abbrev-prefix-mark'.
-          (if (and (< start (point-max))
-                   (eq (char-after start) ?-))
-              (delete-region start (1+ start)))
+          (when (and (< start (point-max))
+                     (eq (char-after start) ?-))
+            (delete-region start (1+ start))
+            (setq pos (1- pos)))
           (skip-syntax-backward " ")
           (setq end (point))
           (when (> end start)

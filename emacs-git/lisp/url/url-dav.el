@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; DAV is in RFC 2518.
 
@@ -518,7 +518,7 @@ FAILURE-RESULTS is a list of (URL STATUS)."
 				    depth '(("Timeout" . "Infinite"))))
 
     ;; Get the parent URL ready for expand-file-name
-    (if (not (vectorp url))
+    (if (not (url-p url))
 	(setq url (url-generic-parse-url url)))
 
     ;; Walk thru the response list, fully expand the URL, and grab the
@@ -540,7 +540,7 @@ FAILURE-RESULTS is a list of (URL STATUS)."
 	(child-url nil)
 	(child-results nil)
 	(results nil))
-    (if (not (vectorp url))
+    (if (not (url-p url))
 	(setq url (url-generic-parse-url url)))
 
     (while response

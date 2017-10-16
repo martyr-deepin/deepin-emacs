@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -580,7 +580,7 @@ See also the commands \\[xscheme-yank-pop] and \\[xscheme-yank-push]."
   (xscheme-rotate-yank-pointer (if (listp arg) 0
 				 (if (eq arg '-) -1
 				   (1- arg))))
-  (push-mark (point))
+  (push-mark)
   (insert (car xscheme-expressions-ring-yank-pointer))
   (if (consp arg)
       (exchange-point-and-mark)))

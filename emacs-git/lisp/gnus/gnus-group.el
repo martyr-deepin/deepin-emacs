@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -2429,7 +2429,7 @@ Valid input formats include:
     (gnus-read-ephemeral-gmane-group group start range)))
 
 (defcustom gnus-bug-group-download-format-alist
-  '((emacs . "http://debbugs.gnu.org/cgi/bugreport.cgi?bug=%s;mboxmaint=yes;mboxstat=yes")
+  '((emacs . "https://debbugs.gnu.org/cgi/bugreport.cgi?bug=%s;mboxmaint=yes;mboxstat=yes")
     (debian
      . "http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=%s&mbox=yes;mboxmaint=yes"))
   "Alist of symbols for bug trackers and the corresponding URL format string.
@@ -2464,14 +2464,33 @@ the bug number, and browsing the URL must return mbox output."
 		     (file-exists-p file))
 		(insert-file-contents file)
 	      (url-insert-file-contents (format mbox-url id)))))
-	(goto-char (point-min))
 	;; Add the debbugs address so that we can respond to reports easily.
-	(while (re-search-forward "^To: " nil t)
-	  (end-of-line)
-	  (insert (format ", %s@%s" (car ids)
-			  (replace-regexp-in-string
-			   "/.*$" ""
-			   (replace-regexp-in-string "^http://" "" mbox-url)))))))
+	(let ((address
+	       (format "%s@%s" (car ids)
+		       (replace-regexp-in-string
+			"/.*$" ""
+			(replace-regexp-in-string "^http://" "" mbox-url)))))
+	  (goto-char (point-min))
+	  (while (re-search-forward (concat "^" message-unix-mail-delimiter)
+				    nil t)
+	    (narrow-to-region (point)
+			      (if (search-forward "\n\n" nil t)
+				  (1- (point))
+				(point-max)))
+	    (unless (string-match (concat "\\(?:\\`\\|[ ,<]\\)"
+					  (regexp-quote address)
+					  "\\(?:\\'\\|[ ,>]\\)")
+				  (concat (message-fetch-field "to") " "
+					  (message-fetch-field "cc")))
+	      (goto-char (point-min))
+	      (if (re-search-forward "^To:" nil t)
+		  (progn
+		    (message-next-header)
+		    (skip-chars-backward "\t\n ")
+		    (insert ", " address))
+		(insert "To: " address "\n")))
+	    (goto-char (point-max))
+	    (widen)))))
     (gnus-group-read-ephemeral-group
      (format "nndoc+ephemeral:bug#%s"
 	     (mapconcat 'number-to-string ids ","))

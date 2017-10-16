@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 
@@ -82,6 +82,16 @@ function ABC_D()
 {
 }
 " '("a" "b" "c" "ABC_D"))
+
+(ert-deftest imenu--sort-by-position-pairs ()
+  (should (imenu--sort-by-position '("a" . 2) '("a" . 3)))
+  (should-not (imenu--sort-by-position '("a" . 3) '("a" . 2))))
+
+;; Regression test for bug#26457: 25.2; Cannot pass a function to
+;; imenu-generic-expression
+(ert-deftest imenu--sort-by-position-list ()
+  (should (imenu--sort-by-position '("a" 2 nil) '("a" 3 nil)))
+  (should-not (imenu--sort-by-position '("a" 3 nil) '("a" 2 nil))))
 
 (provide 'imenu-tests)
 

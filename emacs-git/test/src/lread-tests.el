@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -111,5 +111,80 @@
   (should-error (read "#x") :type 'invalid-read-syntax)
   (should-error (read "#24r") :type 'invalid-read-syntax)
   (should-error (read "#") :type 'invalid-read-syntax))
+
+(ert-deftest lread-record-1 ()
+  (should (equal '(#s(foo) #s(foo))
+                 (read "(#1=#s(foo) #1#)"))))
+
+(defmacro lread-tests--with-temp-file (file-name-var &rest body)
+  (declare (indent 1))
+  (cl-check-type file-name-var symbol)
+  `(let ((,file-name-var (make-temp-file "emacs")))
+     (unwind-protect
+         (progn ,@body)
+       (delete-file ,file-name-var))))
+
+(defun lread-tests--last-message ()
+  (with-current-buffer "*Messages*"
+    (save-excursion
+      (goto-char (point-max))
+      (skip-chars-backward "\n")
+      (buffer-substring (line-beginning-position) (point)))))
+
+(ert-deftest lread-tests--unescaped-char-literals ()
+  "Check that loading warns about unescaped character
+literals (Bug#20852)."
+  (lread-tests--with-temp-file file-name
+    (write-region "?) ?( ?; ?\" ?[ ?]" nil file-name)
+    (should (equal (load file-name nil :nomessage :nosuffix) t))
+    (should (equal (lread-tests--last-message)
+                   (concat (format-message "Loading `%s': " file-name)
+                           "unescaped character literals "
+                           "`?\"', `?(', `?)', `?;', `?[', `?]' detected!")))))
+
+(ert-deftest lread-tests--funny-quote-symbols ()
+  "Check that 'smart quotes' or similar trigger errors in symbol names."
+  (dolist (quote-char
+           '(#x2018 ;; LEFT SINGLE QUOTATION MARK
+             #x2019 ;; RIGHT SINGLE QUOTATION MARK
+             #x201B ;; SINGLE HIGH-REVERSED-9 QUOTATION MARK
+             #x201C ;; LEFT DOUBLE QUOTATION MARK
+             #x201D ;; RIGHT DOUBLE QUOTATION MARK
+             #x201F ;; DOUBLE HIGH-REVERSED-9 QUOTATION MARK
+             #x301E ;; DOUBLE PRIME QUOTATION MARK
+             #xFF02 ;; FULLWIDTH QUOTATION MARK
+             #xFF07 ;; FULLWIDTH APOSTROPHE
+             ))
+    (let ((str (format "%cfoo" quote-char)))
+     (should-error (read str) :type 'invalid-read-syntax)
+     (should (eq (read (concat "\\" str)) (intern str))))))
+
+(ert-deftest lread-test-bug26837 ()
+  "Test for https://debbugs.gnu.org/26837 ."
+  (let ((load-path (cons
+                    (file-name-as-directory
+                     (expand-file-name "data" (getenv "EMACS_TEST_DIRECTORY")))
+                    load-path)))
+    (load "somelib" nil t)
+    (should (string-suffix-p "/somelib.el" (caar load-history)))
+    (load "somelib2" nil t)
+    (should (string-suffix-p "/somelib2.el" (caar load-history)))
+    (load "somelib" nil t)
+    (should (string-suffix-p "/somelib.el" (caar load-history)))))
+
+(ert-deftest lread-tests--old-style-backquotes ()
+  "Check that loading warns about old-style backquotes."
+  (lread-tests--with-temp-file file-name
+    (write-region "(` (a b))" nil file-name)
+    (should (equal (load file-name nil :nomessage :nosuffix) t))
+    (should (equal (lread-tests--last-message)
+                   (concat (format-message "Loading `%s': " file-name)
+                           "old-style backquotes detected!")))))
+
+(ert-deftest lread-lread--substitute-object-in-subtree ()
+  (let ((x (cons 0 1)))
+    (setcar x x)
+    (lread--substitute-object-in-subtree x 1 t)
+    (should (eq x (cdr x)))))
 
 ;;; lread-tests.el ends here

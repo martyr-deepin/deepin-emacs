@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -1689,7 +1689,7 @@ If point is on a group name, this function operates on that group."
 		    ;; generate a call to the column function.
 		    (ibuffer-aif (assq sym ibuffer-inline-columns)
 			(nth 1 it)
-		      `(,sym buffer mark)))
+		      `(or (,sym buffer mark) "")))
 		   ;; You're not expected to understand this.  Hell, I
 		   ;; don't even understand it, and I wrote it five
 		   ;; minutes ago.
@@ -2490,6 +2490,15 @@ FORMATS is the value to use for `ibuffer-formats'.
 	  (setq buffer-read-only t))
 	(unless ibuffer-expert
 	  (message "Commands: m, u, t, RET, g, k, S, D, Q; q to quit; h for help"))))))
+
+;;;###autoload
+(defun ibuffer-jump (&optional other-window)
+  "Call Ibuffer and set point at the line listing the current buffer.
+If optional arg OTHER-WINDOW is non-nil, then use another window."
+  (interactive "P")
+  (let ((name (buffer-name)))
+    (ibuffer other-window)
+    (ignore-errors (ibuffer-jump-to-buffer name))))
 
 (put 'ibuffer-mode 'mode-class 'special)
 (define-derived-mode ibuffer-mode special-mode "IBuffer"

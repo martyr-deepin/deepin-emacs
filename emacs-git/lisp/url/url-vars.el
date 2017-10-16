@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 
@@ -409,10 +409,6 @@ Should be one of:
   "Hook run after initializing the URL library."
   :group 'url
   :type 'hook)
-
-;;; Make OS/2 happy - yeeks
-;; (defvar	tcp-binary-process-input-services nil
-;;   "*Make OS/2 happy with our CRLF pairs...")
 
 (defconst url-working-buffer " *url-work")
 

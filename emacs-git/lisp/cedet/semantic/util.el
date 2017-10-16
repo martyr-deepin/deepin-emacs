@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -110,12 +110,14 @@ buffer, or a filename.  If SOMETHING is nil return nil."
     (semantic-file-tag-table something))
    ;; A Semanticdb table
    ((and (featurep 'semantic/db)
+	 (require 'semantic/db-mode)
 	 (semanticdb-minor-mode-p)
 	 (semanticdb-abstract-table-child-p something))
     (semanticdb-refresh-table something)
     (semanticdb-get-tags something))
    ;; Semanticdb find-results
    ((and (featurep 'semantic/db)
+	 (require 'semantic/db-mode)
 	 (semanticdb-minor-mode-p)
 	 (require 'semantic/db-find)
 	 (semanticdb-find-results-p something))

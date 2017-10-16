@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 
@@ -627,7 +627,7 @@ callback data (if any)."
     ;; Record modified time of gpg-agent socket to restore the Emacs
     ;; frame on text terminal in `epg-wait-for-completion'.
     ;; See
-    ;; <http://lists.gnu.org/archive/html/emacs-devel/2007-02/msg00755.html>
+    ;; <https://lists.gnu.org/archive/html/emacs-devel/2007-02/msg00755.html>
     ;; for more details.
     (when (and agent-info (string-match "\\(.*\\):[0-9]+:[0-9]+" agent-info))
       (setq agent-file (match-string 1 agent-info)
@@ -1047,7 +1047,7 @@ callback data (if any)."
 (defun epg--status-TRUST_MARGINAL (context _string)
   (let ((signature (car (epg-context-result-for context 'verify))))
     (if (and signature
-	     (eq (epg-signature-status signature) 'marginal))
+	     (eq (epg-signature-status signature) 'good))
 	(setf (epg-signature-validity signature) 'marginal))))
 
 (defun epg--status-TRUST_FULLY (context _string)

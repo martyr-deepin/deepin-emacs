@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -730,13 +730,13 @@ If there is no byte at the target address move to the last byte in that line."
 Leaves `hexl-mark' at previous position.
 With prefix arg N, puts point N bytes of the way from the true beginning."
   (interactive "p")
-  (push-mark (point))
+  (push-mark)
   (hexl-goto-address (+ 0 (1- arg))))
 
 (defun hexl-end-of-buffer (arg)
   "Go to `hexl-max-address' minus ARG."
   (interactive "p")
-  (push-mark (point))
+  (push-mark)
   (hexl-goto-address (- hexl-max-address (1- arg))))
 
 (defun hexl-beginning-of-line ()

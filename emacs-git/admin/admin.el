@@ -15,7 +15,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -93,9 +93,7 @@ Optional argument DATE is the release date, default today."
 Root must be the root of an Emacs source tree."
   (interactive (list
 		(read-directory-name "Emacs root directory: " source-directory)
-		(read-string "Version number: "
-			     (replace-regexp-in-string "\\.[0-9]+\\'" ""
-						       emacs-version))))
+		(read-string "Version number: " emacs-version)))
   (unless (file-exists-p (expand-file-name "src/emacs.c" root))
     (user-error "%s doesn't seem to be the root of an Emacs source tree" root))
   (message "Setting version numbers...")
@@ -143,6 +141,13 @@ Root must be the root of an Emacs source tree."
                          (not (equal (cadr oldversion) (cadr newversion)))))
          (newsfile (expand-file-name "etc/NEWS" root))
          (oldnewsfile (expand-file-name (format "etc/NEWS.%s" oldmajor) root)))
+    (unless (> (length newversion) 2)   ; pretest or release candidate?
+      (with-temp-buffer
+        (insert-file-contents newsfile)
+        (if (re-search-forward "^\\(+++ *\\|--- *\\)$" nil t)
+            (display-warning 'admin
+                             "NEWS file still contains temporary markup.
+Documentation changes might not have been completed!"))))
     (when (and majorbump
                (not (file-exists-p oldnewsfile)))
       (rename-file newsfile oldnewsfile)
@@ -650,7 +655,10 @@ style=\"text-align:left\">")
     ("@GZIP_PROG@" . "gzip")
     ("@INSTALL@" . "install -c")
     ("@INSTALL_DATA@" . "${INSTALL} -m 644")
-    ("@configure_input@" . ""))
+    ("@configure_input@" . "")
+    ("@AM_DEFAULT_VERBOSITY@" . "0")
+    ("@AM_V@" . "${V}")
+    ("@AM_DEFAULT_V@" . "${AM_DEFAULT_VERBOSITY}"))
   "Alist of (REGEXP . REPLACEMENT) pairs for `make-manuals-dist'.")
 
 (defun make-manuals-dist--1 (root type)
@@ -670,7 +678,9 @@ style=\"text-align:left\">")
 	(delete-directory stem t))
     (make-directory stem)
     (copy-file "../doc/misc/texinfo.tex" stem)
-    (or (equal type "emacs") (copy-file "../doc/emacs/emacsver.texi" stem))
+    (unless (equal type "emacs")
+      (copy-file "../doc/emacs/emacsver.texi" stem)
+      (copy-file "../doc/emacs/docstyle.texi" stem))
     (dolist (file (directory-files (format "../doc/%s" type) t))
       (if (or (string-match-p "\\(\\.texi\\'\\|/README\\'\\)" file)
 	      (and (equal type "lispintro")

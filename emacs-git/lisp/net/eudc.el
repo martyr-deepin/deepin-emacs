@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;    This package provides a common interface to query directory servers using
@@ -68,8 +68,8 @@
 
 (defvar eudc-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map "q" 'kill-this-buffer)
-    (define-key map "x" 'kill-this-buffer)
+    (define-key map "q" 'kill-current-buffer)
+    (define-key map "x" 'kill-current-buffer)
     (define-key map "f" 'eudc-query-form)
     (define-key map "b" 'eudc-try-bbdb-insert)
     (define-key map "n" 'eudc-move-to-next-record)

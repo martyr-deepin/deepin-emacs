@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -31,3 +31,23 @@
 
 (ert-deftest finalizer-object-type ()
   (should (equal (type-of (make-finalizer nil)) 'finalizer)))
+
+(ert-deftest record-1 ()
+  (let ((x (record 'foo 1 2 3)))
+    (should (recordp x))
+    (should (eq (type-of x) 'foo))
+    (should (eq (aref x 0) 'foo))
+    (should (eql (aref x 3) 3))
+    (should (eql (length x) 4))))
+
+(ert-deftest record-2 ()
+  (let ((x (make-record 'bar 1 0)))
+    (should (eql (length x) 2))
+    (should (eql (aref x 1) 0))))
+
+(ert-deftest record-3 ()
+  (let* ((x (record 'foo 1 2 3))
+         (y (copy-sequence x)))
+    (should-not (eq x y))
+    (dotimes (i 4)
+      (should (eql (aref x i) (aref y i))))))

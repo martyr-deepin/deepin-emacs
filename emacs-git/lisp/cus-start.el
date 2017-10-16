@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -223,6 +223,14 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     (visible-bell display boolean)
 	     (no-redraw-on-reenter display boolean)
 
+             ;; doc.c
+             (text-quoting-style display
+                                 (choice
+                                  (const :tag "Prefer \\=‘curved\\=’ quotes, if possible" nil)
+                                  (const :tag "\\=‘Curved\\=’ quotes" curved)
+                                  (const :tag "\\='Straight\\=' quotes" straight)
+                                  (const :tag "\\=`Grave\\=' quotes (no translation)" grave)))
+
              ;; dosfns.c
 	     (dos-display-scancodes display boolean)
 	     (dos-hyper-key keyboard integer)
@@ -286,7 +294,11 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     ;; fns.c
 	     (use-dialog-box menu boolean "21.1")
 	     (use-file-dialog menu boolean "22.1")
-	     (focus-follows-mouse frames boolean "20.3")
+	     (focus-follows-mouse
+              frames (choice
+                      (const :tag "Off (nil)" :value nil)
+                      (const :tag "On (t)" :value t)
+                      (const :tag "Auto-raise" :value auto-raise)) "26.1")
 	     ;; fontset.c
 	     ;; FIXME nil is the initial value, fontset.el setqs it.
 	     (vertical-centering-font-regexp display
@@ -315,6 +327,13 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 					    (const :tag "Always" t)
 					    (repeat (symbol :tag "Parameter")))
 					   "25.1")
+	     (iconify-child-frame frames
+				  (choice
+				   (const :tag "Do nothing" nil)
+                                   (const :tag "Iconify top level frame instead" iconify-top-level)
+                                   (const :tag "Make frame invisible instead" make-invisible)
+                                   (const :tag "Iconify" t))
+				  "26.1")
 	     (tooltip-reuse-hidden-frame tooltip boolean "26.1")
 	     ;; fringe.c
 	     (overflow-newline-into-fringe fringe boolean)
@@ -494,14 +513,16 @@ since it could result in memory overflow and make Emacs crash."
 	     (window-combination-limit
 	      windows (choice
 		       (const :tag "Never (nil)" :value nil)
-		       (const :tag "For Temp Buffer Resize mode (temp-buffer-resize)"
+		       (const :tag "If requested via buffer display alist (window-size)"
+                              :value window-size)
+		       (const :tag "With Temp Buffer Resize mode (temp-buffer-resize)"
 			      :value temp-buffer-resize)
 		       (const :tag "For temporary buffers (temp-buffer)"
 			      :value temp-buffer)
 		       (const :tag "For buffer display (display-buffer)"
 			      :value display-buffer)
 		       (other :tag "Always (t)" :value t))
-	      "24.3")
+	      "26.1")
 	     (fast-but-imprecise-scrolling scrolling boolean "25.1")
 	     (window-resize-pixelwise windows boolean "24.4")
 	     ;; xdisp.c
@@ -550,7 +571,15 @@ since it could result in memory overflow and make Emacs crash."
 		      (const :tag "Text-image-horiz" :value text-image-horiz)
 		      (const :tag "System default" :value nil)) "24.1")
              (tool-bar-max-label-size frames integer "24.1")
-	     (auto-hscroll-mode scrolling boolean "21.1")
+	     (auto-hscroll-mode scrolling
+                                (choice
+                                 (const :tag "Don't scroll automatically"
+                                        :value nil)
+                                 (const :tag "Scroll the entire window"
+                                        :value t)
+                                 (const :tag "Scroll only the current line"
+                                        :value current-line))
+                                "26.1")
 	     (void-text-area-pointer cursor
 				     (choice
 				      (const :tag "Standard (text pointer)" :value nil)
@@ -569,6 +598,39 @@ since it could result in memory overflow and make Emacs crash."
 		       (const :tag "Fit (t)" :value t)
 		       (const :tag "Grow only" :value grow-only))
 	      "25.1")
+	     (display-raw-bytes-as-hex display boolean "26.1")
+             (display-line-numbers display-line-numbers
+                                   (choice
+                                    (const :tag "Off (nil)" :value nil)
+                                    (const :tag "Absolute line numbers"
+                                           :value t)
+                                    (const :tag "Relative line numbers"
+                                           :value relative)
+                                    (const :tag "Visually relative line numbers"
+                                           :value visual))
+                                   "26.1")
+             (display-line-numbers-width display-line-numbers
+                                 (choice
+                                  (const :tag "Dynamically computed"
+                                         :value nil)
+                                  (integer :menu-tag "Fixed number of columns"
+                                           :value 2
+                                           :format "%v"))
+                                 "26.1")
+             (display-line-numbers-current-absolute display-line-numbers
+                                 (choice
+                                  (const :tag "Display actual number of current line"
+                                         :value t)
+                                  (const :tag "Display zero as number of current line"
+                                         :value nil))
+                                 "26.1")
+             (display-line-numbers-widen display-line-numbers
+                                 (choice
+                                  (const :tag "Disregard narrowing when calculating line numbers"
+                                         :value t)
+                                  (const :tag "Count lines from beginning of narrowed region"
+                                         :value nil))
+                                 "26.1")
 	     ;; xfaces.c
 	     (scalable-fonts-allowed display boolean "22.1")
 	     ;; xfns.c

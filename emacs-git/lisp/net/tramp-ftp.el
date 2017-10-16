@@ -1,4 +1,4 @@
-;;; tramp-ftp.el --- Tramp convenience functions for Ange-FTP
+;;; tramp-ftp.el --- Tramp convenience functions for Ange-FTP  -*- lexical-binding:t -*-
 
 ;; Copyright (C) 2002-2017 Free Software Foundation, Inc.
 
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -32,7 +32,6 @@
 
 ;; Pacify byte-compiler.
 (eval-when-compile
-  (require 'cl)
   (require 'custom))
 (defvar ange-ftp-ftp-name-arg)
 (defvar ange-ftp-ftp-name-res)
@@ -145,7 +144,7 @@ pass to the OPERATION."
        ((memq operation '(file-directory-p file-exists-p))
 	(if (apply 'ange-ftp-hook-function operation args)
 	    (let ((v (tramp-dissect-file-name (car args) t)))
-	      (aset v 0 tramp-ftp-method)
+	      (setf (tramp-file-name-method v) tramp-ftp-method)
 	      (tramp-set-connection-property v "started" t))
 	  nil))
 

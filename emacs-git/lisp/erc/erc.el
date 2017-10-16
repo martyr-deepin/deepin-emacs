@@ -28,20 +28,20 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
 ;; ERC is a powerful, modular, and extensible IRC client for Emacs.
 
 ;; For more information, see the following URLs:
-;; * http://sv.gnu.org/projects/erc/
+;; * https://sv.gnu.org/projects/erc/
 ;; * http://www.emacswiki.org/cgi-bin/wiki/ERC
 
 
 
 ;; As of 2006-06-13, ERC development is now hosted on Savannah
-;; (http://sv.gnu.org/projects/erc).  I invite everyone who wants to
+;; (https://sv.gnu.org/projects/erc).  I invite everyone who wants to
 ;; hack on it to contact me <mwolson@gnu.org> in order to get write
 ;; access to the shared Arch archive.
 
@@ -75,7 +75,7 @@
 (require 'erc-compat)
 
 (defvar erc-official-location
-  "http://emacswiki.org/cgi-bin/wiki/ERC (mailing list: erc-discuss@gnu.org)"
+  "https://emacswiki.org/cgi-bin/wiki/ERC (mailing list: erc-discuss@gnu.org)"
   "Location of the ERC client on the Internet.")
 
 (defgroup erc nil
@@ -2700,7 +2700,10 @@ See also `erc-format-message' and `erc-display-line'."
       (unless (erc-hide-current-message-p parsed)
         (erc-put-text-property 0 (length string) 'erc-parsed parsed string)
         (erc-put-text-property 0 (length string) 'rear-sticky t string)
-        (erc-display-line string buffer)))))
+	(when (erc-response.tags parsed)
+	  (erc-put-text-property 0 (length string) 'tags (erc-response.tags parsed)
+				 string))
+	(erc-display-line string buffer)))))
 
 (defun erc-message-type-member (position list)
   "Return non-nil if the erc-parsed text-property at POSITION is in LIST.
@@ -3027,6 +3030,23 @@ For a list of user commands (/join /part, ...):
 (defalias 'erc-cmd-H 'erc-cmd-HELP)
 (put 'erc-cmd-HELP 'process-not-needed t)
 
+(defun erc-server-join-channel (server channel &optional secret)
+  (let* ((secret (or secret
+		     (plist-get (nth 0 (auth-source-search
+					:max 1
+					:host server
+					:port "irc"
+					:user channel))
+				:secret)))
+	 (password (if (functionp secret)
+		       (funcall secret)
+		     secret)))
+    (erc-log (format "cmd: JOIN: %s" channel))
+    (erc-server-send (concat "JOIN " channel
+			     (if password
+				 (concat " " password)
+			       "")))))
+
 (defun erc-cmd-JOIN (channel &optional key)
   "Join the channel given in CHANNEL, optionally with KEY.
 If CHANNEL is specified as \"-invite\", join the channel to which you
@@ -3046,10 +3066,9 @@ were most recently invited.  See also `invitation'."
         (if (erc-member-ignore-case chnl joined-channels)
             (switch-to-buffer (car (erc-member-ignore-case chnl
                                                            joined-channels)))
-          (erc-log (format "cmd: JOIN: %s" chnl))
-          (erc-server-send (if (and chnl key)
-                               (format "JOIN %s %s" chnl key)
-                             (format "JOIN %s" chnl)))))))
+	  (let ((server (with-current-buffer (process-buffer erc-server-process)
+			  (or erc-session-server erc-server-announced-name))))
+	    (erc-server-join-channel server chnl key))))))
   t)
 
 (defalias 'erc-cmd-CHANNEL 'erc-cmd-JOIN)
@@ -5331,7 +5350,7 @@ Specifically, return the position of `erc-insert-marker'."
   "Time of last call to `erc-send-current-line'.
 If that function has never been called, the value is 0.")
 
-(defcustom erc-accidental-paste-threshold-seconds nil
+(defcustom erc-accidental-paste-threshold-seconds 0.2
   "Minimum time, in seconds, before sending new lines via IRC.
 If the value is a number, `erc-send-current-line' signals an error
 if its previous invocation was fewer than this many seconds ago.
@@ -5341,7 +5360,7 @@ into the ERC buffer, that text is not sent to the IRC server.
 If the value is nil, `erc-send-current-line' always considers any
 submitted line to be intentional."
   :group 'erc
-  :version "24.4"
+  :version "26.1"
   :type '(choice number (other :tag "disabled" nil)))
 
 (defun erc-send-current-line ()
@@ -6735,9 +6754,10 @@ This function should be on `erc-kill-server-hook'."
 This function should be on `erc-kill-channel-hook'."
   (when (erc-server-process-alive)
     (let ((tgt (erc-default-target)))
-      (erc-server-send (format "PART %s :%s" tgt
-                               (funcall erc-part-reason nil))
-                       nil tgt))))
+      (if tgt
+         (erc-server-send (format "PART %s :%s" tgt
+                                  (funcall erc-part-reason nil))
+                          nil tgt)))))
 
 ;;; Dealing with `erc-parsed'
 

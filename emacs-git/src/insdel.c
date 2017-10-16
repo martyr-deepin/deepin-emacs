@@ -1,4 +1,4 @@
-/* Buffer insertion/deletion and gap motion for GNU Emacs.
+/* Buffer insertion/deletion and gap motion for GNU Emacs. -*- coding: utf-8 -*-
    Copyright (C) 1985-1986, 1993-1995, 1997-2017 Free Software
    Foundation, Inc.
 
@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 
 #include <config.h>
@@ -560,7 +560,22 @@ void
 make_gap (ptrdiff_t nbytes_added)
 {
   if (nbytes_added >= 0)
-    make_gap_larger (nbytes_added);
+    /* With set-buffer-multibyte on a large buffer, we can end up growing the
+     * buffer *many* times.  Avoid an O(N^2) behavior by increasing by an
+     * amount at least proportional to the size of the buffer.
+     * On my test (a 223.9MB zip file on a Thinkpad T61):
+     * With /5    =>  24s
+     * With /32   =>  25s
+     * With /64   =>  26s
+     * With /128  =>  28s
+     * With /1024 =>  51s
+     * With /4096 => 131s
+     * With /∞    => gave up after 858s
+     * Of course, ideally we should never call set-buffer-multibyte on
+     * a non-empty buffer (e.g. use buffer-swap-text instead).
+     * We chose /64 because it already brings almost the best performance while
+     * limiting the potential wasted memory to 1.5%.  */
+    make_gap_larger (max (nbytes_added, (Z - BEG) / 64));
 #if defined USE_MMAP_FOR_BUFFERS || defined REL_ALLOC || defined DOUG_LEA_MALLOC
   else
     make_gap_smaller (-nbytes_added);
@@ -1986,18 +2001,21 @@ invalidate_buffer_caches (struct buffer *buf, ptrdiff_t start, ptrdiff_t end)
      see below).  */
   if (buf->bidi_paragraph_cache)
     {
-      if (start != end
-	  && start > BUF_BEG (buf))
+      if (start > BUF_BEG (buf))
 	{
 	  /* If we are deleting or replacing characters, we could
 	     create a paragraph start, because all of the characters
 	     from START to the beginning of START's line are
 	     whitespace.  Therefore, we must extend the region to be
-	     invalidated up to the newline before START.  */
+	     invalidated up to the newline before START.  Similarly,
+	     if we are inserting characters immediately after a
+	     newline, we could create a paragraph start if the
+	     inserted characters start with a newline.  */
 	  ptrdiff_t line_beg = start;
 	  ptrdiff_t start_byte = buf_charpos_to_bytepos (buf, start);
+	  int prev_char = BUF_FETCH_BYTE (buf, start_byte - 1);
 
-	  if (BUF_FETCH_BYTE (buf, start_byte - 1) != '\n')
+	  if ((start == end) == (prev_char == '\n'))
 	    {
 	      struct buffer *old = current_buffer;
 

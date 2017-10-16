@@ -16,7 +16,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; RFC 2045 is: "Multipurpose Internet Mail Extensions (MIME) Part
 ;; One:  Format of Internet Message Bodies".
@@ -28,7 +28,7 @@
 (require 'ietf-drums)
 
 (defun rfc2045-encode-string (param value)
-  "Return and PARAM=VALUE string encoded according to RFC2045."
+  "Return a PARAM=VALUE string encoded according to RFC2045."
   (if (or (string-match (concat "[" ietf-drums-no-ws-ctl-token "]") value)
 	  (string-match (concat "[" ietf-drums-tspecials "]") value)
 	  (string-match "[ \n\t]" value)

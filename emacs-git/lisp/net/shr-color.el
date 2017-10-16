@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -260,7 +260,7 @@ Like rgb() or hsl()."
             (l (/ (string-to-number (match-string-no-properties 3 color)) 100.0)))
         (destructuring-bind (r g b)
             (shr-color-hsl-to-rgb-fractions h s l)
-          (color-rgb-to-hex r g b))))
+          (color-rgb-to-hex r g b 2))))
      ;; Color names
      ((cdr (assoc-string color shr-color-html-colors-alist t)))
      ;; Unrecognized color :(

@@ -16,7 +16,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 
 #include <config.h>
@@ -340,9 +340,11 @@ string is passed through `substitute-command-keys'.  */)
     fun = XCDR (fun);
   if (SUBRP (fun))
     doc = make_number (XSUBR (fun)->doc);
+  else if (MODULE_FUNCTIONP (fun))
+    doc = XMODULE_FUNCTION (fun)->documentation;
   else if (COMPILEDP (fun))
     {
-      if ((ASIZE (fun) & PSEUDOVECTOR_SIZE_MASK) <= COMPILED_DOC_STRING)
+      if (PVSIZE (fun) <= COMPILED_DOC_STRING)
 	return Qnil;
       else
 	{
@@ -500,7 +502,7 @@ store_function_docstring (Lisp_Object obj, EMACS_INT offset)
     {
       /* This bytecode object must have a slot for the
 	 docstring, since we've found a docstring for it.  */
-      if ((ASIZE (fun) & PSEUDOVECTOR_SIZE_MASK) > COMPILED_DOC_STRING)
+      if (PVSIZE (fun) > COMPILED_DOC_STRING)
 	ASET (fun, COMPILED_DOC_STRING, make_number (offset));
       else
 	{
@@ -536,7 +538,7 @@ the same file name is found in the `doc-directory'.  */)
   char const *dirname;
   ptrdiff_t dirlen;
   /* Preloaded defcustoms using custom-initialize-delay are added to
-     this list, but kept unbound.  See http://debbugs.gnu.org/11565  */
+     this list, but kept unbound.  See https://debbugs.gnu.org/11565  */
   Lisp_Object delayed_init =
     find_symbol_value (intern ("custom-delayed-init-variables"));
 

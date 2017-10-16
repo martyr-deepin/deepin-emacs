@@ -22,7 +22,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 
 /* Here we handle three objects: category, category set, and category
@@ -64,10 +64,9 @@ hash_get_category_set (Lisp_Object table, Lisp_Object category_set)
   if (NILP (XCHAR_TABLE (table)->extras[1]))
     set_char_table_extras
       (table, 1,
-       make_hash_table (hashtest_equal, make_number (DEFAULT_HASH_SIZE),
-			make_float (DEFAULT_REHASH_SIZE),
-			make_float (DEFAULT_REHASH_THRESHOLD),
-			Qnil, Qnil));
+       make_hash_table (hashtest_equal, DEFAULT_HASH_SIZE,
+			DEFAULT_REHASH_SIZE, DEFAULT_REHASH_THRESHOLD,
+			Qnil, false));
   h = XHASH_TABLE (XCHAR_TABLE (table)->extras[1]);
   i = hash_lookup (h, category_set, &hash);
   if (i >= 0)

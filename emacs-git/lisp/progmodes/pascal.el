@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -507,9 +507,9 @@ See also the user variables `pascal-type-keywords', `pascal-start-keywords' and
   "Mark the current Pascal function (or procedure).
 This puts the mark at the end, and point at the beginning."
   (interactive)
-  (push-mark (point))
+  (push-mark)
   (pascal-end-of-defun)
-  (push-mark (point))
+  (push-mark)
   (pascal-beg-of-defun)
   (when (featurep 'xemacs)
     (zmacs-activate-region)))

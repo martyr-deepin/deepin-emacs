@@ -21,11 +21,12 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
 (require 'ert)
+(require 'cl-lib)
 
 ;;; Code:
 (defconst byte-opt-testsuite-arith-data
@@ -242,13 +243,8 @@
     (let ((a 3) (b 2) (c 1.0)) (/ 1 a b c))
     (let ((a 3) (b 2) (c 1.0)) (/ a b c 0))
     (let ((a 3) (b 2) (c 1.0)) (/ a b c 1))
-    (let ((a 3) (b 2) (c 1.0)) (/ a b c -1)))
-  "List of expression for test.
-Each element will be executed by interpreter and with
-bytecompiled code, and their results compared.")
-
-(defconst byte-opt-testsuite-cond-data
-  '(
+    (let ((a 3) (b 2) (c 1.0)) (/ a b c -1))
+    ;; Test switch bytecode
     (let ((a 3)) (cond ((eq a 1) 'one) ((eq a 2) 'two) ((eq a 3) 'three) (t t)))
     (let ((a 'three)) (cond ((eq a 'one) 1) ((eq a 2) 'two) ((eq a 'three) 3)
                             (t t)))
@@ -258,8 +254,42 @@ bytecompiled code, and their results compared.")
     (let ((a "foobar")) (cond ((equal "notfoobar" a) 'incorrect)
                               ((equal 1 a) 'incorrect)
                               ((equal a "foobar") 'correct)
-                              (t 'incorrect))))
-  "List of expressions for testing byte-switch.")
+                              (t 'incorrect)))
+    (let ((a "foobar") (l t)) (pcase a
+                                ("bar" 'incorrect)
+                                ("foobar" (while l
+                                            a (setq l nil))
+                                 'correct)))
+    (let ((a 'foobar) (l t)) (cl-case a
+                         ('foo 'incorrect)
+                         ('bar 'incorrect)
+                         ('foobar (while l
+                                    a (setq l nil))
+                                  'correct)))
+    (let ((a 'foobar) (l t)) (cond
+                        ((eq a 'bar) 'incorrect)
+                        ((eq a 'foo) 'incorrect)
+                        ((eq a 'bar) 'incorrect)
+                        (t (while l
+                             a (setq l nil))
+                           'correct)))
+    (let ((a 'foobar) (l t)) (cond
+                        ((eq a 'bar) 'incorrect)
+                        ((eq a 'foo) 'incorrect)
+                        ((eq a 'foobar)
+                         (while l
+                           a (setq l nil))
+                         'correct)
+                        (t 'incorrect)))
+    (let ((a))
+      (cond ((eq a 'foo) 'incorrect)
+            (t)))
+    (let ((a))
+      (cond ((eq a 'foo) 'incorrect)
+            ('correct))))
+  "List of expression for test.
+Each element will be executed by interpreter and with
+bytecompiled code, and their results compared.")
 
 (defun bytecomp-check-1 (pat)
   "Return non-nil if PAT is the same whether directly evalled or compiled."
@@ -288,11 +318,6 @@ bytecompiled code, and their results compared.")
 (ert-deftest bytecomp-tests ()
   "Test the Emacs byte compiler."
   (dolist (pat byte-opt-testsuite-arith-data)
-    (should (bytecomp-check-1 pat))))
-
-(ert-deftest bytecomp-cond ()
-  "Test the Emacs byte compiler."
-  (dolist (pat byte-opt-testsuite-cond-data)
     (should (bytecomp-check-1 pat))))
 
 (defun test-byte-opt-arithmetic (&optional arg)
@@ -480,6 +505,64 @@ bytecompiled code, and their results compared.")
   "Test the Emacs byte compiler lexbind handling."
   (dolist (pat bytecomp-lexbind-tests)
     (should (bytecomp-lexbind-check-1 pat))))
+
+(defmacro bytecomp-tests--with-temp-file (file-name-var &rest body)
+  (declare (indent 1))
+  (cl-check-type file-name-var symbol)
+  `(let ((,file-name-var (make-temp-file "emacs")))
+     (unwind-protect
+         (progn ,@body)
+       (delete-file ,file-name-var)
+       (let ((elc (concat ,file-name-var ".elc")))
+         (if (file-exists-p elc) (delete-file elc))))))
+
+(ert-deftest bytecomp-tests--unescaped-char-literals ()
+  "Check that byte compiling warns about unescaped character
+literals (Bug#20852)."
+  (should (boundp 'lread--unescaped-character-literals))
+  (bytecomp-tests--with-temp-file source
+    (write-region "(list ?) ?( ?; ?\" ?[ ?])" nil source)
+    (bytecomp-tests--with-temp-file destination
+      (let* ((byte-compile-dest-file-function (lambda (_) destination))
+            (byte-compile-error-on-warn t)
+            (byte-compile-debug t)
+            (err (should-error (byte-compile-file source))))
+        (should (equal (cdr err)
+                       (list (concat "unescaped character literals "
+                                     "`?\"', `?(', `?)', `?;', `?[', `?]' "
+                                     "detected!"))))))))
+
+(ert-deftest bytecomp-tests--old-style-backquotes ()
+  "Check that byte compiling warns about old-style backquotes."
+  (should (boundp 'lread--old-style-backquotes))
+  (bytecomp-tests--with-temp-file source
+    (write-region "(` (a b))" nil source)
+    (bytecomp-tests--with-temp-file destination
+      (let* ((byte-compile-dest-file-function (lambda (_) destination))
+            (byte-compile-error-on-warn t)
+            (byte-compile-debug t)
+            (err (should-error (byte-compile-file source))))
+        (should (equal (cdr err)
+                       (list "!! The file uses old-style backquotes !!
+This functionality has been obsolete for more than 10 years already
+and will be removed soon.  See (elisp)Backquote in the manual.")))))))
+
+
+(ert-deftest bytecomp-tests-function-put ()
+  "Check `function-put' operates during compilation."
+  (should (boundp 'lread--old-style-backquotes))
+  (bytecomp-tests--with-temp-file source
+    (dolist (form '((function-put 'bytecomp-tests--foo 'foo 1)
+                    (function-put 'bytecomp-tests--foo 'bar 2)
+                    (defmacro bytecomp-tests--foobar ()
+                      `(cons ,(function-get 'bytecomp-tests--foo 'foo)
+                             ,(function-get 'bytecomp-tests--foo 'bar)))
+                    (defvar bytecomp-tests--foobar 1)
+                    (setq bytecomp-tests--foobar (bytecomp-tests--foobar))))
+      (print form (current-buffer)))
+    (write-region (point-min) (point-max) source nil 'silent)
+    (byte-compile-file source t)
+    (should (equal bytecomp-tests--foobar (cons 1 2)))))
 
 ;; Local Variables:
 ;; no-byte-compile: t

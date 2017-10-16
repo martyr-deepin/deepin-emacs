@@ -16,7 +16,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /*
 Originally by Carl Edman
@@ -175,6 +175,7 @@ ns_directory_from_panel (NSSavePanel *panel)
 #endif
 }
 
+#ifndef NS_IMPL_COCOA
 static Lisp_Object
 interpret_services_menu (NSMenu *menu, Lisp_Object prefix, Lisp_Object old)
 /* --------------------------------------------------------------------------
@@ -223,7 +224,7 @@ interpret_services_menu (NSMenu *menu, Lisp_Object prefix, Lisp_Object old)
     }
   return old;
 }
-
+#endif
 
 
 /* ==========================================================================
@@ -972,6 +973,22 @@ frame_parm_handler ns_frame_parm_handlers[] =
   0, /* x_set_sticky */
   0, /* x_set_tool_bar_position */
   0, /* x_set_inhibit_double_buffering */
+#ifdef NS_IMPL_COCOA
+  x_set_undecorated,
+#else
+  0, /*x_set_undecorated */
+#endif
+  x_set_parent_frame,
+  0, /* x_set_skip_taskbar */
+  x_set_no_focus_on_map,
+  x_set_no_accept_focus,
+  x_set_z_group, /* x_set_z_group */
+  0, /* x_set_override_redirect */
+  x_set_no_special_glyphs,
+#ifdef NS_IMPL_COCOA
+  ns_set_appearance,
+  ns_set_transparent_titlebar,
+#endif
 };
 
 
@@ -1080,7 +1097,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
   ptrdiff_t count = specpdl_ptr - specpdl;
   Lisp_Object display;
   struct ns_display_info *dpyinfo = NULL;
-  Lisp_Object parent;
+  Lisp_Object parent, parent_frame;
   struct kboard *kb;
   static int desc_ctr = 1;
   int x_width = 0, x_height = 0;
@@ -1244,13 +1261,56 @@ This function is an internal primitive--use `make-frame' instead.  */)
 		       "leftFringe", "LeftFringe", RES_TYPE_NUMBER);
   x_default_parameter (f, parms, Qright_fringe, Qnil,
 		       "rightFringe", "RightFringe", RES_TYPE_NUMBER);
+  x_default_parameter (f, parms, Qno_special_glyphs, Qnil,
+		       NULL, NULL, RES_TYPE_BOOLEAN);
 
   init_frame_faces (f);
 
   /* Read comment about this code in corresponding place in xfns.c.  */
+  tem = x_get_arg (dpyinfo, parms, Qmin_width, NULL, NULL, RES_TYPE_NUMBER);
+  if (NUMBERP (tem))
+    store_frame_param (f, Qmin_width, tem);
+  tem = x_get_arg (dpyinfo, parms, Qmin_height, NULL, NULL, RES_TYPE_NUMBER);
+  if (NUMBERP (tem))
+    store_frame_param (f, Qmin_height, tem);
   adjust_frame_size (f, FRAME_COLS (f) * FRAME_COLUMN_WIDTH (f),
 		     FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), 5, 1,
 		     Qx_create_frame_1);
+
+  tem = x_get_arg (dpyinfo, parms, Qundecorated, NULL, NULL, RES_TYPE_BOOLEAN);
+  FRAME_UNDECORATED (f) = !NILP (tem) && !EQ (tem, Qunbound);
+  store_frame_param (f, Qundecorated, FRAME_UNDECORATED (f) ? Qt : Qnil);
+
+#ifdef NS_IMPL_COCOA
+  tem = x_get_arg (dpyinfo, parms, Qns_appearance, NULL, NULL, RES_TYPE_SYMBOL);
+  FRAME_NS_APPEARANCE (f) = EQ (tem, Qdark)
+    ? ns_appearance_vibrant_dark : ns_appearance_aqua;
+  store_frame_param (f, Qns_appearance, tem);
+
+  tem = x_get_arg (dpyinfo, parms, Qns_transparent_titlebar,
+                   NULL, NULL, RES_TYPE_BOOLEAN);
+  FRAME_NS_TRANSPARENT_TITLEBAR (f) = !NILP (tem) && !EQ (tem, Qunbound);
+  store_frame_param (f, Qns_transparent_titlebar, tem);
+#endif
+
+  parent_frame = x_get_arg (dpyinfo, parms, Qparent_frame, NULL, NULL,
+			    RES_TYPE_SYMBOL);
+  /* Accept parent-frame iff parent-id was not specified.  */
+  if (!NILP (parent)
+      || EQ (parent_frame, Qunbound)
+      || NILP (parent_frame)
+      || !FRAMEP (parent_frame)
+      || !FRAME_LIVE_P (XFRAME (parent_frame)))
+    parent_frame = Qnil;
+
+  fset_parent_frame (f, parent_frame);
+  store_frame_param (f, Qparent_frame, parent_frame);
+
+  x_default_parameter (f, parms, Qz_group, Qnil, NULL, NULL, RES_TYPE_SYMBOL);
+  x_default_parameter (f, parms, Qno_focus_on_map, Qnil,
+		       NULL, NULL, RES_TYPE_BOOLEAN);
+  x_default_parameter (f, parms, Qno_accept_focus, Qnil,
+                       NULL, NULL, RES_TYPE_BOOLEAN);
 
   /* The resources controlling the menu-bar and tool-bar are
      processed specially at startup, and reflected in the mode
@@ -1284,6 +1344,15 @@ This function is an internal primitive--use `make-frame' instead.  */)
   f->output_data.ns->hourglass_cursor = [NSCursor disappearingItemCursor];
   f->output_data.ns->horizontal_drag_cursor = [NSCursor resizeLeftRightCursor];
   f->output_data.ns->vertical_drag_cursor = [NSCursor resizeUpDownCursor];
+  f->output_data.ns->left_edge_cursor = [NSCursor resizeLeftRightCursor];
+  f->output_data.ns->top_left_corner_cursor = [NSCursor arrowCursor];
+  f->output_data.ns->top_edge_cursor = [NSCursor resizeUpDownCursor];
+  f->output_data.ns->top_right_corner_cursor = [NSCursor arrowCursor];
+  f->output_data.ns->right_edge_cursor = [NSCursor resizeLeftRightCursor];
+  f->output_data.ns->bottom_right_corner_cursor = [NSCursor arrowCursor];
+  f->output_data.ns->bottom_edge_cursor = [NSCursor resizeUpDownCursor];
+  f->output_data.ns->bottom_left_corner_cursor = [NSCursor arrowCursor];
+
   FRAME_DISPLAY_INFO (f)->vertical_scroll_bar_cursor
      = [NSCursor arrowCursor];
   FRAME_DISPLAY_INFO (f)->horizontal_scroll_bar_cursor
@@ -1378,7 +1447,7 @@ This function is an internal primitive--use `make-frame' instead.  */)
 }
 
 void
-x_focus_frame (struct frame *f)
+x_focus_frame (struct frame *f, bool noactivate)
 {
   struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
 
@@ -1392,6 +1461,79 @@ x_focus_frame (struct frame *f)
     }
 }
 
+static BOOL
+ns_window_is_ancestor (NSWindow *win, NSWindow *candidate)
+/* Test whether CANDIDATE is an ancestor window of WIN. */
+{
+  if (candidate == NULL)
+    return NO;
+  else if (win == candidate)
+    return YES;
+  else
+    return ns_window_is_ancestor(win, [candidate parentWindow]);
+}
+
+DEFUN ("ns-frame-list-z-order", Fns_frame_list_z_order,
+       Sns_frame_list_z_order, 0, 1, 0,
+       doc: /* Return list of Emacs' frames, in Z (stacking) order.
+If TERMINAL is non-nil and specifies a live frame, return the child
+frames of that frame in Z (stacking) order.
+
+Frames are listed from topmost (first) to bottommost (last).  */)
+  (Lisp_Object terminal)
+{
+  Lisp_Object frames = Qnil;
+  NSWindow *parent = nil;
+
+  if (FRAMEP (terminal) && FRAME_LIVE_P (XFRAME (terminal)))
+    parent = [FRAME_NS_VIEW (XFRAME (terminal)) window];
+
+  for (NSWindow *win in [[NSApp orderedWindows] reverseObjectEnumerator])
+    {
+      Lisp_Object frame;
+
+      /* Check against [win parentWindow] so that it doesn't match itself. */
+      if (parent == nil || ns_window_is_ancestor (parent, [win parentWindow]))
+        {
+          XSETFRAME (frame, ((EmacsView *)[win delegate])->emacsframe);
+          frames = Fcons(frame, frames);
+        }
+    }
+
+  return frames;
+}
+
+DEFUN ("ns-frame-restack", Fns_frame_restack, Sns_frame_restack, 2, 3, 0,
+       doc: /* Restack FRAME1 below FRAME2.
+This means that if both frames are visible and the display areas of
+these frames overlap, FRAME2 (partially) obscures FRAME1.  If optional
+third argument ABOVE is non-nil, restack FRAME1 above FRAME2.  This
+means that if both frames are visible and the display areas of these
+frames overlap, FRAME1 (partially) obscures FRAME2.
+
+Some window managers may refuse to restack windows.  */)
+     (Lisp_Object frame1, Lisp_Object frame2, Lisp_Object above)
+{
+  struct frame *f1 = decode_live_frame (frame1);
+  struct frame *f2 = decode_live_frame (frame2);
+
+  if (FRAME_NS_VIEW (f1) && FRAME_NS_VIEW (f2))
+    {
+      NSWindow *window = [FRAME_NS_VIEW (f1) window];
+      NSInteger window2 = [[FRAME_NS_VIEW (f2) window] windowNumber];
+      NSWindowOrderingMode flag = NILP (above) ? NSWindowBelow : NSWindowAbove;
+
+      [window orderWindow: flag
+               relativeTo: window2];
+
+      return Qt;
+    }
+  else
+    {
+      error ("Cannot restack frames");
+      return Qnil;
+    }
+}
 
 DEFUN ("ns-popup-font-panel", Fns_popup_font_panel, Sns_popup_font_panel,
        0, 1, "",
@@ -1459,7 +1601,7 @@ ns_run_file_dialog (void)
 }
 
 #ifdef NS_IMPL_COCOA
-#if MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_9
+#if MAC_OS_X_VERSION_MAX_ALLOWED > 1090
 #define MODAL_OK_RESPONSE NSModalResponseOK
 #endif
 #endif
@@ -1989,9 +2131,6 @@ DEFUN ("ns-list-services", Fns_list_services, Sns_list_services, 0, 0, 0,
 #else
   Lisp_Object ret = Qnil;
   NSMenu *svcs;
-#ifdef NS_IMPL_COCOA
-  id delegate;
-#endif
 
   check_window_system (NULL);
   svcs = [[NSMenu alloc] initWithTitle: @"Services"];
@@ -1999,33 +2138,7 @@ DEFUN ("ns-list-services", Fns_list_services, Sns_list_services, 0, 0, 0,
   [NSApp registerServicesMenuSendTypes: ns_send_types
                            returnTypes: ns_return_types];
 
-/* On Tiger, services menu updating was made lazier (waits for user to
-   actually click on the menu), so we have to force things along: */
-#ifdef NS_IMPL_COCOA
-  delegate = [svcs delegate];
-  if (delegate != nil)
-    {
-      if ([delegate respondsToSelector: @selector (menuNeedsUpdate:)])
-        [delegate menuNeedsUpdate: svcs];
-      if ([delegate respondsToSelector:
-                       @selector (menu:updateItem:atIndex:shouldCancel:)])
-        {
-          int i, len = [delegate numberOfItemsInMenu: svcs];
-          for (i =0; i<len; i++)
-            [svcs addItemWithTitle: @"" action: NULL keyEquivalent: @""];
-          for (i =0; i<len; i++)
-            if (![delegate menu: svcs
-                     updateItem: (NSMenuItem *)[svcs itemAtIndex: i]
-                        atIndex: i shouldCancel: NO])
-              break;
-        }
-    }
-#endif
-
   [svcs setAutoenablesItems: NO];
-#ifdef NS_IMPL_COCOA
-  [svcs update]; /* on macOS, converts from '/' structure */
-#endif
 
   ret = interpret_services_menu (svcs, Qnil, ret);
   return ret;
@@ -2074,10 +2187,10 @@ static int
 ns_do_applescript (Lisp_Object script, Lisp_Object *result)
 {
   NSAppleEventDescriptor *desc;
-  NSDictionary* errorDict;
-  NSAppleEventDescriptor* returnDescriptor = NULL;
+  NSDictionary *errorDict;
+  NSAppleEventDescriptor *returnDescriptor = NULL;
 
-  NSAppleScript* scriptObject =
+  NSAppleScript *scriptObject =
     [[NSAppleScript alloc] initWithSource:
 			     [NSString stringWithUTF8String: SSDATA (script)]];
 
@@ -2408,52 +2521,61 @@ ns_screen_name (CGDirectDisplayID did)
 {
   char *name = NULL;
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_9
-  mach_port_t masterPort;
-  io_iterator_t it;
-  io_object_t obj;
-
-  // CGDisplayIOServicePort is deprecated.  Do it another (harder) way.
-
-  if (IOMasterPort (MACH_PORT_NULL, &masterPort) != kIOReturnSuccess
-      || IOServiceGetMatchingServices (masterPort,
-                                       IOServiceMatching ("IONDRVDevice"),
-                                       &it) != kIOReturnSuccess)
-    return name;
-
-  /* Must loop until we find a name.  Many devices can have the same unit
-     number (represents different GPU parts), but only one has a name.  */
-  while (! name && (obj = IOIteratorNext (it)))
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1090
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+  if (CGDisplayIOServicePort == NULL)
+#endif
     {
-      CFMutableDictionaryRef props;
-      const void *val;
+      mach_port_t masterPort;
+      io_iterator_t it;
+      io_object_t obj;
 
-      if (IORegistryEntryCreateCFProperties (obj,
-                                             &props,
-                                             kCFAllocatorDefault,
-                                             kNilOptions) == kIOReturnSuccess
-          && props != nil
-          && (val = CFDictionaryGetValue(props, @"IOFBDependentIndex")))
+      /* CGDisplayIOServicePort is deprecated.  Do it another (harder) way.
+
+         Is this code OK for macOS < 10.9, and GNUstep?  I suspect it is,
+         in which case is it worth keeping the other method in here? */
+
+      if (IOMasterPort (MACH_PORT_NULL, &masterPort) != kIOReturnSuccess
+          || IOServiceGetMatchingServices (masterPort,
+                                           IOServiceMatching ("IONDRVDevice"),
+                                           &it) != kIOReturnSuccess)
+        return name;
+
+      /* Must loop until we find a name.  Many devices can have the same unit
+         number (represents different GPU parts), but only one has a name.  */
+      while (! name && (obj = IOIteratorNext (it)))
         {
-          unsigned nr = [(NSNumber *)val unsignedIntegerValue];
-          if (nr == CGDisplayUnitNumber (did))
-            name = ns_get_name_from_ioreg (obj);
+          CFMutableDictionaryRef props;
+          const void *val;
+
+          if (IORegistryEntryCreateCFProperties (obj,
+                                                 &props,
+                                                 kCFAllocatorDefault,
+                                                 kNilOptions) == kIOReturnSuccess
+              && props != nil
+              && (val = CFDictionaryGetValue(props, @"IOFBDependentIndex")))
+            {
+              unsigned nr = [(NSNumber *)val unsignedIntegerValue];
+              if (nr == CGDisplayUnitNumber (did))
+                name = ns_get_name_from_ioreg (obj);
+            }
+
+          CFRelease (props);
+          IOObjectRelease (obj);
         }
 
-      CFRelease (props);
-      IOObjectRelease (obj);
+      IOObjectRelease (it);
     }
-
-  IOObjectRelease (it);
-
-#else
-
-  name = ns_get_name_from_ioreg (CGDisplayIOServicePort (did));
-
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+  else
+#endif
+#endif /* #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1090 */
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+    name = ns_get_name_from_ioreg (CGDisplayIOServicePort (did));
 #endif
   return name;
 }
-#endif
+#endif /* NS_IMPL_COCOA */
 
 static Lisp_Object
 ns_make_monitor_attribute_list (struct MonitorInfo *monitors,
@@ -2639,9 +2761,8 @@ compute_tip_xy (struct frame *f,
                 int *root_y)
 {
   Lisp_Object left, top, right, bottom;
-  EmacsView *view = FRAME_NS_VIEW (f);
-  struct ns_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
   NSPoint pt;
+  NSScreen *screen;
 
   /* Start with user-specified or mouse position.  */
   left = Fcdr (Fassq (Qleft, parms));
@@ -2651,22 +2772,7 @@ compute_tip_xy (struct frame *f,
 
   if ((!INTEGERP (left) && !INTEGERP (right))
       || (!INTEGERP (top) && !INTEGERP (bottom)))
-    {
-      pt.x = dpyinfo->last_mouse_motion_x;
-      pt.y = dpyinfo->last_mouse_motion_y;
-      /* Convert to screen coordinates */
-      pt = [view convertPoint: pt toView: nil];
-#if !defined (NS_IMPL_COCOA) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_7
-      pt = [[view window] convertBaseToScreen: pt];
-#else
-      {
-        NSRect r = NSMakeRect (pt.x, pt.y, 0, 0);
-        r = [[view window] convertRectToScreen: r];
-        pt.x = r.origin.x;
-        pt.y = r.origin.y;
-      }
-#endif
-    }
+    pt = [NSEvent mouseLocation];
   else
     {
       /* Absolute coordinates.  */
@@ -2676,13 +2782,28 @@ compute_tip_xy (struct frame *f,
 	      - height);
     }
 
+  /* Find the screen that pt is on. */
+  for (screen in [NSScreen screens])
+    if (pt.x >= screen.frame.origin.x
+        && pt.x < screen.frame.origin.x + screen.frame.size.width
+        && pt.y >= screen.frame.origin.y
+        && pt.y < screen.frame.origin.y + screen.frame.size.height)
+      break;
+
+  /* We could use this instead of the if above:
+
+         if (CGRectContainsPoint ([screen frame], pt))
+
+     which would be neater, but it causes problems building on old
+     versions of macOS and in GNUstep. */
+
   /* Ensure in bounds.  (Note, screen origin = lower left.) */
   if (INTEGERP (left) || INTEGERP (right))
     *root_x = pt.x;
-  else if (pt.x + XINT (dx) <= 0)
-    *root_x = 0; /* Can happen for negative dx */
+  else if (pt.x + XINT (dx) <= screen.frame.origin.x)
+    *root_x = screen.frame.origin.x; /* Can happen for negative dx */
   else if (pt.x + XINT (dx) + width
-	   <= x_display_pixel_width (FRAME_DISPLAY_INFO (f)))
+	   <= screen.frame.origin.x + screen.frame.size.width)
     /* It fits to the right of the pointer.  */
     *root_x = pt.x + XINT (dx);
   else if (width + XINT (dx) <= pt.x)
@@ -2690,20 +2811,20 @@ compute_tip_xy (struct frame *f,
     *root_x = pt.x - width - XINT (dx);
   else
     /* Put it left justified on the screen -- it ought to fit that way.  */
-    *root_x = 0;
+    *root_x = screen.frame.origin.x;
 
   if (INTEGERP (top) || INTEGERP (bottom))
     *root_y = pt.y;
-  else if (pt.y - XINT (dy) - height >= 0)
+  else if (pt.y - XINT (dy) - height >= screen.frame.origin.y)
     /* It fits below the pointer.  */
     *root_y = pt.y - height - XINT (dy);
   else if (pt.y + XINT (dy) + height
-	   <= x_display_pixel_height (FRAME_DISPLAY_INFO (f)))
+	   <= screen.frame.origin.y + screen.frame.size.height)
     /* It fits above the pointer */
       *root_y = pt.y + XINT (dy);
   else
     /* Put it on the top.  */
-    *root_y = x_display_pixel_height (FRAME_DISPLAY_INFO (f)) - height;
+    *root_y = screen.frame.origin.y + screen.frame.size.height - height;
 }
 
 
@@ -2935,6 +3056,67 @@ menu bar or tool bar of FRAME.  */)
 				 : Qnative_edges));
 }
 
+DEFUN ("ns-set-mouse-absolute-pixel-position",
+       Fns_set_mouse_absolute_pixel_position,
+       Sns_set_mouse_absolute_pixel_position, 2, 2, 0,
+       doc: /* Move mouse pointer to absolute pixel position (X, Y).
+The coordinates X and Y are interpreted in pixels relative to a position
+\(0, 0) of the selected frame's display.  */)
+       (Lisp_Object x, Lisp_Object y)
+{
+#ifdef NS_IMPL_COCOA
+  /* GNUstep doesn't support CGWarpMouseCursorPosition, so none of
+     this will work. */
+  struct frame *f = SELECTED_FRAME ();
+  EmacsView *view = FRAME_NS_VIEW (f);
+  NSScreen *screen = [[view window] screen];
+  NSRect screen_frame = [screen frame];
+  int mouse_x, mouse_y;
+
+  NSScreen *primary_screen = [[NSScreen screens] objectAtIndex:0];
+  NSRect primary_screen_frame = [primary_screen frame];
+  CGFloat primary_screen_height = primary_screen_frame.size.height;
+
+  if (FRAME_INITIAL_P (f) || !FRAME_NS_P (f))
+    return Qnil;
+
+  CHECK_TYPE_RANGED_INTEGER (int, x);
+  CHECK_TYPE_RANGED_INTEGER (int, y);
+
+  mouse_x = screen_frame.origin.x + XINT (x);
+
+  if (screen == primary_screen)
+    mouse_y = screen_frame.origin.y + XINT (y);
+  else
+    mouse_y = (primary_screen_height - screen_frame.size.height
+               - screen_frame.origin.y) + XINT (y);
+
+  CGPoint mouse_pos = CGPointMake(mouse_x, mouse_y);
+  CGWarpMouseCursorPosition (mouse_pos);
+#endif /* NS_IMPL_COCOA */
+
+  return Qnil;
+}
+
+DEFUN ("ns-mouse-absolute-pixel-position",
+       Fns_mouse_absolute_pixel_position,
+       Sns_mouse_absolute_pixel_position, 0, 0, 0,
+       doc: /* Return absolute position of mouse cursor in pixels.
+The position is returned as a cons cell (X . Y) of the
+coordinates of the mouse cursor position in pixels relative to a
+position (0, 0) of the selected frame's terminal. */)
+     (void)
+{
+  struct frame *f = SELECTED_FRAME ();
+  EmacsView *view = FRAME_NS_VIEW (f);
+  NSScreen *screen = [[view window] screen];
+  NSPoint pt = [NSEvent mouseLocation];
+
+  return Fcons(make_number(pt.x - screen.frame.origin.x),
+               make_number(screen.frame.size.height -
+                           (pt.y - screen.frame.origin.y)));
+}
+
 /* ==========================================================================
 
     Class implementations
@@ -3075,6 +3257,7 @@ syms_of_nsfns (void)
   DEFSYM (Qfontsize, "fontsize");
   DEFSYM (Qframe_title_format, "frame-title-format");
   DEFSYM (Qicon_title_format, "icon-title-format");
+  DEFSYM (Qdark, "dark");
 
   DEFVAR_LISP ("ns-icon-type-alist", Vns_icon_type_alist,
                doc: /* Alist of elements (REGEXP . IMAGE) for images of icons associated to frames.
@@ -3121,6 +3304,10 @@ be used as the image of the icon representing the frame.  */);
   defsubr (&Sns_display_monitor_attributes_list);
   defsubr (&Sns_frame_geometry);
   defsubr (&Sns_frame_edges);
+  defsubr (&Sns_frame_list_z_order);
+  defsubr (&Sns_frame_restack);
+  defsubr (&Sns_set_mouse_absolute_pixel_position);
+  defsubr (&Sns_mouse_absolute_pixel_position);
   defsubr (&Sx_display_mm_width);
   defsubr (&Sx_display_mm_height);
   defsubr (&Sx_display_screens);

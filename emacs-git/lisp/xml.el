@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -437,6 +437,7 @@ in the XML-NS argument."
                                  (if symbol-qnames (cdr xml-ns) xml-ns)))
                      "")))
 	(if (and symbol-qnames
+                 (not special)
 		 (not (string= prefix "xmlns")))
 	    (intern (concat ns lname))
 	  (cons ns (if special "" lname))))
@@ -646,10 +647,8 @@ surpassed `xml-entity-expansion-limit'"))))
 (defun xml-parse-attlist (&optional xml-ns)
   "Return the attribute-list after point.
 Leave point at the first non-blank character after the tag."
-  (let* ((attlist ())
-	 (symbol-qnames (eq (car-safe xml-ns) 'symbol-qnames))
-	 (xml-ns (if symbol-qnames (cdr xml-ns) xml-ns))
-	 end-pos name)
+  (let ((attlist ())
+        end-pos name)
     (skip-syntax-forward " ")
     (while (looking-at (eval-when-compile
 			 (concat "\\(" xml-name-re "\\)\\s-*=\\s-*")))

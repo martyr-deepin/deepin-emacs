@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -621,7 +621,7 @@ whose value is a range-list."
 (defun xsdre-parse-escape ()
   (let ((ch (car xsdre-current-regexp)))
     (xsdre-advance)
-    (cond ((memq ch '(?\\ ?| ?. ?- ?^ ?* ?+ ?( ?) ?{ ?} ?[ ?])) ch)
+    (cond ((memq ch '(?\\ ?| ?. ?- ?^ ?* ?+ ?\( ?\) ?{ ?} ?\[ ?\])) ch)
 	  ((eq ch ?r) ?\r)
 	  ((eq ch ?n) ?\n)
 	  ((eq ch ?t) ?\t)

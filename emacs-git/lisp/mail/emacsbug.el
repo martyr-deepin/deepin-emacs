@@ -21,7 +21,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -77,33 +77,12 @@
        (equal (executable-find "open") "/usr/bin/open")
        (memq system-type '(darwin))))
 
-;; FIXME this duplicates much of the logic from browse-url-can-use-xdg-open.
 (defun report-emacs-bug-can-use-xdg-email ()
   "Return non-nil if the \"xdg-email\" command can be used.
-xdg-email is a desktop utility that calls your preferred mail client.
-This requires you to be running either Gnome, KDE, or Xfce4."
-  (and (getenv "DISPLAY")
-       (executable-find "xdg-email")
-       (or (getenv "GNOME_DESKTOP_SESSION_ID")
-	   ;; GNOME_DESKTOP_SESSION_ID is deprecated, check on Dbus also.
-	   (condition-case nil
-	       (eq 0 (call-process
-		      "dbus-send" nil nil nil
-				  "--dest=org.gnome.SessionManager"
-				  "--print-reply"
-				  "/org/gnome/SessionManager"
-				  "org.gnome.SessionManager.CanShutdown"))
-	     (error nil))
-	   (equal (getenv "KDE_FULL_SESSION") "true")
-	   ;; FIXME? browse-url-can-use-xdg-open also accepts LXDE.
-	   ;; Is that no good here, or just overlooked?
-	   (condition-case nil
-	       (eq 0 (call-process
-		      "/bin/sh" nil nil nil
-		      "-c"
-		      ;; FIXME use string-match rather than grep.
-		      "xprop -root _DT_SAVE_MODE|grep xfce4"))
-	     (error nil)))))
+xdg-email is a desktop utility that calls your preferred mail client."
+  (and ;; See browse-url-can-use-xdg-open.
+       (or (getenv "DISPLAY") (getenv "WAYLAND_DISPLAY"))
+       (executable-find "xdg-email")))
 
 (defun report-emacs-bug-insert-to-mailer ()
   "Send the message to your preferred mail client.
@@ -151,10 +130,7 @@ Prompts for bug subject.  Leaves you in a mail buffer."
   (interactive "sBug Subject: ")
   ;; The syntax `version;' is preferred to `[version]' because the
   ;; latter could be mistakenly stripped by mailing software.
-  (if (eq system-type 'ms-dos)
-      (setq topic (concat emacs-version "; " topic))
-    (when (string-match "^\\(\\([.0-9]+\\)*\\)\\.[0-9]+$" emacs-version)
-      (setq topic (concat (match-string 1 emacs-version) "; " topic))))
+  (setq topic (concat emacs-version "; " topic))
   (let ((from-buffer (current-buffer))
 	(can-insert-mail (or (report-emacs-bug-can-use-xdg-email)
 			     (report-emacs-bug-can-use-osx-open)))
@@ -203,7 +179,7 @@ Prompts for bug subject.  Leaves you in a mail buffer."
 	 'face 'link
 	 'help-echo (concat "mouse-2, RET: Follow this link")
 	 'action (lambda (button)
-		   (browse-url "http://lists.gnu.org/archive/html/bug-gnu-emacs/"))
+		   (browse-url "https://lists.gnu.org/archive/html/bug-gnu-emacs/"))
 	 'follow-link t)
 	(insert " mailing list\nand the GNU bug tracker at ")
 	(insert-text-button
@@ -211,7 +187,7 @@ Prompts for bug subject.  Leaves you in a mail buffer."
 	 'face 'link
 	 'help-echo (concat "mouse-2, RET: Follow this link")
 	 'action (lambda (button)
-		   (browse-url "http://debbugs.gnu.org/"))
+		   (browse-url "https://debbugs.gnu.org/"))
 	 'follow-link t)
 
 	(insert ".  Please check that

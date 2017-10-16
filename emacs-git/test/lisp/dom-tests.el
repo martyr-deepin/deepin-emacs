@@ -16,7 +16,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -26,6 +26,9 @@
 
 (require 'dom)
 (require 'ert)
+
+;; `defsubst's are not inlined inside `ert-deftest' (see Bug#24402),
+;; therefore we can't use `eval-when-compile' here.
 (require 'subr-x)
 
 (defun dom-tests--tree ()

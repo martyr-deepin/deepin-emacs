@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
@@ -575,7 +575,10 @@ Lisp_Object
 terminal_glyph_code (struct terminal *t, int ch)
 {
 #if HAVE_STRUCT_UNIPAIR_UNICODE
-  if (t->type == output_termcap)
+  /* Heuristically assume that a terminal supporting glyph codes is in
+     UTF-8 mode if and only if its coding system is UTF-8 (Bug#26396).  */
+  if (t->type == output_termcap
+      && t->terminal_coding->encoder == encode_coding_utf_8)
     {
       /* As a hack, recompute the table when CH is the maximum
 	 character.  */

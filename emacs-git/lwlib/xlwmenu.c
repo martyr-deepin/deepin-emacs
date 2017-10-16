@@ -16,7 +16,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* Created by devin@lucid.com */
 
@@ -267,7 +267,7 @@ abort_gracefully (Widget w)
   if (XtIsShell (XtParent (w)))
     XtRemoveGrab (w);
   ungrab_all (w, CurrentTime);
-  abort ();
+  emacs_abort ();
 }
 
 static void
@@ -897,7 +897,7 @@ draw_separator (XlwMenuWidget mw,
       break;
 
     default:
-      abort ();
+      emacs_abort ();
     }
 }
 
@@ -933,7 +933,7 @@ separator_height (enum menu_separator separator)
       return 5;
 
     default:
-      abort ();
+      emacs_abort ();
     }
 }
 
@@ -1900,7 +1900,7 @@ XlwMenuInitialize (Widget request, Widget w, ArgList args, Cardinal *num_args)
           if (!mw->menu.font)
             {
               fprintf (stderr, "Menu font fixed not found, can't continue.\n");
-              abort ();
+              emacs_abort ();
             }
         }
     }

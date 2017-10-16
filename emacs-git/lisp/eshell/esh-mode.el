@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -726,7 +726,9 @@ This is done after all necessary filtering has been done."
 		  (setq obeg (+ obeg nchars)))
 	      (if (<= (point) oend)
 		  (setq oend (+ oend nchars)))
-	      (insert-before-markers string)
+              ;; Let the ansi-color overlay hooks run.
+              (let ((inhibit-modification-hooks nil))
+                (insert-before-markers string))
 	      (if (= (window-start) (point))
 		  (set-window-start (selected-window)
 				    (- (point) nchars)))
@@ -882,8 +884,10 @@ If SCROLLBACK is non-nil, clear the scrollback contents."
   (interactive)
   (if scrollback
       (eshell/clear-scrollback)
-    (insert (make-string (window-size) ?\n))
-    (eshell-send-input)))
+    (let ((eshell-input-filter-functions
+           (remq 'eshell-add-to-history eshell-input-filter-functions)))
+      (insert (make-string (window-size) ?\n))
+      (eshell-send-input))))
 
 (defun eshell/clear-scrollback ()
   "Clear the scrollback content of the eshell window."

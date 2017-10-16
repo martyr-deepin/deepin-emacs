@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -487,8 +487,8 @@ Each alist element, which looks like (ELEMENT ...), is passed to
 
 Elements might be (?\\=` ?\\=` _ \"\\='\\='\"), (?\\( ?  _ \" )\") or (?{ \\n > _ \\n ?} >).")
 
-(defvar skeleton-pair-default-alist '((?( _ ?)) (?\))
-				      (?[ _ ?]) (?\])
+(defvar skeleton-pair-default-alist '((?\( _ ?\)) (?\))
+				      (?\[ _ ?\]) (?\])
 				      (?{ _ ?}) (?\})
 				      (?< _ ?>) (?\>)
 				      (?« _ ?») (?\»)

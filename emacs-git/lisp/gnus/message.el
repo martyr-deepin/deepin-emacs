@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -49,7 +49,8 @@
 (require 'mm-util)
 (require 'rfc2047)
 (require 'puny)
-(require 'subr-x)
+(require 'rmc)			; read-multiple-choice
+(eval-when-compile (require 'subr-x))	; when-let*
 
 (autoload 'mailclient-send-it "mailclient")
 
@@ -63,9 +64,6 @@
   :link '(custom-manual "(message)Top")
   :group 'mail
   :group 'news)
-
-(put 'user-mail-address 'custom-type 'string)
-(put 'user-full-name 'custom-type 'string)
 
 (defgroup message-various nil
   "Various Message Variables."
@@ -309,7 +307,7 @@ any confusion."
 (defcustom message-subject-trailing-was-query t
   "What to do with trailing \"(was: <old subject>)\" in subject lines.
 If nil, leave the subject unchanged.  If it is the symbol `ask', query
-the user what do do.  In this case, the subject is matched against
+the user what to do.  In this case, the subject is matched against
 `message-subject-trailing-was-ask-regexp'.  If
 `message-subject-trailing-was-query' is t, always strip the trailing
 old subject.  In this case, `message-subject-trailing-was-regexp' is
@@ -994,7 +992,6 @@ are replaced:
   %F   The first name if present, e.g.: \"John\", else fall
        back to the mail address.
   %L   The last name if present, e.g.: \"Doe\".
-  %Z, %z   The time zone in the numeric form, e.g.:\"+0000\".
 
 All other format specifiers are passed to `format-time-string'
 which is called using the date from the article your replying to, but
@@ -1358,7 +1355,7 @@ If nil, you might be asked to input the charset."
 (defcustom message-dont-reply-to-names mail-dont-reply-to-names
   "Addresses to prune when doing wide replies.
 This can be a regexp, a list of regexps or a predicate function.
-Also, a value of nil means exclude your own user name only.
+Also, a value of nil means exclude `user-mail-address' only.
 
 If a function email is passed as the argument."
   :version "24.3"
@@ -2328,7 +2325,7 @@ With prefix-argument just set Follow-Up, don't cross-post."
   (setq message-cross-post-old-target target-group))
 
 (defun message-cross-post-insert-note (target-group cross-post in-old
-						    old-groups)
+						    _old-groups)
   "Insert a in message body note about a set Followup or Crosspost.
 If there have been previous notes, delete them.  TARGET-GROUP specifies the
 group to Followup-To.  When CROSS-POST is t, insert note about
@@ -2846,7 +2843,7 @@ These properties are essential to work, so we should never strip them."
       (eq message-mail-alias-type type)
     (memq type message-mail-alias-type)))
 
-(defun message-strip-forbidden-properties (begin end &optional old-length)
+(defun message-strip-forbidden-properties (begin end &optional _old-length)
   "Strip forbidden properties between BEGIN and END, ignoring the third arg.
 This function is intended to be called from `after-change-functions'.
 See also `message-forbidden-properties'."
@@ -3122,7 +3119,7 @@ M-RET    `message-newline-and-reformat' (break the line and reformat)."
       ;; hard way.
       (progn
 	;; Skip past all headers and continuation lines.
-	(while (looking-at "[^:]+:\\|[\t ]+[^\t ]")
+	(while (looking-at "[^\t\n :]+:\\|[\t ]+[^\t\n ]")
 	  (forward-line 1))
 	;; We're now at the first empty line, so perhaps move past it.
 	(when (and (eolp)
@@ -4098,7 +4095,7 @@ Instead, just auto-save the buffer and then bury it."
   "Bury this mail BUFFER."
   ;; Note that this is not quite the same as (bury-buffer buffer),
   ;; since bury-buffer does extra stuff with a nil argument.
-  ;; Eg http://lists.gnu.org/archive/html/emacs-devel/2014-01/msg00539.html
+  ;; Eg https://lists.gnu.org/archive/html/emacs-devel/2014-01/msg00539.html
   (with-current-buffer buffer (bury-buffer))
   (if message-return-action
       (apply (car message-return-action) (cdr message-return-action))))
@@ -4393,7 +4390,7 @@ This function could be useful in `message-setup-hook'."
 			  (if (string= encoded bog)
 			      ""
 			    (format " (%s)" encoded))))))
-		 (error "Bogus address"))))))))
+		 (user-error "Bogus address"))))))))
 
 (custom-add-option 'message-setup-hook 'message-check-recipients)
 
@@ -4845,17 +4842,13 @@ command evaluates `message-send-mail-hook' just before sending a message."
   (run-hooks 'message-send-mail-hook)
   (mailclient-send-it))
 
-(defvar sha1-maximum-internal-length)
-
 (defun message-canlock-generate ()
   "Return a string that is non-trivial to guess.
 Do not use this for anything important, it is cryptographically weak."
-  (require 'sha1)
-  (let (sha1-maximum-internal-length)
-    (sha1 (concat (message-unique-id)
-		  (format "%x%x%x" (random) (random) (random))
-		  (prin1-to-string (recent-keys))
-		  (prin1-to-string (garbage-collect))))))
+  (sha1 (concat (message-unique-id)
+                (format "%x%x%x" (random) (random) (random))
+                (prin1-to-string (recent-keys))
+                (prin1-to-string (garbage-collect)))))
 
 (defvar canlock-password)
 (defvar canlock-password-for-verify)
@@ -5785,7 +5778,10 @@ give as trustworthy answer as possible."
 	   (not (string-match message-bogus-system-names message-user-fqdn)))
       ;; `message-user-fqdn' seems to be valid
       message-user-fqdn)
-     ((not (string-match message-bogus-system-names sysname))
+     ;; A system name without any dots is unlikely to be a good fully
+     ;; qualified domain name.
+     ((and (string-match "[.]" sysname)
+	   (not (string-match message-bogus-system-names sysname)))
       ;; `system-name' returned the right result.
       sysname)
      ;; Try `mail-host-address'.
@@ -5855,7 +5851,7 @@ subscribed address (and not the additional To and Cc header contents)."
       (let ((list
 	     (loop for recipient in recipients
 	       when (loop for regexp in mft-regexps
-		      when (string-match regexp recipient) return t)
+		      thereis (string-match regexp recipient))
 	       return recipient)))
 	(when list
 	  (if only-show-subscribed
@@ -6683,7 +6679,7 @@ is a function used to switch to and display the mail buffer."
 	;; C-h f compose-mail says that headers should be specified as
 	;; (string . value); however all the rest of message expects
 	;; headers to be symbols, not strings (eg message-header-format-alist).
-	;; http://lists.gnu.org/archive/html/emacs-devel/2011-01/msg00337.html
+	;; https://lists.gnu.org/archive/html/emacs-devel/2011-01/msg00337.html
 	;; We need to convert any string input, eg from rmail-start-mail.
 	(dolist (h other-headers other-headers)
 	  (if (stringp (car h)) (setcar h (intern (capitalize (car h)))))))
@@ -8064,8 +8060,12 @@ regexp VARSTR."
 		  (or (null varstr)
 		      (string-match varstr (symbol-name (car local)))))
 	 (ignore-errors
-	   (set (make-local-variable (car local))
-		(cdr local)))))
+	   ;; Cloning message-default-charset could cause an already
+	   ;; encoded text to be encoded again, yielding raw bytes
+	   ;; instead of characters in the message.
+	   (unless (eq 'message-default-charset (car local))
+	     (set (make-local-variable (car local))
+		  (cdr local))))))
      locals)))
 
 ;;;
@@ -8417,7 +8417,7 @@ Used in `message-simplify-recipients'."
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))
-	(when-let ((props (get-text-property (point) 'display)))
+	(when-let* ((props (get-text-property (point) 'display)))
 	  (when (and (consp props)
 		     (eq (car props) 'image))
 	    (put-text-property (point) (1+ (point)) 'display nil)

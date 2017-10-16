@@ -15,7 +15,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* Old BUGS:
    - [M-C-a] != [?\M-\C-a]
@@ -93,7 +93,7 @@ static void describe_command (Lisp_Object, Lisp_Object);
 static void describe_translation (Lisp_Object, Lisp_Object);
 static void describe_map (Lisp_Object, Lisp_Object,
                           void (*) (Lisp_Object, Lisp_Object),
-			  bool, Lisp_Object, Lisp_Object*, bool, bool);
+			  bool, Lisp_Object, Lisp_Object *, bool, bool);
 static void describe_vector (Lisp_Object, Lisp_Object, Lisp_Object,
                              void (*) (Lisp_Object, Lisp_Object), bool,
                              Lisp_Object, Lisp_Object, bool, bool);
@@ -1292,7 +1292,7 @@ silly_event_symbol_error (Lisp_Object c)
   base = XCAR (parsed);
   name = Fsymbol_name (base);
   /* This alist includes elements such as ("RET" . "\\r").  */
-  assoc = Fassoc (name, exclude_keys);
+  assoc = Fassoc (name, exclude_keys, Qnil);
 
   if (! NILP (assoc))
     {

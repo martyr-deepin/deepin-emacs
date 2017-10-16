@@ -17,17 +17,18 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'ert)
 (require 'ffap)
 
 (ert-deftest ffap-tests-25243 ()
-  "Test for http://debbugs.gnu.org/25243 ."
+  "Test for https://debbugs.gnu.org/25243 ."
   (let ((file (make-temp-file "test-Bug#25243")))
     (unwind-protect
         (with-temp-file file
@@ -65,6 +66,18 @@ Host = example.com\n")
                    (list (point-min) (point-max))))
     (let ((ffap-gopher-regexp nil))
       (should-not (ffap-gopher-at-point)))))
+
+(ert-deftest ffap-other-window--bug-25352 ()
+  "Test for Bug#25352.  Checks that the window configuration is
+left alone when opening a URL in an external browser."
+  (cl-letf* ((old (current-window-configuration))
+             ((symbol-function 'ffap-prompter)
+              (lambda () "https://www.gnu.org"))
+             (urls nil)
+             (ffap-url-fetcher (lambda (url) (push url urls) nil)))
+    (should-not (ffap-other-window))
+    (should (equal (current-window-configuration) old))
+    (should (equal urls '("https://www.gnu.org")))))
 
 (provide 'ffap-tests)
 

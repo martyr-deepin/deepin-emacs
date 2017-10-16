@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -602,7 +602,9 @@ Important: the match ends just after the marker.")
 
 (defun proced-header-line ()
   "Return header line for Proced buffer."
-  (list (propertize " " 'display '(space :align-to 0))
+  (list (propertize " "
+                    'display
+                    (list 'space :align-to (+ 2 (line-number-display-width))))
         (if (<= (window-hscroll) (length proced-header-line))
             (replace-regexp-in-string ;; preserve text properties
              "\\(%\\)" "\\1\\1"
@@ -767,7 +769,7 @@ The time interval for updates is specified via `proced-auto-update-interval'."
       (while (not (eobp))
         (cond ((looking-at mark-re)
                (proced-insert-mark nil))
-              ((looking-at " ")
+              ((= (following-char) ?\s)
                (proced-insert-mark t))
               (t
                (forward-line 1)))))))
@@ -1436,7 +1438,7 @@ Replace newline characters by \"^J\" (two characters)."
              (hprops
               (if (nth 4 grammar)
                   (let ((descend (if (eq key sort-key) proced-descend (nth 5 grammar))))
-                    `(proced-key ,key mouse-face highlight
+                    `(proced-key ,key mouse-face header-line-highlight
                                  help-echo ,(format proced-header-help-echo
                                                     (if descend "-" "+")
                                                     (nth 1 grammar)
@@ -1801,7 +1803,7 @@ supported but discouraged.  It will be removed in a future version of Emacs."
 
   (let (failures)
     ;; Why not always use `signal-process'?  See
-    ;; http://lists.gnu.org/archive/html/emacs-devel/2008-03/msg02955.html
+    ;; https://lists.gnu.org/archive/html/emacs-devel/2008-03/msg02955.html
     (if (functionp proced-signal-function)
         ;; use built-in `signal-process'
         (let ((signal (if (stringp signal)

@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2006-2017 Free Software Foundation, Inc.
 
-;; Author: Edward O'Connor <ted@oconnor.cx>
+;; Author: Theresa O'Connor <ted@oconnor.cx>
 ;; Version: 1.4
 ;; Keywords: convenience
 
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -187,26 +187,30 @@ Unlike `reverse', this keeps the property-value pairs intact."
 
 ;; Reader utilities
 
-(defsubst json-advance (&optional n)
-  "Skip past the following N characters."
-  (forward-char n))
+(define-inline json-advance (&optional n)
+  "Advance N characters forward."
+  (inline-quote (forward-char ,n)))
 
-(defsubst json-peek ()
+(define-inline json-peek ()
   "Return the character at point."
-  (let ((char (char-after (point))))
-    (or char :json-eof)))
+  (inline-quote (following-char)))
 
-(defsubst json-pop ()
+(define-inline json-pop ()
   "Advance past the character at point, returning it."
-  (let ((char (json-peek)))
-    (if (eq char :json-eof)
-        (signal 'json-end-of-file nil)
-      (json-advance)
-      char)))
+  (inline-quote
+   (let ((char (json-peek)))
+     (if (zerop char)
+         (signal 'json-end-of-file nil)
+       (json-advance)
+       char))))
 
-(defun json-skip-whitespace ()
+(define-inline json-skip-whitespace ()
   "Skip past the whitespace at point."
-  (skip-chars-forward "\t\r\n\f\b "))
+  ;; See
+  ;; https://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf
+  ;; or https://tools.ietf.org/html/rfc7159#section-2 for the
+  ;; definition of whitespace in JSON.
+  (inline-quote (skip-chars-forward "\t\r\n ")))
 
 
 
@@ -293,14 +297,15 @@ KEYWORD is the keyword expected."
   (unless (member keyword json-keywords)
     (signal 'json-unknown-keyword (list keyword)))
   (mapc (lambda (char)
-          (unless (char-equal char (json-peek))
+          (when (/= char (json-peek))
             (signal 'json-unknown-keyword
                     (list (save-excursion
                             (backward-word-strictly 1)
                             (thing-at-point 'word)))))
           (json-advance))
         keyword)
-  (unless (looking-at "\\(\\s-\\|[],}]\\|$\\)")
+  (json-skip-whitespace)
+  (unless (looking-at "\\([],}]\\|$\\)")
     (signal 'json-unknown-keyword
             (list (save-excursion
                     (backward-word-strictly 1)
@@ -330,10 +335,10 @@ representation will be parsed correctly."
  ;; If SIGN is non-nil, the number is explicitly signed.
  (let ((number-regexp
         "\\([0-9]+\\)?\\(\\.[0-9]+\\)?\\([Ee][+-]?[0-9]+\\)?"))
-   (cond ((and (null sign) (char-equal (json-peek) ?-))
+   (cond ((and (null sign) (= (json-peek) ?-))
           (json-advance)
           (- (json-read-number t)))
-         ((and (null sign) (char-equal (json-peek) ?+))
+         ((and (null sign) (= (json-peek) ?+))
           (json-advance)
           (json-read-number t))
          ((and (looking-at number-regexp)
@@ -377,17 +382,17 @@ representation will be parsed correctly."
      (special (cdr special))
      ((not (eq char ?u)) char)
      ;; Special-case UTF-16 surrogate pairs,
-     ;; cf. https://tools.ietf.org/html/rfc7159#section-7.  Note that
+     ;; cf. <https://tools.ietf.org/html/rfc7159#section-7>.  Note that
      ;; this clause overlaps with the next one and therefore has to
      ;; come first.
      ((looking-at
-       (rx (group (any "Dd") (any "89ABab") (= 2 (any "0-9A-Fa-f")))
-           "\\u" (group (any "Dd") (any "C-Fc-f") (= 2 (any "0-9A-Fa-f")))))
+       (rx (group (any "Dd") (any "89ABab") (= 2 (any xdigit)))
+           "\\u" (group (any "Dd") (any "C-Fc-f") (= 2 (any xdigit)))))
       (json-advance 10)
       (json--decode-utf-16-surrogates
        (string-to-number (match-string 1) 16)
        (string-to-number (match-string 2) 16)))
-     ((looking-at "[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]")
+     ((looking-at (rx (= 4 xdigit)))
       (let ((hex (match-string 0)))
         (json-advance 4)
         (string-to-number hex 16)))
@@ -396,14 +401,16 @@ representation will be parsed correctly."
 
 (defun json-read-string ()
   "Read the JSON string at point."
-  (unless (char-equal (json-peek) ?\")
+  (unless (= (json-peek) ?\")
     (signal 'json-string-format (list "doesn't start with `\"'!")))
   ;; Skip over the '"'
   (json-advance)
   (let ((characters '())
         (char (json-peek)))
-    (while (not (char-equal char ?\"))
-      (push (if (char-equal char ?\\)
+    (while (not (= char ?\"))
+      (when (< char 32)
+        (signal 'json-string-format (list (prin1-char char))))
+      (push (if (= char ?\\)
                 (json-read-escaped-char)
               (json-pop))
             characters)
@@ -411,7 +418,7 @@ representation will be parsed correctly."
     ;; Skip over the '"'
     (json-advance)
     (if characters
-        (apply 'string (nreverse characters))
+        (concat (nreverse characters))
       "")))
 
 ;; String encoding
@@ -465,11 +472,10 @@ Returns the updated object, which you should save, e.g.:
     (setq obj (json-add-to-object obj \"foo\" \"bar\"))
 Please see the documentation of `json-object-type' and `json-key-type'."
   (let ((json-key-type
-         (if (eq json-key-type nil)
+         (or json-key-type
              (cdr (assq json-object-type '((hash-table . string)
                                            (alist . symbol)
-                                           (plist . keyword))))
-           json-key-type)))
+                                           (plist . keyword)))))))
     (setq key
           (cond ((eq json-key-type 'string)
                  key)
@@ -495,11 +501,11 @@ Please see the documentation of `json-object-type' and `json-key-type'."
   ;; read key/value pairs until "}"
   (let ((elements (json-new-object))
         key value)
-    (while (not (char-equal (json-peek) ?}))
+    (while (not (= (json-peek) ?}))
       (json-skip-whitespace)
       (setq key (json-read-string))
       (json-skip-whitespace)
-      (if (char-equal (json-peek) ?:)
+      (if (= (json-peek) ?:)
           (json-advance)
         (signal 'json-object-format (list ":" (json-peek))))
       (json-skip-whitespace)
@@ -510,8 +516,8 @@ Please see the documentation of `json-object-type' and `json-key-type'."
         (funcall json-post-element-read-function))
       (setq elements (json-add-to-object elements key value))
       (json-skip-whitespace)
-      (unless (char-equal (json-peek) ?})
-        (if (char-equal (json-peek) ?,)
+      (when (/= (json-peek) ?})
+        (if (= (json-peek) ?,)
             (json-advance)
           (signal 'json-object-format (list "," (json-peek))))))
     ;; Skip over the "}"
@@ -621,7 +627,7 @@ become JSON objects."
   (json-skip-whitespace)
   ;; read values until "]"
   (let (elements)
-    (while (not (char-equal (json-peek) ?\]))
+    (while (not (= (json-peek) ?\]))
       (json-skip-whitespace)
       (when json-pre-element-read-function
         (funcall json-pre-element-read-function (length elements)))
@@ -629,13 +635,15 @@ become JSON objects."
       (when json-post-element-read-function
         (funcall json-post-element-read-function))
       (json-skip-whitespace)
-      (unless (char-equal (json-peek) ?\])
-        (if (char-equal (json-peek) ?,)
+      (when (/= (json-peek) ?\])
+        (if (= (json-peek) ?,)
             (json-advance)
           (signal 'json-error (list 'bleah)))))
     ;; Skip over the "]"
     (json-advance)
-    (apply json-array-type (nreverse elements))))
+    (pcase json-array-type
+      (`vector (nreverse (vconcat elements)))
+      (`list (nreverse elements)))))
 
 ;; Array encoding
 
@@ -662,31 +670,31 @@ become JSON objects."
 
 ;;; JSON reader.
 
-(defvar json-readtable
+(defmacro json-readtable-dispatch (char)
+  "Dispatch reader function for CHAR."
+  (declare (debug (symbolp)))
   (let ((table
          '((?t json-read-keyword "true")
            (?f json-read-keyword "false")
            (?n json-read-keyword "null")
            (?{ json-read-object)
            (?\[ json-read-array)
-           (?\" json-read-string))))
-    (mapc (lambda (char)
-            (push (list char 'json-read-number) table))
-          '(?- ?+ ?. ?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9))
-    table)
-  "Readtable for JSON reader.")
+           (?\" json-read-string)))
+        res)
+    (dolist (c '(?- ?+ ?. ?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9))
+      (push (list c 'json-read-number) table))
+    (pcase-dolist (`(,c . ,rest) table)
+      (push `((eq ,char ,c) (,@rest)) res))
+    `(cond ,@res (t (signal 'json-readtable-error ,char)))))
 
 (defun json-read ()
   "Parse and return the JSON object following point.
 Advances point just past JSON object."
   (json-skip-whitespace)
   (let ((char (json-peek)))
-    (if (not (eq char :json-eof))
-        (let ((record (cdr (assq char json-readtable))))
-          (if (functionp (car record))
-              (apply (car record) (cdr record))
-            (signal 'json-readtable-error record)))
-      (signal 'json-end-of-file nil))))
+    (if (zerop char)
+        (signal 'json-end-of-file nil)
+      (json-readtable-dispatch char))))
 
 ;; Syntactic sugar for the reader
 

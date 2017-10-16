@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -77,7 +77,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'pcase)
 
 (defvar cps--bindings nil)
 (defvar cps--states nil)
@@ -87,10 +86,7 @@
 (defvar cps--cleanup-function nil)
 
 (defmacro cps--gensym (fmt &rest args)
-  ;; Change this function to use `cl-gensym' if you want the generated
-  ;; code to be easier to read and debug.
-  ;; (cl-gensym (apply #'format fmt args))
-  `(progn (ignore ,@args) (make-symbol ,fmt)))
+  `(gensym (format ,fmt ,@args)))
 
 (defvar cps--dynamic-wrappers '(identity)
   "List of transformer functions to apply to atomic forms we
@@ -146,8 +142,7 @@ the CPS state machinery.
     `(let ((,dynamic-var ,static-var))
        (unwind-protect ; Update the static shadow after evaluation is done
             ,form
-         (setf ,static-var ,dynamic-var))
-       ,form)))
+         (setf ,static-var ,dynamic-var)))))
 
 (defmacro cps--with-dynamic-binding (dynamic-var static-var &rest body)
   "Evaluate BODY such that generated atomic evaluations run with
@@ -685,7 +680,8 @@ sub-iterator function returns via `iter-end-of-sequence'."
 When called as a function, NAME returns an iterator value that
 encapsulates the state of a computation that produces a sequence
 of values.  Callers can retrieve each value using `iter-next'."
-  (declare (indent defun))
+  (declare (indent defun)
+           (debug (&define name lambda-list lambda-doc def-body)))
   (cl-assert lexical-binding)
   (let* ((parsed-body (macroexp-parse-body body))
          (declarations (car parsed-body))
@@ -697,7 +693,8 @@ of values.  Callers can retrieve each value using `iter-next'."
 (defmacro iter-lambda (arglist &rest body)
   "Return a lambda generator.
 `iter-lambda' is to `iter-defun' as `lambda' is to `defun'."
-  (declare (indent defun))
+  (declare (indent defun)
+           (debug (&define lambda-list lambda-doc def-body)))
   (cl-assert lexical-binding)
   `(lambda ,arglist
      ,(cps-generate-evaluator body)))

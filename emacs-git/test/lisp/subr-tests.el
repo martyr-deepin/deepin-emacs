@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -28,6 +28,7 @@
 ;;; Code:
 
 (require 'ert)
+(eval-when-compile (require 'cl-lib))
 
 (ert-deftest let-when-compile ()
   ;; good case
@@ -257,9 +258,9 @@ This exercises `backtrace-frame', and indirectly `mapbacktrace'."
     (should (equal (mapbacktrace #'error unbound) nil)))
   ;; First frame is backtrace-related function
   (should (equal (backtrace-frame 0) '(t backtrace-frame 0)))
-  (should (equal (catch 'ret
-                   (mapbacktrace (lambda (&rest args) (throw 'ret args))))
-                 '(t mapbacktrace ((lambda (&rest args) (throw 'ret args))) nil)))
+  (let ((throw-args (lambda (&rest args) (throw 'ret args))))
+    (should (equal (catch 'ret (mapbacktrace throw-args))
+                   `(t mapbacktrace (,throw-args) nil))))
   ;; Past-end NFRAMES is silently ignored
   (should (equal (backtrace-frame most-positive-fixnum) nil)))
 
@@ -280,6 +281,31 @@ indirectly `mapbacktrace'."
   (should (equal (string-match-p "\\`[[:blank:]]\\'" "\N{HAIR SPACE}") 0))
   (should (equal (string-match-p "\\`[[:blank:]]\\'" "\u3000") 0))
   (should-not (string-match-p "\\`[[:blank:]]\\'" "\N{LINE SEPARATOR}")))
+
+(ert-deftest subr-tests--dolist--wrong-number-of-args ()
+  "Test that `dolist' doesn't accept wrong types or length of SPEC,
+cf. Bug#25477."
+  (should-error (eval '(dolist (a)))
+                :type 'wrong-number-of-arguments)
+  (should-error (eval '(dolist (a () 'result 'invalid)) t)
+                :type 'wrong-number-of-arguments)
+  (should-error (eval '(dolist "foo") t)
+                :type 'wrong-type-argument))
+
+(ert-deftest subr-tests-bug22027 ()
+  "Test for https://debbugs.gnu.org/22027 ."
+  (let ((default "foo") res)
+    (cl-letf (((symbol-function 'read-string)
+               (lambda (_prompt _init _hist def) def)))
+      (setq res (read-passwd "pass: " 'confirm (mapconcat #'string default "")))
+      (should (string= default res)))))
+
+(ert-deftest subr-tests--gensym ()
+  "Test `gensym' behavior."
+  (should (equal (symbol-name (let ((gensym-counter 0)) (gensym)))
+                 "g0"))
+  (should (eq (string-to-char (symbol-name (gensym))) ?g))
+  (should (eq (string-to-char (symbol-name (gensym "X"))) ?X)))
 
 (provide 'subr-tests)
 ;;; subr-tests.el ends here

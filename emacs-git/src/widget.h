@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* Emacs 19 face widget ported by Fred Pierresteguy */
 
@@ -90,9 +90,9 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 typedef struct _EmacsFrameRec *EmacsFrame;
 typedef struct _EmacsFrameClassRec *EmacsFrameClass;
 
-extern WidgetClass emacsFrameClass;
+extern WidgetClass emacsFrameClass (void);
 
-extern struct _DisplayContext* display_context;
+extern struct _DisplayContext *display_context;
 
 /* Special entry points */
 void EmacsFrameSetCharSize (Widget, int, int);

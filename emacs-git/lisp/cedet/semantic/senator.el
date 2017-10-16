@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -659,7 +659,7 @@ Use semantic tags to navigate."
         (end    (progn (senator-end-of-defun) (point)))
         (start  (progn (senator-beginning-of-defun) (point))))
     (goto-char origin)
-    (push-mark (point))
+    (push-mark)
     (goto-char end) ;; end-of-defun
     (push-mark (point) nil t)
     (goto-char start) ;; beginning-of-defun

@@ -1,4 +1,4 @@
-;;; tramp-cmds.el --- Interactive commands for Tramp
+;;; tramp-cmds.el --- Interactive commands for Tramp  -*- lexical-binding:t -*-
 
 ;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -36,6 +36,20 @@
 (declare-function reporter-dump-variable "reporter")
 (defvar reporter-eval-buffer)
 (defvar reporter-prompt-for-summary-p)
+
+;;;###tramp-autoload
+(defun tramp-change-syntax (&optional syntax)
+  "Change Tramp syntax.
+SYNTAX can be one of the symbols `default' (default),
+`simplified' (ange-ftp like) or `separate' (XEmacs like)."
+  (interactive
+   (let ((input (completing-read
+		 "Enter Tramp syntax: " (tramp-syntax-values) nil t
+		 (symbol-name tramp-syntax))))
+     (unless (string-equal input "")
+       (list (intern input)))))
+  (when syntax
+    (custom-set-variables `(tramp-syntax ',syntax))))
 
 (defun tramp-list-tramp-buffers ()
   "Return a list of all Tramp connection buffers."
@@ -71,7 +85,9 @@ When called interactively, a Tramp connection has to be selected."
 	      (tramp-make-tramp-file-name
 	       (tramp-file-name-method x)
 	       (tramp-file-name-user x)
+	       (tramp-file-name-domain x)
 	       (tramp-file-name-host x)
+	       (tramp-file-name-port x)
 	       (tramp-file-name-localname x)))
 	    (tramp-list-connections)))
 	  name)
@@ -190,7 +206,7 @@ This includes password cache, file cache, connection cache, buffers."
 	     password-cache
 	     password-cache-expiry
 	     remote-file-name-inhibit-cache
-	     connection-local-class-alist
+	     connection-local-profile-alist
 	     connection-local-criteria-alist
 	     file-name-handler-alist))))
 	(lambda (x y) (string< (symbol-name (car x)) (symbol-name (car y)))))
@@ -233,10 +249,9 @@ buffer in your bug report.
 	;; Pretty print the cache.
 	(set varsym (read (format "(%s)" (tramp-cache-print val))))
       ;; There are non-7bit characters to be masked.
-      (when (and (boundp 'mm-7bit-chars)
-		 (stringp val)
+      (when (and (stringp val)
 		 (string-match
-		  (concat "[^" (symbol-value 'mm-7bit-chars) "]") val))
+		  (concat "[^" (bound-and-true-p mm-7bit-chars) "]") val))
 	(with-current-buffer reporter-eval-buffer
 	  (set
 	   varsym
@@ -313,8 +328,7 @@ buffer in your bug report.
   ;; Append buffers only when we are in message mode.
   (when (and
 	 (eq major-mode 'message-mode)
-	 (boundp 'mml-mode)
-	 (symbol-value 'mml-mode))
+	 (bound-and-true-p mml-mode))
 
     (let ((tramp-buf-regexp "\\*\\(debug \\)?tramp/")
 	  (buffer-list (tramp-list-tramp-buffers))

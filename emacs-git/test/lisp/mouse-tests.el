@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -46,5 +46,14 @@ translate ‘mouse-1’ events into ‘mouse-2’ events."
             ((symbol-function 'mouse-on-link-p) (lambda (_pos) t)))
     (should-not (mouse--down-1-maybe-follows-link))
     (should (equal unread-command-events '((mouse-2 nil 1))))))
+
+(ert-deftest bug26816-mouse-frame-movement ()
+  "Mouse moves relative to frame."
+  (skip-unless (display-graphic-p))
+  (let ((frame (selected-frame)))
+    (set-mouse-position frame 0 0)
+    (should (equal (mouse-position)
+                   (cons frame (cons 0 0))))))
+
 
 ;;; mouse-tests.el ends here

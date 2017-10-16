@@ -24,7 +24,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -506,7 +506,7 @@ and it selects the Spanish tutorial."))
 	     (input-method . "turkish-postfix")
 	     (sample-text . "Turkish (Türkçe)	Merhaba")
 	     (setup-function . turkish-case-conversion-enable)
-	     (setup-function . turkish-case-conversion-disable)
+	     (exit-function . turkish-case-conversion-disable)
 	     (documentation . "Support for Turkish.
 Differs from the Latin-5 environment in using the `turkish-postfix' input
 method and applying Turkish case rules for the characters i, I, ı, İ.")))

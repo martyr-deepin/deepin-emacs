@@ -18,7 +18,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -103,7 +103,7 @@ The existence of a primary selection depends on the underlying GUI you use.
 E.g. it doesn't exist under MS-Windows."
   :type 'boolean
   :group 'killing
-  :version "24.1")
+  :version "25.1")
 (define-obsolete-variable-alias 'x-select-enable-primary
   'select-enable-primary "25.1")
 
@@ -474,6 +474,9 @@ two markers or an overlay.  Otherwise, it is nil."
 
 	   (t
 	    (error "Unknown selection type: %S" type)))))
+
+      ;; Most programs are unable to handle NUL bytes in strings.
+      (setq str (replace-regexp-in-string "\0" "\\0" str t t))
 
       (setq next-selection-coding-system nil)
       (cons type str))))

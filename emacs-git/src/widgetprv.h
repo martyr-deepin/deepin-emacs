@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* Emacs 19 face widget ported by Fred Pierresteguy */
 
@@ -25,11 +25,11 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <X11/CoreP.h>
 
 typedef struct {
-  struct frame*	frame;		/* the *emacs* frame object */
+  struct frame *frame;		/* the *emacs* frame object */
 
   /* Resources that can't be done from lisp.
    */
-  char*		geometry;		/* geometry spec of this frame */
+  char *	geometry;		/* geometry spec of this frame */
   Boolean	iconic;			/* whether this frame is iconic */
 
   /* The rest of this is crap and should be deleted.

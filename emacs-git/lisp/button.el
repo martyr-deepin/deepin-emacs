@@ -19,7 +19,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -36,7 +36,7 @@
 ;; represented by the overlay itself, or text-properties, in which case
 ;; the button is represented by a marker or buffer-position pointing
 ;; somewhere in the button.  In the latter case, no markers into the
-;; buffer are retained, which is important for speed if there are are
+;; buffer are retained, which is important for speed if there are
 ;; extremely large numbers of buttons.  Note however that if there is
 ;; an existing face text-property at the site of the button, the
 ;; button face may not be visible.  Using overlays avoids this.
@@ -194,6 +194,8 @@ changes to a supertype are not reflected in its subtypes)."
 	((button--area-button-p button)
 	 (get-text-property (cdr button)
 			    prop (button--area-button-string button)))
+	((markerp button)
+	 (get-text-property button prop (marker-buffer button)))
 	(t ; Must be a text-property button.
 	 (get-text-property button prop))))
 
@@ -493,7 +495,7 @@ Returns the button found."
 	    (unless (button-get button 'skip)
 	      (setq n (1- n)))))))
     (if (null button)
-	(error (if wrap "No buttons!" "No more buttons"))
+	(user-error (if wrap "No buttons!" "No more buttons"))
       (let ((msg (and display-message (button-get button 'help-echo))))
 	(when msg
 	  (message "%s" msg)))

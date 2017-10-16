@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
+along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 
 #include <config.h>
@@ -89,12 +89,19 @@ uniscribe_list_family (struct frame *f)
   /* Limit enumerated fonts to outline fonts to save time.  */
   font_match_pattern.lfOutPrecision = OUT_OUTLINE_PRECIS;
 
+  /* Prevent quitting while EnumFontFamiliesEx runs and conses the
+     list it will return.  That's because get_frame_dc acquires the
+     critical section, so we cannot quit before we release it in
+     release_frame_dc.  */
+  Lisp_Object prev_quit = Vinhibit_quit;
+  Vinhibit_quit = Qt;
   dc = get_frame_dc (f);
 
   EnumFontFamiliesEx (dc, &font_match_pattern,
                       (FONTENUMPROC) add_opentype_font_name_to_list,
                       (LPARAM) &list, 0);
   release_frame_dc (f, dc);
+  Vinhibit_quit = prev_quit;
 
   return list;
 }

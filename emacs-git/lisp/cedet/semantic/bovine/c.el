@@ -17,7 +17,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -2253,7 +2253,7 @@ actually in their parent which is not accessible.")
 	  (princ "      Your project symbol map is also derived from the EDE object:\n      ")
 	  (princ (object-print ede-object)))
 	(princ "\n\n")
-	(if (arrayp semantic-lex-spp-project-macro-symbol-obarray)
+	(if (obarrayp semantic-lex-spp-project-macro-symbol-obarray)
 	    (let ((macros nil))
 	      (mapatoms
 	       #'(lambda (symbol)

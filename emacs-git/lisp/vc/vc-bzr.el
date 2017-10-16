@@ -22,7 +22,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -98,7 +98,9 @@ If nil, use the value of `vc-annotate-switches'.  If t, use no switches."
 (defcustom vc-bzr-status-switches
   (ignore-errors
     (with-temp-buffer
-      (call-process vc-bzr-program nil t nil "help" "status")
+      (let ((process-environment (cons (format "BZR_LOG=%s" null-device)
+                                       process-environment)))
+        (call-process vc-bzr-program nil t nil "help" "status"))
       (if (search-backward "--no-classify" nil t)
           "--no-classify")))
   "String or list of strings specifying switches for bzr status under VC.
@@ -725,7 +727,7 @@ or a superior directory.")
 \\([^<(]+?\\)[  ]*[(<]\\([[:alnum:]_.+-]+@[[:alnum:]_.-]+\\)[>)]"
 		    (1 'change-log-name)
 		    (2 'change-log-email))
-		   ("^ *timestamp: \\(.*\\)" (1 'change-log-date-face)))))))
+		   ("^ *timestamp: \\(.*\\)" (1 'change-log-date)))))))
 
 (autoload 'vc-setup-buffer "vc-dispatcher")
 

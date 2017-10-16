@@ -16,7 +16,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 
 /*
@@ -507,7 +507,7 @@ _XMRecomputeGlobals(register Display *display, register XMenu *menu)
 
     /*
      * Ensure that the origin of the menu is placed so that
-     * None of the panes ore selections are off the screen.
+     * None of the panes or selections are off the screen.
      */
     screen = DefaultScreen(display);
     if (menu->x_pos + menu->width > DisplayWidth(display, screen))
