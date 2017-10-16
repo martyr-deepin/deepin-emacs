@@ -110,7 +110,7 @@ $ sudo apt-get install python-pip && sudo pip install jedi epc mocker
 
 Download emacs git code
 ```
-$ git clone git://git.savannah.gnu.org/emacs.git
+$ git clone --depth 1 git://git.savannah.gnu.org/emacs.git
 ```
 
 Compile emacs git
