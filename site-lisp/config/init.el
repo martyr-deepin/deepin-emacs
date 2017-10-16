@@ -52,6 +52,7 @@
        (require 'init-winpoint)
        (require 'init-benchmark)
        (require 'init-info)
+       (require 'init-aggressive-indent)
 
        (require 'init-idle)
        ))
