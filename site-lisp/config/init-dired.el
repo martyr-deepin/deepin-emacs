@@ -6,8 +6,8 @@
 ;; Maintainer: Andy Stewart lazycat.manatee@gmail.com
 ;; Copyright (C) 2008, 2009, Andy Stewart, all rights reserved.
 ;; Created: 2008-10-20 09:38:03
-;; Version: 0.1
-;; Last-Updated: 2008-10-20 09:38:09
+;; Version: 0.2
+;; Last-Updated: 2017-10-16 23:14:09
 ;;           By: Andy Stewart
 ;; URL:
 ;; Keywords: dired
