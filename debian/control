@@ -11,6 +11,8 @@ Homepage: https://github.com/linuxdeepin/deepin-emacs
 
 Package: deepin-emacs
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, g++, python-xlib
+Provides: deepin-emacs-common
+Conflicts: deepin-emacs-common
+Depends: ${shlibs:Depends}, ${misc:Depends}, python-xlib
 Description: The GNU Emacs editor enhanced by LinuxDeepin Lazycat
  GNU Emacs is the extensible self-documenting text editor.

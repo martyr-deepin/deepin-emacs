@@ -1,2 +1,4 @@
 site-lisp /usr/share/deepin-emacs/
 site-start.el /usr/share/deepin-emacs/common/share/emacs/site-lisp/
+deepin-emacs.desktop /usr/share/applications/
+deepin-emacs.svg /usr/share/icons/hicolor/scalable/apps/
