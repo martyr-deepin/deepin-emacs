@@ -5,12 +5,12 @@ Maintainer: Deepin Packages Builder <packages@linuxdeepin.com>
 Build-Depends: debhelper (>= 9), autoconf, dh-autoreconf, texinfo, libxaw7-dev,
  libxpm-dev, libpng-dev, libjpeg-dev, libtiff5-dev, libgif-dev, libgpm-dev, libasound2-dev,
  libncurses5-dev, libxpm-dev, libdbus-1-dev, libgtk-3-dev, libm17n-dev, libotf-dev,
- xaw3dg-dev, liblockfile-dev, imagemagick, sharutils, silversearcher-ag, python-xlib
+ xaw3dg-dev, liblockfile-dev, imagemagick, sharutils, silversearcher-ag
 Standards-Version: 3.9.4
 Homepage: https://github.com/linuxdeepin/deepin-emacs
 
 Package: deepin-emacs
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},deepin-emacs-common
+Depends: ${shlibs:Depends}, ${misc:Depends}, g++, python-xlib
 Description: The GNU Emacs editor enhanced by LinuxDeepin Lazycat
  GNU Emacs is the extensible self-documenting text editor.
