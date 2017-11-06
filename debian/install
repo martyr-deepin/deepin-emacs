@@ -1,0 +1,2 @@
+site-lisp /usr/share/deepin-emacs/
+site-start.el /usr/share/deepin-emacs/common/share/emacs/site-lisp/
