@@ -1,0 +1,90 @@
+deepin-emacs (3.0+r1) UNRELEASED; urgency=medium
+
+  * Auto Build
+  * Auto Build
+
+ -- Deepin Packages Builder <jenkins@56c93f500729>  Fri, 20 Oct 2017 03:13:58 +0000
+
+deepin-emacs (2.0.1+20151112) unstable; urgency=medium
+
+  * Port to Debian. 
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Tue, 17 Nov 2015 20:02:53 +0800
+
+deepin-emacs (2.0.1+20150119154558~c59343b47a) trusty; urgency=medium
+
+  * Build from git c59343b47a66ffb3bf79bfff5793e023fbc27661
+
+ -- Yueqian Zhang <zhangyueqian@linuxdeepin.com>  Mon, 19 Jan 2015 15:46:03 +0800
+
+deepin-emacs (2.0.1+20140724145714~f377ac82ad) trusty; urgency=low
+
+  * Build from git f377ac82adb2b20afbe28b400ec8756830dadea2
+
+ -- Yueqian Zhang <zhangyueqian@linuxdeepin.com>  Thu, 24 Jul 2014 14:57:15 +0800
+
+deepin-emacs (2.0.1-20140508151755~537e843854) trusty; urgency=low
+
+  * Build from git 537e8438540ead3e30da7b2e15e45baf1b07a935
+
+ -- Yueqian Zhang <zhangyueqian@linuxdeepin.com>  Thu, 08 May 2014 15:17:56 +0800
+
+deepin-emacs (2.0.1-20140508145733~5e115f36d2) trusty; urgency=low
+
+  * Build from git 5e115f36d2724ae99bd2cbe410a7a376c3b2e197
+
+ -- Yueqian Zhang <zhangyueqian@linuxdeepin.com>  Thu, 08 May 2014 14:57:33 +0800
+
+deepin-emacs (2.0.1-20140508134502~5e115f36d2) trusty; urgency=low
+
+  * Build from git 5e115f36d2724ae99bd2cbe410a7a376c3b2e197
+
+ -- Yueqian Zhang <zhangyueqian@linuxdeepin.com>  Thu, 08 May 2014 13:45:03 +0800
+
+deepin-emacs (2.0-1+git20140424084945~741865e8f8) trusty; urgency=low
+
+  * Build from git revision 741865e8f8111946e25d645c5169682c1b26e46d
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Thu, 24 Apr 2014 08:49:46 +0800
+
+deepin-emacs (2.0-1+git20140120135550~3858305f8c) saucy; urgency=low
+
+  * Build from git revision 3858305f8c2f1959732413c04e8e46f2d2f109a2
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Mon, 20 Jan 2014 13:55:51 +0800
+
+deepin-emacs (2.0-1+git20140120134313~6a3976adbc) saucy; urgency=low
+
+  * Build from git revision 6a3976adbc2eede59062e0ec30d23c750e5633fb
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Mon, 20 Jan 2014 13:43:14 +0800
+
+deepin-emacs (2.0-1+git20140120134210~6a3976adbc) saucy; urgency=low
+
+  * Build from git revision 6a3976adbc2eede59062e0ec30d23c750e5633fb
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Mon, 20 Jan 2014 13:42:10 +0800
+
+deepin-emacs (2.0-1+git20131231113450~b852adfb30) saucy; urgency=low
+
+  * Build from git revision b852adfb30a4cd7028c2a2f5de7bc018ff0587d7
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Tue, 31 Dec 2013 11:34:51 +0800
+
+deepin-emacs (2.0-1+git20131231090041~1a721989b2) saucy; urgency=low
+
+  * Build from git revision 1a721989b2bd099de2a1b685d096a5788c4d242d
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Tue, 31 Dec 2013 09:00:41 +0800
+
+deepin-emacs (2.0-1+git20131231085754~1a721989b2) saucy; urgency=low
+
+  * Build from git revision 1a721989b2bd099de2a1b685d096a5788c4d242d
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Tue, 31 Dec 2013 08:57:54 +0800
+
+deepin-emacs (2.0-1) saucy; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Mon, 30 Dec 2013 22:37:47 +0800
