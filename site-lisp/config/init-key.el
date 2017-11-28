@@ -47,7 +47,6 @@
    ("s-5" . elisp-depend-insert-require)    ;插入 (require '...) 语句
    ("s-[" . eval-expression)                ;执行表达式
    ("s-\\" . artist-mode)                   ;绘制模式
-   ("M-s-u" . ediff-buffers)                ;ediff
    ("C-s-q" . quoted-insert)                ;读取系一个输入字符并插入
    ("M-h" . set-mark-command) ;Instead C-Space for Chinese input method
    ("M-z" . upcase-char)      ;Upcase char handly with capitalize-word
@@ -738,5 +737,10 @@
  '(
    ("C-=" . er/expand-region))
  "expand-region")
+;; ### vdiff ###
+(lazy-set-autoload-key
+ '(
+   ("M-s-u" . vdiff-buffers))
+ "vdiff")
 
 (provide 'init-key)
