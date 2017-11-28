@@ -136,6 +136,7 @@ from tradition chinese to simple chinese" t)
               (not redefine)            ;重新定义的函数 (比如参数数量改变)
               (not cl-functions)        ;`CL' 包中的运行时调用的函数
               )))
+(elf-setup-default)                     ;二进制文件默认用elf模式打开
 
 (provide 'init-idle)
 
