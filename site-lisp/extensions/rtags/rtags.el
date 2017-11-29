@@ -4200,7 +4200,7 @@ definition."
                   (height (* (window-height) (- 100 rtags-other-window-window-size-percentage))))
               (unless (string= target other-window-content)
                 (setq height (/ height 100))
-                (setq rtags-other-window-window (funcall rtags-split-window-function nil height)))))
+                (setq rtags-other-window-window (funcall rtags-split-window-function)))))
           (select-window rtags-other-window-window)
           (rtags-goto-location target)
           (recenter-top-bottom (when (not center-window) 0))

@@ -15,7 +15,7 @@
 ;;
 ;; Features that might be required by this library:
 ;;
-;;
+;; `window-extension'
 ;;
 
 ;;; This file is NOT part of GNU Emacs
@@ -72,7 +72,7 @@
 ;;
 
 ;;; Require
-
+(require 'window-extension)
 
 ;;; Code:
 
@@ -102,6 +102,12 @@
               ;; Run rtags daemon to provide tags request service.
               (rtags-start-process-unless-running)
 
+              ;; Just kill window and buffer, don't break stack position.
+              (setq rtags-bury-buffer-function 'delete-current-buffer-and-window)
+
+              ;; Split window force at below.
+              (setq rtags-split-window-function 'split-window-below)
+
               ;; Enable flycheck.
               (flycheck-mode)
 
@@ -120,10 +126,9 @@
               (defun rtags-find-references-at-point+ ()
                 (interactive)
                 (rtags-find-references-at-point)
+                ;; Switch window after poup rtag window.
                 (other-window 1)
                 )
-
-              (setq rtags-bury-buffer-function 'delete-current-buffer-and-window)
 
               (lazy-set-key
                '(
