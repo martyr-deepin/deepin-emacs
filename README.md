@@ -79,6 +79,15 @@ Deepin Emacs provides below features:
  - pyflakes (>= 1.0.0-4）
  - locate (>= 4.4.2-10)
 
+## Install rtags for C/C++
+git clone --recursive https://github.com/Andersbakken/rtags.git
+cd rtags
+mkdir build
+cd build
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ..
+make
+sudo make install
+
 ## Installation
 
 ### Debian 8.0 (jessie)
