@@ -94,6 +94,7 @@
   (add-hook hook
             (lambda ()
               (require 'rtags)
+              (require 'helm-config)
               (require 'helm-rtags)
               (require 'ac-rtags)
               (require 'flycheck)
@@ -122,8 +123,10 @@
               ;; then use command "rc -J json_file_directory" to index C/C++ project tag index.
               (lazy-set-key
                '(
-                 ("M-." . rtags-find-symbol-at-point)
-                 ("M-," . rtags-find-references-at-point)
+                 ("C-8" . rtags-find-symbol-at-point)
+                 ("C-9" . rtags-find-references-at-point)
+                 ("M-," . rtags-location-stack-back)
+                 ("M-." . rtags-location-stack-forward)
                  ("M-'" . rtags-display-summary)
                  ("C-." . rtags-rename-symbol)
                  ("M-s-j" . flycheck-next-error)
