@@ -95,16 +95,12 @@
             (lambda ()
               (require 'rtags)
               (require 'helm-config)
-              (require 'helm-rtags)
               (require 'ac-rtags)
               (require 'flycheck)
               (require 'flycheck-rtags)
 
               ;; Run rtags daemon to provide tags request service.
               (rtags-start-process-unless-running)
-
-              ;; Use helm as display backend.
-              (setq rtags-display-result-backend 'helm)
 
               ;; Enable flycheck.
               (flycheck-mode)
@@ -121,10 +117,18 @@
               ;; If your project is build with qmake,
               ;; you need use command "bear --append make" to generate `compile_commands.json' file after command "qmake .."
               ;; then use command "rc -J json_file_directory" to index C/C++ project tag index.
+              (defun rtags-find-references-at-point+ ()
+                (interactive)
+                (rtags-find-references-at-point)
+                (other-window 1)
+                )
+
+              (setq rtags-bury-buffer-function 'delete-current-buffer-and-window)
+
               (lazy-set-key
                '(
                  ("C-8" . rtags-find-symbol-at-point)
-                 ("C-9" . rtags-find-references-at-point)
+                 ("C-9" . rtags-find-references-at-point+)
                  ("M-," . rtags-location-stack-back)
                  ("M-." . rtags-location-stack-forward)
                  ("M-'" . rtags-display-summary)
