@@ -21,6 +21,7 @@
   (require 'init-mode)
   (require 'init-qt)
   (require 'init-dired)
+  (require 'init-rtags)
   (require 'init-session)
   (require 'init-paredit)
   (require 'init-indent)
@@ -32,7 +33,6 @@
   (require 'init-generic)
   (require 'init-auto-indent-mode)
   (require 'init-flymake)
-  (require 'init-rtags)
 
   ;; 可以延后加载的
   (run-with-idle-timer
