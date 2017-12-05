@@ -87,7 +87,6 @@
 ;; sudo make install
 ;;
 (dolist (hook (list
-               'c-mode-common-hook
                'c-mode-hook
                'c++-mode-hook
                ))
