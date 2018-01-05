@@ -107,6 +107,9 @@
               ;; Split window force at below.
               (setq rtags-split-window-function 'split-window-below)
 
+              ;; Don't use bookmarks.
+              (setq rtags-use-bookmarks nil)
+
               ;; Enable flycheck.
               (flycheck-mode)
 
