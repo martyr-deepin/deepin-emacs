@@ -55,6 +55,7 @@
        (require 'init-benchmark)
        (require 'init-info)
        (require 'init-aggressive-indent)
+       (require 'init-auto-sudoedit)
 
        (require 'init-idle)
        ))
