@@ -43,7 +43,7 @@
        (require 'elf-mode)
 
        (require 'init-tempbuf)
-       (require 'init-doc-view)
+       (require 'init-pdf-tools)
        (require 'init-backup)
        (require 'init-eldoc)
        (require 'init-doxymacs)

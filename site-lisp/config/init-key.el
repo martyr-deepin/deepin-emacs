@@ -697,10 +697,10 @@
 ;;; --- 文档阅读器
 (lazy-set-autoload-key
  '(
-   ("C-M-j" . doc-view-scroll-up-or-next-page+) ;翻另一个窗口中图书的下一页
-   ("C-M-k" . doc-view-scroll-down-or-previous-page+) ;翻另一个窗口中图书的上一页
+   ("C-M-j" . pdf-view-scroll-up-or-next-page+) ;翻另一个窗口中图书的下一页
+   ("C-M-k" . pdf-view-scroll-down-or-previous-page+) ;翻另一个窗口中图书的上一页
    )
- "init-doc-view")
+ "init-pdf-tools")
 ;;; ### Keyboard Macro ###
 ;;; --- 键盘宏
 (lazy-set-autoload-key

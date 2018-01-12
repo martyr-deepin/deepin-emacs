@@ -111,6 +111,7 @@ $ sudo apt-get install \
                w3m \
                w3m-img \
                pyflakes \
+               elpa-pdf-tools-server \
                locate
 ```
 ```
