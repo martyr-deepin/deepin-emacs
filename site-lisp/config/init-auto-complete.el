@@ -101,7 +101,7 @@
    ac-source-files-in-current-dir
    ac-source-filename
    ac-source-c-headers
-   ac-source-rtags
+   ;; ac-source-rtags
    ))
 
 (provide 'init-auto-complete)
