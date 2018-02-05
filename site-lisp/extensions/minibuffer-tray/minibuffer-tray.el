@@ -146,7 +146,7 @@ Default is t."
   :group 'minibuffer-tray)
 
 (defun minibuffer-tray-call (method &rest args)
-  (with-demoted-errors "minibuffer-tray-call ERROR: %s"
+  (ignore-errors
     (apply 'dbus-call-method
            :session                 ; use the session (not system) bus
            "com.deepin.minibuffer_tray"  ; service name
