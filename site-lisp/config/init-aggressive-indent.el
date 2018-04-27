@@ -117,7 +117,6 @@
                'coffee-mode-hook
                'sws-mode-hook
                'jade-mode-hook
-               'enh-ruby-mode-hook
                'vala-mode-hook
                'rust-mode-hook
                ))

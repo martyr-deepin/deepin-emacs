@@ -3,20 +3,23 @@ require 'robe/type_space'
 require 'robe/scanners'
 require 'robe/visor'
 require 'robe/jvisor'
+require 'robe/core_ext'
+require 'robe/sash/includes_tracker'
 
 module Robe
   class Sash
-    attr_accessor :visor
+    attr_accessor :visor, :name_cache
 
     def initialize(visor = pick_visor)
       @visor = visor
+      init_name_cache
     end
 
     def class_locations(name, mod)
       locations = {}
       if (obj = visor.resolve_context(name, mod)) and obj.is_a? Module
         methods = obj.methods(false).map { |m| obj.method(m) } +
-                  obj.instance_methods(false).map { |m| obj.instance_method(m) }
+                  obj.__instance_methods__(false).map { |m| obj.instance_method(m) }
         methods.each do |m|
           if loc = m.source_location
             path = loc[0]
@@ -32,19 +35,17 @@ module Robe
     end
 
     def modules
-      res = visor.each_object(Module).map { |c| c.name rescue nil }
-      res.compact!
-      res
+      visor.each_object(Module).map { |mod| name_cache[mod] }.compact
     end
 
     def targets(obj)
       obj = visor.resolve_const(obj)
       if obj.is_a? Module
         module_methods = obj.methods.map { |m| method_spec(obj.method(m)) }
-        instance_methods = (obj.instance_methods +
-                            obj.private_instance_methods(false))
+        instance_methods = (obj.__instance_methods__ +
+                            obj.__private_instance_methods__(false))
           .map { |m| method_spec(obj.instance_method(m)) }
-        [obj.name] + module_methods + instance_methods
+        [name_cache[obj]] + module_methods + instance_methods
       else
         self.targets(obj.class.to_s)
       end
@@ -63,70 +64,72 @@ module Robe
 
     def method_spec(method)
       owner, inst = method.owner, nil
-      if !singleton_class(owner)
-        name, inst = method_owner_and_inst(owner)
-      else
-        name = owner.to_s[/Class:([A-Z][^\(>]*)/, 1] # defined in an eigenclass
+      if owner.__singleton_class__?
+        name = owner.to_s[/Class:([A-Z][^\(> ]*)/, 1] # defined in an eigenclass
+      elsif name = name_cache[owner]
+        inst = true
+      elsif !owner.is_a?(Class)
+        name, inst = IncludesTracker.method_owner_and_inst(owner, name_cache)
       end
+      # XXX: We can speed this up further by only returning the
+      # method's (or owner's) object_id here, and resolve the "real"
+      # host's name only when it's really needed. But that would break
+      # the current 'meta' impl in company-robe, for one thing.
       [name, inst, method.name, method.parameters] + method.source_location.to_a
     end
 
-    def singleton_class(mod)
-      mod.respond_to?(:singleton_class?) ? mod.singleton_class? :
-        Class != mod && mod.ancestors.first != mod
-    end
-
-    def method_owner_and_inst(owner)
-      if owner.name
-        [owner.name, true]
-      else
-        unless owner.is_a?(Class)
-          mod, inst = nil, true
-          ObjectSpace.each_object(Module) do |m|
-            if m.include?(owner) && m.name
-              mod = m
-            elsif m.respond_to?(:singleton_class) &&
-                  m.singleton_class.include?(owner)
-              mod = m
-              inst = nil
-            end && break
-          end
-          [mod && mod.name, inst]
-        end
-      end
-    end
-
-    def doc_for(mod, type, sym)
-      mod = visor.resolve_const(mod)
-      DocFor.new(find_method(mod, type, sym.to_sym)).format
+    def doc_for(mod, inst, sym)
+      resolved = visor.resolve_const(mod)
+      DocFor.new(find_method(resolved, inst, sym.to_sym)).format
     end
 
     def method_targets(name, target, mod, instance, superc, conservative)
       sym = name.to_sym
       space = TypeSpace.new(visor, target, mod, instance, superc)
-      special_method = sym == :initialize || superc
+      special_method = superc
+
       scanner = ModuleScanner.new(sym, special_method || !target)
 
       space.scan_with(scanner)
+      targets = scanner.candidates
 
-      if (targets = scanner.candidates).any?
-        owner = find_method_owner(space.target_type, instance, sym)
-        if owner
-          targets.reject! do |method|
-            !(method.owner <= owner) &&
-              targets.find { |other| other.owner < method.owner }
-          end
-        end
-      elsif (target || !conservative) && !special_method
+      if targets
+        targets.delete(Class.instance_method(:new))
+        filter_targets!(space, targets, instance, sym)
+      end
+
+      sc = space.target_type.singleton_class
+
+      if !instance && (sym == :new) && targets.all? { |t| t.owner < sc }
+        ctor_space   = TypeSpace.new(visor, target, mod, true, superc)
+        ctor_scanner = ModuleScanner.new(:initialize, true)
+        ctor_space.scan_with(ctor_scanner)
+        ctor_targets = ctor_scanner.candidates
+        filter_targets!(ctor_space, ctor_targets, true, :initialize)
+        targets += ctor_targets
+      end
+
+      if targets.empty? && (target || !conservative) && !special_method
         unless target
-          scanner.scan_methods(Kernel, :private_instance_methods)
+          scanner.scan_methods(Kernel, :__private_instance_methods__)
         end
         scanner.check_private = false
         scanner.scan(visor.each_object(Module), true, true)
+        targets = scanner.candidates
       end
 
-      scanner.candidates.map { |method| method_spec(method) }
+      targets.map { |method| method_spec(method) }
         .sort_by { |(mname)| mname ? mname.scan(/::/).length : 99 }
+    end
+
+    def filter_targets!(space, targets, instance, sym)
+      owner = find_method_owner(space.target_type, instance, sym)
+      if owner
+        targets.reject! do |method|
+          !(method.owner <= owner) &&
+            targets.find { |other| other.owner < method.owner }
+        end
+      end
     end
 
     def complete_method(prefix, target, mod, instance)
@@ -170,9 +173,18 @@ module Robe
     end
 
     def rails_refresh
-      ActionDispatch::Reloader.cleanup!
-      ActionDispatch::Reloader.prepare!
+      if defined?(Rails.application.reloader)
+        Rails.application.reloader.reload!
+      else
+        ActionDispatch::Reloader.cleanup!
+        ActionDispatch::Reloader.prepare!
+      end
       Rails.application.eager_load!
+      init_name_cache
+    end
+
+    def load_path
+      $LOAD_PATH
     end
 
     def ping
@@ -193,6 +205,11 @@ module Robe
       else
         Visor.new
       end
+    end
+
+    def init_name_cache
+      # https://www.ruby-forum.com/topic/167055
+      @name_cache = Hash.new { |h, mod| h[mod] = mod.__name__ }
     end
   end
 end

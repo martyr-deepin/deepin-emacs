@@ -1,17 +1,17 @@
-;;; init-ruby.el --- Init for ruby
+;;; init-ruby.el --- Init for auto complete
 
 ;; Filename: init-ruby.el
-;; Description: Init for ruby
-;; Author: Andy Stewart <lazycat.manatee@gmail.com>
-;; Maintainer: Andy Stewart <lazycat.manatee@gmail.com>
-;; Copyright (C) 2014, Andy Stewart, all rights reserved.
-;; Created: 2014-03-22 20:52:31
-;; Version: 0.1
-;; Last-Updated: 2014-03-22 20:52:31
+;; Description: Init for auto complete
+;; Author: Andy Stewart <andy@freedom>
+;; Maintainer: Andy Stewart <andy@freedom>
+;; Copyright (C) 2018, Andy Stewart, all rights reserved.
+;; Created: 2018-04-27 23:54:30
+;; Version: 0.2
+;; Last-Updated: 2018-04-27 23:54:30
 ;;           By: Andy Stewart
 ;; URL: http://www.emacswiki.org/emacs/download/init-ruby.el
 ;; Keywords:
-;; Compatibility: GNU Emacs 24.3.50.1
+;; Compatibility: GNU Emacs 27.0.50
 ;;
 ;; Features that might be required by this library:
 ;;
@@ -65,8 +65,8 @@
 
 ;;; Change log:
 ;;
-;; 2014/03/22
-;;      * First released.
+;; 2018/04/27
+;;      * Second released.
 ;;
 
 ;;; Acknowledgements:
@@ -80,42 +80,12 @@
 ;;
 
 ;;; Require
-
-(require 'enh-ruby-mode)
-(require 'ruby-electric)
-(require 'flymake-ruby)
-(require 'inf-ruby-extension)
 (require 'robe)
-(require 'yasnippet)
+(require 'ac-robe)
+(require 'inf-ruby-extension)
+(require 'ruby-end)
 
-;;; Code:
-
-(setq robe-highlight-capf-candidates nil) ;avoid robe set color of auto-complete candidate
-(setq enh-ruby-check-syntax nil)
-(dolist (hook (list
-               'enh-ruby-mode-hook
-               ))
-  (add-hook hook (lambda ()
-                   (yas-minor-mode-on)
-                   (auto-complete-mode 1)
-                   (ruby-electric-mode)
-                   (flymake-ruby-load)
-                   (robe-mode)
-                   (robe-ac-setup)
-                   (save-excursion
-                     (window-configuration-to-register 'a)
-                     (inf-ruby)
-                     (robe-start)
-                     (jump-to-register 'a)
-                     )
-                   )))
-
-(add-hook 'inf-ruby-mode-hook
-          (lambda ()
-            (auto-complete-mode)
-            (require 'ac-inf-ruby)
-            (ac-inf-ruby-enable)))
-
-(provide 'init-ruby)
+(add-hook 'ruby-mode-hook 'robe-mode)
+(add-hook 'robe-mode-hook 'ac-robe-setup)
 
 ;;; init-ruby.el ends here

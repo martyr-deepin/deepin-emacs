@@ -1,4 +1,6 @@
 require 'pry'
+require 'ostruct'
+
 begin
   require 'pry-doc' if RUBY_ENGINE == "ruby"
 rescue LoadError
@@ -22,11 +24,11 @@ module Robe
 
       def visibility
         owner, name = @method.owner, @method.name
-        if owner.public_instance_methods(false).include?(name)
+        if owner.__public_instance_methods__(false).include?(name)
           :public
-        elsif owner.protected_instance_methods(false).include?(name)
+        elsif owner.__protected_instance_methods__(false).include?(name)
           :protected
-        elsif owner.private_instance_methods(false).include?(name)
+        elsif owner.__private_instance_methods__(false).include?(name)
           :private
         end
       end

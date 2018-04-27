@@ -111,9 +111,9 @@
                'coffee-mode-hook
                'sws-mode-hook
                'jade-mode-hook
-               'enh-ruby-mode-hook
                'vala-mode-hook
                'rust-mode-hook
+               'ruby-mode-hook
                ))
   (add-hook hook (lambda () (linum-mode 1))))
 

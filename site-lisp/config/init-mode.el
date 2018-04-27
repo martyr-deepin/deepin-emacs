@@ -132,7 +132,6 @@
                     ("Cakefile\\'" . coffee-mode)
                     ("\\.styl$" . sws-mode)
                     ("\\.jade" . jade-mode)
-                    ("\\.rb$" . enh-ruby-mode)
                     ("\\.go$" . go-mode)
                     ("\\.vala$" . vala-mode)
                     ("\\.vapi$" . vala-mode)
@@ -154,12 +153,11 @@
 (autoload 'sws-mode "sws-mode")
 (autoload 'jade-mode "jade-mode")
 (autoload 'css-mode "init-css-mode")
-(autoload 'enh-ruby-mode "init-ruby")
 (autoload 'go-mode "init-golang")
 (autoload 'vala-mode "vala-mode")
 (autoload 'rust-mode "rust-mode")
 (autoload 'qmake-mode "qmake-mode")
-(add-to-list 'interpreter-mode-alist '("ruby" . enh-ruby-mode))
+(autoload 'ruby-mode "init-ruby")
 
 ;;; ### Auto-fill ###
 ;;; --- 自动换行

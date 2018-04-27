@@ -6,18 +6,17 @@ require 'logger'
 
 module Robe
   class Server
-    attr_reader :running
+    attr_reader :running, :port
 
     def initialize(handler, port)
-      @port = port
       @handler = handler
-
-      @server = TCPServer.new("127.0.0.1", @port)
+      @server = TCPServer.new("127.0.0.1", port)
       @running = true
+      @port = @server.addr[1]
     end
 
     def start
-      access = File.open("#{Dir.tmpdir}/robe-access.log", "w")
+      access = File.open("#{Dir.tmpdir}/robe-access-#{@port}.log", "w")
       access.sync = true
 
       error_logger = Logger.new($stderr)
@@ -47,6 +46,7 @@ module Robe
                                            :Logger => error_logger,
                                            :HTTPVersion => "1.1")
           resp.status = 200
+          resp.content_type = "application/json; charset=utf-8"
           resp.body = body
 
           begin

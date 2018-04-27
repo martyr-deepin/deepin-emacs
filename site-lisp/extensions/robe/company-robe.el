@@ -1,18 +1,17 @@
 (eval-when-compile (require 'robe))
 
 ;;;###autoload
-(defun company-robe (command &optional arg)
+(defun company-robe (command &optional arg &rest ignore)
   "A `company-mode' completion back-end for `robe-mode'."
   (interactive (list 'interactive))
-  (case command
+  (cl-case command
     (interactive (company-begin-backend 'company-robe))
     (prefix (and (boundp 'robe-mode)
-                 robe-mode robe-running
+                 robe-mode (robe-running-p)
                  (company-robe--prefix)))
     (candidates (robe-complete-thing arg))
     (duplicates t)
-    (meta (let ((spec (car (robe-cached-specs arg))))
-            (when spec (robe-signature spec))))
+    (meta (company-robe--meta arg))
     (location (let ((spec (company-robe--choose-spec arg)))
                 (cons (robe-spec-file spec)
                       (robe-spec-line spec))))
@@ -24,20 +23,28 @@
                       (message nil)
                       (get-buffer "*robe-doc*")))))))
 
+(defun company-robe--meta (completion)
+  (or
+   (get-text-property 0 'robe-type completion)
+   (let ((spec (car (robe-cached-specs completion))))
+     (when spec (robe-signature spec)))))
+
 (defun company-robe--prefix ()
-  (let ((prefix (company-grab-symbol)))
-    (when (robe-complete-symbol-p (- (point) (length prefix)))
-      prefix)))
+  (let ((bounds (robe-complete-bounds)))
+    (when (and bounds
+               (equal (point) (cdr bounds))
+               (robe-complete-symbol-p (car bounds)))
+      (buffer-substring (car bounds) (cdr bounds)))))
 
 (defun company-robe--choose-spec (thing)
   (let ((specs (robe-cached-specs thing)))
     (when specs
       (if (cdr specs)
-          (let ((alist (loop for spec in specs
+          (let ((alist (cl-loop for spec in specs
                              for module = (robe-spec-module spec)
                              when module
                              collect (cons module spec))))
-            (cdr (assoc (ido-completing-read "Module: " alist nil t) alist)))
+            (cdr (assoc (robe-completing-read "Module: " alist nil t) alist)))
         (car specs)))))
 
-(provide 'robe-company)
+(provide 'company-robe)

@@ -1,3 +1,5 @@
+require 'robe/core_ext'
+
 module Robe
   class Scanner
     attr_accessor :check_private
@@ -11,14 +13,14 @@ module Robe
 
     def scan(modules, check_instance, check_module)
       modules.each do |m|
-        if check_module && m.respond_to?(:singleton_class)
-          sc = m.singleton_class
-          scan_methods(sc, :instance_methods)
-          scan_methods(sc, :private_instance_methods) if check_private
+        if check_module
+          sc = m.__singleton_class__
+          scan_methods(sc, :__instance_methods__)
+          scan_methods(sc, :__private_instance_methods__) if check_private
         end
         if check_instance
-          scan_methods(m, :instance_methods)
-          scan_methods(m, :private_instance_methods) if check_private
+          scan_methods(m, :__instance_methods__)
+          scan_methods(m, :__private_instance_methods__) if check_private
         end
       end
     end
