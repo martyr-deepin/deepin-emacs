@@ -48,7 +48,7 @@ GEM
       atomic
     thread_safe (0.1.3-java)
       atomic
-    tzinfo (0.3.38)
+    tzinfo (0.3.62)
     yard (0.8.7.6)
 
 PLATFORMS
